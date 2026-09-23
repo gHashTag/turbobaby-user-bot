@@ -268,14 +268,14 @@ pub fn may_add_to_cart(rate: OptionalRate, bookable: bool) bool {
 ; is a statement about storage, and the refusal below explains why this file may not make one.
 
 ; DECISIONS.md:166. One baht exactly, and the comparison includes the boundary: a gap EQUAL to
-; the threshold is reported. src/api/orders.rs:632 writes the same boundary in the runtime as
+; the threshold is reported. src/api/orders.rs:642 writes the same boundary in the runtime as
 ; (quoted - from_file).abs() >= 1.0, so ">= " here is transcription and not a choice made in
 ; this file. The unit is baht per day, the same unit as every other amount in this contract.
 pub const DIVERGENCE_THRESHOLD_THB_DAY : i16 = 1;
 
 ; DECISIONS.md:167, the second half. Both emission sites obey it structurally, not by promise:
 ; src/api/bikes.rs:649-662 logs inside an if-let and falls through to Ok(value), and
-; src/api/orders.rs:733-743 logs inside the loop and falls through to Ok(BikeLineCheck::Ok).
+; src/api/orders.rs:845-855 logs inside the loop and falls through to Ok(BikeLineCheck::Ok).
 ; Neither has a branch that turns a divergence into an error, a retry or a delay.
 pub const DIVERGENCE_NEVER_BLOCKS_THE_ANSWER : bool = true;
 
@@ -287,7 +287,7 @@ pub const GAP_AT_THRESHOLD_FILE_THB_DAY : i16 = CHEAPEST_IN_STOCK_DAY_RATE_THB -
 
 ; An honest property of the representation, written down because its absence would read as an
 ; oversight. The runtime compares f64 baht and can therefore see a gap SMALLER than one baht:
-; src/api/orders.rs:3568 pins 337.4 against a file-side 337.0, a 0.4 baht gap that is correctly
+; src/api/orders.rs:3732 pins 337.4 against a file-side 337.0, a 0.4 baht gap that is correctly
 ; not reported. This contract's amounts are whole baht (AMOUNT_DECIMALS is 0), so the smallest
 ; non-zero gap it can represent IS the threshold, and "below the threshold" here means exactly
 ; zero. A reader hunting for a sub-baht case in this file would be hunting for something the
@@ -295,7 +295,7 @@ pub const GAP_AT_THRESHOLD_FILE_THB_DAY : i16 = CHEAPEST_IN_STOCK_DAY_RATE_THB -
 pub const SUB_BAHT_GAP_IS_UNREPRESENTABLE_HERE : bool = true;
 
 ; The file side's number is produced by the class-discount arithmetic, and that arithmetic is
-; NOT restated here: src/api/orders.rs:629-631 calls apply_class_discount (src/db/bikes.rs:296)
+; NOT restated here: src/api/orders.rs:639-641 calls apply_class_discount (src/db/bikes.rs:296)
 ; then round_half_up_baht (src/db/bikes.rs:312), and the integer statement of that same step
 ; belongs to the rental-terms contract, whose audit_daily_thb pins 449 at 2500 bp to 337
 ; (turbobaby/rental-terms owns audit_daily_thb and REF_BASE_THB_DAY; cited by owner ID and
@@ -354,9 +354,9 @@ pub const MIGRATION_COUNT_REMEASURED_AT_BEFORE_087 : str = "2026-09-21";
 pub const DIVERGENCE_SINK_KIND : str = "process log line";
 pub const DIVERGENCE_SINKS : [2]str = [
   "src/api/bikes.rs:655-660",
-  "src/api/orders.rs:736-741",
+  "src/api/orders.rs:848-853",
 ];
-pub const DIVERGENCE_PERSISTENCE_NOTE : str = "No sink exists: none of the 88 .sql migration files under migrations/ (87 at the top level plus one in migrations/wip/) mentions divergence, so there is no table, column or retention rule to pin. The only trace either priced answer leaves is a tracing::info! line at src/api/bikes.rs:655-660 and src/api/orders.rs:736-741. The decision is owned here; the record is owned by nobody.";
+pub const DIVERGENCE_PERSISTENCE_NOTE : str = "No sink exists: none of the 88 .sql migration files under migrations/ (87 at the top level plus one in migrations/wip/) mentions divergence, so there is no table, column or retention rule to pin. The only trace either priced answer leaves is a tracing::info! line at src/api/bikes.rs:655-660 and src/api/orders.rs:848-853. The decision is owned here; the record is owned by nobody.";
 
 ; The file side of a comparison, as a predicate. is_client_price already names the door side;
 ; this is its counterpart, and it exists so that divergence_report_required can refuse a
@@ -375,9 +375,9 @@ pub fn amount_gap_thb_day(a: i16, b: i16) i16 {
 }
 
 ; Whether D11 requires a report. Three refusals before the arithmetic, and each mirrors a
-; branch of src/api/orders.rs:624-637: no door number means no priced answer to log against
-; (the runtime's quoted filter at :630), no file number means nothing to compare (the runtime's
-; ? at :631), and only then is the gap measured against the threshold. A mislabelled pair --
+; branch of src/api/orders.rs:634-647: no door number means no priced answer to log against
+; (the runtime's quoted filter at :640), no file number means nothing to compare (the runtime's
+; ? at :641), and only then is the gap measured against the threshold. A mislabelled pair --
 ; two door values, or a reference value passed as the door -- is refused rather than compared,
 ; because a divergence between a number and itself is not evidence of anything.
 pub fn divergence_report_required(door: OptionalRate, file_ref: OptionalRate) bool {
@@ -522,7 +522,7 @@ test the_divergence_report_boundary_sits_exactly_at_one_baht {
 ; "Below the threshold" is not a second case in this model, it is the same case, and saying so
 ; out loud is the point of this test. In whole baht the only gap smaller than one baht is zero,
 ; so equality IS the sub-threshold case here; the fractional one the runtime can see is pinned
-; in Rust at src/api/orders.rs:3568 and cannot be written down in an integer contract.
+; in Rust at src/api/orders.rs:3732 and cannot be written down in an integer contract.
 test below_the_threshold_means_exactly_zero_in_whole_baht {
     assert SUB_BAHT_GAP_IS_UNREPRESENTABLE_HERE == true;
     assert AMOUNT_DECIMALS == 0;
@@ -568,7 +568,7 @@ test the_file_side_of_a_divergence_is_never_shown_to_a_client {
 }
 
 ; A silent door is the absence path, not a divergence with one side missing. The runtime agrees
-; by construction -- src/api/orders.rs:630 drops out before the comparison -- and the customer
+; by construction -- src/api/orders.rs:640 drops out before the comparison -- and the customer
 ; gets the dash and the sentence, never a comparison against the file's number. The mirror case
 ; is here too: a missing file side is nothing to compare, not a divergence of the whole amount.
 test an_absent_door_amount_is_the_absence_path_and_never_a_divergence {
@@ -590,7 +590,7 @@ test persistence_of_a_divergence_is_refused_for_lack_of_a_sink {
     assert DIVERGENCE_SINK_KIND == "process log line";
     assert DIVERGENCE_SINKS.len == 2;
     assert DIVERGENCE_SINKS[0] == "src/api/bikes.rs:655-660";
-    assert DIVERGENCE_SINKS[1] == "src/api/orders.rs:736-741";
+    assert DIVERGENCE_SINKS[1] == "src/api/orders.rs:848-853";
 }
 
 ; The file side's number is somebody else's output. Naming that owner is what keeps this

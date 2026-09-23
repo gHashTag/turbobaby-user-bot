@@ -1273,7 +1273,7 @@ mod tests {
 
     #[test]
     fn a_bike_only_order_prints_its_stored_total_while_the_owner_decides() {
-        // The stored sums leave a rental's money out (src/api/orders.rs:489-497),
+        // The stored sums leave a rental's money out (src/api/orders.rs:495-503),
         // so a bike-only order stores 0 and 0. Which figure such an order should
         // show is an OPEN owner question in order_presentation.t27; until it is
         // answered nothing here decides it: the stored total prints as stored,

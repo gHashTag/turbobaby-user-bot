@@ -51,7 +51,7 @@ struct ReorderOrderItem {
 ///
 /// Dropping is what the caller already does with any line it cannot identify
 /// — every call site is a `filter_map`. Bike lines never reach this code at
-/// all: `src/api/orders.rs:845` clears `unit_price` on them on purpose (a
+/// all: `src/api/orders.rs:957` clears `unit_price` on them on purpose (a
 /// rental's money lives in its `deal`), and none of the four id branches
 /// below matches a bike, so a reorder has never included one.
 fn reorder_item_to_cart_item(item: &ReorderOrderItem) -> Option<CartItem> {

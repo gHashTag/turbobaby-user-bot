@@ -503,7 +503,7 @@ pub const READERS_AGREE_ON_CASE : bool = true;
 pub const READING_SITE : str = "src/trios/order_status_view.rs:117";
 pub const READING_CALL_IN_THE_STEPPER_SITE : str = "src/ui/components/status_stepper.rs:41";
 pub const STATUS_READING_IS_EXACT : bool = true;
-pub const EXACT_READING_REASON : str = "The server reads the column exactly: validate_update_order_status admits a name only when VALID_STATUSES contains it (src/api/orders.rs:1876), the terminal guard is a raw matches over the stored string (:1920-1923), and a customer cancellation is refused with 409 unless the stored string is exactly the pending name (:2209). The order-status contract's name lookup gives a different case the UNSET verdict (VOCABULARY_LOOKUP_DECLARATION). A folded reading here would label an order the server does not recognise and draw a cancel button the server refuses.";
+pub const EXACT_READING_REASON : str = "The server reads the column exactly: validate_update_order_status admits a name only when VALID_STATUSES contains it (src/api/orders.rs:2002), the terminal guard is a raw matches over the stored string (:2046-2049), and a customer cancellation is refused with 409 unless the stored string is exactly the pending name (:2335). The order-status contract's name lookup gives a different case the UNSET verdict (VOCABULARY_LOOKUP_DECLARATION). A folded reading here would label an order the server does not recognise and draw a cancel button the server refuses.";
 pub const STATUS_READER_COUNT_BEFORE_REPAIR : u8 = 15;
 pub const CASE_NORMALIZING_READER_COUNT_BEFORE_REPAIR : u8 = 6;
 pub const RAW_READER_COUNT_BEFORE_REPAIR : u8 = 9;
@@ -931,12 +931,12 @@ pub const MONEY_WITHHELD_FIELD : str = "money_withheld";
 pub const MONEY_WITHHELD_REASON : str = "stored_value_not_finite_non_negative";
 pub const MONEY_WITHHELD_REASON_SITE : str = "src/db/orders.rs:46";
 pub const ORDER_ENDPOINTS_SERIALISE_THROUGH_ONE_CONVERSION : [2]str = [
-  "src/api/orders.rs:1847",
-  "src/api/orders.rs:2383",
+  "src/api/orders.rs:1973",
+  "src/api/orders.rs:2509",
 ];
 pub const ADMIN_ENDPOINTS_SERIALISE_THROUGH_THE_SAME_CONVERSION : [2]str = [
-  "src/api/orders.rs:1698",
-  "src/api/orders.rs:1722",
+  "src/api/orders.rs:1824",
+  "src/api/orders.rs:1848",
 ];
 ; Every other reader of the same payloads, each declaring the figure as an Option: the home widget,
 ; the profile history, the webapp-bridge mirror, and the admin order (all four figures). The mirror
@@ -1142,11 +1142,11 @@ pub const IDENTITY_IS_CHECKED_ON_THIS_SCREEN : bool = false;
 pub const AN_IDENTITY_CHECK_HERE_WOULD_BE_A_FOURTH_COPY : bool = true;
 
 ; --- What the server sends about delivery, and what the customer sees of it --------------------
-; The status endpoint publishes seven fields (src/api/orders.rs:1782-1795). The detail screen's
+; The status endpoint publishes seven fields (src/api/orders.rs:1908-1921). The detail screen's
 ; response struct declares four of them and reads ONE -- the status. The three it declares and
 ; does not read are silenced with an allow(dead_code) at src/ui/screens/order_detail_screen.rs:64,
 ; and the seventh, the delivery fee, is not declared at all. The fee is the sharp one: the comment
-; that publishes it at src/api/orders.rs:1789-1790 says a non-finite fee serialises as null and
+; that publishes it at src/api/orders.rs:1915-1916 says a non-finite fee serialises as null and
 ; RENDERS AS A DASH, naming a renderer that this screen does not contain. The zone name and the
 ; eta pair ARE read elsewhere, by two screens and neither of them owned here: the checkout screen
 ; before the order exists (src/ui/screens/checkout_screen.rs:820) and the success screen after it
@@ -1164,15 +1164,15 @@ pub const AN_IDENTITY_CHECK_HERE_WOULD_BE_A_FOURTH_COPY : bool = true;
 ; reads the pair at :302-305 (was :298-305) with no local fallback and no literal, and renders its
 ; ETA row only for a served pair (:490-495, was :491-492). Migration 087 stores no ETA on any row,
 ; so the status payload carries null in both minute fields: the eta REACHES no customer today, on
-; any screen. The payload itself is unchanged (:1782-1795, line for line), and the reader count
+; any screen. The payload itself is unchanged (:1908-1921, line for line), and the reader count
 ; stays two. The 2026-09-21 sites are kept under _BEFORE_2026_09_24 names.
-pub const STATUS_PAYLOAD_SITE : str = "src/api/orders.rs:1782-1795";
+pub const STATUS_PAYLOAD_SITE : str = "src/api/orders.rs:1908-1921";
 pub const STATUS_PAYLOAD_FIELD_COUNT : u8 = 7;
 pub const FIELDS_DECLARED_BY_THE_SCREEN : u8 = 4;
 pub const FIELDS_THAT_REACH_THE_CUSTOMER : u8 = 1;
 pub const DEAD_CODE_ANNOTATION_SITE : str = "src/ui/screens/order_detail_screen.rs:64";
 pub const DELIVERY_FEE_IS_DECLARED_BY_THE_SCREEN : bool = false;
-pub const DELIVERY_FEE_PUBLISHER_SITE : str = "src/api/orders.rs:1794";
+pub const DELIVERY_FEE_PUBLISHER_SITE : str = "src/api/orders.rs:1920";
 pub const NO_ETA_REACHES_EITHER_OWNED_SCREEN : bool = true;
 pub const ETA_READER_SCREEN_COUNT : u8 = 2;
 pub const ETA_READER_SCREENS_OWNED_HERE : u8 = 0;
@@ -1492,7 +1492,7 @@ pub const SCREEN_HAS_NO_RULE_FOR_A_REFUSED_CANCELLATION_BEFORE_REPAIR : bool = t
 pub const REFUSED_CANCELLATION_NOTE : str = "Since 2026-09-22 the screen reads the answer to a customer's cancellation through order_cancel_answer in src/trios/api_errors.rs, closes the dialog only on a confirmed success, withdraws the offer once the server has confirmed, reads the status again after every answer, holds an attempt whose outcome is unknown -- no answer, or a failure of the server's own -- until a fresh reading shows the order still cancellable, and tells every answer above the pending gate. What stays unpublished is narrower and belongs to the client-errors contract: an owner-approved sentence for the refusal the order-status contract declares once the order has left pending. The interim that ships until then, and what exactly is missing, are recorded there.";
 pub const REFUSED_CANCELLATION_NOTE_BEFORE_REPAIR : str = "The POST result is bound to a discarded local at src/ui/screens/order_detail_screen.rs:352 and the confirmation dialog is closed at :358 on both paths. No branch reads a status code, no state records a failure, and no i18n key exists for one. What the customer is told after a refused cancellation is therefore nothing, and this file declares the absence rather than a message.";
 pub const SCREEN_HAS_NO_RULE_FOR_AN_EXPIRED_LIVE_VIEW : bool = true;
-pub const EXPIRED_LIVE_VIEW_NOTE : str = "The tick loop at src/ui/screens/order_detail_screen.rs:439-446 ends after 360 iterations. Since 2026-09-22 one thing still reads the status after it: an answer to a cancellation, which drops the last reading and asks once more (CANCEL_REREAD_HANDLER_SITE), past the hour as within it. Nothing else runs. The badge at :247 depends on the presence of the last response and not on its age, and the payload at src/api/orders.rs:1782-1795 carries no timestamp that a freshness rule could consult, so there is still no shipped freshness rule to describe.";
+pub const EXPIRED_LIVE_VIEW_NOTE : str = "The tick loop at src/ui/screens/order_detail_screen.rs:439-446 ends after 360 iterations. Since 2026-09-22 one thing still reads the status after it: an answer to a cancellation, which drops the last reading and asks once more (CANCEL_REREAD_HANDLER_SITE), past the hour as within it. Nothing else runs. The badge at :247 depends on the presence of the last response and not on its age, and the payload at src/api/orders.rs:1908-1921 carries no timestamp that a freshness rule could consult, so there is still no shipped freshness rule to describe.";
 pub const EXPIRED_LIVE_VIEW_NOTE_BEFORE_REPAIR : str = "The tick loop at src/ui/screens/order_detail_screen.rs:463-470 ends after 360 iterations and nothing runs afterwards. The badge at :270 remains rendered because it depends on the presence of the last response and not on its age, and the payload at src/api/orders.rs:1782-1795 carries no timestamp that a freshness rule could consult. There is no shipped rule here to describe.";
 ; CORRECTED 2026-09-22: the screens have had one rule for a status outside the vocabulary since
 ; the repair, so the refusal below flipped. It is the owner's DEFAULT, not this file's ruling: the
@@ -1531,7 +1531,7 @@ pub const ORDER_FIGURE_DASH_NOTE : str = "Owner question E. Which sentence, if a
 ; (CHECKOUT_SUBMISSION_SITE builds four shapes of line and none carries a bike), so this is
 ; reachability and not traffic, and gate 3 binds that zero to the submission map.
 pub const BIKE_LINE_ORDER_TOTAL_HAS_A_DISPLAY_RULE : bool = false;
-pub const BIKE_LINE_SUM_SITE : str = "src/api/orders.rs:489-497";
+pub const BIKE_LINE_SUM_SITE : str = "src/api/orders.rs:495-503";
 pub const NO_SHIPPED_CLIENT_SUBMITS_A_BIKE_LINE : bool = true;
 pub const CHECKOUT_SUBMISSION_SITE : str = "src/ui/screens/checkout_screen.rs:975-1006";
 pub const CHECKOUT_BIKE_LINE_KEY_COUNT : u8 = 0;

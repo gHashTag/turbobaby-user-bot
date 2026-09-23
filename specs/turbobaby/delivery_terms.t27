@@ -50,8 +50,8 @@
 ; The paragraph above stays as the 2026-09-20 measurement it was; THE SHIPPED ZONE TABLE section
 ; below says what the table is now, where each row comes from, and how it meets the ladder.
 ; --
-; WHERE THE OBVIOUS READING IS REFUTED. src/api/orders.rs:2415 and :1794 serve the zone fee
-; through `finite_money`, with a comment (orders.rs:2411-2414) saying an undocumented fee comes
+; WHERE THE OBVIOUS READING IS REFUTED. src/api/orders.rs:2541 and :1920 serve the zone fee
+; through `finite_money`, with a comment (orders.rs:2537-2540) saying an undocumented fee comes
 ; back as null and renders as a dash rather than as free delivery. Read alone, that comment says
 ; the dash already protects the delivery leg. It does not, for three measured reasons.
 ;   (1) The branch cannot fire. `fee` is NOT NULL DEFAULT 0 CHECK (fee >= 0) in
@@ -633,7 +633,7 @@ pub const ZONE_OVERRIDE_FALLBACK_IS_THE_OWNERS_TABLE : bool = true;
 pub const ZONE_OVERRIDE_FALLBACK_WAS_THE_OTHER_ISLAND_BEFORE_PHUKET : bool = true;
 pub const BUILT_IN_ZONE_TABLE_IS_READ_BY_A_HANDLER : bool = false;
 ; The live read surface: src/api/mod.rs:77 nests the API under /api and src/api/orders.rs:104
-; registers the handler at /delivery/zones. src/api/orders.rs:2389-2420 serves every ACTIVE row
+; registers the handler at /delivery/zones. src/api/orders.rs:2515-2546 serves every ACTIVE row
 ; ordered by sort_order then name, with no auth, to the customer checkout and the order tracker.
 pub const ZONES_ROUTE : str = "/api/delivery/zones";
 pub const ZONES_ROUTE_IS_PUBLIC : bool = true;
@@ -657,8 +657,8 @@ pub const BUILT_IN_ZONES_WITH_AN_ETA_BEFORE_PHUKET : i32 = 5;
 
 ; --- What is not published, said plainly ----------------------------------------------------------
 ; The shop publishes a WINDOW, not a travel time. No ETA for any area appears in
-; data/fleet_seed.json, and the minute ranges the API serves (src/api/orders.rs:1787-1788 and
-; :2409-2410) come from the zone rows of the other island.
+; data/fleet_seed.json, and the minute ranges the API serves (src/api/orders.rs:1913-1914 and
+; :2535-2536) come from the zone rows of the other island.
 ; CORRECTED 2026-09-24: the owner said so in as many words -- no delivery time in minutes is
 ; published, the shop promises windows. The API serves those two fields through one rule now,
 ; served_eta at src/delivery.rs:126-131 (reached through :133-141 from both lines above): both
@@ -715,7 +715,7 @@ pub const DELIVERY_CUTOFF_IS_MODELLED_IN_THE_SHIPPED_CODE : bool = false;
 pub const UNMODELLED_RULE_COUNT : i32 = 2;
 
 ; --- Fees and totals ------------------------------------------------------------------------------
-; Measured 2026-09-20: the zone fee is READ at two endpoints (src/api/orders.rs:1794 and :2415)
+; Measured 2026-09-20: the zone fee is READ at two endpoints (src/api/orders.rs:1920 and :2541)
 ; and rendered on one screen (src/ui/screens/checkout_screen.rs:818-825, :1547; the fee is at
 ; :826-836 since 2026-09-24, the ETA block now standing above it). It appears in no
 ; total expression anywhere: the order total the server accepts is subtotal minus bonus minus

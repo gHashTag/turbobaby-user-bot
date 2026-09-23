@@ -351,6 +351,12 @@ fn validate_bike_lines(items: &[OrderItem], today: chrono::NaiveDate) -> Result<
                             return Err(StatusCode::BAD_REQUEST);
                         }
                         // "THB", or the USD/EUR equivalent the seed allows.
+                        // CORRECTED 2026-09-24 (T27 C3): only the code's shape
+                        // is bounded here. On the order path a FIGURE in any
+                        // currency but THB is then refused (`deposit_refusal`,
+                        // `DepositRefusal::NotComparable`) until the owner
+                        // decides how a foreign deposit is recorded; only the
+                        // money form with no figure passes in another currency.
                         if currency
                             .as_ref()
                             .is_some_and(|c| c.is_empty() || c.len() > 8)
@@ -606,6 +612,10 @@ pub(crate) enum BikeLineCheck {
     /// Accepting it would put a rental with no rate anywhere in the system on
     /// the books.
     NoPublishedRate(String),
+    /// A rental line's money deposit that the family's published
+    /// `deposit_thb` does not back (T27 C3, #28 AC3/AC7). The reasons are
+    /// [`DepositRefusal`]'s.
+    DepositRefused(String, DepositRefusal),
 }
 
 /// Compare the rate the client says was quoted against the one the seed-derived
@@ -636,9 +646,108 @@ pub(crate) fn rate_divergence(
     }
 }
 
+/// Why a rental line's money deposit was refused (T27 C3, 2026-09-24).
+///
+/// The published figure is `bikes.deposit_thb`: a per-family attribute
+/// looked up on the family key and never derived (D17), undiscounted (the
+/// class and term discounts are RATE discounts). The figure in the order
+/// body is input, never authority (#28 AC3/AC7). Until this check the body's
+/// deposit was only bounded by [`validate_bike_lines`] and stored as sent, so
+/// a lowered one was recorded rather than refused.
+#[derive(Debug, PartialEq)]
+pub(crate) enum DepositRefusal {
+    /// Money on a family that publishes no deposit: `deposit_thb` is absent,
+    /// or is not a finite positive figure. There is nothing to check the
+    /// money against, and inventing a figure is the D9 defect.
+    NotPublished,
+    /// A figure in the published currency that is not the published figure.
+    /// The owner's knowledge base lowers a deposit only through a manager,
+    /// never through the order body.
+    Differs { claimed: f64, published: f64 },
+    /// A figure in another currency. Its equivalent is agreed by a human at
+    /// the door and no exchange rate is published (D18), so the server has
+    /// nothing to compare it with. The money form without a figure is still
+    /// accepted.
+    NotComparable { currency: String },
+}
+
+/// Server-side authority for the deposit of ONE rental line, against the
+/// family's published `deposit_thb`. Pure; `None` means accepted.
+///
+/// * No deposit form, or the passport: accepted on any family. The passport
+///   carries no amount by construction.
+/// * Money on a family with no published deposit: refused.
+/// * Money whose figure is not agreed yet (`amount: None`): accepted. That
+///   is a dash, not a claim, and there is nothing to compare.
+/// * A figure in the published currency, or with no currency named: must be
+///   the published figure, exactly. The body may repeat the figure, never
+///   name it. That is not a claim of whole-baht tiers: the column admits a
+///   fraction and no tier check runs on it (turbobaby/catalog-api
+///   `DEPOSIT_COLUMN_ADMITS_A_FRACTION`, `DEPOSIT_TIER_CHECK_IS_SHIPPED`).
+/// * A figure in any other currency: refused, see
+///   [`DepositRefusal::NotComparable`].
+///
+/// The figure is PER UNIT (2026-09-24). `deposit_thb` is one bike's deposit
+/// and the line's `quantity` is not read, so a line of two units passes with
+/// the one-bike figure and is refused with twice it. Whether a multi-unit
+/// line should carry the line's total instead is the owner's question.
+pub(crate) fn deposit_refusal(
+    deposit: Option<&DepositForm>,
+    published_deposit_thb: Option<f64>,
+) -> Option<DepositRefusal> {
+    let Some(DepositForm::Money {
+        amount, currency, ..
+    }) = deposit
+    else {
+        return None;
+    };
+    // The one filter that decides "usable" for a published figure (D15): an
+    // absent, NaN, infinite, zero or negative column is no deposit at all.
+    let Some(published) = crate::trios::pricing::published_money(published_deposit_thb) else {
+        return Some(DepositRefusal::NotPublished);
+    };
+    // No figure agreed yet is a dash, not a claim: there is nothing to
+    // compare, so the line is accepted.
+    let claimed = (*amount)?;
+    // The column is THB by name; the code comes from the declared market
+    // profile rather than a literal (D18).
+    let published_code = crate::trios::pricing::THB_MARKET.currency_code;
+    if let Some(code) = currency.as_deref() {
+        if !code.eq_ignore_ascii_case(published_code) {
+            return Some(DepositRefusal::NotComparable {
+                currency: code.to_string(),
+            });
+        }
+    }
+    if claimed != published {
+        return Some(DepositRefusal::Differs { claimed, published });
+    }
+    None
+}
+
+/// [`deposit_refusal`] over every rental line of the family `key`; the first
+/// refusal wins. Sale lines carry no deposit and are skipped.
+pub(crate) fn rental_deposit_refusal(
+    items: &[OrderItem],
+    key: &str,
+    published_deposit_thb: Option<f64>,
+) -> Option<DepositRefusal> {
+    items
+        .iter()
+        .filter_map(|item| item.bike.as_ref())
+        .filter(|bike| bike.bike_key == key)
+        .find_map(|bike| match &bike.deal {
+            BikeDeal::BikeRental { deposit, .. } => {
+                deposit_refusal(deposit.as_ref(), published_deposit_thb)
+            }
+            BikeDeal::BikeSale { .. } => None,
+        })
+}
+
 /// Fleet-side authority for the bike lines of an order: the family must exist,
 /// a rental must be of a family that is still offered and that publishes a
-/// rate, and any quoted rate is reconciled against the file.
+/// rate, a rental's money deposit must be the family's published one
+/// ([`deposit_refusal`]), and any quoted rate is reconciled against the file.
 ///
 /// One `find_family_by_key` per distinct family — a cart holds one or two, and
 /// the whole fleet is 14 families, so this is cheaper and far clearer than
@@ -703,6 +812,9 @@ async fn check_bike_lines(
             }
             if listing.bike.base_rate_thb_day.is_none() {
                 return Ok(BikeLineCheck::NoPublishedRate((*key).to_string()));
+            }
+            if let Some(why) = rental_deposit_refusal(items, key, listing.bike.deposit_thb) {
+                return Ok(BikeLineCheck::DepositRefused((*key).to_string(), why));
             }
         }
         if listing.units_available < units.ceil() as i64 {
@@ -1093,11 +1205,12 @@ async fn create_order(
 
     // D11/D12: the fleet half of price authority. A bike line adds nothing to
     // the subtotal, so `check_full_subtotal` cannot police it — this does. It
-    // refuses unknown families, rentals of a family the door has closed, and
+    // refuses unknown families, rentals of a family the door has closed,
     // rentals of a family with no published rate (there is no number to quote,
-    // so the cart cannot hold one). A quoted rate that disagrees with the file
-    // is logged, never corrected: the door is authoritative, and logging must
-    // not block the answer.
+    // so the cart cannot hold one), and a rental whose money deposit is not the
+    // family's published deposit (T27 C3). A quoted rate that disagrees with
+    // the file is logged, never corrected: the door is authoritative, and
+    // logging must not block the answer.
     match check_bike_lines(&state.db.orm, &req.items).await {
         Ok(BikeLineCheck::Ok) => {}
         Ok(BikeLineCheck::UnknownFamily(key)) => {
@@ -1152,6 +1265,19 @@ async fn create_order(
                 telegram_id = req.telegram_id.unwrap_or(0),
                 bike_key = %key,
                 "create_order: rental requested for a family with no published rate"
+            );
+            return Err(StatusCode::UNPROCESSABLE_ENTITY);
+        }
+        Ok(BikeLineCheck::DepositRefused(key, why)) => {
+            // T27 C3: the deposit on a rental line is the family's published
+            // figure or no figure at all. No fraud event: a cart left open
+            // across a tariff edit lands here as honestly as a lowered figure
+            // does, and no fraud code names this refusal.
+            tracing::warn!(
+                telegram_id = req.telegram_id.unwrap_or(0),
+                bike_key = %key,
+                refusal = ?why,
+                "create_order: rental deposit is not backed by the family's published deposit"
             );
             return Err(StatusCode::UNPROCESSABLE_ENTITY);
         }
@@ -2440,18 +2566,7 @@ async fn promptpay_qr(
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
     let order = model.ok_or(StatusCode::NOT_FOUND)?;
-    // D9: a QR is a payment instruction, so there is no honest fallback. The
-    // old `else { 0.0 }` built a scannable 0-baht code for an order whose
-    // total was NaN — the customer would have paid nothing and both sides
-    // would have believed the bill was settled. Refuse loudly instead.
-    let Some(total) = crate::db::orders::finite_money(Some(order.total)) else {
-        tracing::error!(
-            order_id = %id,
-            total = order.total,
-            "promptpay_qr: order total is not a finite non-negative number; refusing to render a QR"
-        );
-        return Err(StatusCode::INTERNAL_SERVER_ERROR);
-    };
+    let total = promptpay_qr_amount(&id, order.total)?;
     let payload = build_payload(&state.config.promptpay, total, &id);
     let svg = svg_qr(&payload).map_err(|e| {
         tracing::error!("promptpay_qr render: {}", e);
@@ -2460,13 +2575,62 @@ async fn promptpay_qr(
     Ok(([(axum::http::header::CONTENT_TYPE, "image/svg+xml")], svg).into_response())
 }
 
+/// The amount a PromptPay QR may carry for an order whose stored total is
+/// `total`, or the refusal.
+///
+/// D9: a QR is a payment instruction, so there is no honest fallback. The
+/// old `else { 0.0 }` built a scannable 0-baht code for an order whose
+/// total was NaN — the customer would have paid nothing and both sides
+/// would have believed the bill was settled. Refuse loudly instead.
+///
+/// T27 D4 (2026-09-24): the same code was still drawn for a total of exactly
+/// zero, because [`finite_money`](crate::db::orders::finite_money) keeps a
+/// zero. A zero total is a real figure — a bike-only order stores 0 because
+/// the rental is not this server's sum ([`check_full_subtotal`]), and an
+/// order the discounts paid in full floors at 0 — but there is nothing to
+/// collect, and a code that "settles" 0 baht while the rental money is still
+/// owed is the defect above with a finite number in it. So a total that is
+/// not strictly positive gets no QR: an unusable stored figure stays the
+/// server's own fault (500), a zero is refused as the caller's request (422).
+///
+/// CORRECTED 2026-09-24 (review of D4): "strictly positive" was read off the
+/// stored figure, and the QR does not carry the stored figure. It prints the
+/// total at two decimals (`{:.2}` in `amount_tlv` and `fallback_payload`,
+/// `src/promptpay.rs`), and `create_order` stores the body's total whenever
+/// [`validate_create_order`] finds it within a hundredth of the expected one,
+/// so a bike-only order may store 0.004: that was drawn as a scannable "0.00".
+/// The test is therefore on the satang the code would carry: under one
+/// satang after rounding is the zero case (422). One satang (0.01) still
+/// gets its QR: it is a real amount the same tolerance can store, and the
+/// smallest the code can carry.
+fn promptpay_qr_amount(order_id: &str, total: f64) -> Result<f64, StatusCode> {
+    let Some(total) = crate::db::orders::finite_money(Some(total)) else {
+        tracing::error!(
+            order_id = %order_id,
+            total = total,
+            "promptpay_qr: order total is not a finite non-negative number; refusing to render a QR"
+        );
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    };
+    if (total * 100.0).round() < 1.0 {
+        tracing::info!(
+            order_id = %order_id,
+            total = total,
+            "promptpay_qr: order total rounds to zero satang; there is nothing to collect, refusing to render a QR"
+        );
+        return Err(StatusCode::UNPROCESSABLE_ENTITY);
+    }
+    Ok(total)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        admin_item_line, check_and_record, check_full_subtotal, is_valid_idempotency_key,
-        new_store, rate_divergence, thb_or_dash, validate_bike_lines, validate_create_order,
-        validate_update_order_status, CreateOrderRequest, FullSubtotalCheck, PriceCatalog,
-        ANON_ORDER_RL_MAX_ATTEMPTS, ANON_ORDER_RL_MAX_IPS, ANON_ORDER_RL_WINDOW,
+        admin_item_line, check_and_record, check_full_subtotal, deposit_refusal,
+        is_valid_idempotency_key, new_store, promptpay_qr_amount, rate_divergence,
+        rental_deposit_refusal, thb_or_dash, validate_bike_lines, validate_create_order,
+        validate_update_order_status, CreateOrderRequest, DepositRefusal, FullSubtotalCheck,
+        PriceCatalog, ANON_ORDER_RL_MAX_ATTEMPTS, ANON_ORDER_RL_MAX_IPS, ANON_ORDER_RL_WINDOW,
         MAX_BIKE_UNITS_PER_LINE, MAX_RENTAL_DAYS,
     };
 
@@ -3661,5 +3825,232 @@ mod tests {
     fn admin_card_keeps_the_short_form_for_a_catalog_line() {
         let line = admin_item_line(&accessory_item_with("a1", 3.0));
         assert_eq!(line, "  • a1 × 3");
+    }
+
+    // ── PromptPay QR amount (T27 D4, 2026-09-24) ─────────────────────────
+
+    #[test]
+    fn a_zero_total_is_refused_a_promptpay_qr_rather_than_drawn_as_one() {
+        // A bike-only order stores subtotal 0 and total 0 (the rental is not
+        // this server's sum), and an order the discounts paid in full floors at
+        // 0. Either way there is nothing to collect: a scannable code for 0
+        // baht is a payment instruction that settles nothing. A 4xx, never an
+        // SVG.
+        assert_eq!(
+            promptpay_qr_amount("o1", 0.0),
+            Err(StatusCode::UNPROCESSABLE_ENTITY)
+        );
+        assert_eq!(
+            promptpay_qr_amount("o1", -0.0),
+            Err(StatusCode::UNPROCESSABLE_ENTITY)
+        );
+        // Review fix: a total the create path can store (within a hundredth of
+        // an expected 0) that the code would print as "0.00".
+        assert_eq!(
+            promptpay_qr_amount("o1", 0.004),
+            Err(StatusCode::UNPROCESSABLE_ENTITY)
+        );
+    }
+
+    #[test]
+    fn the_refusal_follows_the_two_decimals_the_code_prints() {
+        // The QR prints `{:.2}` (src/promptpay.rs), so "nothing to collect" is
+        // decided on that text, not on the stored figure. Half a satang rounds
+        // up to one, and is printed as one.
+        for total in [0.0, 0.001, 0.004, 0.0049, 0.005, 0.006, 0.01, 0.1, 449.0] {
+            assert_eq!(
+                promptpay_qr_amount("o1", total).is_err(),
+                format!("{total:.2}") == "0.00",
+                "{total}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_positive_total_gets_its_qr_and_an_unusable_one_stays_a_server_fault() {
+        assert_eq!(promptpay_qr_amount("o1", 449.0), Ok(449.0));
+        // One satang is a real amount the create path's hundredth can store,
+        // and the smallest the code can carry, so it keeps its QR.
+        assert_eq!(promptpay_qr_amount("o1", 0.01), Ok(0.01));
+        // Nobody computed these: the stored row is broken, which is the
+        // server's fault and not the caller's (unchanged by D4).
+        for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY, -1.0] {
+            assert_eq!(
+                promptpay_qr_amount("o1", bad),
+                Err(StatusCode::INTERNAL_SERVER_ERROR),
+                "{bad}"
+            );
+        }
+    }
+
+    // ── Rental deposit authority (T27 C3, 2026-09-24) ────────────────────
+
+    fn money(amount: Option<f64>, currency: Option<&str>) -> DepositForm {
+        DepositForm::Money {
+            amount,
+            currency: currency.map(str::to_string),
+            method: Some("cash THB".into()),
+        }
+    }
+
+    /// A rental of `key` starting tomorrow whose deposit is `deposit`.
+    fn rental_with(key: &str, deposit: Option<DepositForm>) -> OrderItem {
+        bike_item(
+            key,
+            1.0,
+            BikeDeal::BikeRental {
+                rental_start: today() + chrono::Duration::days(1),
+                rental_end: today() + chrono::Duration::days(7),
+                rate_thb_day: Some(449.0),
+                deposit,
+            },
+        )
+    }
+
+    #[test]
+    fn a_money_deposit_must_be_the_familys_published_deposit() {
+        // nmax-155 publishes 3000 (data/fleet_seed.json; the `rental` fixture).
+        let published = Some(3000.0);
+        let refused = |amount: f64, currency: Option<&str>| {
+            deposit_refusal(Some(&money(Some(amount), currency)), published)
+        };
+        assert_eq!(refused(3000.0, Some("THB")), None);
+        // The lowered deposit #28 describes: bounded, and until now stored.
+        assert_eq!(
+            refused(2000.0, Some("THB")),
+            Some(DepositRefusal::Differs {
+                claimed: 2000.0,
+                published: 3000.0
+            })
+        );
+        // A raised one is no better: the figure is not the body's to name.
+        assert_eq!(
+            refused(3500.0, Some("THB")),
+            Some(DepositRefusal::Differs {
+                claimed: 3500.0,
+                published: 3000.0
+            })
+        );
+        // No currency named reads as the published one, so only the
+        // published figure passes; the ISO code is not case-sensitive.
+        assert_eq!(refused(3000.0, None), None);
+        assert_eq!(
+            refused(2999.0, None),
+            Some(DepositRefusal::Differs {
+                claimed: 2999.0,
+                published: 3000.0
+            })
+        );
+        assert_eq!(refused(3000.0, Some("thb")), None);
+    }
+
+    #[test]
+    fn a_money_deposit_on_a_family_that_publishes_none_is_refused() {
+        // click-125 publishes no deposit. An unusable stored figure is the
+        // same absence, never a deposit of zero (D9).
+        for published in [None, Some(0.0), Some(-1.0), Some(f64::NAN)] {
+            assert_eq!(
+                deposit_refusal(Some(&money(Some(2000.0), Some("THB"))), published),
+                Some(DepositRefusal::NotPublished),
+                "{published:?}"
+            );
+            assert_eq!(
+                deposit_refusal(Some(&money(None, None)), published),
+                Some(DepositRefusal::NotPublished),
+                "{published:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_passport_and_a_figure_not_agreed_yet_are_still_accepted() {
+        for published in [Some(3000.0), None] {
+            assert_eq!(
+                deposit_refusal(Some(&DepositForm::Passport), published),
+                None
+            );
+            assert_eq!(deposit_refusal(None, published), None);
+        }
+        // Money with no figure yet states a form, not an amount.
+        assert_eq!(
+            deposit_refusal(Some(&money(None, Some("THB"))), Some(3000.0)),
+            None
+        );
+        assert_eq!(
+            deposit_refusal(Some(&money(None, Some("USD"))), Some(3000.0)),
+            None
+        );
+    }
+
+    #[test]
+    fn a_foreign_currency_figure_cannot_be_compared_and_is_refused() {
+        // No exchange rate is published (D18); the equivalent is agreed at
+        // the door, so a figure in another currency has no authority here.
+        assert_eq!(
+            deposit_refusal(Some(&money(Some(100.0), Some("USD"))), Some(3000.0)),
+            Some(DepositRefusal::NotComparable {
+                currency: "USD".into()
+            })
+        );
+    }
+
+    #[test]
+    fn every_rental_line_of_the_family_is_held_to_its_deposit() {
+        let agreed = || rental_with("nmax-155", Some(money(Some(3000.0), Some("THB"))));
+        let lowered = rental_with("nmax-155", Some(money(Some(1000.0), Some("THB"))));
+        // Another family's line is judged against its own figure, not this one.
+        let other = || rental_with("xmax-300", Some(money(Some(1000.0), Some("THB"))));
+        let sale = || bike_item("nmax-155", 1.0, BikeDeal::BikeSale { price_thb: None });
+        assert_eq!(
+            rental_deposit_refusal(&[agreed(), sale(), other()], "nmax-155", Some(3000.0)),
+            None
+        );
+        assert_eq!(
+            rental_deposit_refusal(&[agreed(), lowered, other()], "nmax-155", Some(3000.0)),
+            Some(DepositRefusal::Differs {
+                claimed: 1000.0,
+                published: 3000.0
+            })
+        );
+        // The passport stands on a family that publishes no deposit.
+        assert_eq!(
+            rental_deposit_refusal(
+                &[rental_with("nmax-155", Some(DepositForm::Passport))],
+                "nmax-155",
+                None
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn a_multi_unit_line_carries_the_per_unit_deposit_not_the_line_total() {
+        // Documents the rule as shipped (2026-09-24), not an owner decision:
+        // `deposit_thb` is one bike's deposit, `quantity` is not read, so a
+        // line of two units passes with the one-bike figure and is refused with
+        // twice it. Per line or per unit is an open owner question.
+        let two_units = |figure: f64| {
+            bike_item(
+                "nmax-155",
+                2.0,
+                BikeDeal::BikeRental {
+                    rental_start: today() + chrono::Duration::days(1),
+                    rental_end: today() + chrono::Duration::days(7),
+                    rate_thb_day: Some(449.0),
+                    deposit: Some(money(Some(figure), Some("THB"))),
+                },
+            )
+        };
+        assert_eq!(
+            rental_deposit_refusal(&[two_units(3000.0)], "nmax-155", Some(3000.0)),
+            None
+        );
+        assert_eq!(
+            rental_deposit_refusal(&[two_units(6000.0)], "nmax-155", Some(3000.0)),
+            Some(DepositRefusal::Differs {
+                claimed: 6000.0,
+                published: 3000.0
+            })
+        );
     }
 }

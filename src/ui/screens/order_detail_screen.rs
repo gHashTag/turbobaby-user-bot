@@ -87,7 +87,7 @@ struct OrderStatusResp {
 ///
 /// Dropping is what the caller already does with any line it cannot identify
 /// — every call site is a `filter_map`. Bike lines never reach this code at
-/// all: `src/api/orders.rs:845` clears `unit_price` on them on purpose (a
+/// all: `src/api/orders.rs:957` clears `unit_price` on them on purpose (a
 /// rental's money lives in its `deal`), and none of the four id branches
 /// below matches a bike, so a reorder has never included one.
 fn api_order_item_to_cart_item(item: &ApiOrderItem) -> Option<CartItem> {
@@ -156,7 +156,7 @@ fn item_name(item: &ApiOrderItem) -> String {
 ///
 /// Goes through the same `published` filter as the catalog (D9): `None`, NaN,
 /// infinity, negatives and `0.0` all mean "never published". A bike line is
-/// deliberately in that set — `src/api/orders.rs:845` clears `unit_price` on
+/// deliberately in that set — `src/api/orders.rs:957` clears `unit_price` on
 /// bikes because a rental's money lives in its `deal`, so multiplying a day
 /// rate by a unit count here would print a figure the door never quoted.
 fn line_total(item: &ApiOrderItem) -> String {
