@@ -12,6 +12,7 @@ pub mod i18n;
 pub mod js_errors;
 pub mod loyalty;
 pub mod market;
+pub mod order_status_view;
 pub mod packs;
 pub mod person;
 pub mod pricing;

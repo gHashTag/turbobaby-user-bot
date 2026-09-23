@@ -230,7 +230,7 @@ pub fn insert_is_admitted(kind_within_cap: bool, payload_is_json: bool) bool {
 }
 
 ; src/notification_queue.rs:347-388. Four arms plus a catch-all; three writers, at
-; src/db/referrals.rs:300, src/db/orders.rs:437 and src/db/referrals.rs:877. The fourth arm is kept
+; src/db/referrals.rs:300, src/db/orders.rs:463 and src/db/referrals.rs:877. The fourth arm is kept
 ; deliberately for rows written before the mechanic behind it was withdrawn, and the reason stands
 ; at src/db/notifications.rs:27-35: the writer is code and the rows are data, and the two do not
 ; have the same lifetime. That retirement is not this file's decision to make or to reverse.
@@ -475,7 +475,7 @@ pub fn failure_handling_depends_on_the_cause(cause_is_permanent: bool, classes: 
 ; migrations/067_notification_queue.sql:5 and filled in practice by a client-side uuid v4 at
 ; src/db/notifications.rs:73, and UNIQUE occurs 0 times in that migration. Each of the
 ; three producers carries its own guard instead -- a fresh-invite test at src/db/referrals.rs:295,
-; a first-order test at src/db/orders.rs:397, and an ON CONFLICT (referrer_id, milestone) DO NOTHING
+; a first-order test at src/db/orders.rs:423, and an ON CONFLICT (referrer_id, milestone) DO NOTHING
 ; whose rows_affected decides the send at src/db/referrals.rs:805-817. Three guards, three shapes,
 ; nothing shared. A fourth producer inherits none of them.
 pub const QUEUE_UNIQUE_CONSTRAINT_COUNT : u8 = 1;
@@ -486,7 +486,7 @@ pub const PRODUCER_COUNT : u8 = 3;
 pub const PRODUCERS_WITH_THEIR_OWN_GUARD : u8 = 3;
 pub const GUARD_SHAPE_COUNT : u8 = 3;
 pub const GUARD_FRIEND_JOINED : str = "src/db/referrals.rs:295";
-pub const GUARD_FRIEND_ORDERED : str = "src/db/orders.rs:397";
+pub const GUARD_FRIEND_ORDERED : str = "src/db/orders.rs:423";
 pub const GUARD_MILESTONE : str = "src/db/referrals.rs:805-817";
 
 pub fn duplicate_enqueue_is_stopped(producer_guard_present: bool) bool {

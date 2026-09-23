@@ -34,21 +34,22 @@ declared, is RED. DECISIONS.md D16 is the rule -- a gate whose input can reach z
 must pin a floor, because "found nothing" and "found nothing wrong" look identical
 from the outside. The floor on the table itself is MIN_BINDINGS.
 
-WHAT A GREEN RUN DOES NOT PROVE. Re-measured 2026-09-22, on the working tree that adds
-the five binding groups of that day (a33e500 plus their spec edits) and the fixes a
-same-day review of those groups asked for: the table's 168 bindings cover 164 distinct
-(contract, constant) pairs out of 4997 top-level `pub const` declarations across the 45
-files under specs/, touching 40 of those 45 contracts. That is 3.3% of the declared
-constants, and it is 0% of the 9038 `assert` statements. (Earlier the same day, before
-that review's fixes: 162 bindings, 158 pairs of 4942, 3.2%, 8940 asserts. The fixes added
-the six rows, and most of the 55 constants and 98 asserts between the two readings are
+WHAT A GREEN RUN DOES NOT PROVE. Re-measured 2026-09-24, on the tree that adds the
+status, cancellation and money families and the person-naming resolution of 2026-09-22/23
+to the binding groups below: the table's 198 bindings cover 190 distinct (contract,
+constant) pairs out of 5310 top-level `pub const` declarations across the 45 files under
+specs/, touching 41 of those 45 contracts. That is 3.6% of the declared constants, and it
+is 0% of the 9535 `assert` statements. (2026-09-22, the binding groups alone: 168
+bindings, 164 pairs of 4997, 3.3%, 9038 asserts, 40 contracts. Earlier that day, before
+a review's fixes: 162 bindings, 158 pairs of 4942, 3.2%, 8940 asserts. The fixes added
+six rows, and most of the 55 constants and 98 asserts between those two readings are
 dated re-measurements kept beside the readings they correct.) This script
 compares DECLARED VALUES, it does not execute a
 single contract predicate, and a contract whose constants all match the code can still
-assert something false about them. The five files no row names as a contract are
+assert something false about them. The four files no row names as a contract are
 specs/agents/turbobaby.t27 (read here only as a SOURCE), market_profile.t27 (tied by
-scripts/verify_fleet_seed.py instead), order_presentation.t27, person_naming.t27 and
-ride_runtime.t27. Every binding below was measured by hand before it
+scripts/verify_fleet_seed.py instead), person_naming.t27 and ride_runtime.t27;
+order_presentation.t27 has been bound since 2026-09-22. Every binding below was measured by hand before it
 was written; the rest of the corpus is unchecked and is not claimed otherwise. Growing
 the table is the point; a number here that nobody re-measured is the defect this file
 exists to catch. Was, re-measured 2026-09-21 11:2x after an adversarial pass: 66
@@ -439,6 +440,16 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "relation": "equal",
         "why": "a public board renders this string; the cap is the only thing between "
                "a player-chosen name and the width of the screen",
+    },
+    {
+        "name": "game_score.IDENTIFIER_DIGIT_RUN ~ game.rs IDENTIFIER_DIGIT_RUN",
+        "spec": "specs/turbobaby/game_score.t27",
+        "const": "IDENTIFIER_DIGIT_RUN",
+        "source": "src/api/game.rs",
+        "extract": ("regex", r"const IDENTIFIER_DIGIT_RUN:\s*usize\s*=\s*([0-9_]+)\s*;"),
+        "relation": "equal",
+        "why": "the anonymous board masks a name holding this many digits in a row even when "
+               "the row's own Telegram id cannot be read (2026-09-24 leak fix)",
     },
     # --- request identity -----------------------------------------------------------------
     {
@@ -998,6 +1009,460 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "why": "the contract records the WRONG number too, on purpose, so the next "
                "reader running the fast grep does not 'correct' a true 15 into a false "
                "19; pinning both keeps the gap between them from moving unnoticed",
+    },
+    # --- order presentation fixes, 2026-09-22 ---
+    # person-naming family. The attendee handle bound is events_booking's alone since
+    # person_naming stopped restating it, and until now nothing tied its four numbers to
+    # src/trios/attendees.rs except ATTENDEE_SOURCE_LINES, which says the file's length
+    # changed and not which fact did. Measured by hand 2026-09-22: the comment at src/trios/attendees.rs:39
+    # reads `5..=32`, the check at src/trios/attendees.rs:41 reads `handle.len() > 32`, and
+    # the module holds 16 `#[test]` attributes, all indented inside `mod tests`, none in a
+    # string or a comment.
+    # HANDLE_MIN_ENFORCED is NOT bound: the enforced floor is an emptiness check with no
+    # numeral in it, and a pattern for "no lower length check exists" would be a second
+    # fact wearing that constant's name. What a fix to the floor would change is bound
+    # under its own name instead, ATTENDEE_SOURCE_LENGTH_COMPARISONS, the last entry here.
+    {
+        "name": "events_booking.HANDLE_MIN_DECLARED ~ attendees.rs handle comment, low end",
+        "spec": "specs/turbobaby/events_booking.t27",
+        "const": "HANDLE_MIN_DECLARED",
+        "source": "src/trios/attendees.rs",
+        "extract": ("regex", r"//\s*Telegram handles are (\d+)\.\.=\d+ of"),
+        "relation": "equal",
+        "why": "the contract's DECLARED minimum is what this comment states; the gap it "
+               "pins against the enforced floor is only real while the comment says it",
+    },
+    {
+        "name": "events_booking.HANDLE_MAX_DECLARED ~ attendees.rs handle comment, high end",
+        "spec": "specs/turbobaby/events_booking.t27",
+        "const": "HANDLE_MAX_DECLARED",
+        "source": "src/trios/attendees.rs",
+        "extract": ("regex", r"//\s*Telegram handles are \d+\.\.=(\d+) of"),
+        "relation": "equal",
+        "why": "same comment, the upper end the contract says the check agrees with",
+    },
+    {
+        "name": "events_booking.HANDLE_MAX_ENFORCED ~ attendees.rs length check",
+        "spec": "specs/turbobaby/events_booking.t27",
+        "const": "HANDLE_MAX_ENFORCED",
+        "source": "src/trios/attendees.rs",
+        "extract": ("regex", r"\bhandle\.len\(\)\s*>\s*(\d+)"),
+        "relation": "equal",
+        "why": "the normaliser's upper length comparison, which the contract says the "
+               "check enforces; that it is the ONLY length comparison is not this binding's "
+               "to say, and ATTENDEE_SOURCE_LENGTH_COMPARISONS below says it",
+    },
+    {
+        "name": "events_booking.ATTENDEE_SOURCE_TESTS ~ attendees.rs #[test] attributes",
+        "spec": "specs/turbobaby/events_booking.t27",
+        "const": "ATTENDEE_SOURCE_TESTS",
+        "source": "src/trios/attendees.rs",
+        "extract": ("regex_count", r"^[ \t]*#\[test\][ \t]*$"),
+        "relation": "equal",
+        "why": "the contract's HANDLE_GAP_EXAMPLES_IN_TESTS and HANDLE_OVER_MAX_EXAMPLES_"
+               "IN_TESTS were read off these tests; a test added or removed means they "
+               "must be read again, which the line count alone does not say",
+    },
+    # Added after a checker's plant: `if handle.len() < 5 {` written over the emptiness
+    # check at src/trios/attendees.rs:36 fixes the floor, keeps 357 lines and 16 tests, and
+    # left the four bindings above and ATTENDEE_SOURCE_LINES all holding. The count is of
+    # ORDERING comparisons of a length anywhere in the module: `<`, `<=`, `>` or `>=` on
+    # either side of a `len()` or `count()`, and a range `contains` over one. Direction is
+    # not read, because `len() > N` is a ceiling in a refusal and a floor in an acceptance;
+    # a first draft that counted only "from below" forms missed `.filter(|h| h.len() > 4)`.
+    # Measured 2026-09-22: 1 in the file (the upper check at src/trios/attendees.rs:41), 2
+    # in each of seven planted floors (the checker's, reversed, chars().count(), range
+    # contains, a second comparison on the upper check's line, `>= N` and `> N` filters in
+    # attendee_link), 1 in `len().lt(&N)` and `get(N..).is_none()`, which stay unseen. The
+    # `(?<![=\-])` keeps `=>` and `->` from reading as comparisons. No witness: the expected
+    # value is 1, so a scan gone blind reads 0 and is red on its own (D16 asks a witness of
+    # a zero). Rewriting the upper check away is HANDLE_MAX_ENFORCED's to catch, not this.
+    {
+        "name": "events_booking.ATTENDEE_SOURCE_LENGTH_COMPARISONS ~ attendees.rs length comparisons",
+        "spec": "specs/turbobaby/events_booking.t27",
+        "const": "ATTENDEE_SOURCE_LENGTH_COMPARISONS",
+        "source": "src/trios/attendees.rs",
+        "extract": (
+            "regex_count",
+            r"\.(?:len|count)\(\)\s*[<>]"
+            r"|(?<![=\-])[<>]=?\s*[\w.()]*\.(?:len|count)\(\)"
+            r"|\.contains\(\s*&[\w.()]*\.(?:len|count)\(\)",
+        ),
+        "relation": "equal",
+        "why": "HANDLE_MIN_ENFORCED records an emptiness check with no numeral and is bound "
+               "by nothing; a floor fixed in place as a length comparison flips it while the "
+               "line and test counts hold, and this count is what turns red instead",
+    },
+    # status family. src/trios/order_status_view.rs is the one exact reading of the order
+    # status the orders list, the order detail screen and the stepper now share. The
+    # vocabulary and the terminal set are order-status's, and the reading keeps named copies
+    # of both, one arm per line in the shape `"name" => StatusArm::X,` or
+    # `"a" | "b" => StatusArm::X,`. Measured by hand 2026-09-22: arm_of's seven named arms
+    # hold the nine quoted names at src/trios/order_status_view.rs:119-125 (its eighth arm
+    # is the fallback), and no other line of the file, doc comments and tests included, has
+    # a quoted name followed by `=> StatusArm::`. The lookahead lets both names of a pair
+    # match.
+    {
+        "name": "order_status.STATUS_NAMES ~ order_status_view.rs arm_of arms",
+        "spec": "specs/turbobaby/order_status.t27",
+        "const": "STATUS_NAMES",
+        "source": "src/trios/order_status_view.rs",
+        "extract": ("regex_all", r'"([a-z_]+)"(?=(?: \| "[a-z_]+")* => StatusArm::)'),
+        "relation": "set_equal",
+        "why": "the customer's reading must give every accepted name a deliberate arm; a "
+               "tenth name the server starts accepting would otherwise fall to Unresolved "
+               "and be drawn as unreadable, and STATUS_NAMES is already bound to "
+               "VALID_STATUSES, so this chains the screens to the write path",
+    },
+    {
+        "name": "order_status.TERMINAL_NAMES ~ order_status_view.rs terminal arms",
+        "spec": "specs/turbobaby/order_status.t27",
+        "const": "TERMINAL_NAMES",
+        "source": "src/trios/order_status_view.rs",
+        "extract": (
+            "regex_all",
+            r'"([a-z_]+)"(?=(?: \| "[a-z_]+")* => StatusArm::'
+            r"(?:DeliveredOrCompleted|CancelledOrRejected),)",
+        ),
+        "relation": "set_equal",
+        "why": "terminality is order-status's; the reading's is_terminal is true for exactly "
+               "these two arms, so the names in them are its copy of the terminal set, and a "
+               "name moved in or out of them flips a chip, the reorder button and the bar "
+               "(the host tests in the module check is_terminal against the same constant)",
+    },
+    # LABEL_KEY_NAMES is order-presentation's own table, in the order of its ARM_* arms.
+    # label_key's eight arms are the only `StatusArm::X => T_ORDERS_STATUS_...,` lines in the
+    # file (src/trios/order_status_view.rs:146-153), written in that order.
+    {
+        "name": "order_presentation.LABEL_KEY_NAMES ~ order_status_view.rs label_key arms",
+        "spec": "specs/turbobaby/order_presentation.t27",
+        "const": "LABEL_KEY_NAMES",
+        "source": "src/trios/order_status_view.rs",
+        "extract": ("regex_all", r"StatusArm::\w+ => (T_ORDERS_STATUS_[A-Z_]+),"),
+        "relation": "list_equal",
+        "why": "a label key the owner adds when splitting a shared arm (owner questions A "
+               "and B) has to arrive in the contract's table too, in arm order; until then "
+               "the table and the one function that uses it cannot drift apart",
+    },
+    # The three UI files hold no status literal at all since the repair: every decision is
+    # the reading's. Counted over RAW text, comments included, so prose quoting a name is a
+    # finding too. Measured 2026-09-22: 0, 0 and 0 (28, 23 and 33 at 14b01ac). The witness
+    # is the call of the one reading, which each file must make (D16: a zero needs a proof
+    # the scan can still see). The nine names in the pattern are order-status's STATUS_NAMES,
+    # bound to the server's VALID_STATUSES above; a tenth trips the arm_of binding first.
+    {
+        "name": "order_presentation.OWNED_SCREEN_STATUS_LITERAL_COUNT ~ orders_screen.rs",
+        "spec": "specs/turbobaby/order_presentation.t27",
+        "const": "OWNED_SCREEN_STATUS_LITERAL_COUNT",
+        "source": "src/ui/screens/orders_screen.rs",
+        "extract": (
+            "regex_count",
+            r'"(?:pending|confirmed|preparing|ready|out_for_delivery|delivered|completed|'
+            r'rejected|cancelled)"',
+        ),
+        "witness": r"arm_of\(",
+        "relation": "equal",
+        "why": "a quoted status name back in the list is a second reading of the string, the "
+               "defect the repair removed (a chip decided by one rule and a label by another)",
+    },
+    {
+        "name": "order_presentation.OWNED_SCREEN_STATUS_LITERAL_COUNT ~ order_detail_screen.rs",
+        "spec": "specs/turbobaby/order_presentation.t27",
+        "const": "OWNED_SCREEN_STATUS_LITERAL_COUNT",
+        "source": "src/ui/screens/order_detail_screen.rs",
+        "extract": (
+            "regex_count",
+            r'"(?:pending|confirmed|preparing|ready|out_for_delivery|delivered|completed|'
+            r'rejected|cancelled)"',
+        ),
+        "witness": r"arm_of\(",
+        "relation": "equal",
+        "why": "the detail screen's cancel button compared the raw string with one name while "
+               "its label folded case; a literal back here is that split coming back",
+    },
+    {
+        "name": "order_presentation.OWNED_SCREEN_STATUS_LITERAL_COUNT ~ status_stepper.rs",
+        "spec": "specs/turbobaby/order_presentation.t27",
+        "const": "OWNED_SCREEN_STATUS_LITERAL_COUNT",
+        "source": "src/ui/components/status_stepper.rs",
+        "extract": (
+            "regex_count",
+            r'"(?:pending|confirmed|preparing|ready|out_for_delivery|delivered|completed|'
+            r'rejected|cancelled)"',
+        ),
+        "witness": r"arm_of\(",
+        "relation": "equal",
+        "why": "the stepper drew an unreadable status as a finished delivery and printed the "
+               "server's word as a step label; it may only draw what the reading decides, and "
+               "its pipeline now lives in the host-compiled module",
+    },
+    # wc -l of the four files the contract owns, measured 2026-09-22 after cargo fmt. The
+    # money and cancellation families edit the same two screens next, and every site the
+    # contract cites was measured against files of these lengths.
+    {
+        "name": "order_presentation.LIST_LINE_COUNT ~ orders_screen.rs length",
+        "spec": "specs/turbobaby/order_presentation.t27",
+        "const": "LIST_LINE_COUNT",
+        "source": "src/ui/screens/orders_screen.rs",
+        "extract": ("line_count",),
+        "relation": "equal",
+        "why": "the list's sites in the contract were measured against a file of this length",
+    },
+    {
+        "name": "order_presentation.DETAIL_LINE_COUNT ~ order_detail_screen.rs length",
+        "spec": "specs/turbobaby/order_presentation.t27",
+        "const": "DETAIL_LINE_COUNT",
+        "source": "src/ui/screens/order_detail_screen.rs",
+        "extract": ("line_count",),
+        "relation": "equal",
+        "why": "the detail screen's sites in the contract were measured against a file of "
+               "this length",
+    },
+    {
+        "name": "order_presentation.SHARED_COMPONENT_LINE_COUNT ~ status_stepper.rs length",
+        "spec": "specs/turbobaby/order_presentation.t27",
+        "const": "SHARED_COMPONENT_LINE_COUNT",
+        "source": "src/ui/components/status_stepper.rs",
+        "extract": ("line_count",),
+        "relation": "equal",
+        "why": "the stepper went from 122 lines to 72 when it stopped deciding; growth is the "
+               "first sign it has started deciding again",
+    },
+    {
+        "name": "order_presentation.READING_LINE_COUNT ~ order_status_view.rs length",
+        "spec": "specs/turbobaby/order_presentation.t27",
+        "const": "READING_LINE_COUNT",
+        "source": "src/trios/order_status_view.rs",
+        "extract": ("line_count",),
+        "relation": "equal",
+        "why": "the reading's sites in the contract, and in order-status's DISPLAY_PIPELINE_"
+               "MODEL_A, were measured against a file of this length",
+    },
+    # cancel family. The order detail screen sent POST /api/orders/:id/cancel, bound the
+    # answer to `let _resp` and closed its dialog right after the await, on every path.
+    # Measured by hand 2026-09-22 with these exact patterns: at 14b01ac (git show) 1 and 1,
+    # on the repaired screen 0 and 0. The first counts a POST whose result is bound to an
+    # underscore name -- `[^;]*` spans the builder chain across lines. The second counts a
+    # statement setting a dialog-visibility signal (`*confirm*`) to false right after
+    # ANOTHER statement or block; the two closes left are each the first statement of their
+    # block (the verdict's `if` and the customer's own "no"), so neither counts. Both are
+    # zeros, so each carries a witness the repaired screen must hold (D16).
+    {
+        "name": "order_presentation.CANCEL_POSTS_WITH_A_DISCARDED_ANSWER ~ order_detail_screen.rs",
+        "spec": "specs/turbobaby/order_presentation.t27",
+        "const": "CANCEL_POSTS_WITH_A_DISCARDED_ANSWER",
+        "source": "src/ui/screens/order_detail_screen.rs",
+        "extract": ("regex_count", r"let\s+_\w*\s*=[^;]*\.post\("),
+        "witness": r"order_cancel_answer\(",
+        "relation": "equal",
+        "why": "a customer's cancellation whose answer nobody reads tells a refusal, a lost "
+               "connection and a success alike, which is the defect the repair removed",
+    },
+    {
+        "name": "order_presentation.DIALOG_CLOSES_THAT_FOLLOW_ANOTHER_STATEMENT ~ order_detail_screen.rs",
+        "spec": "specs/turbobaby/order_presentation.t27",
+        "const": "DIALOG_CLOSES_THAT_FOLLOW_ANOTHER_STATEMENT",
+        "source": "src/ui/screens/order_detail_screen.rs",
+        "extract": ("regex_count", r"[;}]\s*\w*confirm\w*\.set\(false\)"),
+        "witness": r"if order_cancel_dialog_closes\(",
+        "relation": "equal",
+        "why": "AGENTS.md lesson 4: the dialog closes on the server's confirmation; a close "
+               "written after the send's await closes it on every answer again",
+    },
+    # The sentences are client-errors'. order_cancel_line in src/trios/api_errors.rs picks
+    # its own keys in arms of the shape `t(lang, T_KEY).to_string(), OrderCancelTone::X,`
+    # (rustfmt puts the tone on the next line; `\s*` spans it), and no other line of the
+    # file, tests included, has that shape: measured 2026-09-22, six captures. Re-measured
+    # after the server class was held for a fresh reading (the unknown-outcome arms now come
+    # first), same six in file order: T_SUCCESS_STATUS_LOADING, T_SUCCESS_STATUS_ERROR,
+    # T_ORDER_DETAIL_CANCELLED_BY_USER, T_ORDER_DETAIL_NOT_FOUND, T_API_ERR_UNKNOWN,
+    # T_CHECKOUT_ERR_NETWORK.
+    {
+        "name": "client_errors.ORDER_CANCEL_OWN_KEY_NAMES ~ api_errors.rs order_cancel_line arms",
+        "spec": "specs/turbobaby/client_errors.t27",
+        "const": "ORDER_CANCEL_OWN_KEY_NAMES",
+        "source": "src/trios/api_errors.rs",
+        "extract": (
+            "regex_all",
+            r"t\(lang, (T_[A-Z0-9_]+)\)\.to_string\(\),\s*OrderCancelTone::",
+        ),
+        "relation": "set_equal",
+        "why": "the owner's sentence for a refused cancellation (question D) arrives as a key; "
+               "until it does, the surface speaks only existing keys, and a key added or "
+               "swapped here has to be recorded where the sentence is owned",
+    },
+    # The delegation to the general mapper, counted as every NON-TEST call in the module
+    # that defines it, whatever its spelling and whichever function holds it. Corrected
+    # after a checker's plant: the first pattern counted one tuple shape only, so a second
+    # delegation spelled `(friendly_response_error(lang, 409), ...)` left it at 1. The
+    # lookahead admits a call only when the module's column-0 `#[cfg(test)]` still follows
+    # it (src/trios/api_errors.rs has exactly one, above `mod tests`, which is the file's
+    # last item); `(?<!fn )` drops the definition. Measured by hand 2026-09-22: 1, the arm
+    # of order_cancel_line for the identity gates, the limiter and the server class, with
+    # the tests' eleven calls all below the marker (0 at a33e500, before the cancel surface
+    # existed). The module count after it closes the rest of src/trios: exactly one trio
+    # file of 23 calls the mapper at all, tests included, and it is this one (i18n.rs
+    # names it in a comment, without a call). The checker's plant delegate_409 reads 2.
+    {
+        "name": "client_errors.API_MAPPER_DELEGATION_SITES ~ api_errors.rs non-test calls",
+        "spec": "specs/turbobaby/client_errors.t27",
+        "const": "API_MAPPER_DELEGATION_SITES",
+        "source": "src/trios/api_errors.rs",
+        "extract": (
+            "regex_count",
+            r"(?<!fn )\bfriendly_response_error\((?=[\s\S]*^#\[cfg\(test\)\])",
+        ),
+        "relation": "equal",
+        "why": "the ten call sites the contract counts are in src/ui/screens; this is the one "
+               "place a trio hands a customer surface to the general mapper, and a second one "
+               "would reach its cart and price sentences from somewhere nobody counted",
+    },
+    {
+        "name": "client_errors.TRIO_MODULES_CALLING_THE_API_MAPPER ~ src/trios calls",
+        "spec": "specs/turbobaby/client_errors.t27",
+        "const": "TRIO_MODULES_CALLING_THE_API_MAPPER",
+        "source": "src/trios/**/*.rs",
+        "extract": ("tree_module_count", r"(?<!fn )\bfriendly_response_error\("),
+        "relation": "equal",
+        "why": "the binding above counts one module; a delegation added to another trio "
+               "would sit outside it, and this count is what turns red instead",
+    },
+    # The dialog's closes, each accounted for by where it stands. A checker's plant put a
+    # close first thing in Confirm's onclick, `{ show_cancel_confirm.set(false); ... }`:
+    # it follows `{`, so DIALOG_CLOSES_THAT_FOLLOW_ANOTHER_STATEMENT above never saw it,
+    # and the line count held. Measured by hand 2026-09-22 on the repaired screen: 2
+    # writes of `false` to a `*confirm*` signal in the whole file (:343 and :577), one
+    # of them the whole body of the verdict's `if` and the other the whole body of the
+    # "no" button's onclick with that button's label on the next line; at 14b01ac, 2, 0
+    # and 1 (the old close followed the await, and "no" was already written this way).
+    # A close added anywhere moves the first count; a close moved off the verdict or off
+    # "no" moves one of the other two.
+    {
+        "name": "order_presentation.CANCEL_DIALOG_CLOSES ~ order_detail_screen.rs",
+        "spec": "specs/turbobaby/order_presentation.t27",
+        "const": "CANCEL_DIALOG_CLOSES",
+        "source": "src/ui/screens/order_detail_screen.rs",
+        "extract": ("regex_count", r"\w*confirm\w*\.set\(false\)"),
+        "relation": "equal",
+        "why": "AGENTS.md lesson 4: the dialog closes on the server's confirmation or on the "
+               "customer's own no; a third close is a close before the server has answered",
+    },
+    {
+        "name": "order_presentation.CANCEL_DIALOG_CLOSES_UNDER_THE_VERDICT ~ order_detail_screen.rs",
+        "spec": "specs/turbobaby/order_presentation.t27",
+        "const": "CANCEL_DIALOG_CLOSES_UNDER_THE_VERDICT",
+        "source": "src/ui/screens/order_detail_screen.rs",
+        "extract": (
+            "regex_count",
+            r"if order_cancel_dialog_closes\(\w+\) \{\s*\w*confirm\w*\.set\(false\);\s*\}",
+        ),
+        "relation": "equal",
+        "why": "the one close that answers the server must be the verdict's whole body, so "
+               "that a success and nothing else closes the dialog",
+    },
+    {
+        "name": "order_presentation.CANCEL_DIALOG_CLOSES_ON_THE_CUSTOMERS_NO ~ order_detail_screen.rs",
+        "spec": "specs/turbobaby/order_presentation.t27",
+        "const": "CANCEL_DIALOG_CLOSES_ON_THE_CUSTOMERS_NO",
+        "source": "src/ui/screens/order_detail_screen.rs",
+        "extract": (
+            "regex_count",
+            r'onclick: move \|_\| \{ \w*confirm\w*\.set\(false\); \},\s*"\{t\(lang, T_MODAL_CANCEL\)\}"',
+        ),
+        "relation": "equal",
+        "why": "the other close is the customer's own no, whose onclick does nothing else; "
+               "moved to Confirm, it would close the dialog before anything is sent",
+    },
+    # money family. Defects 2 and 6: four of the five money figures on the two order
+    # screens went straight into format_baht, and a figure declared as a bare number lost
+    # the screen when a payload omitted it. The rule now lives in src/trios/pricing.rs
+    # (order_money_text / order_total_text over measured_money), host-tested there; these
+    # six bind the screens' side of it. Measured by hand 2026-09-22 with these exact
+    # patterns: on the screens before the money repair (the working tree after the status
+    # and cancel repairs, rebuilt as a plant) 3, 1, 4, 1, 2 -- and 0 on the checkout, which
+    # has never built a bike line -- and 0 on every one of the six since. All six are zeros,
+    # so each carries a witness the repaired file must hold (D16). The format_baht count
+    # reads RAW text, comments included, like every regex_count here: prose naming the
+    # formatter on a screen is a finding too, and neither screen holds any.
+    {
+        "name": "order_presentation.DETAIL_FORMAT_BAHT_OCCURRENCE_COUNT ~ order_detail_screen.rs",
+        "spec": "specs/turbobaby/order_presentation.t27",
+        "const": "DETAIL_FORMAT_BAHT_OCCURRENCE_COUNT",
+        "source": "src/ui/screens/order_detail_screen.rs",
+        "extract": ("regex_count", r"format_baht\("),
+        "witness": r"crate::trios::pricing::order_money_text\(",
+        "relation": "equal",
+        "why": "format_baht takes a bare f64 and cannot say absent; an order figure handed to "
+               "it here bypasses the order rule, which is defect 2 coming back",
+    },
+    {
+        "name": "order_presentation.LIST_FORMAT_BAHT_OCCURRENCE_COUNT ~ orders_screen.rs",
+        "spec": "specs/turbobaby/order_presentation.t27",
+        "const": "LIST_FORMAT_BAHT_OCCURRENCE_COUNT",
+        "source": "src/ui/screens/orders_screen.rs",
+        "extract": ("regex_count", r"format_baht\("),
+        "witness": r"crate::trios::pricing::order_total_text\(",
+        "relation": "equal",
+        "why": "the list prints the same stored total as the detail; formatting it here a "
+               "second way is the two-readings drift the order rule exists to stop",
+    },
+    # A figure field declared as a bare number, at the start of a line: `subtotal`,
+    # `bonus_used` or `total` as f64, `stars_used` as i64. `quantity: f64` on the line DTO is
+    # not money and does not match. The witness is the flattened Option block.
+    {
+        "name": "order_presentation.DETAIL_BARE_FIGURE_FIELD_COUNT ~ order_detail_screen.rs",
+        "spec": "specs/turbobaby/order_presentation.t27",
+        "const": "DETAIL_BARE_FIGURE_FIELD_COUNT",
+        "source": "src/ui/screens/order_detail_screen.rs",
+        "extract": (
+            "regex_count",
+            r"^[ \t]*(?:subtotal|bonus_used|total):[ \t]*f64,|^[ \t]*stars_used:[ \t]*i64,",
+        ),
+        "witness": r"#\[serde\(flatten\)\]\s*money: crate::trios::pricing::OrderMoney,",
+        "relation": "equal",
+        "why": "a bare figure fails the whole response when a payload omits it, and the "
+               "customer is told the order was not found (defect 6, the lost screen)",
+    },
+    {
+        "name": "order_presentation.LIST_BARE_FIGURE_FIELD_COUNT ~ orders_screen.rs",
+        "spec": "specs/turbobaby/order_presentation.t27",
+        "const": "LIST_BARE_FIGURE_FIELD_COUNT",
+        "source": "src/ui/screens/orders_screen.rs",
+        "extract": ("regex_count", r"^[ \t]*total:[ \t]*f64,"),
+        "witness": r"#\[serde\(default\)\]\s*total: Option<f64>,",
+        "relation": "equal",
+        "why": "on the list one order without a total failed the WHOLE response, so every "
+               "order vanished behind the error text",
+    },
+    # A discount row decided by the screen's own comparison of a figure with zero -- the
+    # shape `if order.bonus_used > 0.0` had, which hid a negative bonus exactly like a zero
+    # one. `[^\n;{]*` keeps the match on one expression. The witness is the rule's own row.
+    {
+        "name": "order_presentation.DETAIL_ROW_COMPARISON_COUNT ~ order_detail_screen.rs",
+        "spec": "specs/turbobaby/order_presentation.t27",
+        "const": "DETAIL_ROW_COMPARISON_COUNT",
+        "source": "src/ui/screens/order_detail_screen.rs",
+        "extract": ("regex_count", r"(?:bonus_used|stars_used)\b[^\n;{]*>\s*0"),
+        "witness": r"if let Some\(bonus\) = &money\.bonus \{",
+        "relation": "equal",
+        "why": "a measured zero omits its row and an absence keeps it with the dash; a "
+               "comparison written on the screen folds the two together again",
+    },
+    # The reachability premise of owner question F: no shipped client submits a bike line,
+    # so an order holding one is possible on the wire and absent from traffic. The checkout
+    # builds its lines in one map (src/ui/screens/checkout_screen.rs, items_json), four
+    # shapes, none with a `bike` key; `git log -S'"bike":' -- src/ui/` finds none ever
+    # added. A bike key appearing there makes the question current rather than theoretical.
+    {
+        "name": "order_presentation.CHECKOUT_BIKE_LINE_KEY_COUNT ~ checkout_screen.rs",
+        "spec": "specs/turbobaby/order_presentation.t27",
+        "const": "CHECKOUT_BIKE_LINE_KEY_COUNT",
+        "source": "src/ui/screens/checkout_screen.rs",
+        "extract": ("regex_count", r'"bike"\s*:'),
+        "witness": r'"set_id": item\.id',
+        "relation": "equal",
+        "why": "the owner question on a bike line's order total is recorded as reachability, "
+               "not traffic; a client submitting bike lines turns it into live traffic",
     },
     # --- commerce group: checkout contact, commerce, deposit tiers, cart persistence, delivery terms ---
     # Added 2026-09-22. Each row was measured both sides by hand at a33e500 and went RED on a
@@ -2640,8 +3105,12 @@ ONE_GROUP_EXTRACTORS = (
 # contracts, and the floor went to 162, not 161. Later the same day the review fixes added
 # six rows (DEAL_KIND_COUNT, the two rental band ends, ESCAPE_REPLACEMENTS,
 # ROUTES_TESTING_THE_GRANT_CEILING, FAIL_OPEN_CALL_SITE_FILES) over the same 40 contracts:
-# 168 rows, floor 168.
-MIN_BINDINGS = 168
+# 168 rows, floor 168. Re-measured 2026-09-24: the status, cancellation and money families
+# and the person-naming resolution added 29 rows (order_presentation among them, bound for
+# the first time) over 41 contracts: 197 rows, floor 197. Until then the floor had stayed
+# at 168 while the table held 197, a 29-row hole of exactly the kind this comment forbids.
+# The same day the leaderboard leak fix bound game_score.IDENTIFIER_DIGIT_RUN: 198 rows.
+MIN_BINDINGS = 198
 
 
 # ---------------------------------------------------------------------------------

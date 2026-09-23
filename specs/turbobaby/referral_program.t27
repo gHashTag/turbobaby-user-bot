@@ -16,7 +16,7 @@
 ;    and every leaderboard the module has -- and ZERO writers produce it. The writers are
 ;    src/db/referrals.rs:279 (pending) and :380 (confirmed), plus the one-time backfill at
 ;    migrations/007_referral_events.sql:26 (confirmed). A sweep of src/ and migrations/ for a
-;    statement that SETS this column to paid returns nothing at all. src/db/orders.rs:392
+;    statement that SETS this column to paid returns nothing at all. src/db/orders.rs:418
 ;    documents the missing writer as though it ran: it states that confirm_referral sets
 ;    referral_events.status to paid, and src/db/referrals.rs:380 -- the exact line it describes --
 ;    sets confirmed. So half the module's WHERE clauses are dead branches, and the completion
@@ -120,7 +120,7 @@ pub const EVENT_MIGRATION : str = "migrations/007_referral_events.sql";
 pub const CODE_WIDTH_MIGRATION : str = "migrations/035_referral_code_telegram_id.sql";
 pub const OPACITY_MIGRATION : str = "migrations/046_opaque_referral_codes.sql";
 pub const MILESTONE_MIGRATION : str = "migrations/068_referral_milestones.sql";
-pub const PAYOUT_CALL_SITE : str = "src/db/orders.rs:397-463";
+pub const PAYOUT_CALL_SITE : str = "src/db/orders.rs:423-489";
 pub const RECORD_CALL_SITE : str = "src/bot/commands.rs:188-215";
 pub const REGRESSION_WITNESS : str = "tests/integration_invite_counter.rs";
 
@@ -337,7 +337,7 @@ pub const FIRST_TOUCH_WINS : bool = true;
 ; The edge is stored twice and the two copies are read by different paths.
 ; src/db/referrals.rs:253 writes loyalty_profiles.referred_by; :276 writes
 ; referral_events.referrer_id. The payout reads the event (:376); the milestone award reads the
-; profile (src/db/orders.rs:420 calling src/db/referrals.rs:191-203). Nothing compares them.
+; profile (src/db/orders.rs:446 calling src/db/referrals.rs:191-203). Nothing compares them.
 pub const ATTRIBUTION_IS_STORED_TWICE : bool = true;
 pub const THE_TWO_COPIES_ARE_EVER_COMPARED : bool = false;
 
@@ -457,7 +457,7 @@ pub const STATUS_VALUES_WITH_A_WRITER : u8 = 2;
 pub const PAID_READ_SITE_COUNT : u8 = 5;
 pub const PAID_WRITE_SITE_COUNT : u8 = 0;
 pub const A_COMMENT_CLAIMS_A_PAID_WRITER : bool = true;
-pub const STALE_PAID_CLAIM_SITE : str = "src/db/orders.rs:392";
+pub const STALE_PAID_CLAIM_SITE : str = "src/db/orders.rs:418";
 
 pub fn status_is_named_in_the_schema(status: u8) bool {
   return status >= STATUS_PENDING and status <= STATUS_PAID;
@@ -521,9 +521,9 @@ pub const EVERY_CREDIT_PAIRS_WITH_A_LEDGER_ROW : bool = true;
 
 ; The amounts are parameters, not constants: src/db/referrals.rs:319-323 takes both, and they do
 ; not arrive from the same place. The per-referral bonus is read from shop configuration by the one
-; production caller, with a compiled fallback beside it (src/db/orders.rs:397-413, passed at :414).
+; production caller, with a compiled fallback beside it (src/db/orders.rs:423-439, passed at :440).
 ; The welcome amount is not read there at all -- it is itself a parameter of complete_order
-; (src/db/orders.rs:169) and is passed straight through at :414, so its own source is further up
+; (src/db/orders.rs:195) and is passed straight through at :440, so its own source is further up
 ; than this domain. This file names both seams and writes down neither number.
 pub const AMOUNTS_ARRIVE_AS_ARGUMENTS : bool = true;
 pub const THIS_FILE_DECLARES_AN_AMOUNT : bool = false;
@@ -598,7 +598,7 @@ pub fn a_new_rung_can_be_offered_and_never_paid(in_the_ladder: bool, has_a_defau
 
 ; src/db/referrals.rs:792-871 is one transaction over every rung; the notices at :873-885 are sent
 ; after the commit on purpose, so a messaging failure cannot roll back money. The whole routine is
-; best-effort at its call site: src/db/orders.rs:425-433 logs a failure and completes the order.
+; best-effort at its call site: src/db/orders.rs:451-459 logs a failure and completes the order.
 ; What those notices ARE -- the row, its kind, its markup and its delivery -- belongs to
 ; turbobaby/notification-queue, which measures the same enqueues from the mail side. Only their
 ; position relative to the commit is declared here, and no kind or column of theirs is restated.
@@ -877,7 +877,7 @@ test five_read_sites_branch_on_a_value_no_writer_produces {
   assert read_branch_is_reachable(STATUS_CONFIRMED) == true;
   assert read_branch_is_reachable(STATUS_PENDING) == false;
   assert A_COMMENT_CLAIMS_A_PAID_WRITER == true;
-  assert STALE_PAID_CLAIM_SITE == "src/db/orders.rs:392";
+  assert STALE_PAID_CLAIM_SITE == "src/db/orders.rs:418";
 }
 
 test confirmation_is_locked_single_and_one_way {

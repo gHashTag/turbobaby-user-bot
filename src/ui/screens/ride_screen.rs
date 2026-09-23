@@ -62,8 +62,8 @@ pub fn RideGame() -> Element {
         let init = init_data.clone();
         spawn(async move {
             let base = api_base_url();
-            let score_body =
-                format!(r#"{{"telegram_id":{tid},"score":{dist},"display_name":"Player {tid}"}}"#);
+            // No display name: the board is anonymous, and a name built from the id published it.
+            let score_body = format!(r#"{{"telegram_id":{tid},"score":{dist}}}"#);
             let _ = crate::ui::api::http::post_json_authed(
                 &format!("{base}/api/game/high-scores"),
                 &init,

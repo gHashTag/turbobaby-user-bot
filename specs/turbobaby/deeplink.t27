@@ -27,7 +27,7 @@
 ; is answerable. They can still disagree about WHERE it lands, and today they do. FIVE targets are
 ; declared (src/trios/deeplink.rs:75-103) and FOUR of them have a landing branch in the app:
 ; reorder, cart, product and order, at src/ui/app.rs:175, :183, :230 and :239, consumed by
-; src/ui/screens/home_screen.rs:176-203. The fifth, `Referrals`, has none. `parse_start_param`
+; src/ui/screens/home_screen.rs:177-204. The fifth, `Referrals`, has none. `parse_start_param`
 ; answers None for every non-product target (src/ui/share.rs:105-121, the `_` arm at :119) and no
 ; other reader exists: `grep -rn "Target::Referrals" src/` returns eleven hits, ten inside
 ; `src/trios/deeplink.rs` itself and one comment at src/notification_queue.rs:157 (was :113; the 2026-09-21 drain rewrite moved it, the comment is unchanged). So the payload a
@@ -56,7 +56,7 @@
 ; :242 and four call sites at :291, :305, :321 and :663, every one of them inside
 ; `#[cfg(test)] mod tests`. The table has no production caller. What actually places a customer is
 ; `ProductKind::route` at src/ui/share.rs:87-91, whose single caller is
-; src/ui/screens/home_screen.rs:180, and it sends ALL FIVE product kinds to one destination
+; src/ui/screens/home_screen.rs:181, and it sends ALL FIVE product kinds to one destination
 ; (src/ui/share.rs:70-86 records that as deliberate, dated 2026-09-16, because the per-kind screens
 ; are retired and an empty grid is a dead end). So the gated table separates five kinds, the
 ; shipped table collapses them, the two do not agree, and no test can notice: one lives where
@@ -358,7 +358,7 @@ pub const TARGETS_DECLARED : u8 = 5;
 pub const TARGETS_WITH_A_LIVE_LANDING : u8 = 4;
 pub const UNCONSUMED_TARGET_NAME : str = "referrals";
 pub const DESTINATION_TABLE_HAS_A_PRODUCTION_CALLER : bool = false;
-pub const SHIPPED_LANDING_SITE : str = "src/ui/share.rs:87-91 ProductKind::route, single caller src/ui/screens/home_screen.rs:180";
+pub const SHIPPED_LANDING_SITE : str = "src/ui/share.rs:87-91 ProductKind::route, single caller src/ui/screens/home_screen.rs:181";
 pub const GATED_LANDING_SITE : str = "src/trios/deeplink.rs:242-256 destination, five call sites all inside its own cfg(test) module";
 pub const TWO_LANDING_TABLES_DISAGREE : bool = true;
 pub const THE_DISAGREEMENT_IS_UNREACHABLE_BY_THE_HOST_SUITE : bool = true;

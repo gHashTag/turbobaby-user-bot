@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct Order {
@@ -9,10 +10,15 @@ pub(crate) struct Order {
     pub customer_phone: Option<String>,
     pub customer_telegram: Option<String>,
     pub items: Value,
-    pub subtotal: f64,
-    pub bonus_used: f64,
-    pub stars_used: i64,
-    pub total: f64,
+    /// D9: `null` when the stored figure is unusable (see `From` below).
+    pub subtotal: Option<f64>,
+    pub bonus_used: Option<f64>,
+    pub stars_used: Option<i64>,
+    pub total: Option<f64>,
+    /// Each of the four figures above that `From` withheld, with the reason
+    /// ([`MONEY_WITHHELD_UNUSABLE`]); omitted when none is. Not later fields.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub money_withheld: BTreeMap<String, String>,
     pub status: String,
     pub shop_id: Option<String>,
     pub delivery_address: Option<String>,
@@ -35,38 +41,57 @@ pub(crate) fn finite_money(raw: Option<f64>) -> Option<f64> {
     raw.filter(|v| v.is_finite() && *v >= 0.0)
 }
 
+/// The one reason an order endpoint withholds a money figure today: the
+/// stored value is NaN, infinite or negative, so nobody computed it.
+pub(crate) const MONEY_WITHHELD_UNUSABLE: &str = "stored_value_not_finite_non_negative";
+
+/// Record one withheld figure: the log names the order and the value, the
+/// response names the field and [`MONEY_WITHHELD_UNUSABLE`].
+fn withhold_money(
+    withheld: &mut BTreeMap<String, String>,
+    order_id: &str,
+    field: &'static str,
+    value: &dyn std::fmt::Display,
+) {
+    tracing::error!(
+        order_id = %order_id,
+        field = field,
+        value = %value,
+        "order money column is not a finite non-negative number; \
+         published as null, withheld with a named reason"
+    );
+    withheld.insert(field.to_string(), MONEY_WITHHELD_UNUSABLE.to_string());
+}
+
 // Cycle #85: SeaORM `order::Model` → wire `Order` conversion. Entity has
 // identical column set; `DateTimeWithTimeZone` converts to
 // `chrono::DateTime<chrono::Utc>` via `.into()` (re-zones).
 impl From<crate::db::entities::order::Model> for Order {
     fn from(m: crate::db::entities::order::Model) -> Self {
-        // `subtotal` / `bonus_used` / `total` are `NOT NULL DEFAULT 0` columns
-        // (`migrations/001_initial.sql:64-66`) and 001 is frozen (D2), so this
-        // wire shape cannot express "absent" for them the way the nullable
-        // bike money on `OrderItem` can. What it can stop doing is lying
-        // quietly: the old closure turned a NaN — which Postgres
-        // `DOUBLE PRECISION` accepts and `serde_json` cannot serialise at all
-        // — into a confident `0` with no trace. Name the order and the field,
-        // then fall back to 0 only because the response must serialise. New
-        // money goes through `finite_money` and stays absent (D9).
-        let money = |v: f64, field: &'static str| -> f64 {
-            match finite_money(Some(v)) {
-                Some(ok) => ok,
-                None => {
-                    tracing::error!(
-                        order_id = %m.id,
-                        field = field,
-                        value = v,
-                        "order money column is not a finite non-negative number; \
-                         reported as 0 because the wire field cannot be null"
-                    );
-                    0.0
-                }
+        // D9, T27 defect 2. The columns are `NOT NULL DEFAULT 0`
+        // (`migrations/001_initial.sql:64-66`, frozen by D2), but the wire
+        // field is not the column. A stored NaN, infinity or negative was
+        // computed by nobody, so it leaves as `null` -- never as a confident
+        // `0` the client would print as a price -- and `money_withheld` names
+        // the field and why. (`serde_json` would write a NaN as `null` on its
+        // own; a negative it writes as a number, so the filter decides.)
+        let mut withheld = BTreeMap::new();
+        let mut money = |v: f64, field: &'static str| -> Option<f64> {
+            let kept = finite_money(Some(v));
+            if kept.is_none() {
+                withhold_money(&mut withheld, &m.id, field, &v);
             }
+            kept
         };
         let subtotal = money(m.subtotal, "subtotal");
         let bonus_used = money(m.bonus_used, "bonus_used");
         let total = money(m.total, "total");
+        let stars_used = if m.stars_used >= 0 {
+            Some(m.stars_used)
+        } else {
+            withhold_money(&mut withheld, &m.id, "stars_used", &m.stars_used);
+            None
+        };
         Self {
             id: m.id,
             telegram_id: m.telegram_id,
@@ -76,8 +101,9 @@ impl From<crate::db::entities::order::Model> for Order {
             items: m.items,
             subtotal,
             bonus_used,
-            stars_used: m.stars_used.max(0),
+            stars_used,
             total,
+            money_withheld: withheld,
             status: m.status,
             shop_id: m.shop_id,
             delivery_address: m.delivery_address,
@@ -2059,5 +2085,121 @@ mod tests {
         assert_eq!(finite_money(Some(f64::INFINITY)), None);
         assert_eq!(finite_money(Some(-1.0)), None);
         assert_eq!(finite_money(Some(449.0)), Some(449.0));
+    }
+
+    // ── T27 defect 2: a figure nobody could compute is never a price ──
+
+    fn stored_order(
+        subtotal: f64,
+        bonus_used: f64,
+        stars_used: i64,
+        total: f64,
+    ) -> crate::db::entities::order::Model {
+        crate::db::entities::order::Model {
+            id: "ord-t27-d2".into(),
+            telegram_id: Some(1),
+            customer_name: None,
+            customer_phone: None,
+            customer_telegram: None,
+            items: serde_json::json!([]),
+            subtotal,
+            bonus_used,
+            stars_used,
+            total,
+            status: "pending".into(),
+            shop_id: None,
+            delivery_address: None,
+            delivery_notes: None,
+            age_confirmed: true,
+            delivery_zone_id: None,
+            created_at: chrono::DateTime::parse_from_rfc3339("2026-09-23T00:00:00+07:00")
+                .expect("fixed timestamp parses"),
+        }
+    }
+
+    /// End to end on the host: the stored row goes through the wire
+    /// conversion both customer order endpoints use, is read back by the
+    /// client's own `OrderMoney`, and is printed by the one rule every order
+    /// screen calls. A stored figure that is not a finite non-negative number
+    /// was computed by nobody; the customer must see the dash, and the
+    /// response must name why the figure is withheld -- not a `฿0` total.
+    #[test]
+    fn an_unusable_stored_figure_is_never_shown_as_a_price() {
+        use super::Order;
+        use crate::trios::pricing::{format_baht, order_money_text, order_total_text, OrderMoney};
+        let dash = "\u{2014}";
+
+        for bad in [f64::NAN, f64::INFINITY, -1.0] {
+            let wire = serde_json::to_value(Order::from(stored_order(bad, bad, -3, bad)))
+                .expect("the order serialises");
+            let money: OrderMoney =
+                serde_json::from_value(wire.clone()).expect("the client reads the order");
+            let text = order_money_text(&money, dash);
+            assert_eq!(
+                text.total, dash,
+                "stored total {bad} printed as a price: {wire}"
+            );
+            assert_eq!(text.subtotal, dash, "stored subtotal {bad}: {wire}");
+            assert_eq!(
+                text.bonus.as_deref(),
+                Some(dash),
+                "stored bonus {bad}: {wire}"
+            );
+            assert_eq!(text.stars.as_deref(), Some(dash), "stored stars -3: {wire}");
+            // The detail screen reads the same block flattened into its DTO.
+            #[derive(serde::Deserialize)]
+            struct Detail {
+                #[serde(flatten)]
+                money: OrderMoney,
+            }
+            let detail: Detail =
+                serde_json::from_value(wire.clone()).expect("the detail reads the order");
+            assert_eq!(detail.money, money, "flattened read differs: {wire}");
+            // The orders list, the home widget and the profile history print
+            // the total alone, through the same rule.
+            let total: Option<f64> =
+                serde_json::from_value(wire["total"].clone()).expect("the total reads");
+            assert_eq!(
+                order_total_text(total, dash),
+                dash,
+                "list total {bad}: {wire}"
+            );
+            for field in ["subtotal", "bonus_used", "stars_used", "total"] {
+                // `null`, not an omitted key: a reader that defaults a
+                // missing field would invent a zero for the omission.
+                assert_eq!(
+                    wire.get(field),
+                    Some(&serde_json::Value::Null),
+                    "{field} left the server as {}",
+                    wire[field]
+                );
+                assert!(
+                    wire["money_withheld"][field].is_string(),
+                    "{field} withheld without a named reason: {wire}"
+                );
+            }
+        }
+
+        // Control: a computed order still prints its figures, and a response
+        // that withholds nothing carries no reason block at all.
+        let wire = serde_json::to_value(Order::from(stored_order(1500.0, 100.0, 0, 1400.0)))
+            .expect("the order serialises");
+        assert!(
+            wire.get("money_withheld").is_none(),
+            "nothing withheld: {wire}"
+        );
+        let money: OrderMoney = serde_json::from_value(wire).expect("the client reads the order");
+        let text = order_money_text(&money, dash);
+        assert_eq!(text.total, format_baht(1400.0));
+        assert_eq!(text.subtotal, format_baht(1500.0));
+        assert_eq!(text.bonus, Some(format!("-{}", format_baht(100.0))));
+        assert_eq!(text.stars, None);
+
+        // A stored zero total is a measurement (the discounts paid in full),
+        // not an unusable figure: it stays a printed zero.
+        let wire = serde_json::to_value(Order::from(stored_order(0.0, 0.0, 0, 0.0)))
+            .expect("the order serialises");
+        let money: OrderMoney = serde_json::from_value(wire).expect("the client reads the order");
+        assert_eq!(order_money_text(&money, dash).total, format_baht(0.0));
     }
 }

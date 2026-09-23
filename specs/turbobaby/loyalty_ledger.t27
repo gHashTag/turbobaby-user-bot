@@ -14,7 +14,7 @@
 ;    its stored balance. Cycle #161 added the missing debit row to make it true again. It is not
 ;    true. Ten statements in src/ perform arithmetic on loyalty_profiles.bonus_balance; SIX pair
 ;    with a ledger insert (src/api/loyalty.rs:353 behind :342, src/api/loyalty.rs:508 behind :554,
-;    src/db/orders.rs:356 behind :351, src/db/referrals.rs:429 behind :419, :489 behind :481, and
+;    src/db/orders.rs:382 behind :377, src/db/referrals.rs:429 behind :419, :489 behind :481, and
 ;    :855 behind :847) and FOUR do not (src/api/orders.rs:1292 debits at checkout,
 ;    src/api/orders.rs:2013 refunds on reject, src/api/orders.rs:2247 refunds on cancel, and
 ;    src/bot/callbacks.rs:760 refunds on reject from the bot, all four with zero occurrences of

@@ -59,7 +59,7 @@ async fn get_high_scores(
             // Without the cast the decode failed and `unwrap_or(0)` turned
             // every real score into 0 — the public leaderboard showed the
             // whole table tied at zero while the rows underneath were fine.
-            "SELECT display_name, high_score::bigint AS high_score \
+            "SELECT telegram_id, display_name, high_score::bigint AS high_score \
              FROM game_high_scores \
              ORDER BY high_score DESC, updated_at ASC \
              LIMIT $1",
@@ -73,9 +73,11 @@ async fn get_high_scores(
 
     let mut entries = Vec::with_capacity(rows.len());
     for (rank, r) in (1i64..).zip(rows) {
+        let stored = r.try_get::<String>("", "display_name").unwrap_or_default();
+        let player = r.try_get::<i64>("", "telegram_id").ok();
         entries.push(json!({
             "rank": rank,
-            "display_name": r.try_get::<String>("", "display_name").unwrap_or_else(|_| "Player".into()),
+            "display_name": public_display_name(&stored, player),
             "high_score": r.try_get::<i64>("", "high_score").unwrap_or(0),
         }));
     }
@@ -98,11 +100,7 @@ async fn submit_high_score(
     if req.score < 0 || req.score > MAX_SCORE {
         return Err(StatusCode::BAD_REQUEST);
     }
-    let display_name = if req.display_name.trim().is_empty() {
-        "Player".to_string()
-    } else {
-        req.display_name.trim().to_string()
-    };
+    let display_name = public_display_name(&req.display_name, Some(req.telegram_id));
     if display_name.len() > MAX_DISPLAY_NAME_LEN {
         return Err(StatusCode::BAD_REQUEST);
     }
@@ -164,9 +162,65 @@ async fn submit_high_score(
     })))
 }
 
+/// The placeholder the board shows instead of a name it must not publish.
+pub(crate) const ANONYMOUS_NAME: &str = "Player";
+
+/// The shortest run of digits treated as an identifier when the row's own id cannot be read.
+const IDENTIFIER_DIGIT_RUN: usize = 6;
+
+/// The name the anonymous board may publish for a stored or submitted one (2026-09-24).
+///
+/// The only shipped submitter used to send "Player {telegram_id}" (src/ui/screens/ride_screen.rs),
+/// and GET /api/game/high-scores needs no credentials, so every rider's Telegram id was public.
+/// A blank name, a name holding the player's own id, or a name holding a digit run as long as an
+/// id becomes [`ANONYMOUS_NAME`]. Applied on the read, rows stored before this change are covered
+/// without a write to the live table; applied on the write, no new row stores an id as a name.
+pub(crate) fn public_display_name(name: &str, telegram_id: Option<i64>) -> String {
+    let name = name.trim();
+    let holds_own_id = telegram_id
+        .filter(|id| *id != 0)
+        .is_some_and(|id| name.contains(&id.unsigned_abs().to_string()));
+    let mut run = 0usize;
+    let holds_long_digit_run = name.chars().any(|c| {
+        run = if c.is_ascii_digit() { run + 1 } else { 0 };
+        run >= IDENTIFIER_DIGIT_RUN
+    });
+    if name.is_empty() || holds_own_id || holds_long_digit_run {
+        ANONYMOUS_NAME.to_string()
+    } else {
+        name.to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_name_carrying_the_players_telegram_id_is_never_published() {
+        // The exact name the shipped ride screen sent until 2026-09-24.
+        assert_eq!(
+            public_display_name("Player 123456789", Some(123456789)),
+            ANONYMOUS_NAME
+        );
+        // A stored row whose id could not be read is still masked by the digit run.
+        assert_eq!(
+            public_display_name("Player 123456789", None),
+            ANONYMOUS_NAME
+        );
+        // A short id is caught by the id itself.
+        assert_eq!(
+            public_display_name("rider 4242", Some(4242)),
+            ANONYMOUS_NAME
+        );
+        // Ordinary names pass unchanged, trimmed.
+        assert_eq!(
+            public_display_name("  Nong Bike 2024 ", Some(123456789)),
+            "Nong Bike 2024"
+        );
+        assert_eq!(public_display_name("", Some(1)), ANONYMOUS_NAME);
+        assert_eq!(public_display_name("   ", None), ANONYMOUS_NAME);
+    }
 
     #[test]
     fn validate_display_name_too_long() {

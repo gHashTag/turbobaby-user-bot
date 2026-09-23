@@ -19,6 +19,15 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# In-place `sed -E` that works with both BSD sed (macOS: `-i ''`) and GNU sed
+# (Linux, Git Bash on Windows: `-i` with no argument). The BSD-only spelling this
+# script used before 2026-09-24 made GNU sed read '' as the script and the
+# expression as a file name, so the cache-bust step failed off macOS.
+sed_in_place() {
+  local expr="$1" file="$2"
+  sed -E "$expr" "$file" > "$file.sedtmp" && mv "$file.sedtmp" "$file"
+}
+
 # clap-backed Trunk versions expect a boolean value, while many CI/agent
 # environments use the conventional NO_COLOR=1 spelling.
 if [ "${NO_COLOR:-}" = "1" ]; then
@@ -57,7 +66,7 @@ echo "▶ cache-busting snippet imports with ?v=${hash}"
 busted=0
 while IFS= read -r js; do
   if grep -qE "from '[^']*snippets/[^']*\.js'" "$js"; then
-    sed -i '' -E "s#(from '[^']*snippets/[^']*\.js)'#\1?v=${hash}'#g" "$js"
+    sed_in_place "s#(from '[^']*snippets/[^']*\.js)'#\1?v=${hash}'#g" "$js"
     busted=$((busted + 1))
   fi
 done < <(find dist -name '*.js' -type f)
@@ -67,7 +76,7 @@ echo "  ✓ busted snippet imports in ${busted} file(s)"
 # too, so even a WebView with a broken filename cache sees a new full URL on
 # every build. This makes long-lived immutable caching safe.
 echo "▶ cache-busting main bundle URLs with ?v=${hash}"
-sed -i '' -E "s#(/[^/\"'[:space:]?]+-${hash}(_bg)?\.(js|wasm))(['\"])#\1?v=${hash}\4#g" dist/index.html
+sed_in_place "s#(/[^/\"'[:space:]?]+-${hash}(_bg)?\.(js|wasm))(['\"])#\1?v=${hash}\4#g" dist/index.html
 echo "  ✓ main JS/WASM URLs versioned"
 
 # Trunk owns the generated module script. Make it wait for the async Telegram
