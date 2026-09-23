@@ -377,6 +377,51 @@ pub fn largest_family_units() u8 {
     return largest;
 }
 
+; --- Corrections of 2026-09-24 -----------------------------------------------------------------
+; Placed after the functions and not beside the constants they correct, so that no line of this
+; file cited from elsewhere moves (scripts/execute_t27_assertions.py cites :224, :269 and :272,
+; delivery_terms.t27 cites :342).
+
+; CORRECTED 2026-09-24. CLICK_125_REDIRECTS above records what the owner's FAQ SUGGESTS
+; (brain:knowledge_base:106 and :434 still read "PCX 150 / ADV 150 / NMAX 155"), and until this
+; date those three were also what the customer was SHOWN: src/ui/screens/catalog_screen.rs held
+; CLICK_125_ALTERNATIVES = ["PCX 150", "ADV 150", "NMAX 155"] and printed it under the closed
+; CLICK 125 card on both customer screens. Two of the three have zero units, and the owner's later
+; rules forbid naming a model outside the fleet at all, "not even as a replacement"
+; (brain:knowledge_base:108-110, marked 05.07.2026; :345-346, 06.07.2026;
+; brain:business_rules:7-8). So the suggestion stays recorded as it is, and what is shown is its
+; bookable subset, by the same predicate usable_click_redirect_count() applies. The label is the
+; seed's model name for that key (data/fleet_seed.json families[].model), because the screen
+; prints a label and not a key. Gate 3 binds CLICK_125_REDIRECT_LABELS_SHOWN to the Rust constant,
+; and tests/catalog_honesty_wiring.rs ties every Rust label to an offered seed family with units.
+; No gate resolves a brain: citation; the lines were read on 2026-09-24.
+pub const CLICK_125_REDIRECTS_SHOWN : [1]str = ["nmax-155"];
+pub const CLICK_125_REDIRECT_LABELS_SHOWN : [1]str = ["NMAX 155"];
+pub const CLICK_125_REDIRECT_LABELS_SHOWN_BEFORE_2026_09_24 : [3]str = ["PCX 150", "ADV 150", "NMAX 155"];
+
+; CORRECTED 2026-09-24. FILE_MAY_RULE_OUT and FILE_MAY_CONFIRM above were declared while both
+; customer screens confirmed from the file anyway. availability_line in
+; src/ui/screens/catalog_screen.rs printed
+; T_BIKE_AVAILABILITY ("{0} of {1} free") on the detail screen and T_BIKE_AVAILABILITY_FREE
+; ("{0} free") on every list card, both from units_available: the bike_units rows seeded from this
+; file's table on 2026-09-12 and changed only by an admin, never by a live check with the shop.
+; The same count fed a T_BIKE_FILTER_FREE_NOW ("Free now") chip on the list and a
+; T_BIKE_COLORS_AVAILABLE ("Colours free:") row on the detail. The owner's rule is the same as
+; FILE_MAY_CONFIRM: do not promise without checking occupancy (brain:knowledge_base:336). Since
+; this date the customer screens print T_BIKE_AVAILABILITY_UNKNOWN ("A manager confirms
+; availability"), copy both locales already published; the chip is gone and the colour row is the
+; whole family's (T_BIKE_COLORS_ALL). What stays is the direction FILE_MAY_RULE_OUT allows: a zero
+; still rules a family out, in the detail's T_BIKE_UNITS_EMPTY line and in the Book control's
+; no-units reason. The admin screen keeps its count, because the admin is who writes it. Gate 3
+; counts the code lines under src/ui/ that use any of the four confirming keys: 7 on upstream main
+; f0640f8, 0 now.
+pub const CUSTOMER_SCREENS_CONFIRM_FROM_THE_FILE : bool = false;
+pub const CUSTOMER_SCREENS_CONFIRMED_FROM_THE_FILE_BEFORE_2026_09_24 : bool = true;
+pub const CUSTOMER_AVAILABILITY_KEY : str = "T_BIKE_AVAILABILITY_UNKNOWN";
+pub const CONFIRMING_KEYS : [4]str = ["T_BIKE_AVAILABILITY", "T_BIKE_AVAILABILITY_FREE", "T_BIKE_COLORS_AVAILABLE", "T_BIKE_FILTER_FREE_NOW"];
+pub const CONFIRMING_KEY_LINES_IN_UI : u8 = 0;
+pub const CONFIRMING_KEY_LINES_IN_UI_BEFORE_2026_09_24 : u8 = 7;
+
 ; --- Fixtures -------------------------------------------------------------------------------
 ; Not pub: the surface of this spec is the status set, the table and the functions. The slot
 ; codes are written as their literal ordinals and every test ties the literal back to its named
@@ -547,6 +592,37 @@ test bookability_reasons_and_redirects_share_one_owner {
     assert may_confirm(true, 1, true) == true;
 }
 
+; The two corrections of 2026-09-24, as literals.
+test the_shown_click_redirect_is_the_bookable_subset_of_the_suggestion {
+    // what is shown is exactly what the bookability predicate lets through
+    assert CLICK_125_REDIRECTS_SHOWN.len == usable_click_redirect_count();
+    assert CLICK_125_REDIRECTS_SHOWN[0] == CLICK_125_REDIRECTS[2];
+    assert CLICK_125_REDIRECT_UNITS_AVAILABLE[2] == 5;
+    assert is_bookable(true, CLICK_125_REDIRECT_UNITS_AVAILABLE[2]) == true;
+    // and it is a family of the measured fleet, the one at index 1
+    assert FAMILY_KEYS[1] == CLICK_125_REDIRECTS_SHOWN[0];
+    assert FAMILY_UNITS[1] == 10;
+    // the two suggested rows the owner's later rule forbids, failed by the same predicate
+    assert is_bookable(true, CLICK_125_REDIRECT_UNITS_AVAILABLE[0]) == false;
+    assert is_bookable(true, CLICK_125_REDIRECT_UNITS_AVAILABLE[1]) == false;
+    // one label per shown key; the old label list had one per suggested key
+    assert CLICK_125_REDIRECT_LABELS_SHOWN.len == CLICK_125_REDIRECTS_SHOWN.len;
+    assert CLICK_125_REDIRECT_LABELS_SHOWN_BEFORE_2026_09_24.len == CLICK_125_REDIRECTS.len;
+    assert CLICK_125_REDIRECT_LABELS_SHOWN[0] == CLICK_125_REDIRECT_LABELS_SHOWN_BEFORE_2026_09_24[2];
+}
+
+test the_customer_screens_no_longer_confirm_from_the_file {
+    assert FILE_MAY_CONFIRM == false;
+    assert CUSTOMER_SCREENS_CONFIRM_FROM_THE_FILE == FILE_MAY_CONFIRM;
+    assert CUSTOMER_SCREENS_CONFIRMED_FROM_THE_FILE_BEFORE_2026_09_24 == true;
+    assert CUSTOMER_AVAILABILITY_KEY == "T_BIKE_AVAILABILITY_UNKNOWN";
+    assert CONFIRMING_KEYS.len == 4;
+    assert CONFIRMING_KEY_LINES_IN_UI == 0;
+    assert CONFIRMING_KEY_LINES_IN_UI_BEFORE_2026_09_24 == 7;
+    // ruling a family out from the file stays legal
+    assert FILE_MAY_RULE_OUT == true;
+}
+
 test the_capacity_is_scanned_from_the_table_and_not_quoted {
     // the measured maximum today, found by walking all 14 rows rather than reading row 1
     assert largest_family_units() == 10;
@@ -595,6 +671,14 @@ invariant a_tariff_line_without_units_is_not_stock
 
 invariant confirmation_requires_a_live_check
     assert FILE_MAY_CONFIRM == false and may_confirm(true, 1, false) == false
+
+; The customer screens follow the rule above rather than restate it (2026-09-24).
+invariant customer_screens_follow_file_may_confirm
+    assert CUSTOMER_SCREENS_CONFIRM_FROM_THE_FILE == FILE_MAY_CONFIRM and CONFIRMING_KEY_LINES_IN_UI == 0
+
+; What the closed family points to is only what the bookability predicate lets through.
+invariant the_shown_click_redirect_is_bookable
+    assert CLICK_125_REDIRECTS_SHOWN.len == usable_click_redirect_count()
 
 invariant click_is_rented_unavailable_and_not_quotable
     assert FAMILY_RENTED[0] == 1 and FAMILY_AVAILABLE[0] == 0 and CLICK_125_STALE_GRID_IS_QUOTABLE == false

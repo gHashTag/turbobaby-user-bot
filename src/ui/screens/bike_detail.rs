@@ -1,5 +1,5 @@
 //! One bike family in full: specs, the price block, the published term ladder,
-//! what is free right now, and the buy-out block.
+//! who confirms availability, and the buy-out block.
 //!
 //! # Money
 //!
@@ -22,9 +22,12 @@
 //!   `colors`, `colors_available`, `model_years` — because `api::bikes`
 //!   narrows a unit row to status, colour and model year at the boundary and
 //!   publishes no `unit_code` and no `km_since_purchase` (D6, D14). So this
-//!   screen shows *how many* are free and in which colours and years, and the
-//!   customer books the family; the shop assigns the machine (D8). There is no
-//!   unit picker, because there is nothing honest to put in it.
+//!   screen shows the family's colours and years, and the customer books the
+//!   family; the shop assigns the machine (D8). There is no unit picker,
+//!   because there is nothing honest to put in it. Since 2026-09-24 it does
+//!   not print *how many* are free either: the count is seeded and
+//!   admin-edited, not a live check, so a manager confirms availability
+//!   (`availability.t27` `FILE_MAY_CONFIRM = false`).
 //! - the ladder comes from `GET /api/rental-terms`, one document for the whole
 //!   shop, fetched here alongside the family. A ladder that fails to load
 //!   degrades to no ladder section at all rather than to a table of dashes —
@@ -61,13 +64,13 @@
 use crate::trios::core::Lang;
 use crate::trios::i18n::{
     t, tf, Key, T_BACK, T_BIKE_ASK_MANAGER, T_BIKE_BOOK, T_BIKE_CC, T_BIKE_CLASS_DISCOUNT,
-    T_BIKE_COLORS_ALL, T_BIKE_COLORS_AVAILABLE, T_BIKE_DEPOSIT, T_BIKE_MODEL_YEARS,
-    T_BIKE_MONTHLY_LOW_SEASON, T_BIKE_NOT_OFFERED_ALTERNATIVES, T_BIKE_NOT_OFFERED_TITLE,
-    T_BIKE_PER_DAY, T_BIKE_PRICE_ON_REQUEST, T_BIKE_PRICE_TITLE, T_BIKE_QUOTE_NOTE,
-    T_BIKE_RATE_PER_DAY, T_BIKE_SALE_PRICE, T_BIKE_SALE_TITLE, T_BIKE_TARIFF_BEFORE_DISCOUNT,
-    T_BIKE_TERMS_NOTE, T_BIKE_TERMS_TITLE, T_BIKE_TERM_DAYS, T_BIKE_TERM_DAYS_OPEN,
-    T_BIKE_TERM_DISCOUNT_ONE, T_BIKE_TERM_DISCOUNT_RANGE, T_BIKE_TERM_MONTH, T_BIKE_TERM_TWO_WEEKS,
-    T_BIKE_TERM_WEEK, T_BIKE_UNITS_EMPTY, T_BIKE_UNITS_TITLE,
+    T_BIKE_COLORS_ALL, T_BIKE_DEPOSIT, T_BIKE_MODEL_YEARS, T_BIKE_MONTHLY_LOW_SEASON,
+    T_BIKE_NOT_OFFERED_ALTERNATIVES, T_BIKE_NOT_OFFERED_TITLE, T_BIKE_PER_DAY,
+    T_BIKE_PRICE_ON_REQUEST, T_BIKE_PRICE_TITLE, T_BIKE_QUOTE_NOTE, T_BIKE_RATE_PER_DAY,
+    T_BIKE_SALE_PRICE, T_BIKE_SALE_TITLE, T_BIKE_TARIFF_BEFORE_DISCOUNT, T_BIKE_TERMS_NOTE,
+    T_BIKE_TERMS_TITLE, T_BIKE_TERM_DAYS, T_BIKE_TERM_DAYS_OPEN, T_BIKE_TERM_DISCOUNT_ONE,
+    T_BIKE_TERM_DISCOUNT_RANGE, T_BIKE_TERM_MONTH, T_BIKE_TERM_TWO_WEEKS, T_BIKE_TERM_WEEK,
+    T_BIKE_UNITS_EMPTY, T_BIKE_UNITS_TITLE,
 };
 use crate::ui::components::card_media::CardMedia;
 use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
@@ -221,22 +224,20 @@ fn render_detail(
     );
 
     let alternatives = offer_instead_labels(&bike);
-    let availability = availability_line(&bike, lang);
+    // Always "a manager confirms": the seeded count may not confirm (see
+    // `availability_line`).
+    let availability = availability_line(lang);
     // "None free" is a fact the API stated; it is not inferred from a missing
-    // count (that case is `availability_line`'s unknown branch).
+    // count. A zero may rule a family out (`FILE_MAY_RULE_OUT`), so this line
+    // stays while the count itself is no longer printed.
     let none_free = bike.units_available == Some(0);
-    // Colours of the machines that are free right now. When nothing is free,
-    // the same list would be a promise the shop cannot keep, so the fallback
-    // line is labelled as the whole fleet instead — and when neither list was
-    // served there is no colour row at all.
-    let colors_row: Option<(Key, String)> = match (
-        join_labels(&bike.colors_available),
-        join_labels(&bike.colors),
-    ) {
-        (Some(free), _) => Some((T_BIKE_COLORS_AVAILABLE, free)),
-        (None, Some(all)) => Some((T_BIKE_COLORS_ALL, all)),
-        (None, None) => None,
-    };
+    // The colours on record across the family's units. Until 2026-09-24 the
+    // row preferred the colours of the units seeded as free, labelled "free
+    // colours" — the seeded count again, as a promise. Now it is the whole
+    // family's list under the whole-family label, or no row when none was
+    // served.
+    let colors_row: Option<(Key, String)> =
+        join_labels(&bike.colors).map(|all| (T_BIKE_COLORS_ALL, all));
     let years = join_labels(
         &bike
             .model_years
@@ -395,7 +396,7 @@ fn render_detail(
             })}
 
             // ── Availability ─────────────────────────────────────────────────
-            // The rollup, not a unit list: counts, free colours, model years.
+            // The rollup, not a unit list: who confirms, colours, model years.
             // Nothing here identifies a machine (D14) or says a word about
             // service state (D6).
             {is_offered.then(|| rsx! {

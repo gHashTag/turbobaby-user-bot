@@ -47,8 +47,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/availability.t27": {
         "module": "availability",
         "id": "turbobaby/availability",
-        "min_declarations": 101,
-        "min_checks": 28,
+        "min_declarations": 114,
+        "min_checks": 32,
     },
     "specs/turbobaby/bike_catalog.t27": {
         "module": "bike-catalog",
@@ -77,7 +77,7 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/catalog_write.t27": {
         "module": "turbobaby-catalog-write",
         "id": "turbobaby/catalog-write",
-        "min_declarations": 157,
+        "min_declarations": 158,
         "min_checks": 44,
     },
     "specs/turbobaby/checkout_contact.t27": {

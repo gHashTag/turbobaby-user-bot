@@ -397,3 +397,20 @@ location, Thai helmet law, license requirement. No invented product claims
 (insurance, deposit terms) — those stay the owner's to make. The cannabis shop
 address in checkout (Koh Phangan pickup) became TurboBaby / Kamala, matching README
 and the migration 085 zone rename.
+
+## D12 amendment (2026-09-24) — the CLICK 125 redirect names only the fleet
+
+Kept at the end of this file rather than under D12, so that none of the line citations into
+this file (several contracts cite it by line) moves.
+
+The redirect as recorded in D12 names two machines the shop does not have. PCX 150 and
+ADV 150 are tariff rows with zero units (`data/fleet_seed.json`, `price_list_only`), and the
+owner's later rules forbid naming a model outside the fleet "not even as a replacement"
+(brain `knowledge_base`, the «нет в парке» note of 05.07.2026 and the client-bot rules of
+06.07.2026; `business_rules`, «Клиентам называть только модели реального парка»). The
+customer screens showed all three until this date. They now offer NMAX 155 alone:
+`specs/turbobaby/availability.t27` records the shown list as `CLICK_125_REDIRECT_LABELS_SHOWN`,
+gate 3 binds it to the screen's constant, and `tests/catalog_honesty_wiring.rs` checks every
+label against the seed. The brain itself still carries the three-name redirect in two places
+(`knowledge_base`, the CLICK line of the tariff notes and of the «что НЕ сдаём» list); that is
+the owner's text to change, not this repository's.
