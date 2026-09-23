@@ -3,7 +3,7 @@
     {
       "name": "prometheus",
       "label": "Prometheus",
-      "description": "Prometheus datasource for Woody Weed Bot metrics",
+      "description": "Prometheus datasource for TurboBaby Bot metrics",
       "type": "datasource",
       "pluginId": "prometheus",
       "pluginName": "Prometheus"
@@ -65,7 +65,7 @@
       }
     ]
   },
-  "description": "Woody Weed Bot — production metrics dashboard. Requires Prometheus scraping /metrics.",
+  "description": "TurboBaby Bot — production metrics dashboard. Requires Prometheus scraping /metrics.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -708,7 +708,7 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Woody Weed Bot — Production Metrics",
+  "title": "TurboBaby Bot — Production Metrics",
   "uid": "turbobaby-bot-metrics",
   "version": 1
 }
