@@ -48,7 +48,7 @@ npm run test:debug
 `Dashboard`, `Orders`, `Quests`, `Treasures`, `Garden`, `Loyalty`, `Managers`
 
 Each tab gets its own `test('Tab: <Name>', ...)` which:
-1. Opens `https://woody-weed-bot-production.up.railway.app/admin`
+1. Opens `https://turbobaby-bot-production.up.railway.app/admin`
 2. Injects `window.Telegram.WebApp` with the HMAC-signed `initData` from `/tmp/secrets/init_data`
 3. Waits for `.admin-tab-bar` to appear (WASM load)
 4. Clicks the tab

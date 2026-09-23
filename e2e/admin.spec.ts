@@ -16,7 +16,8 @@ import * as path from 'path';
 // Helpers
 // ---------------------------------------------------------------------------
 
-const PROD_URL = 'https://woody-weed-bot-production.up.railway.app/admin';
+// TurboBaby's own admin (until 2026-09-24: another shop's live service). Override with E2E_BASE_URL.
+const PROD_URL = `${process.env.E2E_BASE_URL ?? 'https://turbobaby-bot-production.up.railway.app'}/admin`;
 const SCREENSHOTS_DIR = path.join(__dirname, 'screenshots');
 
 /** Read initData from secret file (never log it). */

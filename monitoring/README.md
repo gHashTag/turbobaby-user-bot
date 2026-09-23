@@ -10,7 +10,7 @@ scrape_configs:
     scheme: 'https'
     metrics_path: '/metrics'
     static_configs:
-      - targets: ['woody-weed-bot-production.up.railway.app:443']
+      - targets: ['turbobaby-bot-production.up.railway.app:443']
     tls_config:
       insecure_skip_verify: false
 ```
@@ -53,11 +53,11 @@ Custom counters (add to application code as needed):
 After deployment, the interactive API docs are available at:
 
 ```
-https://woody-weed-bot-production.up.railway.app/swagger-ui/
+https://turbobaby-bot-production.up.railway.app/swagger-ui/
 ```
 
 The OpenAPI JSON spec is served at:
 
 ```
-https://woody-weed-bot-production.up.railway.app/api-docs/openapi.json
+https://turbobaby-bot-production.up.railway.app/api-docs/openapi.json
 ```

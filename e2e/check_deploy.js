@@ -10,7 +10,7 @@ const { chromium } = require('playwright');
   page.on('console', msg => console.log(`[${msg.type()}] ${msg.text()}`));
   page.on('pageerror', err => console.log(`[PAGE ERROR] ${err.message}`));
   
-  await page.goto('https://woody-weed-bot-production.up.railway.app/admin', { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.goto(`${process.env.E2E_BASE_URL ?? 'https://turbobaby-bot-production.up.railway.app'}/admin`, { waitUntil: 'domcontentloaded', timeout: 30000 });
   await page.waitForTimeout(15000);
   
   const bodyText = await page.evaluate(() => document.body.innerText);

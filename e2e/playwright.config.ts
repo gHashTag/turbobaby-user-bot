@@ -7,7 +7,9 @@ export default defineConfig({
   retries: 1,
   reporter: [['list'], ['html', { open: 'never', outputFolder: 'playwright-report' }]],
   use: {
-    baseURL: 'https://woody-weed-bot-production.up.railway.app',
+    // TurboBaby's own production service. Until 2026-09-24 this pointed at another shop's
+    // live service (woody-weed-bot) that shares the Railway project. Override with E2E_BASE_URL.
+    baseURL: process.env.E2E_BASE_URL ?? 'https://turbobaby-bot-production.up.railway.app',
     extraHTTPHeaders: {
       'ngrok-skip-browser-warning': 'true',
     },
