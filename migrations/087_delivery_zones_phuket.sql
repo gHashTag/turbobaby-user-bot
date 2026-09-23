@@ -3,7 +3,7 @@
 -- Owner's decisions, 2026-09-24 (chat). Until today the picker offered the
 -- other shop's villages -- 071 seeded Thong Sala, Haad Rin, Srithanu and
 -- Bottle Beach, and 085 kept them "until the owner defines TurboBaby's Phuket
--- zones" (DECISIONS.md D19). He has:
+-- zones" (DECISIONS.md D19). The owner has decided:
 --
 --   1. The zone table is the owner's live Bridge sheet (read-only snapshot
 --      D:/turbobaby-bot/fixtures/delivery_zones_get.live.json, taken
@@ -63,7 +63,7 @@ UPDATE delivery_zones
 
 -- The Phuket zones. Idempotent by name_en, like 071: re-running must not
 -- duplicate a zone, and a zone an admin already created by hand is left as
--- he made it rather than recreated underneath him.
+-- the admin made it rather than recreated underneath them.
 INSERT INTO delivery_zones (name, name_en, fee, min_order, sort_order)
 SELECT v.name, v.name_en, v.fee, v.min_order, v.sort_order FROM (
     VALUES

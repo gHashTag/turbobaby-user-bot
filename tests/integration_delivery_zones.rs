@@ -93,7 +93,7 @@ const PHUKET_ZONES: [(&str, f64); 18] = [
 
 #[tokio::test]
 #[ignore = "needs DATABASE_URL env var; run with --ignored"]
-async fn the_picker_offers_the_owners_phuket_zones_at_his_fees() {
+async fn the_picker_offers_the_owners_phuket_zones_at_the_owners_fees() {
     // An empty picker is as broken as a wrong one — the customer then has no
     // delivery option at all.
     let Some(app) = common::make_app().await else {

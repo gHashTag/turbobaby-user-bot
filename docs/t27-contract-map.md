@@ -176,7 +176,7 @@ resolved by writing more `.t27`:
 
 1. **The Koh Phangan delivery rows.** They are another shop's map, left in place deliberately
    (`085`), and TurboBaby's Phuket zones do not exist yet. *Decided 2026-09-24 by the owner:*
-   `087` deactivates the four rows (deletes none) and ships his eighteen Phuket zones with no
+   `087` deactivates the four rows (deletes none) and ships the owner's eighteen Phuket zones with no
    ETA; `delivery_terms` records the table, and its out-of-belt price and the 17:30 cut-off as
    known and unmodelled.
 2. **Which legacy surface retires next.** `legacy_retirement` measures three states; choosing what
