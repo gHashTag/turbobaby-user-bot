@@ -51,7 +51,7 @@
 ; D11 requires is a different contract", which was wrong about the DECISION and right only
 ; about the record. The decision -- the one-baht threshold, the ">=" boundary, and the rule
 ; that the log never blocks or delays the answer -- is owned here, below. What is still owned
-; by nobody is the PERSISTED divergence record, and not by deferral: none of the 87 .sql files
+; by nobody is the PERSISTED divergence record, and not by deferral: none of the 88 .sql files
 ; under migrations/ mentions divergence, so there is no table, column or retention rule for any
 ; contract to describe, and both emission sites leave a tracing::info! line and nothing else.
 ; A named refusal below says exactly that, instead of naming a sink that does not exist. And it
@@ -316,18 +316,18 @@ pub const DIVERGENCE_FILE_SIDE_SOURCE : u8 = SOURCE_FILE_REFERENCE;
 ; THE REFUSAL (measured 2026-09-20, re-measured 2026-09-21 and unchanged). Persistence is not
 ; specified here, and not because it was deferred: there is nothing in this repository to
 ; specify it against. grep -rniE "diverg" over
-; migrations/ returns 0 rows. The 87 below is the number of .sql migration files that recursive
-; grep actually read: 86 at the top level plus 077_quest_progress.sql in migrations/wip/. It is
-; NOT "ls migrations/ | wc -l", which also prints 87 but counts the wip/ DIRECTORY as one of its
-; entries and only 86 files -- the right number by the wrong arithmetic, and the two agree here
-; by coincidence. So: no table, no column, no id, no retention
+; migrations/ returns 0 rows. The 88 below is the number of .sql migration files that recursive
+; grep actually read: 87 at the top level plus 077_quest_progress.sql in migrations/wip/. It is
+; NOT "ls migrations/ | wc -l", which also prints 88 but counts the wip/ DIRECTORY as one of its
+; entries and only 87 files -- the right number by the wrong arithmetic, and the two agree here
+; by coincidence. (87, 86 and 87 until 2026-09-24: see the correction below the count.) So: no table, no column, no id, no retention
 ; window. Both emission sites are tracing::info!, which is a process log line: it has no schema
 ; this file could pin, no reader this file could name and no lifetime this file could bound.
 ; Naming a table, a column set or a retention period would be exactly the invention D11 forbids,
 ; one level up from the price. When a sink exists, this constant is what has to be deleted.
 pub const DIVERGENCE_PERSISTENCE_IS_NOT_SPECIFIED : bool = true;
 pub const DIVERGENCE_TABLES : u8 = 0;
-pub const MIGRATION_FILES_SEARCHED : u8 = 87;
+pub const MIGRATION_FILES_SEARCHED : u8 = 88;
 ; THIS CONTRACT OWNS THIS COUNT. turbobaby/locale-policy declares the same figure in a
 ; declaration of the same name, for a DIFFERENT search over the same directory: it looks for a
 ; CHECK constraint on a language column where this one looks for a divergence sink. One
@@ -338,17 +338,25 @@ pub const MIGRATION_FILES_SEARCHED : u8 = 87;
 ; under migrations/ is migrations/wip/README.md, which is why counting every file returns 88 and
 ; is the wrong arithmetic for this claim. Re-run the same day, the search for divergence over
 ; all 87 still returns zero rows, and both emission sites below still read as quoted.
+; CORRECTED 2026-09-24: 88, of which 87 at the top level. migrations/087_delivery_zones_phuket.sql
+; arrived with the owner's Phuket delivery zones (turbobaby/delivery-terms). The search was re-run
+; over all 88 the same day and still returns zero rows for divergence; counting every file under
+; migrations/ now returns 89, still the wrong arithmetic for the same reason. The 2026-09-21
+; figures are kept below under their own names.
 pub const MIGRATION_COUNT_IS_OWNED_HERE : bool = true;
 pub const MIGRATION_COUNT_COPY_HOLDER_ID : str = "turbobaby/locale-policy";
-pub const MIGRATION_COUNT_TOP_LEVEL : u8 = 86;
+pub const MIGRATION_COUNT_TOP_LEVEL : u8 = 87;
 pub const MIGRATION_COUNT_IN_WIP : u8 = 1;
-pub const MIGRATION_COUNT_REMEASURED_AT : str = "2026-09-21";
+pub const MIGRATION_COUNT_REMEASURED_AT : str = "2026-09-24";
+pub const MIGRATION_FILES_SEARCHED_BEFORE_087 : u8 = 87;
+pub const MIGRATION_COUNT_TOP_LEVEL_BEFORE_087 : u8 = 86;
+pub const MIGRATION_COUNT_REMEASURED_AT_BEFORE_087 : str = "2026-09-21";
 pub const DIVERGENCE_SINK_KIND : str = "process log line";
 pub const DIVERGENCE_SINKS : [2]str = [
   "src/api/bikes.rs:655-660",
   "src/api/orders.rs:736-741",
 ];
-pub const DIVERGENCE_PERSISTENCE_NOTE : str = "No sink exists: none of the 87 .sql migration files under migrations/ (86 at the top level plus one in migrations/wip/) mentions divergence, so there is no table, column or retention rule to pin. The only trace either priced answer leaves is a tracing::info! line at src/api/bikes.rs:655-660 and src/api/orders.rs:736-741. The decision is owned here; the record is owned by nobody.";
+pub const DIVERGENCE_PERSISTENCE_NOTE : str = "No sink exists: none of the 88 .sql migration files under migrations/ (87 at the top level plus one in migrations/wip/) mentions divergence, so there is no table, column or retention rule to pin. The only trace either priced answer leaves is a tracing::info! line at src/api/bikes.rs:655-660 and src/api/orders.rs:736-741. The decision is owned here; the record is owned by nobody.";
 
 ; The file side of a comparison, as a predicate. is_client_price already names the door side;
 ; this is its counterpart, and it exists so that divergence_report_required can refuse a
@@ -578,7 +586,7 @@ test an_absent_door_amount_is_the_absence_path_and_never_a_divergence {
 test persistence_of_a_divergence_is_refused_for_lack_of_a_sink {
     assert DIVERGENCE_PERSISTENCE_IS_NOT_SPECIFIED == true;
     assert DIVERGENCE_TABLES == 0;
-    assert MIGRATION_FILES_SEARCHED == 87;
+    assert MIGRATION_FILES_SEARCHED == 88;
     assert DIVERGENCE_SINK_KIND == "process log line";
     assert DIVERGENCE_SINKS.len == 2;
     assert DIVERGENCE_SINKS[0] == "src/api/bikes.rs:655-660";
@@ -591,14 +599,18 @@ test persistence_of_a_divergence_is_refused_for_lack_of_a_sink {
 ; two halves of the directory stop adding up to the whole, which is the arithmetic that made the
 ; wrong version of this measurement look right.
 test this_contract_owns_the_migration_file_count_and_names_its_copy_holder {
-  assert MIGRATION_FILES_SEARCHED == 87;
+  assert MIGRATION_FILES_SEARCHED == 88;
   assert MIGRATION_COUNT_IS_OWNED_HERE == true;
-  assert MIGRATION_COUNT_TOP_LEVEL == 86;
+  assert MIGRATION_COUNT_TOP_LEVEL == 87;
   assert MIGRATION_COUNT_IN_WIP == 1;
   assert MIGRATION_COUNT_TOP_LEVEL + MIGRATION_COUNT_IN_WIP == MIGRATION_FILES_SEARCHED;
   assert MIGRATION_COUNT_COPY_HOLDER_ID == "turbobaby/locale-policy";
   assert MIGRATION_COUNT_COPY_HOLDER_ID != ID;
-  assert MIGRATION_COUNT_REMEASURED_AT == "2026-09-21";
+  assert MIGRATION_COUNT_REMEASURED_AT == "2026-09-24";
+  assert MIGRATION_FILES_SEARCHED_BEFORE_087 == 87;
+  assert MIGRATION_COUNT_TOP_LEVEL_BEFORE_087 + MIGRATION_COUNT_IN_WIP == MIGRATION_FILES_SEARCHED_BEFORE_087;
+  assert MIGRATION_FILES_SEARCHED == MIGRATION_FILES_SEARCHED_BEFORE_087 + 1;
+  assert MIGRATION_COUNT_REMEASURED_AT_BEFORE_087 == "2026-09-21";
   assert DIVERGENCE_TABLES == 0;
 }
 
@@ -702,7 +714,7 @@ invariant a_silent_door_is_an_absence_and_never_a_divergence
     assert divergence_report_required(rate_absent(), rate_reference(CHEAPEST_IN_STOCK_DAY_RATE_THB)) == false and answer_despite_divergence(rate_absent(), rate_reference(CHEAPEST_IN_STOCK_DAY_RATE_THB)).say == SAY_HUMAN_QUOTES
 
 ; Refused for cause, not deferred to later. The cause is a measurement -- zero divergence tables
-; in 87 migrations, two tracing sites -- so the refusal expires the day that measurement changes.
+; in 88 migrations, two tracing sites -- so the refusal expires the day that measurement changes.
 invariant the_persisted_divergence_record_is_refused_not_deferred
     assert DIVERGENCE_PERSISTENCE_IS_NOT_SPECIFIED == true and DIVERGENCE_TABLES == 0 and DIVERGENCE_SINKS.len == 2
 

@@ -43,13 +43,13 @@ pub struct Config {
     /// (`HIDE_MARKETING_BADGES=1`); promote to a DB-backed admin
     /// toggle when that's needed.
     pub hide_marketing_badges: bool,
-    /// Delivery zones and ETA estimates. Loaded from `DELIVERY_ZONES_JSON`
-    /// or the built-in defaults. Used by the order tracker and checkout to
-    /// show ETA / fee ranges.
+    /// Delivery zones: loaded from `DELIVERY_ZONES_JSON` or the built-in
+    /// defaults. No handler reads this field (measured 2026-09-24): the API
+    /// serves the `delivery_zones` rows, which migration 087 made the same.
     ///
-    /// Those defaults are Koh Phangan villages and TurboBaby is in Kamala,
-    /// Phuket — see `crate::delivery` for why they are still there and whose
-    /// decision replaces them.
+    /// Those defaults are the owner's Phuket zones (owner, 2026-09-24) and
+    /// TurboBaby is in Kamala, Phuket; none carries an ETA, since none is
+    /// published — see `crate::delivery`.
     pub delivery_zones: crate::delivery::DeliveryZones,
     /// PromptPay merchant identifier for cashless Thai QR payments.
     /// Thai mobile numbers (10 digits starting with 0) or 13-digit national

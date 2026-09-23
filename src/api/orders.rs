@@ -1784,13 +1784,13 @@ async fn get_order_status(
         "status": model.status,
         "delivery_zone_id": model.delivery_zone_id,
         "delivery_zone_name": zone.as_ref().map(|z| z.name.clone()),
-        "min_eta_minutes": zone.as_ref().map(|z| z.eta_min.max(0)),
-        "max_eta_minutes": zone.as_ref().map(|z| z.eta_max.max(z.eta_min).max(0)),
+        "min_eta_minutes": zone.as_ref().and_then(crate::delivery::zone_eta_min),
+        "max_eta_minutes": zone.as_ref().and_then(crate::delivery::zone_eta_max),
         // D9: a fee that is not a finite number serialises as JSON `null` and
         // renders as a dash. The old `else { 0.0 }` told the customer that
-        // delivery to this zone was free. Only the Bangtao figure (290 ฿) is
-        // documented in `data/fleet_seed.json`; the rest of the table is
-        // `null` on purpose and must not be interpolated.
+        // delivery to this zone was free. The fees are the owner's Phuket
+        // table (migration 087, owner 2026-09-24). No ETA is published, so
+        // both minute fields above are `null` and nothing may fill them in.
         "delivery_fee_baht": zone.as_ref().and_then(|z| crate::db::orders::finite_money(Some(z.fee))),
     })))
 }
@@ -2384,8 +2384,8 @@ async fn get_user_orders(
     Ok(Json(json!({ "orders": orders })))
 }
 
-/// Public delivery zones + ETA/fee ranges. No auth — used by the customer
-/// checkout and order tracker.
+/// Public delivery zones and fees; the ETA pair is `null` unless a row stores
+/// one. No auth — used by the customer checkout and order tracker.
 async fn list_delivery_zones(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
     use crate::db::entities::delivery_zone::{Column as ZoneCol, Entity as ZoneEntity};
     use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
@@ -2406,8 +2406,8 @@ async fn list_delivery_zones(State(state): State<AppState>) -> Result<Json<Value
                 "id": z.id,
                 "name": z.name,
                 "name_en": z.name_en,
-                "min_eta_minutes": z.eta_min.max(0),
-                "max_eta_minutes": z.eta_max.max(z.eta_min).max(0),
+                "min_eta_minutes": crate::delivery::zone_eta_min(&z),
+                "max_eta_minutes": crate::delivery::zone_eta_max(&z),
                 // D9: `null`, not `0` — see `get_order_status`. A zone whose
                 // fee is undocumented renders as a dash and the customer is
                 // told a human quotes it, rather than being shown free

@@ -175,7 +175,10 @@ These are the owner's, not a contract's. Each is recorded where it belongs and n
 resolved by writing more `.t27`:
 
 1. **The Koh Phangan delivery rows.** They are another shop's map, left in place deliberately
-   (`085`), and TurboBaby's Phuket zones do not exist yet.
+   (`085`), and TurboBaby's Phuket zones do not exist yet. *Decided 2026-09-24 by the owner:*
+   `087` deactivates the four rows (deletes none) and ships the owner's eighteen Phuket zones with no
+   ETA; `delivery_terms` records the table, and its out-of-belt price and the 17:30 cut-off as
+   known and unmodelled.
 2. **Which legacy surface retires next.** `legacy_retirement` measures three states; choosing what
    moves between them is a product call (issue #2).
 3. **Whether `completed` stays an alias of `delivered`.** One column, five enumerations, four

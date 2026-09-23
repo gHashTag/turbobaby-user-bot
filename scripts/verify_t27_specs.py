@@ -113,8 +113,10 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/delivery_terms.t27": {
         "module": "turbobaby-delivery-terms",
         "id": "turbobaby/delivery-terms",
-        "min_declarations": 253,
-        "min_checks": 46,
+        # Raised 2026-09-24 from 253/46 to the measured count when the owner's Phuket zone
+        # table landed in the contract (88 declarations, 10 checks).
+        "min_declarations": 341,
+        "min_checks": 56,
     },
     "specs/turbobaby/deposit_tiers.t27": {
         "module": "deposit-tiers",
