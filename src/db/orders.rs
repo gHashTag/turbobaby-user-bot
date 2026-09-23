@@ -626,11 +626,23 @@ pub enum DepositForm {
         /// The figure agreed, in `currency`. `None` means it has not been
         /// agreed or computed yet — a dash, never `0`, which would read as
         /// "no deposit owed" (D9).
+        ///
+        /// PER UNIT (2026-09-24): on a rental line the order path compares
+        /// it with the family's `bikes.deposit_thb`, one bike's deposit, and
+        /// does not read the line's `quantity` (`deposit_refusal` in
+        /// src/api/orders.rs), so a line of two bikes carries the one-bike
+        /// figure. Per unit or per line is an open owner question.
         #[serde(default)]
         amount: Option<f64>,
         /// Currency of `amount` as agreed: "THB" for the published tiers, or
         /// the USD/EUR equivalent the seed allows for a foreign-currency
         /// deposit. `None` when nothing has been agreed.
+        ///
+        /// CORRECTED 2026-09-24 (T27 C3): an order cannot record a USD/EUR
+        /// figure today. The order path refuses a figure in any currency but
+        /// THB (`DepositRefusal::NotComparable` in src/api/orders.rs) until
+        /// the owner decides how a foreign deposit is recorded; only the
+        /// money form with no figure passes in another currency.
         #[serde(default)]
         currency: Option<String>,
         /// How it was taken, and therefore how it must be returned — one of

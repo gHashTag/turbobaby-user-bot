@@ -72,8 +72,8 @@
 ;      duplicated write -- the 409 arm at src/ui/screens/checkout_screen.rs:162-178, whose own
 ;      comment at :125 calls 409 'already accepted' -- is written against a status
 ;      POST /api/orders never returns. The server answers a replay with 200 and a body flag
-;      (src/api/orders.rs:1245-1249), refuses a malformed key with 400 (:764), and the only
-;      StatusCode::CONFLICT in src/api/orders.rs is :2210 in cancel_order. The branch is
+;      (src/api/orders.rs:1371-1375), refuses a malformed key with 400 (:876), and the only
+;      StatusCode::CONFLICT in src/api/orders.rs is :2336 in cancel_order. The branch is
 ;      unreachable from the endpoint it guards."
 ;      The premise held and the arm is GONE rather than repaired: it recovered an order by
 ;      RECENCY, never matched against the idempotency key that was sent, and built its URL from
@@ -500,7 +500,7 @@ pub fn resubmission_reuses_a_key_with_a_new_payload(key_stable: bool, payload_ch
 
 ; The client never learns which arm the server took. It reads order_id out of a 2xx body
 ; (src/ui/screens/checkout_screen.rs:173-174) and ignores the idempotent_replay flag the server
-; sets beside it at src/api/orders.rs:1248, so a replayed order and a newly created one are
+; sets beside it at src/api/orders.rs:1374, so a replayed order and a newly created one are
 ; indistinguishable on this side.
 pub const SERVER_REPLAY_STATUS : u16 = 200;
 pub const SERVER_REPLAY_FLAG_NAME : str = "idempotent_replay";
@@ -513,7 +513,7 @@ pub fn client_distinguishes_replay_from_create(reads_replay_flag: bool) bool {
 ; --- The conflict arm that could not fire, and is gone ---------------------------------------------
 ; REMOVED 2026-09-21. It stood at src/ui/screens/checkout_screen.rs:162-178, treated 409 as
 ; "already accepted", fetched /api/orders/user/{id} and returned the FIRST element of the array as
-; the order the customer had just placed. The list is newest-first -- src/api/orders.rs:2375 orders
+; the order the customer had just placed. The list is newest-first -- src/api/orders.rs:2501 orders
 ; by created_at descending -- so the pick was at least the newest order, but it was chosen by
 ; recency and not by the key that was sent, and nothing checked that it was the same order. The
 ; telegram id used to build the recovery URL was itself a fabricated zero when identity was absent
@@ -521,8 +521,8 @@ pub fn client_distinguishes_replay_from_create(reads_replay_flag: bool) bool {
 ; queried a user that does not exist.
 ; Removed rather than repaired, because the measurement says it cannot fire and a correct version
 ; would have had nothing to guard: POST /api/orders answers a replay with 200
-; (src/api/orders.rs:1245-1250), refuses an unusable key with 400 (:764), and the only
-; StatusCode::CONFLICT in that file is cancel_order at :2210. A 409 now falls to the terminal arm
+; (src/api/orders.rs:1371-1376), refuses an unusable key with 400 (:876), and the only
+; StatusCode::CONFLICT in that file is cancel_order at :2336. A 409 now falls to the terminal arm
 ; and reaches the customer, which is the honest outcome for a status nothing in the server is known
 ; to send. The measurement is not trusted to a comment: tests/wire_absence_wiring.rs re-takes it on
 ; every run and fails if a CONFLICT appears outside cancel_order, so a server that starts answering

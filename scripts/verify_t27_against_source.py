@@ -34,17 +34,19 @@ declared, is RED. DECISIONS.md D16 is the rule -- a gate whose input can reach z
 must pin a floor, because "found nothing" and "found nothing wrong" look identical
 from the outside. The floor on the table itself is MIN_BINDINGS.
 
-WHAT A GREEN RUN DOES NOT PROVE. Re-measured 2026-09-24, after the owner's Phuket delivery
-zones (migration 087) and their sixteen bindings, on top of the catalog-honesty change:
-the table's 216 bindings cover 203 distinct (contract, constant) pairs out of 5418 top-level
-`pub const` declarations across the 45 files under specs/, touching 41 of those 45
-contracts. That is 3.7% of the declared constants, and it is 0% of the 9738 `assert`
-statements. (Earlier on 2026-09-24, on the catalog-honesty tree (the CLICK 125 redirect, the
-customer availability line and the admin Add answer on top of upstream main f0640f8): 200
-bindings, 192 pairs of 5320, 3.6%, 9558 asserts, 41 contracts. Before that, on the tree
-that added the status, cancellation and money families and the person-naming resolution of
-2026-09-22/23 to the binding groups below: 198 bindings, 190 pairs of 5310, 3.6%, 9535
-asserts, 41 contracts.) (2026-09-22, the binding groups alone: 168
+WHAT A GREEN RUN DOES NOT PROVE. Re-measured 2026-09-24, after the T27 C3 deposit comparison
+(one row, commerce.CLIENT_DEPOSIT_REFUSALS) landed on top of the owner's Phuket delivery zones
+and the catalog-honesty change: the table's 217 bindings cover 204 distinct (contract,
+constant) pairs out of 5427 top-level `pub const` declarations across the 45 files under
+specs/, touching 41 of those 45 contracts. That is 3.8% of the declared constants, and it
+is 0% of the 9753 `assert` statements. (Earlier on 2026-09-24: after the Phuket delivery zones
+(migration 087) and their sixteen bindings, 216 bindings, 203 pairs of 5418, 3.7%, 9738
+asserts, 41 contracts; on the catalog-honesty tree (the CLICK 125 redirect, the customer
+availability line and the admin Add answer on top of upstream main f0640f8), 200 bindings,
+192 pairs of 5320, 3.6%, 9558 asserts, 41 contracts; on the tree that added the status,
+cancellation and money families and the person-naming resolution of 2026-09-22/23 to the
+binding groups below, 198 bindings, 190 pairs of 5310, 3.6%, 9535 asserts, 41 contracts.)
+(2026-09-22, the binding groups alone: 168
 bindings, 164 pairs of 4997, 3.3%, 9038 asserts, 40 contracts. Earlier that day, before
 a review's fixes: 162 bindings, 158 pairs of 4942, 3.2%, 8940 asserts. The fixes added
 six rows, and most of the 55 constants and 98 asserts between those two readings are
@@ -1595,7 +1597,7 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "const": "DEAL_NAMES",
         "source": "src/db/orders.rs",
         # BikeDeal's tags come from serde rename_all over the variant names and are spelled
-        # nowhere but these two tests (:1924, :2014), which cargo test holds to the enum.
+        # nowhere but these two tests (:1962, :2052), which cargo test holds to the enum.
         # This row reads the TESTS, not the enum: a variant added with no test asserting its
         # tag leaves it green (planted 2026-09-22). The row below counts the variants.
         "extract": ("regex_all", r'assert_eq!\(json(?:\["[a-z_]+"\])*\["kind"\],\s*"(bike_[a-z_]+)"\);'),
@@ -1617,7 +1619,7 @@ BINDINGS: tuple[dict[str, object], ...] = (
         # column-zero `}` must close the item that stands right before `pub enum
         # DepositForm`. Keyed on that NAME, not on the doc words between them, so rewording
         # the doc cannot blind it; an item inserted between the two enums reads 0: a noisy
-        # red, but a red. Measured 2 (:553 BikeRental, :575 BikeSale). Planted RED: a third
+        # red, but a red. Measured 2 (:579 BikeRental, :601 BikeSale). Planted RED: a third
         # struct variant and a third unit variant, neither with a test.
         "extract": ("regex_count",
                     r"^    [A-Z]\w*\s*(?:\{|\(|,)(?=(?:(?!^\}).)*?^\}\s*(?:///[^\n]*\n\s*)*"
@@ -1627,6 +1629,30 @@ BINDINGS: tuple[dict[str, object], ...] = (
                "the wire the moment it compiles, with or without a test; the contract's "
                "exactly-two-shapes invariant is written against this count, and DEAL_NAMES "
                "is held to it by an assert in the contract",
+    },
+    # Added 2026-09-24 with T27 C3. deposit_refusal (src/api/orders.rs) returns its three
+    # refusals as `return Some(DepositRefusal::X` lines, in the order it decides them; no other
+    # line of the file, tests included, returns one (the tests assert with `Some(Deposit...`
+    # and never `return`). Measured by hand: NotPublished, NotComparable, Differs. Planted
+    # RED: the Differs return moved above the currency test, and the NotPublished return
+    # commented out in place. Blind spot, named on review 2026-09-24: NOT_IN_A_LINE_COMMENT
+    # refuses only `//`, so a return inside a /* block comment */ is still read as live and
+    # the row stays green over it. What the row never proves is that the verdict is CALLED:
+    # tests/deposit_check_wiring.rs binds CLIENT_DEPOSIT_RECONCILIATION_IS_NOT_SHIPPED = false
+    # to the rental_deposit_refusal( call inside check_bike_lines (a bool, which this table's
+    # compare() refuses to bind against a count).
+    {
+        "name": "commerce.CLIENT_DEPOSIT_REFUSALS ~ orders.rs deposit_refusal returns",
+        "spec": "specs/turbobaby/commerce.t27",
+        "const": "CLIENT_DEPOSIT_REFUSALS",
+        "source": "src/api/orders.rs",
+        "extract": ("regex_all", NOT_IN_A_LINE_COMMENT + r"return Some\(DepositRefusal::(\w+)"),
+        "relation": "list_equal",
+        "why": "the order the verdict decides in is the rule: money on a family with no "
+               "published deposit is refused before any figure is read, and a figure in a "
+               "currency no published rate converts is refused before it can be compared "
+               "with a baht figure; a refusal dropped, added or reordered here changes which "
+               "deposits an order may carry without the contract saying so",
     },
     # deposit_tiers.t27 is cited by NAME below, not by line: this change also edits its
     # wiring block, which moves every line after it.
@@ -2341,7 +2367,7 @@ BINDINGS: tuple[dict[str, object], ...] = (
         # exclude it on their own (6 with either, measured 2026-09-22); the tail is what
         # ties the capture to route_callback's arms. The six are disjoint today, so a
         # reorder cannot misroute and is only a red against the contract's declared
-        # sequence; the row exists for a RENAMED or dropped arm. The builders (src/api/orders.rs:1648-1649, this file :546) spell
+        # sequence; the row exists for a RENAMED or dropped arm. The builders (src/api/orders.rs:1774-1775, this file :546) spell
         # the same prefixes inside format! strings and are not read here.
         "extract": ("regex_all", r"if (?:let Some\(\w+\) = )?data\.(?:strip_prefix|starts_with)\(\"([^\"]*)\"\)\s*\{\s*return CallbackAction::"),
         "relation": "list_equal",
@@ -3336,7 +3362,8 @@ ONE_GROUP_EXTRACTORS = (
 # and availability.CONFIRMING_KEY_LINES_IN_UI (41 contracts still): 200 rows, floor 200.
 # Then the owner's Phuket delivery zones (migration 087) added the sixteen delivery_terms
 # rows of the delivery zones group, each planted RED once by hand: 216 rows, floor 216.
-MIN_BINDINGS = 216
+# Then T27 C3 bound commerce.CLIENT_DEPOSIT_REFUSALS: 217 rows, floor 217.
+MIN_BINDINGS = 217
 
 
 # ---------------------------------------------------------------------------------
@@ -3391,7 +3418,7 @@ def literal_element(raw: str, where: str) -> object:
 def strip_line_comments(body: str) -> str:
     """Drop `// ...` from a captured Rust list body, respecting quotes.
 
-    src/api/orders.rs:1871 puts `// legacy alias for delivered` inside VALID_STATUSES.
+    src/api/orders.rs:1998 puts `// legacy alias for delivered` inside VALID_STATUSES.
     Without this the comment is split out as an element and read as an identifier.
     Quote-aware so a `//` inside a string literal survives.
     """

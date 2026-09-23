@@ -342,11 +342,11 @@ pub const CURSOR_OCCURRENCES_IN_THE_API_MODULE : u8 = 0;
 ;     ladder serves belongs to turbobaby/game-score; only the transport numbers are read here);
 ;   src/api/loyalty.rs:592-596 -- default 50, clamped into 1..100 at src/api/loyalty.rs:608-609,
 ;     with an offset floored at 0 at src/api/loyalty.rs:609;
-;   src/api/orders.rs:1674-1683 -- default 100, clamped into 1..500, offset floored at 0;
+;   src/api/orders.rs:1800-1809 -- default 100, clamped into 1..500, offset floored at 0;
 ;   src/api/referrals.rs:208 -- default 10, clamped into 1..50, no offset.
 ; Two of the six carry an offset; every one of the six floors at 1; not one of the six carries a
 ; cursor, which is the claim this census exists to make and the only one the wrong count did not
-; damage. src/api/bikes.rs:755 and src/api/orders.rs:2376 are NOT in the census: both are fixed
+; damage. src/api/bikes.rs:755 and src/api/orders.rs:2502 are NOT in the census: both are fixed
 ; caps the handler chooses, not a number the client supplies.
 pub const SHIPPED_PAGE_LADDERS : u8 = 6;
 pub const SHIPPED_CURSOR_LADDERS : u8 = 0;
@@ -402,7 +402,7 @@ pub const UNIT_ROLLUP_QUERY_ROW_CAP : u32 = 1000;
 pub const UNIT_ROLLUP_CAP_IS_A_PAGE_LIMIT : bool = false;
 
 pub const PAGINATION_TRANSPORT_IS_NOT_SHIPPED : bool = true;
-pub const PAGINATION_TRANSPORT_NOTE : str = "No page limit and no cursor reaches GET /api/bikes. list_bikes at src/api/bikes.rs:412-525 parses neither and serves the whole offered catalog in one document at src/api/bikes.rs:478, and admin_list_bikes repeats that shape at src/api/bikes.rs:1100. A grep for cursor over src/api/ returns zero on 2026-09-21. PAGE_LIMIT_MIN, PAGE_LIMIT_DEFAULT, PAGE_LIMIT_MAX and CURSOR_BYTES_MAX therefore refuse nothing, and catalog_api_normalize_limit, catalog_api_cursor_valid and catalog_api_may_emit_next_cursor have never been entered by a shipped request. Closing this needs a limit parsed at the handler and a cursor encoder beside it; until then these numbers are a proposal with a test suite. CORRECTED 2026-09-21: this sentence used to say the repository ships three page ladders and that all three are offset ladders. Both halves were wrong -- the census above measures six, and only two of the six (src/api/loyalty.rs:609 and src/api/orders.rs:1679-1683) carry an offset at all, the other four being bare clamped limits. What survives is the part that mattered: not one of the six is cursor-shaped, so a cursor here is a change of shape for this repository and not only a new parameter.";
+pub const PAGINATION_TRANSPORT_NOTE : str = "No page limit and no cursor reaches GET /api/bikes. list_bikes at src/api/bikes.rs:412-525 parses neither and serves the whole offered catalog in one document at src/api/bikes.rs:478, and admin_list_bikes repeats that shape at src/api/bikes.rs:1100. A grep for cursor over src/api/ returns zero on 2026-09-21. PAGE_LIMIT_MIN, PAGE_LIMIT_DEFAULT, PAGE_LIMIT_MAX and CURSOR_BYTES_MAX therefore refuse nothing, and catalog_api_normalize_limit, catalog_api_cursor_valid and catalog_api_may_emit_next_cursor have never been entered by a shipped request. Closing this needs a limit parsed at the handler and a cursor encoder beside it; until then these numbers are a proposal with a test suite. CORRECTED 2026-09-21: this sentence used to say the repository ships three page ladders and that all three are offset ladders. Both halves were wrong -- the census above measures six, and only two of the six (src/api/loyalty.rs:609 and src/api/orders.rs:1805-1809) carry an offset at all, the other four being bare clamped limits. What survives is the part that mattered: not one of the six is cursor-shaped, so a cursor here is a change of shape for this repository and not only a new parameter.";
 
 ; Does a declared bound refuse anything? Only if something parses the thing it bounds. Both
 ; arguments are measured facts above, and both are false today.

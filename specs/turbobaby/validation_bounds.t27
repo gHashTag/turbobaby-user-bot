@@ -65,7 +65,7 @@
 ; QrToken slot. The validation is the only barrier, which makes the next correction matter.
 ; (3) The brief asks which other modules import the clamp. Measured: none. clamp_finite_in_range
 ; has one importer (src/api/quest.rs:2) and four call sites; clamp_finite_non_negative has one
-; caller anywhere (src/db/orders.rs:1244) and it guards an admin revenue figure. The eight
+; caller anywhere (src/db/orders.rs:1256) and it guards an admin revenue figure. The eight
 ; unreached exports include validate_qr_token itself: the live QR scan path builds its own
 ; grammar at src/api/quest.rs:595-604, which requires only 1..=200 characters, checks no alphabet
 ; at all, and accepts the token under either of two body keys. The strict 16-character
@@ -196,7 +196,7 @@ pub const REACHED_ITEMS_OUTSIDE_THE_SPLIT : u8 = 2;
 pub const READ_CLAMP_IMPORTERS : u8 = 1;
 pub const READ_CLAMP_CALL_SITES : u8 = 4;
 pub const READ_CLAMP_CALL_SITES_ON_A_PUBLISHED_FIELD : u8 = 4;
-; src/db/orders.rs:1244 -- the only caller of the non-negative companion, guarding a revenue
+; src/db/orders.rs:1256 -- the only caller of the non-negative companion, guarding a revenue
 ; figure that the admin panel renders.
 pub const MONEY_CLAMP_CALL_SITES : u8 = 1;
 
@@ -311,7 +311,7 @@ pub fn substitution_is_undetectable(finite: bool, value: i32, min: i32, max: i32
 }
 
 ; --- The non-negative companion ---------------------------------------------------------------
-; src/trios/validation.rs:225-231, one caller, at src/db/orders.rs:1244, on revenue. Its floor is
+; src/trios/validation.rs:225-231, one caller, at src/db/orders.rs:1256, on revenue. Its floor is
 ; a true clamp for a negative input and a substitution for a non-finite one, and in both cases
 ; the output is zero, which for a revenue figure is an ordinary quiet day. Same trap, money slot.
 pub const NON_NEGATIVE_FLOOR : i32 = 0;

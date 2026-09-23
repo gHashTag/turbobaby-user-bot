@@ -385,7 +385,7 @@ None of these is unblocked by more `.t27`:
   two screens. An answer needs an owner-approved ru/en pair. Adding a key moves every `i18n.rs`
   citation below it, so land it together with A, B and D.
 * **F. What should an order holding a bike line show as its total?** The stored subtotal and
-  total leave the rental out (`src/api/orders.rs:489-497`), so a bike-only order stores 0 and 0.
+  total leave the rental out (`src/api/orders.rs:495-503`), so a bike-only order stores 0 and 0.
   Today its subtotal is a dash and its total prints `฿0`. The choices are a dash for the whole
   order, or the catalog part with owner-supplied qualifier copy. No shipped client submits a bike
   line; gate 3 binds that, so this is reachability, not traffic. A design that inferred bike

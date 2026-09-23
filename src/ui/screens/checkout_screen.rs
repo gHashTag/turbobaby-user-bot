@@ -135,9 +135,9 @@ enum SubmitResult {
 /// recency, never checked against the idempotency key that was sent. It was
 /// removed rather than repaired because it cannot fire: `POST /api/orders`
 /// answers a replay with 200 and an `idempotent_replay` flag
-/// (`src/api/orders.rs:1245-1250`), refuses an unusable key with 400 (:764),
+/// (`src/api/orders.rs:1371-1376`), refuses an unusable key with 400 (:876),
 /// and the only `StatusCode::CONFLICT` in that file is `cancel_order`
-/// (:2210). A 409 from this endpoint now falls to the terminal arm below and
+/// (:2336). A 409 from this endpoint now falls to the terminal arm below and
 /// is shown to the customer, which is the honest outcome for a status nothing
 /// in the server is known to send. `tests/wire_absence_wiring.rs` re-takes
 /// that measurement on every run, so the premise cannot rot silently.
