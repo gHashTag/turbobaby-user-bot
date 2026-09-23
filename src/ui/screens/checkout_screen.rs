@@ -815,23 +815,23 @@ pub fn CheckoutScreen() -> Element {
         .and_then(|id| zones.iter().find(|z| z.id == *id))
         .or_else(|| zones.first())
         .cloned();
-    let (delivery_eta_text, delivery_fee_text) = match selected_zone.as_ref() {
-        Some(z) => {
-            let eta = format!("{}-{}", z.min_eta_minutes, z.max_eta_minutes);
-            let eta_text = t(crate::ui::lang::current_lang(), T_DELIVERY_ETA).replace("{0}", &eta);
-            let fee_text = t(crate::ui::lang::current_lang(), T_DELIVERY_FEE).replace(
-                "{0}",
-                &crate::trios::pricing::format_baht(z.delivery_fee_baht),
-            );
-            (eta_text, fee_text)
-        }
-        None => (
-            tf(lang, T_DELIVERY_ETA, &["30-45".to_string()]),
-            tf(
-                lang,
-                T_DELIVERY_FEE,
-                &[crate::trios::pricing::format_baht(0.0)],
-            ),
+    // The fee, and an ETA line only when the zone row carries both minutes.
+    // None is published (owner, 2026-09-24): the shop promises a window, so
+    // an absent pair shows no ETA at all, and no literal range stands in. The
+    // fee's own fallback for an empty zone list, below, is unchanged.
+    let delivery_eta_text: Option<String> = selected_zone.as_ref().and_then(|z| {
+        let (min, max) = (z.min_eta_minutes?, z.max_eta_minutes?);
+        Some(tf(lang, T_DELIVERY_ETA, &[format!("{min}-{max}")]))
+    });
+    let delivery_fee_text = match selected_zone.as_ref() {
+        Some(z) => t(crate::ui::lang::current_lang(), T_DELIVERY_FEE).replace(
+            "{0}",
+            &crate::trios::pricing::format_baht(z.delivery_fee_baht),
+        ),
+        None => tf(
+            lang,
+            T_DELIVERY_FEE,
+            &[crate::trios::pricing::format_baht(0.0)],
         ),
     };
 
@@ -1061,10 +1061,10 @@ pub fn CheckoutScreen() -> Element {
                             if let Some(ref z) = zone_info {
                                 let _ =
                                     storage.set_item("woody_last_zone_name", &zone_display_name(z));
-                                let _ = storage.set_item(
-                                    "woody_last_zone_eta",
-                                    &format!("{}-{}", z.min_eta_minutes, z.max_eta_minutes),
-                                );
+                                // No ETA is stored any more: the success screen reads
+                                // it from the server alone, and no zone row carries one
+                                // (owner, 2026-09-24). A key an older build wrote is
+                                // left in place and never read.
                             }
                             let _ = storage.set_item("woody_last_notes", &delivery_notes());
                             let _ = storage.set_item("woody_last_stars", &submit_stars.to_string());
@@ -1543,7 +1543,7 @@ pub fn CheckoutScreen() -> Element {
                         border: 4px solid rgba(0,229,255,0.2);
                         border-radius: 0; padding: 10px;
                     ",
-                            div { style: "font-size: 13px; margin-bottom: 6px;", "{delivery_eta_text}" }
+                            if let Some(eta) = delivery_eta_text.as_ref() { div { style: "font-size: 13px; margin-bottom: 6px;", "{eta}" } }
                             div { style: "font-size: 15px; color: #39ff14;", "{delivery_fee_text}" }
                         }
                     }

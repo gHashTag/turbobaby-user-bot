@@ -1025,10 +1025,10 @@ struct UpdateZoneRequest {
     fee: Option<f64>,
     #[serde(default)]
     min_order: Option<f64>,
-    #[serde(default)]
-    eta_min: Option<i32>,
-    #[serde(default)]
-    eta_max: Option<i32>,
+    #[serde(default, deserialize_with = "present_or_null")]
+    eta_min: Option<Option<i32>>,
+    #[serde(default, deserialize_with = "present_or_null")]
+    eta_max: Option<Option<i32>>,
     #[serde(default)]
     sort_order: Option<i32>,
     #[serde(default)]
@@ -1048,6 +1048,51 @@ fn validate_zone_name(name: &str) -> Result<(), StatusCode> {
         return Err(StatusCode::BAD_REQUEST);
     }
     Ok(())
+}
+
+/// A stored lower ETA edge from an admin write: a negative becomes 0.
+fn clamp_eta_min(eta_min: i32) -> i32 {
+    eta_min.max(0)
+}
+
+/// A stored upper ETA edge: never negative, never below a stored lower edge.
+fn clamp_eta_max(eta_max: i32, eta_min: Option<i32>) -> i32 {
+    eta_max.max(eta_min.unwrap_or(0)).max(0)
+}
+
+/// The ETA a created zone stores: what the admin sent, clamped, or nothing.
+/// Until 2026-09-24 an absent edge was stored as 30 and 60 minutes, numbers
+/// nobody measured; no ETA is published (owner, 2026-09-24), so migration 087
+/// made both columns nullable and an absent edge now stays NULL.
+fn created_zone_eta(eta_min: Option<i32>, eta_max: Option<i32>) -> (Option<i32>, Option<i32>) {
+    (
+        eta_min.map(clamp_eta_min),
+        eta_max.map(|max| clamp_eta_max(max, eta_min)),
+    )
+}
+
+/// The ETA an update writes, per edge: `None` leaves the column alone and
+/// `Some(None)` clears it. The upper edge is floored by the lower one the row
+/// will hold after this update.
+fn updated_zone_eta(
+    stored_min: Option<i32>,
+    eta_min: Option<Option<i32>>,
+    eta_max: Option<Option<i32>>,
+) -> (Option<Option<i32>>, Option<Option<i32>>) {
+    let floor = eta_min.unwrap_or(stored_min);
+    (
+        eta_min.map(|min| min.map(clamp_eta_min)),
+        eta_max.map(|max| max.map(|max| clamp_eta_max(max, floor))),
+    )
+}
+
+/// For an update body: an absent key is `None`, `null` is `Some(None)`, a
+/// number is `Some(Some(n))`. serde alone reads `null` and "absent" alike.
+fn present_or_null<'de, D>(deserializer: D) -> Result<Option<Option<i32>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Option::<i32>::deserialize(deserializer).map(Some)
 }
 
 async fn list_delivery_zones_admin(
@@ -1077,18 +1122,15 @@ async fn create_delivery_zone(
     check_admin(&headers, &state)?;
     validate_zone_name(&req.name)?;
     let now = chrono::DateTime::from(chrono::Utc::now());
+    let (eta_min, eta_max) = created_zone_eta(req.eta_min, req.eta_max);
     let am = delivery_zone::ActiveModel {
         id: Set(uuid::Uuid::new_v4()),
         name: Set(req.name),
         name_en: Set(req.name_en),
         fee: Set(req.fee.map(sanitize_f64).unwrap_or(0.0)),
         min_order: Set(req.min_order.map(sanitize_f64).unwrap_or(0.0)),
-        eta_min: Set(req.eta_min.unwrap_or(30).max(0)),
-        eta_max: Set(req
-            .eta_max
-            .unwrap_or(req.eta_min.unwrap_or(60))
-            .max(req.eta_min.unwrap_or(0))
-            .max(0)),
+        eta_min: Set(eta_min),
+        eta_max: Set(eta_max),
         sort_order: Set(req.sort_order.unwrap_or(0)),
         is_active: Set(req.is_active.unwrap_or(true)),
         created_at: Set(Some(now)),
@@ -1134,12 +1176,13 @@ async fn update_delivery_zone(
     if let Some(min_order) = req.min_order {
         am.min_order = Set(sanitize_f64(min_order));
     }
-    if let Some(eta_min) = req.eta_min {
-        am.eta_min = Set(eta_min.max(0));
+    let (eta_min, eta_max) =
+        updated_zone_eta(am.eta_min.clone().unwrap(), req.eta_min, req.eta_max);
+    if let Some(eta_min) = eta_min {
+        am.eta_min = Set(eta_min);
     }
-    if let Some(eta_max) = req.eta_max {
-        let floor = req.eta_min.unwrap_or_else(|| am.eta_min.clone().unwrap());
-        am.eta_max = Set(eta_max.max(floor).max(0));
+    if let Some(eta_max) = eta_max {
+        am.eta_max = Set(eta_max);
     }
     if let Some(sort_order) = req.sort_order {
         am.sort_order = Set(sort_order);
@@ -1264,6 +1307,58 @@ mod tests {
         assert_eq!(
             validate_admin_login(&req).unwrap_err(),
             StatusCode::BAD_REQUEST
+        );
+    }
+}
+
+#[cfg(test)]
+mod zone_eta_tests {
+    use super::*;
+
+    #[test]
+    fn a_zone_created_without_minutes_stores_no_eta() {
+        let req: CreateZoneRequest =
+            serde_json::from_str(r#"{"name":"Патонг","name_en":"Patong","fee":290}"#)
+                .expect("a zone needs no ETA");
+        assert_eq!(created_zone_eta(req.eta_min, req.eta_max), (None, None));
+    }
+
+    #[test]
+    fn a_created_zone_stores_the_edges_it_was_given_and_invents_none() {
+        assert_eq!(created_zone_eta(Some(20), None), (Some(20), None));
+        assert_eq!(created_zone_eta(None, Some(40)), (None, Some(40)));
+        assert_eq!(created_zone_eta(Some(-5), Some(-1)), (Some(0), Some(0)));
+        assert_eq!(created_zone_eta(Some(30), Some(10)), (Some(30), Some(30)));
+    }
+
+    #[test]
+    fn an_update_tells_an_absent_key_from_a_null() {
+        let absent: UpdateZoneRequest = serde_json::from_str("{}").expect("empty body");
+        assert_eq!((absent.eta_min, absent.eta_max), (None, None));
+        let cleared: UpdateZoneRequest =
+            serde_json::from_str(r#"{"eta_min":null,"eta_max":null}"#).expect("nulls");
+        assert_eq!((cleared.eta_min, cleared.eta_max), (Some(None), Some(None)));
+        let set: UpdateZoneRequest =
+            serde_json::from_str(r#"{"eta_min":15,"eta_max":25}"#).expect("numbers");
+        assert_eq!((set.eta_min, set.eta_max), (Some(Some(15)), Some(Some(25))));
+    }
+
+    #[test]
+    fn an_update_leaves_clears_or_sets_each_edge() {
+        assert_eq!(updated_zone_eta(Some(20), None, None), (None, None));
+        assert_eq!(
+            updated_zone_eta(Some(20), Some(None), Some(None)),
+            (Some(None), Some(None))
+        );
+        assert_eq!(
+            updated_zone_eta(Some(20), None, Some(Some(10))),
+            (None, Some(Some(20))),
+            "the stored lower edge floors a new upper one"
+        );
+        assert_eq!(
+            updated_zone_eta(Some(20), Some(None), Some(Some(10))),
+            (Some(None), Some(Some(10))),
+            "a cleared lower edge floors nothing"
         );
     }
 }

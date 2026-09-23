@@ -393,15 +393,17 @@ pub struct BroadcastProduct {
     pub image_url: Option<String>,
 }
 
-/// Delivery zone with ETA / fee — matches backend `/api/delivery/zones`.
+/// Delivery zone and fee — matches backend `/api/delivery/zones`; no ETA is published, so null.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DeliveryZone {
     pub id: String,
     pub name: String,
     #[serde(default)]
     pub name_en: Option<String>,
-    pub min_eta_minutes: u32,
-    pub max_eta_minutes: u32,
+    #[serde(default)]
+    pub min_eta_minutes: Option<u32>,
+    #[serde(default)]
+    pub max_eta_minutes: Option<u32>,
     pub delivery_fee_baht: f64,
 }
 

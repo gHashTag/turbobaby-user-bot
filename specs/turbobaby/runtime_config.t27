@@ -84,6 +84,9 @@
 ; retired surface is -- and it restates no zone, price, deposit, route, metric name or rate. It
 ; holds no renter, handle, phone, key code, plate, debt, purchase price or personal note (D14):
 ; every constant here is a variable name, a file path, a boolean or a count.
+; RE-POINTED 2026-09-24: the src/db/mod.rs lines this file cites past line 385 moved four lines
+; down when migrations/087_delivery_zones_phuket.sql joined MIGRATIONS, and src/delivery.rs was
+; rewritten for the owner's Phuket zones; every such citation below is re-measured.
 ; phi^2 + 1/phi^2 = 3 | TRINITY
 
 module turbobaby-runtime-config;
@@ -109,7 +112,7 @@ pub const DEPLOY_NOTICE_IMPLEMENTATION : str = "src/notify.rs";
 ; legacy-retirement owns what the other shop's names are and what "retired" means, so the one
 ; deliberately-kept retired variable name below is counted here and judged there. delivery-terms
 ; owns the zone table and the direction of its override's failure, which is the third default
-; with a business-identity consequence and the one still open. publication owns the rule that a
+; with a business-identity consequence (the one still open until 2026-09-24; repaired that day). publication owns the rule that a
 ; thing is claimed only where it was observed, which is why the unread template is a refusal.
 ; The last three edges, with promo-broadcast, are the contracts that own the WORK of a loop this
 ; file inventories: notification-queue the drain, events-booking the reminder sweep,
@@ -144,8 +147,8 @@ pub const NOTIFICATION_QUEUE_INTERVAL_DECLARATION : str = "POLL_INTERVAL_SECONDS
 ; std::env::var call under src/ plus the two names handed to the collector as literals at
 ; src/config.rs:77. 24 names reach env::var inside src/config.rs; BOT_TOKEN and DATABASE_URL are
 ; read through the closure at :77-79 and so appear in no env::var call there; seven further names
-; are read only outside the resolver -- DB_POOL_MAX (src/db/mod.rs:586), DELIVERY_ZONES_JSON
-; (src/delivery.rs:91), PROMPTPAY_ID (src/promptpay.rs:28), RUST_LOG (src/main.rs:393) and the
+; are read only outside the resolver -- DB_POOL_MAX (src/db/mod.rs:590), DELIVERY_ZONES_JSON
+; (src/delivery.rs:105), PROMPTPAY_ID (src/promptpay.rs:28), RUST_LOG (src/main.rs:393) and the
 ; three RAILWAY_GIT_* names (src/notify.rs:78, :84, :85). Configuration is not resolved in one
 ; place, and the seven are the measure of that.
 pub const ENV_NAMES_TOTAL : u8 = 33;
@@ -213,10 +216,21 @@ pub fn default_is_admissible(names_another_business: bool, points_off_this_deplo
 ; describes another island's villages and its own doc comment says so at src/config.rs:50-52.
 ; That one is turbobaby/delivery-terms' subject and its verdict is that contract's; counted here
 ; because a census that dropped it would report the rule as fully satisfied.
+; CORRECTED 2026-09-24: all three are repaired. The owner defined TurboBaby's Phuket zones that day
+; and src/delivery.rs now carries them as its built-in table (turbobaby/delivery-terms records the
+; decision and the rows), so the default no longer names another business's geography; the
+; doc comment at src/config.rs:50-52 says so in the same three lines. Measured the same day, and
+; narrower than the census suggests: no handler reads that built-in table at all -- the field is
+; built at src/config.rs:166 and read nowhere, and the zones customers see are delivery_zones rows.
+; The owner edge stays, renamed by what it now records. The 2026-09-22 counts keep their names.
 pub const IDENTITY_BEARING_DEFAULTS : u8 = 3;
-pub const IDENTITY_BEARING_DEFAULTS_REPAIRED : u8 = 2;
-pub const IDENTITY_BEARING_DEFAULTS_OPEN : u8 = 1;
+pub const IDENTITY_BEARING_DEFAULTS_REPAIRED : u8 = 3;
+pub const IDENTITY_BEARING_DEFAULTS_OPEN : u8 = 0;
+pub const IDENTITY_BEARING_DEFAULTS_REPAIRED_BEFORE_2026_09_24 : u8 = 2;
+pub const IDENTITY_BEARING_DEFAULTS_OPEN_BEFORE_2026_09_24 : u8 = 1;
 pub const OPEN_DEFAULT_OWNER_ID : str = "turbobaby/delivery-terms";
+pub const THIRD_DEFAULT_REPAIRED_AT : str = "2026-09-24";
+pub const BUILT_IN_ZONE_TABLE_IS_READ_BY_A_HANDLER : bool = false;
 
 ; --- The guard, and its shape --------------------------------------------------------------------
 ; src/config.rs:118-125. Blank or whitespace, or a value containing either of two legacy hostname
@@ -325,16 +339,17 @@ pub fn absent_value_refuses_boot(required_always: bool, required_in_production: 
 
 ; Two names are parsed strictly, so a malformed value refuses the boot rather than being
 ; swallowed: PORT (src/config.rs:299-314, unset and empty still default) and DB_POOL_MAX
-; (src/db/mod.rs:541-563, which also refuses a zero because it would deadlock the first query).
+; (src/db/mod.rs:545-567, which also refuses a zero because it would deadlock the first query).
 ; Six are parsed tolerantly and fall back on garbage. The direction is the finding: strictness is
-; the exception, and one of the six tolerant fallbacks is the open identity-bearing default.
+; the exception, and one of the six tolerant fallbacks is the identity-bearing default that stayed
+; open until 2026-09-24 (src/delivery.rs:105-115, :91-101 before that day's rewrite of the file).
 pub const STRICTLY_PARSED_NAMES : [2]str = ["PORT", "DB_POOL_MAX"];
 pub const TOLERANTLY_PARSED_SITES : [6]str = [
   "src/config.rs:159",
   "src/config.rs:163-165",
   "src/config.rs:168-172",
   "src/config.rs:230-243",
-  "src/delivery.rs:91-101",
+  "src/delivery.rs:105-115",
   "src/promptpay.rs:40-44"
 ];
 
@@ -624,9 +639,14 @@ test a_default_must_clear_both_halves_of_the_rule {
   assert default_is_admissible(true, true) == false;
 }
 
-test the_identity_bearing_defaults_are_counted_and_one_is_open {
+test the_identity_bearing_defaults_are_counted_and_none_is_open_since_the_zone_decision {
   assert IDENTITY_BEARING_DEFAULTS_REPAIRED + IDENTITY_BEARING_DEFAULTS_OPEN == IDENTITY_BEARING_DEFAULTS;
-  assert IDENTITY_BEARING_DEFAULTS_OPEN == 1;
+  assert IDENTITY_BEARING_DEFAULTS_OPEN == 0;
+  assert IDENTITY_BEARING_DEFAULTS_REPAIRED == IDENTITY_BEARING_DEFAULTS;
+  assert IDENTITY_BEARING_DEFAULTS_OPEN_BEFORE_2026_09_24 == 1;
+  assert IDENTITY_BEARING_DEFAULTS_REPAIRED_BEFORE_2026_09_24 + IDENTITY_BEARING_DEFAULTS_OPEN_BEFORE_2026_09_24 == IDENTITY_BEARING_DEFAULTS;
+  assert THIRD_DEFAULT_REPAIRED_AT == "2026-09-24";
+  assert BUILT_IN_ZONE_TABLE_IS_READ_BY_A_HANDLER == false;
   assert OPEN_DEFAULT_OWNER_ID == "turbobaby/delivery-terms";
   assert OPEN_DEFAULT_OWNER_ID != ID;
 }

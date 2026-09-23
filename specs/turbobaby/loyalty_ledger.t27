@@ -59,7 +59,7 @@
 ;    this into add_bonus / use_bonus" and "this entity is intentionally unreferenced -- see the
 ;    loyalty_idempotency_key entry in ALLOWED_UNWIRED_ENTITIES". Both halves are stale. The entity
 ;    is imported and used at src/api/loyalty.rs:262 and :458, and ALLOWED_UNWIRED_ENTITIES at
-;    src/db/mod.rs:1929-1951 lists exactly two names, quest_place and event_photo. A reader who
+;    src/db/mod.rs:1933-1955 lists exactly two names, quest_place and event_photo. A reader who
 ;    trusted that comment would contract for protection that is wired, or skip the file believing
 ;    nothing runs. migrations/033_loyalty_idempotency_keys.sql:1 is stale in the same way: it names
 ;    the route add-bonus, and the registration at src/api/loyalty.rs:25 is /bonus.
@@ -86,6 +86,9 @@
 ; renter, handle, phone, key code, plate, debt, purchase price or personal note in any constant,
 ; fixture or comment, and no account id is written down anywhere below -- only compared. Shipped
 ; Cyrillic strings in the cited sources are referred to by path and never quoted.
+; RE-POINTED 2026-09-24: every src/db/mod.rs line this file cites past line 385 moved four lines
+; down when migrations/087_delivery_zones_phuket.sql joined the MIGRATIONS list. The numbers are
+; re-measured; the old ones are these minus four, and nothing they point at changed.
 ; phi^2 + 1/phi^2 = 3 | TRINITY
 
 module turbobaby-loyalty-ledger;

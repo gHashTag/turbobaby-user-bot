@@ -224,19 +224,19 @@ pub fn SuccessScreen(id: String) -> Element {
         })
     };
 
-    // Load the delivery zone written by checkout so the ETA is real, not a
-    // hard-coded "30-45 min" fallback.
+    // Load the zone name written by checkout. No ETA is read back: none is
+    // published (owner, 2026-09-24), so only the server's own pair is shown.
     let mut zone_name = use_signal(|| Option::<String>::None);
-    let mut zone_eta = use_signal(|| Option::<String>::None);
+    // (The local ETA fallback that stood here is gone, with its literal.)
     use_effect(move || {
         if let Some(window) = web_sys::window() {
             if let Ok(Some(storage)) = window.local_storage() {
                 if let Ok(Some(name)) = storage.get_item("woody_last_zone_name") {
                     zone_name.set(Some(name));
                 }
-                if let Ok(Some(eta)) = storage.get_item("woody_last_zone_eta") {
-                    zone_eta.set(Some(eta));
-                }
+                // `woody_last_zone_eta` is not read: an older device may hold
+                // the other island's minutes (D19), and a stale figure is not
+                // an ETA.
             }
         }
     });
@@ -295,14 +295,14 @@ pub fn SuccessScreen(id: String) -> Element {
         .as_ref()
         .map(|s| order_status_label(lang, &s.status))
         .unwrap_or_else(|| t(lang, T_SUCCESS_CONFIRMED).to_string());
-    let eta_range = status_result
-        .as_ref()
-        .and_then(|s| match (s.min_eta_minutes, s.max_eta_minutes) {
-            (Some(min), Some(max)) => Some(format!("{min}-{max}")),
-            _ => None,
-        })
-        .or_else(|| zone_eta().clone())
-        .unwrap_or_else(|| "30-45".to_string());
+    // Only the server's own pair is an ETA: each edge is taken with `?`, so a
+    // missing one ends it. No local fallback and no literal range stand in:
+    // an absent pair renders no ETA row at all (owner, 2026-09-24), and none
+    // is published, so today no order shows one.
+    let eta_range = status_result.as_ref().and_then(|s| {
+        let (min, max) = (s.min_eta_minutes?, s.max_eta_minutes?);
+        Some(format!("{min}-{max}"))
+    });
     let zone_display = status_result
         .as_ref()
         .and_then(|s| s.delivery_zone_name.clone())
@@ -487,9 +487,11 @@ pub fn SuccessScreen(id: String) -> Element {
                     span { style: "color: #8b8b9e;", "{status_label}" }
                     span { style: "color: #39ff14;", "{status_text}" }
                 }
-                div { style: "display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;",
-                    span { style: "color: #8b8b9e;", "{eta_label}" }
-                    span { "{tf(lang, T_SUCCESS_ETA_VALUE, std::slice::from_ref(&eta_range))}" }
+                if let Some(range) = eta_range.as_ref() {
+                    div { style: "display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px;",
+                        span { style: "color: #8b8b9e;", "{eta_label}" }
+                        span { "{tf(lang, T_SUCCESS_ETA_VALUE, std::slice::from_ref(range))}" }
+                    }
                 }
                 div { style: "display: flex; justify-content: space-between; font-size: 13px;",
                     span { style: "color: #8b8b9e;", "{payment_label}" }

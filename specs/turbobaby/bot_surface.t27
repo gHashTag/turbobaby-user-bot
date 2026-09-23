@@ -82,6 +82,9 @@
 ; and the roughly eighty-path routing table is not this file's subject under any reading. No
 ; renter name, handle, phone, key code, plate, debt, purchase price or personal note appears
 ; here, in constants, fixtures or comments.
+; RE-POINTED 2026-09-24: every src/db/mod.rs line this file cites past line 385 moved four lines
+; down when migrations/087_delivery_zones_phuket.sql joined the MIGRATIONS list. The numbers are
+; re-measured; the old ones are these minus four, and nothing they point at changed.
 ; phi^2 + 1/phi^2 = 3 | TRINITY
 
 module turbobaby-bot-surface;
@@ -535,7 +538,7 @@ pub const THE_CO_DECLARER_SPELLS_THE_HELPER_NAME : bool = false;
 
 ; --- The legacy tripwire ----------------------------------------------------------------------------
 ; MEASURED, not inferred. Two of the six callback prefixes page a strain-of-day carousel whose
-; only data source is a table that migration 083 dropped. The reader is src/db/mod.rs:1029; its
+; only data source is a table that migration 083 dropped. The reader is src/db/mod.rs:1033; its
 ; one caller is src/bot/callbacks.rs:387, which writes unwrap_or_default() and so turns the query
 ; error into an empty vector. An empty vector makes the index lookup at :388 miss, the arm sends
 ; nothing, and the surface is alive precisely because it fails quietly.
@@ -566,7 +569,7 @@ pub const LEGACY_TABLES_DROPPED_BY_THAT_MIGRATION : u8 = 6;
 pub const DROPPED_TABLE_COUNT_OWNER_ID : str = "turbobaby/legacy-retirement";
 pub const DROPPED_TABLE_COUNT_OWNER_DECLARATION : str = "DROPPED_TABLE_COUNT";
 pub const DROPPED_TABLE_COUNT_OWNERS_VALUE : u8 = 6;
-pub const LEGACY_READER : str = "src/db/mod.rs:1029";
+pub const LEGACY_READER : str = "src/db/mod.rs:1033";
 pub const LEGACY_CALL_SITE : str = "src/bot/callbacks.rs:387";
 pub const LEGACY_ERROR_IS_SWALLOWED : bool = true;
 pub const LEGACY_SURVIVOR_ENTRY : str = "tests/retired_table_wiring.rs:66-75";

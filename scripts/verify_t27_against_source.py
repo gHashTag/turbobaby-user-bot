@@ -34,15 +34,17 @@ declared, is RED. DECISIONS.md D16 is the rule -- a gate whose input can reach z
 must pin a floor, because "found nothing" and "found nothing wrong" look identical
 from the outside. The floor on the table itself is MIN_BINDINGS.
 
-WHAT A GREEN RUN DOES NOT PROVE. Re-measured 2026-09-24 on the catalog-honesty tree (the
-CLICK 125 redirect, the customer availability line and the admin Add answer on top of
-upstream main f0640f8): the table's 200 bindings cover 192 distinct (contract, constant)
-pairs out of 5320 top-level `pub const` declarations across the 45 files under specs/,
-touching 41 of those 45 contracts. That is 3.6% of the declared constants, and it is 0%
-of the 9558 `assert` statements. (Earlier on 2026-09-24, on the tree that added the
-status, cancellation and money families and the person-naming resolution of 2026-09-22/23
-to the binding groups below: 198 bindings, 190 pairs of 5310, 3.6%, 9535 asserts, 41
-contracts. 2026-09-22, the binding groups alone: 168
+WHAT A GREEN RUN DOES NOT PROVE. Re-measured 2026-09-24, after the owner's Phuket delivery
+zones (migration 087) and their sixteen bindings, on top of the catalog-honesty change:
+the table's 216 bindings cover 203 distinct (contract, constant) pairs out of 5418 top-level
+`pub const` declarations across the 45 files under specs/, touching 41 of those 45
+contracts. That is 3.7% of the declared constants, and it is 0% of the 9738 `assert`
+statements. (Earlier on 2026-09-24, on the catalog-honesty tree (the CLICK 125 redirect, the
+customer availability line and the admin Add answer on top of upstream main f0640f8): 200
+bindings, 192 pairs of 5320, 3.6%, 9558 asserts, 41 contracts. Before that, on the tree
+that added the status, cancellation and money families and the person-naming resolution of
+2026-09-22/23 to the binding groups below: 198 bindings, 190 pairs of 5310, 3.6%, 9535
+asserts, 41 contracts.) (2026-09-22, the binding groups alone: 168
 bindings, 164 pairs of 4997, 3.3%, 9038 asserts, 40 contracts. Earlier that day, before
 a review's fixes: 162 bindings, 158 pairs of 4942, 3.2%, 8940 asserts. The fixes added
 six rows, and most of the 55 constants and 98 asserts between those two readings are
@@ -193,6 +195,15 @@ UNIT_ROW_KEYED_SQL = (
     r"\('([a-z0-9\-]+)',\s*'[a-z0-9\-]+',\s*(?:NULL|\d+),\s*(?:NULL|'[^']*'),\s*"
     r"'" + STATUS_ANY + r"'\)"
 )
+# One Phuket zone row of migrations/087_delivery_zones_phuket.sql's VALUES list --
+# (name, name_en, fee, min_order, sort_order) -- and the same row of src/delivery.rs's
+# PHUKET_ZONES -- (id, name, name_en, fee). The _NAME forms capture name_en. The pickup row is
+# neither (087 does not insert it, and src/delivery.rs declares it apart as PICKUP_ZONE), and
+# the two-element rows of delivery.rs's own test table do not match either shape.
+PHUKET_ROW_SQL = r"^[ \t]+\('[^'\n]+',[ \t]*'[^'\n]+',[ \t]*[0-9.]+,[ \t]*[0-9.]+,[ \t]*\d+\),?[ \t]*$"
+PHUKET_ROW_SQL_NAME = r"^[ \t]+\('[^'\n]+',[ \t]*'([^'\n]+)',[ \t]*[0-9.]+,[ \t]*[0-9.]+,[ \t]*\d+\),?[ \t]*$"
+PHUKET_ROW_RS = r'^[ \t]+\("[a-z_]+",[ \t]*"[^"\n]+",[ \t]*"[^"\n]+",[ \t]*[0-9.]+\),[ \t]*$'
+PHUKET_ROW_RS_NAME = r'^[ \t]+\("[a-z_]+",[ \t]*"[^"\n]+",[ \t]*"([^"\n]+)",[ \t]*[0-9.]+\),[ \t]*$'
 # One families-block row, key captured. migrations/082 seeds families before units, so
 # this is also the order availability.t27's four parallel arrays are written in.
 FAMILY_ROW_SQL = (
@@ -1740,7 +1751,7 @@ BINDINGS: tuple[dict[str, object], ...] = (
     },
     # The next four read data/fleet_seed.json, the first JSON source in this table. It is
     # delivery_terms.t27's declared SOURCE, "the repository-tracked file a gate could bind
-    # to" (delivery_terms.t27:20-25); read_text and the tracked check treat it like any
+    # to" (delivery_terms.t27:21-26); read_text and the tracked check treat it like any
     # other file. Measured 2026-09-22: no file under src/ reads the seed, and outside
     # specs/ the four keys read below (known_tariff_example, delivery_thb, pickup_thb,
     # default_point) occur in the seed alone -- these rows keep the contract and its
@@ -1754,7 +1765,7 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "extract": ("regex", r'"known_tariff_example":\s*\{[^}]*"delivery_thb":\s*([0-9.]+)\s*[,}]'),
         "relation": "equal",
         "why": "the one delivery price in this repository; the contract pins its ladder's "
-               "first rung to it (delivery_terms.t27:806), so a re-priced seed under a stale "
+               "first rung to it (delivery_terms.t27:1047), so a re-priced seed under a stale "
                "contract leaves the repository stating two fees for one district",
     },
     {
@@ -1794,6 +1805,180 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "relation": "equal",
         "why": "where a customer collects the bike when nothing else is agreed; "
                "handover_point_is_settled treats this point as settled without agreement",
+    },
+    # --- delivery zones group: the owner's Phuket table (owner, 2026-09-24) -------------------
+    # Added 2026-09-24 with migrations/087_delivery_zones_phuket.sql. The contract's zone table
+    # (delivery_terms.PHUKET_ZONE_*) is bound to BOTH places the table ships -- the migration that
+    # inserts the rows and the built-in copy in src/delivery.rs -- by count, by name and order,
+    # and by three fees that are each an owner decision (Pa Khlok 490 and Mai Khao 990 of
+    # 2026-09-06, the airport's 690 of 2026-09-24). The ETA rows count what must stay ZERO, each
+    # with a witness (D16). Every row was measured by hand on both sides before it was written.
+    {
+        "name": "delivery_terms.PHUKET_ZONE_COUNT ~ 087 inserted rows",
+        "spec": "specs/turbobaby/delivery_terms.t27",
+        "const": "PHUKET_ZONE_COUNT",
+        "source": "migrations/087_delivery_zones_phuket.sql",
+        "extract": ("regex_count", PHUKET_ROW_SQL),
+        "relation": "equal",
+        "why": "the owner decided eighteen zones; a row added to or dropped from the migration "
+               "is a zone customers can or cannot pick that the contract does not know about",
+    },
+    {
+        "name": "delivery_terms.PHUKET_ZONE_NAMES_EN ~ 087 name_en column",
+        "spec": "specs/turbobaby/delivery_terms.t27",
+        "const": "PHUKET_ZONE_NAMES_EN",
+        "source": "migrations/087_delivery_zones_phuket.sql",
+        "extract": ("regex_all", PHUKET_ROW_SQL_NAME),
+        "relation": "list_equal",
+        "why": "names AND order: the sort orders follow the list, and the contract's fee, source "
+               "and ladder-index arrays are indexed by the same position",
+    },
+    {
+        "name": "delivery_terms.PAKLOK_FEE_THB ~ 087 Pa Khlok fee",
+        "spec": "specs/turbobaby/delivery_terms.t27",
+        "const": "PAKLOK_FEE_THB",
+        "source": "migrations/087_delivery_zones_phuket.sql",
+        "extract": ("regex", r"^[ \t]+\('[^'\n]+',[ \t]*'Pa Khlok',[ \t]*([0-9.]+),"),
+        "relation": "equal",
+        "why": "owner decision 2026-09-06-3 moved Paklok 390 -> 490; a migration carrying the "
+               "superseded 390 would ship the older price as current",
+    },
+    {
+        "name": "delivery_terms.MAIKHAO_FEE_THB ~ 087 Mai Khao fee",
+        "spec": "specs/turbobaby/delivery_terms.t27",
+        "const": "MAIKHAO_FEE_THB",
+        "source": "migrations/087_delivery_zones_phuket.sql",
+        "extract": ("regex", r"^[ \t]+\('[^'\n]+',[ \t]*'Mai Khao',[ \t]*([0-9.]+),"),
+        "relation": "equal",
+        "why": "owner decision 2026-09-06-4: 990 is a live price, not sheet garbage; a 'tidied' "
+               "neighbour price here is exactly what that decision forbids",
+    },
+    {
+        "name": "delivery_terms.AIRPORT_ZONE_FEE_THB ~ 087 Airport fee",
+        "spec": "specs/turbobaby/delivery_terms.t27",
+        "const": "AIRPORT_ZONE_FEE_THB",
+        "source": "migrations/087_delivery_zones_phuket.sql",
+        "extract": ("regex", r"^[ \t]+\('[^'\n]+',[ \t]*'Airport',[ \t]*([0-9.]+),"),
+        "relation": "equal",
+        "why": "the owner chose 690 from the published 590-690 range on 2026-09-24; a midpoint "
+               "or the lower end here would be a price nobody chose",
+    },
+    {
+        "name": "delivery_terms.OTHER_ISLAND_ZONE_NAMES_EN ~ 087 deactivation list",
+        "spec": "specs/turbobaby/delivery_terms.t27",
+        "const": "OTHER_ISLAND_ZONE_NAMES_EN",
+        "source": "migrations/087_delivery_zones_phuket.sql",
+        "extract": ("regex_list", r"WHERE name_en IN \(([^)]*)\)"),
+        "relation": "list_equal",
+        "why": "the four Koh Phangan rows 087 deactivates (and deletes none of); a village missing "
+               "from this list stays in the customer's picker",
+    },
+    {
+        "name": "delivery_terms.ETA_COLUMNS_MADE_NULLABLE_BY_087 ~ 087 DROP NOT NULL",
+        "spec": "specs/turbobaby/delivery_terms.t27",
+        "const": "ETA_COLUMNS_MADE_NULLABLE_BY_087",
+        "source": "migrations/087_delivery_zones_phuket.sql",
+        "extract": ("regex_count", r"^ALTER TABLE delivery_zones ALTER COLUMN eta_(?:min|max) DROP NOT NULL;"),
+        "relation": "equal",
+        "why": "an ETA column left NOT NULL can only hold a number, which is how 060 put 30 and "
+               "60 minutes on every row nobody had measured",
+    },
+    {
+        "name": "delivery_terms.PHUKET_ZONE_COUNT ~ delivery.rs built-in rows",
+        "spec": "specs/turbobaby/delivery_terms.t27",
+        "const": "PHUKET_ZONE_COUNT",
+        "source": "src/delivery.rs",
+        "extract": ("regex_count", PHUKET_ROW_RS),
+        "relation": "equal",
+        "why": "the built-in copy mirrors migration 087; two tables of different lengths is the "
+               "state 071 was written to end",
+    },
+    {
+        "name": "delivery_terms.PHUKET_ZONE_NAMES_EN ~ delivery.rs built-in name_en",
+        "spec": "specs/turbobaby/delivery_terms.t27",
+        "const": "PHUKET_ZONE_NAMES_EN",
+        "source": "src/delivery.rs",
+        "extract": ("regex_all", PHUKET_ROW_RS_NAME),
+        "relation": "list_equal",
+        "why": "same names in the same order as the migration, through the contract; a zone "
+               "renamed in one copy only is two zones",
+    },
+    {
+        "name": "delivery_terms.PAKLOK_FEE_THB ~ delivery.rs Pa Khlok fee",
+        "spec": "specs/turbobaby/delivery_terms.t27",
+        "const": "PAKLOK_FEE_THB",
+        "source": "src/delivery.rs",
+        "extract": ("regex", r'^[ \t]+\("pa_khlok",[^\n]*,[ \t]*([0-9.]+)\),'),
+        "relation": "equal",
+        "why": "the built-in copy of an owner decision; see the migration row",
+    },
+    {
+        "name": "delivery_terms.MAIKHAO_FEE_THB ~ delivery.rs Mai Khao fee",
+        "spec": "specs/turbobaby/delivery_terms.t27",
+        "const": "MAIKHAO_FEE_THB",
+        "source": "src/delivery.rs",
+        "extract": ("regex", r'^[ \t]+\("mai_khao",[^\n]*,[ \t]*([0-9.]+)\),'),
+        "relation": "equal",
+        "why": "the built-in copy of an owner decision; see the migration row",
+    },
+    {
+        "name": "delivery_terms.AIRPORT_ZONE_FEE_THB ~ delivery.rs Airport fee",
+        "spec": "specs/turbobaby/delivery_terms.t27",
+        "const": "AIRPORT_ZONE_FEE_THB",
+        "source": "src/delivery.rs",
+        "extract": ("regex", r'^[ \t]+\("airport",[^\n]*,[ \t]*([0-9.]+)\),'),
+        "relation": "equal",
+        "why": "the built-in copy of the owner's choice from a range; see the migration row",
+    },
+    {
+        "name": "delivery_terms.SHIPPED_HANDOVER_ROW_FEE_THB ~ delivery.rs pickup fee",
+        "spec": "specs/turbobaby/delivery_terms.t27",
+        "const": "SHIPPED_HANDOVER_ROW_FEE_THB",
+        "source": "src/delivery.rs",
+        "extract": ("regex", r'"Pickup at TurboBaby",\s*([0-9.]+),'),
+        # Expected value is ZERO (D16): the witness proves the pickup row is still the
+        # constant the regex reads.
+        "witness": r"const PICKUP_ZONE: ZoneRow",
+        "relation": "equal",
+        "why": "collecting at the shop's own counter costs nothing; a fee here would charge a "
+               "customer for walking in",
+    },
+    {
+        "name": "delivery_terms.BUILT_IN_ZONES_WITH_AN_ETA ~ delivery.rs absence",
+        "spec": "specs/turbobaby/delivery_terms.t27",
+        "const": "BUILT_IN_ZONES_WITH_AN_ETA",
+        "source": "src/delivery.rs",
+        "extract": ("regex_count", NOT_IN_A_LINE_COMMENT + r"_eta_minutes:\s*Some\("),
+        # Zero expected (D16): the field is still declared, so the scan can see where a
+        # Some would go.
+        "witness": r"pub min_eta_minutes: Option<u32>,",
+        "relation": "equal",
+        "why": "no ETA is published (owner, 2026-09-24); a Some here is a travel time nobody "
+               "measured, which is what the five Koh Phangan defaults carried",
+    },
+    {
+        "name": "delivery_terms.CHECKOUT_ETA_FALLBACK_LITERALS ~ checkout_screen.rs absence",
+        "spec": "specs/turbobaby/delivery_terms.t27",
+        "const": "CHECKOUT_ETA_FALLBACK_LITERALS",
+        "source": "src/ui/screens/checkout_screen.rs",
+        "extract": ("regex_count", NOT_IN_A_LINE_COMMENT + r"30-45"),
+        # Zero expected (D16): the fee line the checkout keeps is still there to be read.
+        "witness": r"T_DELIVERY_FEE,",
+        "relation": "equal",
+        "why": "the checkout printed a hard-coded 30-45 minute ETA when the zone list was "
+               "empty; no source measures it and the shop publishes windows, not minutes",
+    },
+    {
+        "name": "delivery_terms.SUCCESS_SCREEN_ETA_FALLBACK_LITERALS ~ success_screen.rs absence",
+        "spec": "specs/turbobaby/delivery_terms.t27",
+        "const": "SUCCESS_SCREEN_ETA_FALLBACK_LITERALS",
+        "source": "src/ui/screens/success_screen.rs",
+        "extract": ("regex_count", NOT_IN_A_LINE_COMMENT + r"30-45"),
+        # Zero expected (D16): the ETA row's value key is still there to be read.
+        "witness": r"T_SUCCESS_ETA_VALUE",
+        "relation": "equal",
+        "why": "the success screen fell back to the same literal after the order was placed; "
+               "an absent ETA renders no row",
     },
     # --- catalog group: validation bounds, catalog api, http cache, rental terms, happy hour ---
     # Added 2026-09-22. Each row was measured both sides by hand at a33e500 and went RED for at
@@ -2634,15 +2819,16 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "spec": "specs/turbobaby/webapp_bridge.t27",
         "const": "DEFAULTS_ON_A_BARE_NUMBER",
         "source": "src/ui/api/types.rs",
-        # Attribute POSITION, not text: the comment at :37 and the doc line at :424 name the
+        # Attribute POSITION, not text: the comment at :37 and the doc line at :426 name the
         # attribute without being one. Any serde attribute whose arguments include
         # `default` counts -- this file already writes it combined twice
         # (:121 `rename = "type", default`, :130), on a String and a bool today -- and other
         # attributes, and since 2026-09-22 `//` and `///` lines, may sit between it and the
         # field, which may be private. Until then a doc line after the attribute, or a field
         # without `pub`, hid a seventh default (both planted green; both RED now). Today :28,
-        # :40, :311, :421, :448, :459, the six NUMERIC_DEFAULT_SITES, re-measured 6 with the
-        # wider gap. Re-checked against webapp_bridge.t27's 2026-09-22 correction: the constant
+        # :40, :311, :423, :450, :461, the six NUMERIC_DEFAULT_SITES, re-measured 6 with the
+        # wider gap (:421, :448, :459 and the doc line at :424 until 2026-09-24, when the two
+        # DeliveryZone ETA fields became Options with a default -- not numbers, so still 6). Re-checked against webapp_bridge.t27's 2026-09-22 correction: the constant
         # counts the bare attribute, and the contract records COMBINED_DEFAULTS_ON_A_NUMBER =
         # 0, so counted by what serde does the numeric column is the same six. This row reads
         # the serde reading -- any spelling of `default` -- so a combined default on a number
@@ -3148,7 +3334,9 @@ ONE_GROUP_EXTRACTORS = (
 # The same day the leaderboard leak fix bound game_score.IDENTIFIER_DIGIT_RUN: 198 rows.
 # Later that day the catalog-honesty change bound availability.CLICK_125_REDIRECT_LABELS_SHOWN
 # and availability.CONFIRMING_KEY_LINES_IN_UI (41 contracts still): 200 rows, floor 200.
-MIN_BINDINGS = 200
+# Then the owner's Phuket delivery zones (migration 087) added the sixteen delivery_terms
+# rows of the delivery zones group, each planted RED once by hand: 216 rows, floor 216.
+MIN_BINDINGS = 216
 
 
 # ---------------------------------------------------------------------------------

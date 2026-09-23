@@ -1157,6 +1157,15 @@ pub const AN_IDENTITY_CHECK_HERE_WOULD_BE_A_FOURTH_COPY : bool = true;
 ; that carries it every ten seconds. A wider claim was in this paragraph until the review of
 ; 2026-09-21 and was false; it is recorded as corrected rather than quietly replaced, because a
 ; false absence is the one kind of claim a later reader never re-runs.
+; CORRECTED 2026-09-24, by the owner's no-ETA decision (turbobaby/delivery-terms): both unowned
+; readers still read the pair, but neither shows a number unless a zone row carries one, and none
+; does. The checkout builds its ETA line only from two present minutes (checkout_screen.rs:822-823,
+; was :820) and prints none otherwise; its literal "30-45" fallback is gone. The success screen
+; reads the pair at :302-305 (was :298-305) with no local fallback and no literal, and renders its
+; ETA row only for a served pair (:490-495, was :491-492). Migration 087 stores no ETA on any row,
+; so the status payload carries null in both minute fields: the eta REACHES no customer today, on
+; any screen. The payload itself is unchanged (:1782-1795, line for line), and the reader count
+; stays two. The 2026-09-21 sites are kept under _BEFORE_2026_09_24 names.
 pub const STATUS_PAYLOAD_SITE : str = "src/api/orders.rs:1782-1795";
 pub const STATUS_PAYLOAD_FIELD_COUNT : u8 = 7;
 pub const FIELDS_DECLARED_BY_THE_SCREEN : u8 = 4;
@@ -1167,9 +1176,16 @@ pub const DELIVERY_FEE_PUBLISHER_SITE : str = "src/api/orders.rs:1794";
 pub const NO_ETA_REACHES_EITHER_OWNED_SCREEN : bool = true;
 pub const ETA_READER_SCREEN_COUNT : u8 = 2;
 pub const ETA_READER_SCREENS_OWNED_HERE : u8 = 0;
-pub const ETA_IS_READ_BEFORE_THE_ORDER_EXISTS_AT : str = "src/ui/screens/checkout_screen.rs:820";
-pub const ETA_REACHES_A_CUSTOMER_ON_AN_UNOWNED_SCREEN_AT : str = "src/ui/screens/success_screen.rs:491-492";
+pub const ETA_IS_READ_BEFORE_THE_ORDER_EXISTS_AT : str = "src/ui/screens/checkout_screen.rs:822-823";
+pub const ETA_REACHES_A_CUSTOMER_ON_AN_UNOWNED_SCREEN_AT : str = "src/ui/screens/success_screen.rs:490-495";
 pub const ETA_CLAIM_WAS_CORRECTED_AT : str = "2026-09-21";
+pub const ETA_IS_READ_BEFORE_THE_ORDER_EXISTS_AT_BEFORE_2026_09_24 : str = "src/ui/screens/checkout_screen.rs:820";
+pub const ETA_REACHES_A_CUSTOMER_ON_AN_UNOWNED_SCREEN_AT_BEFORE_2026_09_24 : str = "src/ui/screens/success_screen.rs:491-492";
+pub const AN_ETA_IS_SHOWN_ONLY_WHEN_A_ZONE_ROW_CARRIES_ONE : bool = true;
+pub const SHIPPED_ZONE_ROWS_CARRY_AN_ETA : bool = false;
+pub const ETA_FALLBACK_LITERALS_ON_UNOWNED_SCREENS : u8 = 0;
+pub const ETA_FALLBACK_LITERALS_ON_UNOWNED_SCREENS_BEFORE_2026_09_24 : u8 = 2;
+pub const ETA_REACHES_A_CUSTOMER_TODAY : bool = false;
 pub const NO_DELIVERY_FIGURE_REACHES_EITHER_OWNED_SCREEN : bool = true;
 
 ; The one row on the detail screen that carries a delivery label carries a shop name in its value
@@ -2102,6 +2118,12 @@ test seven_delivery_fields_are_sent_four_are_declared_and_one_is_shown {
   assert ETA_READER_SCREEN_COUNT == 2;
   assert ETA_IS_READ_BEFORE_THE_ORDER_EXISTS_AT != ETA_REACHES_A_CUSTOMER_ON_AN_UNOWNED_SCREEN_AT;
   assert NO_DELIVERY_FIGURE_REACHES_EITHER_OWNED_SCREEN == true;
+  assert ETA_IS_READ_BEFORE_THE_ORDER_EXISTS_AT != ETA_IS_READ_BEFORE_THE_ORDER_EXISTS_AT_BEFORE_2026_09_24;
+  assert AN_ETA_IS_SHOWN_ONLY_WHEN_A_ZONE_ROW_CARRIES_ONE == true;
+  assert SHIPPED_ZONE_ROWS_CARRY_AN_ETA == false;
+  assert ETA_REACHES_A_CUSTOMER_TODAY == SHIPPED_ZONE_ROWS_CARRY_AN_ETA;
+  assert ETA_FALLBACK_LITERALS_ON_UNOWNED_SCREENS == 0;
+  assert ETA_FALLBACK_LITERALS_ON_UNOWNED_SCREENS_BEFORE_2026_09_24 == ETA_READER_SCREEN_COUNT;
 }
 
 test the_labelled_delivery_row_carries_a_shop_and_the_real_rows_carry_no_key {

@@ -398,6 +398,7 @@ location, Thai helmet law, license requirement. No invented product claims
 address in checkout (Koh Phangan pickup) became TurboBaby / Kamala, matching README
 and the migration 085 zone rename.
 
+
 ## D12 amendment (2026-09-24) — the CLICK 125 redirect names only the fleet
 
 Kept at the end of this file rather than under D12, so that none of the line citations into
@@ -414,3 +415,15 @@ gate 3 binds it to the screen's constant, and `tests/catalog_honesty_wiring.rs` 
 label against the seed. The brain itself still carries the three-name redirect in two places
 (`knowledge_base`, the CLICK line of the tariff notes and of the «что НЕ сдаём» list); that is
 the owner's text to change, not this repository's.
+
+## D19 addendum — the delivery zones, decided 2026-09-24
+
+D19 left the Phangan delivery zones waiting for the owner, who decided them in chat on
+2026-09-24. Migration **087** deactivates the four Koh Phangan rows — deactivated, not
+deleted, for the reason 071 gave: placed orders reference `delivery_zone_id` — and inserts
+TurboBaby's eighteen Phuket zones at the owner's fees: the sixteen of the owner's live
+delivery sheet plus Kathu and Nai Harn from the brain's delivery rule. No zone carries an
+ETA, because none is published; the shop promises a window. The pickup row stays at fee 0.
+The table, its sources and the two rules it does not model (the sheet's out-of-belt price
+and the 17:30 cut-off) are in `specs/turbobaby/delivery_terms.t27`. The legacy screens are
+still open.

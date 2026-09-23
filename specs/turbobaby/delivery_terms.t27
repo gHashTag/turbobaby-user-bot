@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 ; specs/turbobaby/delivery_terms.t27 -- the delivery promise: one island, two handover points,
-; a published tariff ladder of twelve districts, and a dash for every district off it.
+; a published tariff ladder of twelve districts, and a dash for every district off it. Since
+; 2026-09-24 also the zone table the shop ships: the owner's eighteen Phuket zones, and no ETA.
 ; This contract owns the shape of what the shop promises about getting a bike to a client:
 ; the coverage rule, the handover point and the agreement it needs, the window geometry read
 ; off the wall clock, and the published area tariff. It is the named PRODUCER of the
@@ -41,6 +42,13 @@
 ; in the owner's knowledge base, by district, and this file now carries it -- see THE PUBLISHED
 ; TARIFF LADDER below. The sentence above is kept because it is still true of the repository, and
 ; because it is the measurement that made the ladder worth going to look for.
+; CORRECTED 2026-09-24, by the owner's decisions in chat that day (cited as owner, 2026-09-24). The
+; shipped zone table no longer describes another island: migrations/087_delivery_zones_phuket.sql
+; deactivates the four Koh Phangan rows -- deactivated, not deleted, because placed orders
+; reference them -- and inserts the owner's eighteen Phuket zones, and src/delivery.rs carries the
+; same eighteen as its built-in table behind the shop's own pickup row. No zone carries an ETA.
+; The paragraph above stays as the 2026-09-20 measurement it was; THE SHIPPED ZONE TABLE section
+; below says what the table is now, where each row comes from, and how it meets the ladder.
 ; --
 ; WHERE THE OBVIOUS READING IS REFUTED. src/api/orders.rs:2415 and :1794 serve the zone fee
 ; through `finite_money`, with a comment (orders.rs:2411-2414) saying an undocumented fee comes
@@ -59,6 +67,14 @@
 ;       takes `f64` and has no absent case (src/trios/pricing.rs:417, was :361). It is the empty list and not
 ;       an unselected picker that reaches this branch, because :797 falls back to the first zone
 ;       whenever one exists. That is the confident zero D9 forbids, still live on the client half.
+;       CORRECTED 2026-09-24: the "30-45" literal is gone. No ETA is published (owner, 2026-09-24),
+;       and the checkout prints an ETA line only when the zone row carries both minutes, which no
+;       shipped row does. The zero FEE on an empty list is unchanged and still the zero D9 forbids
+;       (src/ui/screens/checkout_screen.rs:831-835). Re-measured the same day: the fallback to the
+;       first zone is at :816 (this paragraph said :797, a reading of an older tree),
+;       delivery_fee_baht is at src/ui/api/types.rs:407 (:405 before two ETA attributes landed above
+;       it), and the admin write stores the fee at src/api/admin.rs:1130 on create and :1173-1175 on
+;       update (:1084 and :1131-1133 before); sanitize_f64 is still :1038-1044.
 ; The prohibition therefore cannot be a render rule here. Until 2026-09-21 it was the LENGTH of a
 ; one-element fee array, pinned by an invariant that a second row could not be added without an
 ; assert being deleted on purpose. That length is now a MEASUREMENT -- the extent of the ladder
@@ -77,6 +93,10 @@
 ; offset; each is named by the ID of its owner instead. It does not transcribe the shipped zone
 ; names: they are Cyrillic in src/delivery.rs:40-72 and in migrations/071_delivery_zones_koh_
 ; phangan.sql:25-29, L3 forbids Cyrillic in a spec, and they are cited by path and never quoted.
+; CORRECTED 2026-09-24: the Russian names are now those of the owner's Phuket zones
+; (src/delivery.rs:58-75, migrations/087_delivery_zones_phuket.sql:70-87), still cited by path and
+; never quoted. Their ENGLISH names are ASCII and the owner's own spelling, and are declared below
+; as PHUKET_ZONE_NAMES_EN so that a gate can bind them. It still holds no ETA: none is published.
 ; phi^2 + 1/phi^2 = 3 | TRINITY
 
 module turbobaby-delivery-terms;
@@ -356,6 +376,10 @@ pub const DISTRICTS_AT_EACH_FLAT_STEP : [5]i32 = [4, 1, 3, 3, 1];
 ; than a missing number and the reason its fee rests on the owner's word alone: the decision that
 ; put it on the ladder says the rules had been silent on it, the word Maikhao appearing nowhere in
 ; the node (brain:business_rules:1411-1412).
+; RE-READ 2026-09-24 (BRAIN_REREAD_AT). The line numbers in this block are the 2026-09-21 read's.
+; Since then nine lines were appended inside decision 3 -- a measured note that the prompt constant
+; it said was stale had been fixed the same day -- so decision 3 still begins at :1364, decision 4
+; now begins at :1409, and no existing line of either decision was altered.
 ; CORRECTED 2026-09-21 BY REVIEW. Until that day this paragraph said TWO rows carried no plain
 ; count, named Kamala and Naiharn, and gave Maikhao Kamala's sentinel. Three entries were sentinels
 ; while the prose counted two, and the shared sentinel said of Maikhao what is true of Kamala --
@@ -458,8 +482,13 @@ pub const DOCUMENTED_COLLECTION_FEE_THB : i32 = 0;
 ; of a plausible free delivery.
 pub const FEE_ABSENT : i32 = -1;
 pub const FEE_MAY_BE_INTERPOLATED : bool = false;
-pub const TARIFF_TABLE_IS_NOT_SHIPPED : bool = true;
-pub const TARIFF_TABLE_NOTE : str = "data/fleet_seed.json:307 sets rental_terms.delivery.tariff_table to null and :308 says only the one documented area's figure exists, so the REPOSITORY still ships no tariff table and the delivery_zones rows it does ship price another island's villages (migrations/071_delivery_zones_koh_phangan.sql:25-29). Until 2026-09-21 this note continued: what is missing is the owner's Phuket tariff, an area list with a fee per area, measured by him. That sentence is now WRONG and is kept visible rather than deleted, because it was true of every place this file had looked and false about the shop. The tariff exists and has existed for over a year: brain:booking_flow:74-92 and brain:business_rules:626-645 publish it by district, and it is declared above as LADDER_DISTRICT_NAMES and LADDER_DISTRICT_FEE_THB. What is still missing is narrower and is stated in its own words below -- a fee for a district the ladder does not name, and any off-island rule beyond no delivery.";
+; CORRECTED 2026-09-24: the repository ships a priced zone table now -- the owner's (migration 087,
+; src/delivery.rs) -- so the constant below turned false. The SEED is unchanged: its tariff_table is
+; still null and it still prices one area, and both facts keep constants of their own.
+pub const TARIFF_TABLE_IS_NOT_SHIPPED : bool = false;
+pub const TARIFF_TABLE_WAS_NOT_SHIPPED_BEFORE_087 : bool = true;
+pub const SEED_TARIFF_TABLE_IS_STILL_NULL : bool = true;
+pub const TARIFF_TABLE_NOTE : str = "data/fleet_seed.json:307 sets rental_terms.delivery.tariff_table to null and :308 says only the one documented area's figure exists, so the REPOSITORY still ships no tariff table and the delivery_zones rows it does ship price another island's villages (migrations/071_delivery_zones_koh_phangan.sql:25-29). Until 2026-09-21 this note continued: what is missing is the owner's Phuket tariff, an area list with a fee per area, measured by him. That sentence is now WRONG and is kept visible rather than deleted, because it was true of every place this file had looked and false about the shop. The tariff exists and has existed for over a year: brain:booking_flow:74-92 and brain:business_rules:626-645 publish it by district, and it is declared above as LADDER_DISTRICT_NAMES and LADDER_DISTRICT_FEE_THB. What is still missing is narrower and is stated in its own words below -- a fee for a district the ladder does not name, and any off-island rule beyond no delivery. CORRECTED 2026-09-24: the repository now ships a priced zone table, the owner's eighteen Phuket zones (migrations/087_delivery_zones_phuket.sql, src/delivery.rs), and it no longer prices another island. The seed's tariff_table is still null.";
 
 ; --- What the ladder still does not answer ---------------------------------------------------------
 ; A district OFF the ladder has no published fee, and the brain does not supply one. It is not
@@ -470,11 +499,23 @@ pub const TARIFF_TABLE_NOTE : str = "data/fleet_seed.json:307 sets rental_terms.
 ; confirmed by it. So five names and one figure are known to EXIST and are known to be UNCONFIRMED,
 ; which is a stronger statement than never having heard of them and a weaker one than a price. None
 ; of the six is declared here as a fee, and the ladder does not grow to meet them.
+; CORRECTED 2026-09-24. The owner confirmed all five that day, at the sheet's own prices, as zones
+; of the shipped table (THE SHIPPED ZONE TABLE, below), so they are fees now -- by his word, not by
+; the ladder, and not by interpolation. The brain still records them as unconfirmed: it was
+; re-read on 2026-09-24 (brain:business_rules:1426-1429 today, :1417-1420 on the 2026-09-21 read)
+; and nothing was written to it here. The 1490 belt step is NOT confirmed and is not modelled; see
+; the section on unmodelled rules. The ladder itself is unchanged: area_fee_thb still answers
+; FEE_ABSENT off the ladder, and six zones off the ladder are priced by the zone table instead.
 pub const UNCONFIRMED_SHEET_ZONE_COUNT : i32 = 5;
 pub const UNCONFIRMED_BELT_STEP_THB : i32 = 1490;
-pub const UNCONFIRMED_ZONES_ARE_NOT_FEES : bool = true;
-pub const OFF_LADDER_DISTRICT_HAS_NO_PUBLISHED_FEE : bool = true;
-pub const OFF_LADDER_NOTE : str = "A district the ladder does not name yields FEE_ABSENT, which turbobaby/pricing-honesty renders as a dash carrying the sentence that a human quotes the price. No neighbouring district's fee, no step boundary and no distance produces a number for it, and there is no function in this file that could. This is now a NARROW refusal where it used to be the whole section: twelve districts and one airport-adjacent case are published, and what remains unpublished is named. brain:business_rules:1417-1420 names five sheet zones (Phuket Town, Cape Panwa, Thalang East, Thalang North, Naithon) and a 1490 belt step as existing but explicitly unconfirmed by the owner, so they are the shape of the gap rather than candidates to fill it.";
+pub const UNCONFIRMED_ZONES_ARE_NOT_FEES : bool = false;
+pub const UNCONFIRMED_ZONES_WERE_NOT_FEES_BEFORE_2026_09_24 : bool = true;
+pub const SHEET_ZONES_THE_OWNER_CONFIRMED_ON_2026_09_24 : i32 = 5;
+pub const THE_BRAIN_STILL_RECORDS_THEM_AS_UNCONFIRMED : bool = true;
+pub const OFF_LADDER_DISTRICT_HAS_NO_PUBLISHED_FEE : bool = false;
+pub const OFF_LADDER_DISTRICT_HAD_NO_PUBLISHED_FEE_BEFORE_2026_09_24 : bool = true;
+pub const A_DISTRICT_IN_NEITHER_TABLE_HAS_NO_FEE : bool = true;
+pub const OFF_LADDER_NOTE : str = "A district the ladder does not name yields FEE_ABSENT, which turbobaby/pricing-honesty renders as a dash carrying the sentence that a human quotes the price. No neighbouring district's fee, no step boundary and no distance produces a number for it, and there is no function in this file that could. This is now a NARROW refusal where it used to be the whole section: twelve districts and one airport-adjacent case are published, and what remains unpublished is named. brain:business_rules:1417-1420 names five sheet zones (Phuket Town, Cape Panwa, Thalang East, Thalang North, Naithon) and a 1490 belt step as existing but explicitly unconfirmed by the owner, so they are the shape of the gap rather than candidates to fill it. CORRECTED 2026-09-24: the owner filled the gap himself that day for the shipped zone table -- the five at the sheet's prices and the airport at 690 -- so a district off the LADDER may now have a fee from the ZONE TABLE (zone_fee_thb). What survives is the interpolation ban: a district in neither table has no fee, and none is derived from a neighbour, a step or a distance.";
 ; Off the island the brain says exactly what the seed says and nothing more: delivery is Phuket only
 ; (brain:business_rules:10, brain:knowledge_base:404, brain:faq:96), an address off the island means
 ; no delivery and the client collects the bike. There is no off-island fee, no surcharge, no longer
@@ -484,37 +525,113 @@ pub const OFF_ISLAND_RULE_IS_ONLY_NO_DELIVERY : bool = true;
 pub const OFF_ISLAND_FEE_SOURCES_FOUND : i32 = 0;
 pub const OFF_ISLAND_NOTE : str = "Three brain nodes and the seed agree and none goes further than the boundary: delivery is Phuket only and an address or Maps link off the island means no delivery, with the client collecting the bike. Nothing anywhere publishes an off-island fee, a surcharge, a partial-way handover or a longer window, so this file declares none. The one neighbouring rule that sounds like an exception is a different fact and is already separated above: brain:faq:111 permits RIDING a rented bike to other islands and provinces, with recovery to Phuket at the client's cost if it breaks down. That is where a rented bike may go, not where the shop will bring one.";
 
-; --- The shipped zone table, which describes another island --------------------------------------
-; src/delivery.rs:37-78 -- 5 default zones, 4 places and 1 handover row. The module header
-; (src/delivery.rs:7-20) states that the places are Koh Phangan villages and that TurboBaby is in
-; Kamala, Phuket, a different island. The rows are deliberately left alone, and the reason is
-; recorded in three places, so this is settled policy and not neglect.
+; --- THE SHIPPED ZONE TABLE: the owner's Phuket zones -------------------------------------------
+; REWRITTEN 2026-09-24, by the owner's decisions in chat that day. Until then this section was
+; titled "The shipped zone table, which describes another island": src/delivery.rs shipped five
+; default zones -- four Koh Phangan villages and one handover row -- the database held the same
+; four villages from migrations/071_delivery_zones_koh_phangan.sql, and none of the four lay on the
+; coverage island. Those facts are kept below under _BEFORE_PHUKET names: they were true until
+; this change and an old order still references those rows.
+; THE DECISIONS, four of them. (1) The table is the owner's live delivery sheet -- all sixteen of
+; its zones at the sheet's own prices -- plus the two districts the brain's delivery rule names and
+; the sheet lacks, Kathu at 490 and Naiharn at 590 (brain:business_rules:625-630, the same lines on
+; the 2026-09-21 and 2026-09-24 reads). Paklok's 490 and Maikhao's 990 are his decisions of
+; 2026-09-06, declared above, and the airport's 690 is his choice on 2026-09-24 from the rule's
+; 590-690 range. Eighteen zones. (2) No delivery time in minutes: none is published. (3) The Koh
+; Phangan rows are deactivated, not deleted; the shop's own pickup row stays active at fee 0.
+; (4) The sheet's out-of-belt settings and the 17:30 cut-off are not modelled by this change; the
+; section after the ETA note names both.
+; THE SHEET IS NOT A FILE IN THIS REPOSITORY. It is the owner's Bridge sheet, read here through the
+; PC bot's read-only snapshot fixtures/delivery_zones_get.live.json in the turbobaby-bot repository,
+; taken 2026-07-15, rows [name, lat, lon, price, radius]. Like a brain line, that path resolves
+; nowhere in this tree and no gate checks it. The anchors' coordinates and radii were not imported:
+; delivery_zones has no coordinate column and this change adds none.
+; WHERE THE ROWS LIVE. migrations/087_delivery_zones_phuket.sql inserts the eighteen, idempotent by
+; name_en, at sort orders 1-18; the pickup row keeps 0 and stays the picker's default.
+; src/delivery.rs:57-76 carries the same eighteen in the same order, behind the pickup row
+; (:45-50), as the built-in table. ORDER IS NOT RANK here either: it is the tariff's own order --
+; ladder step, cheapest first; within a step the sheet's row order; Kathu and Naiharn close their
+; step. The English names are the owner's spelling of 2026-09-24 (Bang Tao, Pa Khlok, Mai Khao, Nai
+; Harn), not the one-word form the ladder spells after the seed's Bangtao (Bangtao, Paklok,
+; Maikhao, Naiharn); PHUKET_ZONE_LADDER_INDEX joins the two tables without renaming either.
+; EVERY FEE HERE IS INDICATIVE, exactly as the ladder's is: the zone table is what the shop
+; publishes, and the price a client pays is named by a human (D11, EVERY_PUBLISHED_FEE_IS_INDICATIVE).
+pub const ZONE_TABLE_DECIDED_AT : str = "2026-09-24";
+pub const ZONE_TABLE_IS_THE_OWNERS_WORD : bool = true;
+pub const SHEET_SNAPSHOT : str = "turbobaby-bot fixtures/delivery_zones_get.live.json, a read-only snapshot of the owner's Bridge sheet";
+pub const SHEET_SNAPSHOT_TAKEN_AT : str = "2026-07-15";
+pub const SHEET_SNAPSHOT_IS_NOT_A_PATH_IN_THIS_REPOSITORY : bool = true;
+pub const SHEET_ZONE_COUNT : i32 = 16;
+pub const BRAIN_REREAD_AT : str = "2026-09-24";
 pub const SHIPPED_ZONE_DEFAULTS_PATH : str = "src/delivery.rs";
-pub const SHIPPED_ZONE_DEFAULT_COUNT : i32 = 5;
-pub const SHIPPED_ZONE_PLACE_COUNT : i32 = 4;
+pub const PHUKET_ZONE_COUNT : i32 = 18;
+pub const PHUKET_ZONE_NAMES_EN : [18]str = ["Bang Tao", "Surin", "Kamala", "Patong", "Thalang North", "Karon", "Phuket Town", "Pa Khlok", "Thalang East", "Kata", "Kathu", "Rawai", "Chalong", "Cape Panwa", "Nai Thon", "Nai Harn", "Airport", "Mai Khao"];
+pub const PHUKET_ZONE_FEE_THB : [18]i32 = [290, 290, 290, 290, 390, 390, 490, 490, 490, 490, 490, 590, 590, 590, 590, 590, 690, 990];
+pub const PHUKET_ZONE_SORT_ORDER : [18]i32 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18];
+pub const ZONE_FROM_THE_SHEET : u8 = 1;
+pub const ZONE_FROM_THE_BRAIN_RULE : u8 = 2;
+pub const PHUKET_ZONE_SOURCE : [18]u8 = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 1, 1, 1, 2, 1, 1];
+pub const ZONES_FROM_THE_BRAIN_RULE_ONLY : i32 = 2;
+pub const NOT_A_LADDER_DISTRICT : i32 = -1;
+pub const PHUKET_ZONE_LADDER_INDEX : [18]i32 = [0, 2, 3, 1, -1, 4, -1, 7, -1, 5, 6, 8, 10, -1, -1, 9, -1, 11];
+pub const ZONES_OFF_THE_LADDER : i32 = 6;
+pub const PHUKET_ZONE_STEPS_THB : [6]i32 = [290, 390, 490, 590, 690, 990];
+pub const PHUKET_ZONES_AT_EACH_STEP : [6]i32 = [4, 2, 5, 5, 1, 1];
+pub const PAKLOK_ZONE_INDEX : i32 = 7;
+pub const KATHU_ZONE_INDEX : i32 = 10;
+pub const NAIHARN_ZONE_INDEX : i32 = 15;
+pub const AIRPORT_ZONE_INDEX : i32 = 16;
+pub const MAIKHAO_ZONE_INDEX : i32 = 17;
+; THE AIRPORT ROW, and the one tension this table carries on purpose. The sheet names a zone after
+; the airport, and brain:booking_flow:91 says the airport itself cannot be served directly and an
+; adjacent hotel can (AIRPORT_ITSELF_IS_NOT_A_DELIVERY_DESTINATION above). The owner kept the row and
+; priced it; its name is the sheet's and is not changed here. Its 690 is the owner's CHOICE of an
+; end of the published range, not a midpoint derived from it, so NO_MIDPOINT_IS_DERIVED_FROM_THE_
+; AIRPORT_RANGE still holds -- and the ladder still has no district at 690.
+pub const AIRPORT_ZONE_FEE_THB : i32 = 690;
+pub const AIRPORT_ZONE_FEE_IS_THE_OWNERS_CHOICE_OF_A_RANGE_END : bool = true;
+pub const AIRPORT_ROW_NAME_IS_THE_SHEETS : bool = true;
+; The handover row. migrations/085_unpublish_woody_catalog.sql:36-38 rebranded it, src/delivery.rs
+; carries it at :45-50, and it is the shop's own counter, which src/delivery.rs:10-11 places in
+; Kamala -- inside the coverage island, and not a destination. It stays active at fee 0 and sort
+; order 0 and loses only its ETA, which nobody measured. Counted apart from the places, as before.
+pub const SHIPPED_ZONE_DEFAULT_COUNT : i32 = 19;
+pub const SHIPPED_ZONE_PLACE_COUNT : i32 = 18;
 pub const SHIPPED_ZONE_HANDOVER_COUNT : i32 = 1;
-; The count is over the PLACE rows, and the distinction is measured rather than tidy. The four
-; place rows (src/delivery.rs:38-69) are the other island's villages, and none of them is on the
-; coverage island. The fifth row is not a destination at all: migrations/085_unpublish_woody_
-; catalog.sql:36-38 rebranded it and src/delivery.rs:70-77 carries the rebranded name, so it is
-; the shop's own counter -- which src/delivery.rs:10 places in Kamala, Phuket, INSIDE the coverage
-; island. Counting it as a zone outside coverage would be false; counting it as a delivery
-; destination inside coverage would be false too. It is the origin, and it is counted separately.
-pub const SHIPPED_ZONE_PLACES_IN_COVERAGE : i32 = 0;
+pub const SHIPPED_ZONE_PLACES_IN_COVERAGE : i32 = 18;
 pub const SHIPPED_HANDOVER_ROW_IS_THE_SHOP_ITSELF : bool = true;
-pub const SHIPPED_ZONE_TABLE_DESCRIBES_ANOTHER_ISLAND : bool = true;
+pub const SHIPPED_HANDOVER_ROW_FEE_THB : i32 = 0;
+pub const SHIPPED_HANDOVER_ROW_SORT_ORDER : i32 = 0;
+pub const SHIPPED_ZONE_TABLE_DESCRIBES_ANOTHER_ISLAND : bool = false;
 pub const SHIPPED_ZONE_NAMES_ARE_CITED_NOT_QUOTED : bool = true;
+; THE TABLE BEFORE 2026-09-24, under its own names. The four villages are named in English here for
+; the first time because migration 087 names them to deactivate them, and a gate binds that list.
+pub const SHIPPED_ZONE_DEFAULT_COUNT_BEFORE_PHUKET : i32 = 5;
+pub const SHIPPED_ZONE_PLACE_COUNT_BEFORE_PHUKET : i32 = 4;
+pub const SHIPPED_ZONE_PLACES_IN_COVERAGE_BEFORE_PHUKET : i32 = 0;
+pub const SHIPPED_ZONE_TABLE_DESCRIBED_ANOTHER_ISLAND_BEFORE_PHUKET : bool = true;
+pub const ZONE_ROWS_MIGRATION_BEFORE_PHUKET : str = "migrations/071_delivery_zones_koh_phangan.sql";
+pub const OTHER_ISLAND_ZONE_NAMES_EN : [4]str = ["Thong Sala", "Haad Rin", "Srithanu", "Bottle Beach"];
+pub const OTHER_ISLAND_ROWS_DEACTIVATED_BY_087 : i32 = 4;
+pub const OTHER_ISLAND_ROWS_DELETED : i32 = 0;
 pub const ZONE_TABLE_MIGRATION : str = "migrations/060_delivery_zones.sql";
-pub const ZONE_ROWS_MIGRATION : str = "migrations/071_delivery_zones_koh_phangan.sql";
+pub const ZONE_ROWS_MIGRATION : str = "migrations/087_delivery_zones_phuket.sql";
 pub const ZONE_RENAME_MIGRATION : str = "migrations/085_unpublish_woody_catalog.sql";
 pub const ZONE_ROWS_ARE_KEPT_NOT_DELETED : bool = true;
-pub const ZONE_ROWS_KEPT_REASON : str = "Three recorded reasons, none of them an oversight. migrations/060_delivery_zones.sql:16-19 seeded one mainland placeholder zone to match an older hard-coded fallback. migrations/071_delivery_zones_koh_phangan.sql:13-18 deactivates that placeholder rather than deleting it, because placed orders reference delivery_zone_id and deleting the row would orphan them, and :9-11 leaves 060 itself unedited because an applied migration may not be rewritten. migrations/085_unpublish_woody_catalog.sql:32-38 renames only the handover row and states that the island zone names are the other shop's delivery map, kept until the owner defines TurboBaby's Phuket zones -- flagged to him, not decided in code. DECISIONS.md D19 records the same thing as an unmade product call. A zone is a name, a fee and an ETA, and inventing any of the three would put an unmeasured number on a customer's screen (D11).";
-; src/delivery.rs:89-102. One override, and its failure mode points the wrong way: invalid JSON
-; logs a warning and returns the built-in defaults, so a broken override silently restores the
-; other island's map instead of leaving the table empty. The env var is named because the code
-; names it; no value of it is read by this file or by any spec.
+pub const ZONE_ROWS_KEPT_REASON : str = "Three recorded reasons, none of them an oversight. migrations/060_delivery_zones.sql:16-19 seeded one mainland placeholder zone to match an older hard-coded fallback. migrations/071_delivery_zones_koh_phangan.sql:13-18 deactivates that placeholder rather than deleting it, because placed orders reference delivery_zone_id and deleting the row would orphan them, and :9-11 leaves 060 itself unedited because an applied migration may not be rewritten. migrations/085_unpublish_woody_catalog.sql:32-38 renames only the handover row and states that the island zone names are the other shop's delivery map, kept until the owner defines TurboBaby's Phuket zones -- flagged to him, not decided in code. DECISIONS.md D19 records the same thing as an unmade product call. A zone is a name, a fee and an ETA, and inventing any of the three would put an unmeasured number on a customer's screen (D11). CORRECTED 2026-09-24: the owner made that call. migrations/087_delivery_zones_phuket.sql deactivates the four Koh Phangan rows for the same reason 071 gave for the placeholder -- placed orders reference them -- and deletes nothing; the names and fees of the eighteen Phuket zones are his, and the ETA is left absent, because none is published.";
+; src/delivery.rs:103-116. One override, and a failure mode that used to point the wrong way:
+; invalid JSON logs a warning and returns the built-in defaults, and until 2026-09-24 that silently
+; restored the other island's map. It restores the owner's Phuket table now. An override that omits
+; the minute fields parses, as absent ETAs. MEASURED 2026-09-24, and narrower than all of this
+; suggests: no handler reads the built-in table at all -- src/config.rs:166 builds it into
+; Config.delivery_zones and nothing reads that field -- so the table customers pick from is the
+; delivery_zones rows alone, and the built-in copy is a mirror of migration 087, not a fallback any
+; request can reach. The env var is named because the code names it; no value of it is read here.
 pub const ZONE_OVERRIDE_ENV : str = "DELIVERY_ZONES_JSON";
 pub const ZONE_OVERRIDE_INVALID_FALLS_BACK_TO_DEFAULTS : bool = true;
+pub const ZONE_OVERRIDE_FALLBACK_IS_THE_OWNERS_TABLE : bool = true;
+pub const ZONE_OVERRIDE_FALLBACK_WAS_THE_OTHER_ISLAND_BEFORE_PHUKET : bool = true;
+pub const BUILT_IN_ZONE_TABLE_IS_READ_BY_A_HANDLER : bool = false;
 ; The live read surface: src/api/mod.rs:77 nests the API under /api and src/api/orders.rs:104
 ; registers the handler at /delivery/zones. src/api/orders.rs:2389-2420 serves every ACTIVE row
 ; ordered by sort_order then name, with no auth, to the customer checkout and the order tracker.
@@ -526,13 +643,41 @@ pub const ZONES_ROUTE_SERVES_ACTIVE_ROWS_ONLY : bool = true;
 ; non-existence, never by a field.
 pub const ZONE_FEE_COLUMN_IS_NOT_NULLABLE : bool = true;
 pub const ABSENT_FEE_HAS_NO_ROW_SHAPE : bool = true;
+; The ETA columns went the other way on 2026-09-24. migrations/060_delivery_zones.sql:8-9 declared
+; eta_min and eta_max NOT NULL with a default, so every row carried minutes whether or not anybody
+; had measured them; migrations/087_delivery_zones_phuket.sql:43-46 drops both NOT NULLs and both
+; defaults and sets every row to NULL, active or not, so that a reactivated row brings none back.
+; src/db/entities/delivery_zone.rs:15-16 reads them as Option.
+pub const ETA_COLUMNS_ARE_NULLABLE : bool = true;
+pub const ETA_COLUMNS_WERE_NOT_NULL_BEFORE_087 : bool = true;
+pub const ETA_COLUMNS_MADE_NULLABLE_BY_087 : i32 = 2;
+pub const ZONE_ROWS_WITH_AN_ETA_AFTER_087 : i32 = 0;
+pub const BUILT_IN_ZONES_WITH_AN_ETA : i32 = 0;
+pub const BUILT_IN_ZONES_WITH_AN_ETA_BEFORE_PHUKET : i32 = 5;
 
 ; --- What is not published, said plainly ----------------------------------------------------------
 ; The shop publishes a WINDOW, not a travel time. No ETA for any area appears in
 ; data/fleet_seed.json, and the minute ranges the API serves (src/api/orders.rs:1787-1788 and
 ; :2409-2410) come from the zone rows of the other island.
+; CORRECTED 2026-09-24: the owner said so in as many words -- no delivery time in minutes is
+; published, the shop promises windows. The API serves those two fields through one rule now,
+; served_eta at src/delivery.rs:126-131 (reached through :133-141 from both lines above): both
+; edges or neither, so a row without minutes is null and never a 0. No shipped row has minutes. The
+; checkout prints an ETA line only for two present minutes and has no literal fallback left
+; (src/ui/screens/checkout_screen.rs:822-825, :1546), the success screen likewise (:302-305,
+; :490-495), and the admin write supplies no minutes of its own (src/api/admin.rs:1067-1072).
 pub const ETA_IS_NOT_PUBLISHED : bool = true;
-pub const ETA_NOTE : str = "No travel-time estimate for any area of the coverage island exists in this repository. The shop's promise is a window with a start and a published length; the min/max minute pair the API returns is read from delivery_zones rows whose places are on another island, and the empty-list fallback on the checkout screen prints a single hard-coded '30-45' string that no source measures (src/ui/screens/checkout_screen.rs:829). What would be needed is an owner-measured time per Phuket area, which nobody has taken. Until then a window is the answer and an ETA is not offered. RE-MEASURED 2026-09-21 over all 43 tracked specs: still nothing. turbobaby/order-status, written that day, records No delivery ETA from its own side, which is a second contract arriving independently at the same absence and not a source that supplies one. The checkout-screen line was re-read the same day and still carries the hard-coded string. WIDENED 2026-09-21 past the repository: the owner's knowledge base was read on the same day the tariff ladder came out of it, and it publishes no travel time either. What it publishes about timing is a WINDOW and its floor -- the office opens at 10:00, the earliest window is 11:00-13:00, same-day delivery is two hours after the booking but never before that window, the default window is two hours and narrows to one on request (brain:knowledge_base:415-419, brain:faq:100-101) -- which is the same shape the seed already carries and is not an ETA. So this absence survived a search of the one place that answered the tariff question, and BRAIN_ETA_SOURCES_FOUND records that the search happened rather than leaving the claim resting on the repository alone.";
+pub const OWNER_SAID_NO_ETA_IS_PUBLISHED_AT : str = "2026-09-24";
+pub const API_SERVES_AN_ABSENT_ETA_AS_NULL : bool = true;
+pub const A_HALF_STORED_ETA_IS_SERVED_AS_NULL : bool = true;
+pub const ETA_RULE_SITE : str = "src/delivery.rs:126 served_eta";
+pub const CHECKOUT_ETA_FALLBACK_LITERALS : i32 = 0;
+pub const CHECKOUT_ETA_FALLBACK_LITERALS_BEFORE_2026_09_24 : i32 = 1;
+pub const SUCCESS_SCREEN_ETA_FALLBACK_LITERALS : i32 = 0;
+pub const SUCCESS_SCREEN_ETA_FALLBACK_LITERALS_BEFORE_2026_09_24 : i32 = 1;
+pub const ADMIN_WRITE_SUPPLIES_NO_ETA : bool = true;
+pub const ADMIN_WRITE_DEFAULTED_THE_ETA_BEFORE_2026_09_24 : bool = true;
+pub const ETA_NOTE : str = "No travel-time estimate for any area of the coverage island exists in this repository. The shop's promise is a window with a start and a published length; the min/max minute pair the API returns is read from delivery_zones rows whose places are on another island, and the empty-list fallback on the checkout screen prints a single hard-coded '30-45' string that no source measures (src/ui/screens/checkout_screen.rs:829). What would be needed is an owner-measured time per Phuket area, which nobody has taken. Until then a window is the answer and an ETA is not offered. RE-MEASURED 2026-09-21 over all 43 tracked specs: still nothing. turbobaby/order-status, written that day, records No delivery ETA from its own side, which is a second contract arriving independently at the same absence and not a source that supplies one. The checkout-screen line was re-read the same day and still carries the hard-coded string. WIDENED 2026-09-21 past the repository: the owner's knowledge base was read on the same day the tariff ladder came out of it, and it publishes no travel time either. What it publishes about timing is a WINDOW and its floor -- the office opens at 10:00, the earliest window is 11:00-13:00, same-day delivery is two hours after the booking but never before that window, the default window is two hours and narrows to one on request (brain:knowledge_base:415-419, brain:faq:100-101) -- which is the same shape the seed already carries and is not an ETA. So this absence survived a search of the one place that answered the tariff question, and BRAIN_ETA_SOURCES_FOUND records that the search happened rather than leaving the claim resting on the repository alone. CORRECTED 2026-09-24: the owner settled it the same way -- no delivery time in minutes is published, the shop promises windows. Migration 087 stores no ETA on any zone row, the API serves null for both minute fields (served_eta, src/delivery.rs), and the literal '30-45' is gone from the checkout and from the success screen, which had a second copy this note never named. The absence is now the shipped state and not only a refusal.";
 ; Nothing in this repository decides whether an address is on the coverage island. delivery_zones
 ; carries name, name_en, fee, min_order, eta_min, eta_max, is_active and sort_order
 ; (migrations/060_delivery_zones.sql:2-14) and no geometry of any kind; the checkout screen can
@@ -547,9 +692,32 @@ pub const COVERAGE_BOUNDARY_NOTE : str = "The coverage rule is a sentence, not a
 ; an unmeasurable fee is persisted as free delivery rather than refused.
 pub const ADMIN_WRITE_TURNS_AN_UNUSABLE_FEE_INTO_ZERO : bool = true;
 
+; --- Two rules the shipped table knows about and does not model --------------------------------
+; The owner's fourth decision of 2026-09-24: neither of these is modelled by the change that
+; shipped the Phuket table, and both are named here so the absence is recorded, not discovered.
+; (1) OUT-OF-BELT PRICING. The sheet's config rows carry OUT_BELT_KM 5, OUT_BELT_PRICE 1490 and
+;     OUT_BEYOND "by agreement" (translated), in the snapshot named above. Three sources say three
+;     different things and none is a rule this repository could apply: the PC bot's own resolver
+;     (turbobaby-bot delivery.py, at its OUT_BELT constants, read 2026-09-24) keeps both numbers as
+;     LEGACY and says it does not apply them; brain:business_rules:1426-1429 (:1417-1420 on the
+;     2026-09-21 read) says the 1490 step is NOT confirmed by the owner; and the owner said on
+;     2026-09-24 that it is not modelled now. So an address outside every zone has no fee here --
+;     FEE_ABSENT, a human quotes it -- and 1490 is a step of no table in this file.
+; (2) THE 17:30 CUT-OFF. DELIVERY_CUTOFF_MIN above is the owner's rule of 2026-08-20 and this file
+;     models it as the third outcome it is. The shipped code does not: nothing under src/ compares
+;     a delivery time with 17:30 (searched 2026-09-24), and the zone table has no time column.
+pub const OUT_BELT_KM_IN_THE_SHEET : i32 = 5;
+pub const OUT_BELT_PRICE_IN_THE_SHEET_THB : i32 = 1490;
+pub const OUT_BEYOND_IN_THE_SHEET : str = "by agreement";
+pub const OUT_OF_BELT_PRICING_IS_MODELLED : bool = false;
+pub const PC_RESOLVER_TREATS_THE_BELT_AS_LEGACY : bool = true;
+pub const DELIVERY_CUTOFF_IS_MODELLED_IN_THE_SHIPPED_CODE : bool = false;
+pub const UNMODELLED_RULE_COUNT : i32 = 2;
+
 ; --- Fees and totals ------------------------------------------------------------------------------
 ; Measured 2026-09-20: the zone fee is READ at two endpoints (src/api/orders.rs:1794 and :2415)
-; and rendered on one screen (src/ui/screens/checkout_screen.rs:818-825, :1547). It appears in no
+; and rendered on one screen (src/ui/screens/checkout_screen.rs:818-825, :1547; the fee is at
+; :826-836 since 2026-09-24, the ETA block now standing above it). It appears in no
 ; total expression anywhere: the order total the server accepts is subtotal minus bonus minus
 ; stars (src/api/orders.rs:210), with no delivery term in it. The shipped delivery fee is
 ; therefore displayed and never charged. This file neither changes that nor restates the identity.
@@ -722,6 +890,79 @@ pub fn delivery_destination_ready(on_coverage_island: bool, point: u8, explicit_
 ; function so the shipped count can be handed to it instead of asserted about in prose.
 pub fn shipped_table_answers_for_coverage(zones_in_coverage: i32) bool {
     return zones_in_coverage > 0;
+}
+
+; The shipped zone table, read the way the ladder is: by index, bounded by the declared count, and
+; FEE_ABSENT off it. Nothing is derived; a fee is either a row of the owner's table or absent.
+pub fn zone_fee_thb(zone_index: i32) i32 {
+    if (zone_index >= 0 and zone_index < PHUKET_ZONE_COUNT) {
+        return PHUKET_ZONE_FEE_THB[zone_index];
+    }
+    return FEE_ABSENT;
+}
+
+pub fn zone_is_a_ladder_district(zone_index: i32) bool {
+    if (zone_index >= 0 and zone_index < PHUKET_ZONE_COUNT) {
+        return PHUKET_ZONE_LADDER_INDEX[zone_index] != NOT_A_LADDER_DISTRICT;
+    }
+    return false;
+}
+
+; Where the two tables meet they must say the same number. A zone off the ladder has nothing to
+; disagree with, and it is the owner's word alone that prices it.
+pub fn zone_fee_agrees_with_the_ladder(zone_index: i32) bool {
+    if (zone_is_a_ladder_district(zone_index)) {
+        return zone_fee_thb(zone_index) == area_fee_thb(PHUKET_ZONE_LADDER_INDEX[zone_index]);
+    }
+    return true;
+}
+
+pub fn zones_that_disagree_with_the_ladder() i32 {
+    var found : i32 = 0;
+    var i : i32 = 0;
+    while (i < PHUKET_ZONE_COUNT) {
+        if (!zone_fee_agrees_with_the_ladder(i)) {
+            found = found + 1;
+        }
+        i += 1;
+    }
+    return found;
+}
+
+pub fn zones_on_ladder_district(ladder_index: i32) i32 {
+    var found : i32 = 0;
+    var i : i32 = 0;
+    while (i < PHUKET_ZONE_COUNT) {
+        if (PHUKET_ZONE_LADDER_INDEX[i] == ladder_index) {
+            found = found + 1;
+        }
+        i += 1;
+    }
+    return found;
+}
+
+pub fn zones_at_fee(fee_thb: i32) i32 {
+    var found : i32 = 0;
+    var i : i32 = 0;
+    while (i < PHUKET_ZONE_COUNT) {
+        if (PHUKET_ZONE_FEE_THB[i] == fee_thb) {
+            found = found + 1;
+        }
+        i += 1;
+    }
+    return found;
+}
+
+pub fn zones_from_source(source: u8) i32 {
+    var found : i32 = 0;
+    var i : i32 = 0;
+    while (i < PHUKET_ZONE_COUNT) {
+        if (PHUKET_ZONE_SOURCE[i] == source) {
+            found = found + 1;
+        }
+        i += 1;
+    }
+    return found;
 }
 
 ; ==================================================================================================
@@ -937,11 +1178,21 @@ test a_district_off_the_ladder_is_an_absence_and_never_a_derived_number {
     assert area_fee_is_documented(-1) == false;
     assert area_fee_is_documented(11) == true;
     assert FEE_MAY_BE_INTERPOLATED == false;
-    assert TARIFF_TABLE_IS_NOT_SHIPPED == true;
-    assert OFF_LADDER_DISTRICT_HAS_NO_PUBLISHED_FEE == true;
+    assert TARIFF_TABLE_IS_NOT_SHIPPED == false;
+    assert TARIFF_TABLE_WAS_NOT_SHIPPED_BEFORE_087 == true;
+    assert SEED_TARIFF_TABLE_IS_STILL_NULL == true;
+    assert OFF_LADDER_DISTRICT_HAS_NO_PUBLISHED_FEE == false;
+    assert OFF_LADDER_DISTRICT_HAD_NO_PUBLISHED_FEE_BEFORE_2026_09_24 == true;
+    assert A_DISTRICT_IN_NEITHER_TABLE_HAS_NO_FEE == true;
+    assert zone_fee_thb(PHUKET_ZONE_COUNT) == FEE_ABSENT;
+    assert zone_fee_thb(-1) == FEE_ABSENT;
     assert UNCONFIRMED_SHEET_ZONE_COUNT == 5;
-    assert UNCONFIRMED_ZONES_ARE_NOT_FEES == true;
+    assert UNCONFIRMED_ZONES_ARE_NOT_FEES == false;
+    assert UNCONFIRMED_ZONES_WERE_NOT_FEES_BEFORE_2026_09_24 == true;
+    assert SHEET_ZONES_THE_OWNER_CONFIRMED_ON_2026_09_24 == UNCONFIRMED_SHEET_ZONE_COUNT;
+    assert THE_BRAIN_STILL_RECORDS_THEM_AS_UNCONFIRMED == true;
     assert districts_at_step(UNCONFIRMED_BELT_STEP_THB) == 0;
+    assert zones_at_fee(UNCONFIRMED_BELT_STEP_THB) == 0;
     assert OFF_ISLAND_RULE_IS_ONLY_NO_DELIVERY == true;
     assert OFF_ISLAND_FEE_SOURCES_FOUND == 0;
     assert absence_claim_still_holds(OFF_ISLAND_FEE_SOURCES_FOUND) == true;
@@ -1077,36 +1328,212 @@ test the_destination_is_ready_only_when_every_leg_holds {
     assert MUST_SEND_MAP_LINK == true;
 }
 
-test the_shipped_zone_table_prices_another_island_and_is_kept_on_purpose {
+test the_shipped_zone_table_was_another_island_and_its_rows_are_kept_inactive {
     assert SHIPPED_ZONE_DEFAULTS_PATH == "src/delivery.rs";
-    assert SHIPPED_ZONE_DEFAULT_COUNT == 5;
-    assert SHIPPED_ZONE_PLACE_COUNT + SHIPPED_ZONE_HANDOVER_COUNT == SHIPPED_ZONE_DEFAULT_COUNT;
-    assert SHIPPED_ZONE_PLACES_IN_COVERAGE == 0;
-    assert shipped_table_answers_for_coverage(SHIPPED_ZONE_PLACES_IN_COVERAGE) == false;
-    assert shipped_table_answers_for_coverage(1) == true;
-    assert SHIPPED_ZONE_TABLE_DESCRIBES_ANOTHER_ISLAND == true;
-    assert SHIPPED_ZONE_NAMES_ARE_CITED_NOT_QUOTED == true;
+    assert SHIPPED_ZONE_DEFAULT_COUNT_BEFORE_PHUKET == 5;
+    assert SHIPPED_ZONE_PLACE_COUNT_BEFORE_PHUKET + SHIPPED_ZONE_HANDOVER_COUNT == SHIPPED_ZONE_DEFAULT_COUNT_BEFORE_PHUKET;
+    assert SHIPPED_ZONE_PLACES_IN_COVERAGE_BEFORE_PHUKET == 0;
+    assert shipped_table_answers_for_coverage(SHIPPED_ZONE_PLACES_IN_COVERAGE_BEFORE_PHUKET) == false;
+    assert SHIPPED_ZONE_TABLE_DESCRIBED_ANOTHER_ISLAND_BEFORE_PHUKET == true;
+    assert OTHER_ISLAND_ZONE_NAMES_EN.len == SHIPPED_ZONE_PLACE_COUNT_BEFORE_PHUKET;
+    assert OTHER_ISLAND_ROWS_DEACTIVATED_BY_087 == SHIPPED_ZONE_PLACE_COUNT_BEFORE_PHUKET;
+    assert OTHER_ISLAND_ROWS_DELETED == 0;
     assert ZONE_ROWS_ARE_KEPT_NOT_DELETED == true;
     assert ZONE_TABLE_MIGRATION == "migrations/060_delivery_zones.sql";
-    assert ZONE_ROWS_MIGRATION == "migrations/071_delivery_zones_koh_phangan.sql";
+    assert ZONE_ROWS_MIGRATION_BEFORE_PHUKET == "migrations/071_delivery_zones_koh_phangan.sql";
+    assert ZONE_ROWS_MIGRATION == "migrations/087_delivery_zones_phuket.sql";
     assert ZONE_RENAME_MIGRATION == "migrations/085_unpublish_woody_catalog.sql";
+    assert ZONE_ROWS_MIGRATION != ZONE_ROWS_MIGRATION_BEFORE_PHUKET;
+    assert SHIPPED_ZONE_NAMES_ARE_CITED_NOT_QUOTED == true;
 }
 
-; The published count and the shipped count are different numbers about different things, and
-; neither is the other's evidence. Twelve districts are priced by the shop, one of them appears in
-; this repository's seed, five zones are shipped in code, and none of the five is in the coverage
-; area. The gap the file was written about got WIDER rather than narrower when the tariff was found:
-; the shop publishes twelve rows and the code serves five wrong ones.
-test the_published_count_and_the_shipped_count_do_not_corroborate_each_other {
+; THE OWNER'S TABLE, 2026-09-24. Eighteen places and the shop's own counter; every place on the
+; coverage island; five parallel arrays that cannot drift apart; sixteen rows from the sheet and two
+; from the brain's rule.
+test the_shipped_zone_table_is_the_owners_eighteen_phuket_zones {
+    assert ZONE_TABLE_DECIDED_AT == "2026-09-24";
+    assert ZONE_TABLE_IS_THE_OWNERS_WORD == true;
+    assert PHUKET_ZONE_COUNT == 18;
+    assert PHUKET_ZONE_NAMES_EN.len == PHUKET_ZONE_COUNT;
+    assert PHUKET_ZONE_FEE_THB.len == PHUKET_ZONE_COUNT;
+    assert PHUKET_ZONE_SORT_ORDER.len == PHUKET_ZONE_COUNT;
+    assert PHUKET_ZONE_SOURCE.len == PHUKET_ZONE_COUNT;
+    assert PHUKET_ZONE_LADDER_INDEX.len == PHUKET_ZONE_COUNT;
+    assert SHIPPED_ZONE_PLACE_COUNT == PHUKET_ZONE_COUNT;
+    assert SHIPPED_ZONE_PLACE_COUNT + SHIPPED_ZONE_HANDOVER_COUNT == SHIPPED_ZONE_DEFAULT_COUNT;
+    assert SHIPPED_ZONE_PLACES_IN_COVERAGE == SHIPPED_ZONE_PLACE_COUNT;
+    assert shipped_table_answers_for_coverage(SHIPPED_ZONE_PLACES_IN_COVERAGE) == true;
+    assert SHIPPED_ZONE_TABLE_DESCRIBES_ANOTHER_ISLAND == false;
+    assert zones_from_source(ZONE_FROM_THE_SHEET) == SHEET_ZONE_COUNT;
+    assert zones_from_source(ZONE_FROM_THE_BRAIN_RULE) == ZONES_FROM_THE_BRAIN_RULE_ONLY;
+    assert SHEET_ZONE_COUNT + ZONES_FROM_THE_BRAIN_RULE_ONLY == PHUKET_ZONE_COUNT;
+    assert PHUKET_ZONE_SOURCE[KATHU_ZONE_INDEX] == ZONE_FROM_THE_BRAIN_RULE;
+    assert PHUKET_ZONE_SOURCE[NAIHARN_ZONE_INDEX] == ZONE_FROM_THE_BRAIN_RULE;
+    assert PHUKET_ZONE_NAMES_EN[KATHU_ZONE_INDEX] == "Kathu";
+    assert PHUKET_ZONE_NAMES_EN[NAIHARN_ZONE_INDEX] == "Nai Harn";
+    assert PHUKET_ZONE_NAMES_EN[PAKLOK_ZONE_INDEX] == "Pa Khlok";
+    assert PHUKET_ZONE_NAMES_EN[MAIKHAO_ZONE_INDEX] == "Mai Khao";
+    assert PHUKET_ZONE_NAMES_EN[AIRPORT_ZONE_INDEX] == "Airport";
+    assert PHUKET_ZONE_SORT_ORDER[0] == 1;
+    assert PHUKET_ZONE_SORT_ORDER[17] == PHUKET_ZONE_COUNT;
+    assert SHIPPED_HANDOVER_ROW_SORT_ORDER < PHUKET_ZONE_SORT_ORDER[0];
+    assert SHIPPED_HANDOVER_ROW_FEE_THB == 0;
+    assert SHIPPED_HANDOVER_ROW_IS_THE_SHOP_ITSELF == true;
+    assert SHEET_SNAPSHOT_IS_NOT_A_PATH_IN_THIS_REPOSITORY == true;
+    assert SHEET_SNAPSHOT_TAKEN_AT == "2026-07-15";
+}
+
+; Every row read back by index, so a transposition shows up as a wrong fee for a named zone.
+test each_zone_reads_back_at_the_owners_fee {
+    assert zone_fee_thb(0) == 290;
+    assert zone_fee_thb(1) == 290;
+    assert zone_fee_thb(2) == 290;
+    assert zone_fee_thb(3) == 290;
+    assert zone_fee_thb(4) == 390;
+    assert zone_fee_thb(5) == 390;
+    assert zone_fee_thb(6) == 490;
+    assert zone_fee_thb(7) == 490;
+    assert zone_fee_thb(8) == 490;
+    assert zone_fee_thb(9) == 490;
+    assert zone_fee_thb(10) == 490;
+    assert zone_fee_thb(11) == 590;
+    assert zone_fee_thb(12) == 590;
+    assert zone_fee_thb(13) == 590;
+    assert zone_fee_thb(14) == 590;
+    assert zone_fee_thb(15) == 590;
+    assert zone_fee_thb(16) == 690;
+    assert zone_fee_thb(17) == 990;
+    assert zone_fee_thb(18) == FEE_ABSENT;
+    assert zone_fee_thb(-1) == FEE_ABSENT;
+    assert zone_fee_thb(PAKLOK_ZONE_INDEX) == PAKLOK_FEE_THB;
+    assert zone_fee_thb(MAIKHAO_ZONE_INDEX) == MAIKHAO_FEE_THB;
+    assert zone_fee_thb(AIRPORT_ZONE_INDEX) == AIRPORT_ZONE_FEE_THB;
+}
+
+; Where the owner's table and the brain's ladder meet, they agree to the baht: all twelve ladder
+; districts are in the table exactly once, at the ladder's fee, including the two rows the owner
+; decided on 2026-09-06. The six zones off the ladder are the five sheet zones the brain calls
+; unconfirmed and the airport.
+test every_ladder_district_is_in_the_table_once_at_its_ladder_fee {
+    assert zones_that_disagree_with_the_ladder() == 0;
+    assert zones_on_ladder_district(0) == 1;
+    assert zones_on_ladder_district(1) == 1;
+    assert zones_on_ladder_district(2) == 1;
+    assert zones_on_ladder_district(3) == 1;
+    assert zones_on_ladder_district(4) == 1;
+    assert zones_on_ladder_district(5) == 1;
+    assert zones_on_ladder_district(6) == 1;
+    assert zones_on_ladder_district(7) == 1;
+    assert zones_on_ladder_district(8) == 1;
+    assert zones_on_ladder_district(9) == 1;
+    assert zones_on_ladder_district(10) == 1;
+    assert zones_on_ladder_district(11) == 1;
+    assert zones_on_ladder_district(NOT_A_LADDER_DISTRICT) == ZONES_OFF_THE_LADDER;
+    assert ZONES_OFF_THE_LADDER + LADDER_DISTRICT_COUNT == PHUKET_ZONE_COUNT;
+    assert ZONES_OFF_THE_LADDER == UNCONFIRMED_SHEET_ZONE_COUNT + 1;
+    assert zone_is_a_ladder_district(AIRPORT_ZONE_INDEX) == false;
+    assert zone_is_a_ladder_district(PAKLOK_ZONE_INDEX) == true;
+    assert PHUKET_ZONE_LADDER_INDEX[PAKLOK_ZONE_INDEX] == PAKLOK_LADDER_INDEX;
+    assert PHUKET_ZONE_LADDER_INDEX[MAIKHAO_ZONE_INDEX] == MAIKHAO_LADDER_INDEX;
+    assert PHUKET_ZONE_LADDER_INDEX[0] == DOCUMENTED_AREA_INDEX;
+    assert zone_fee_thb(0) == DOCUMENTED_DELIVERY_FEE_THB;
+    assert zone_fee_agrees_with_the_ladder(KATHU_ZONE_INDEX) == true;
+    assert zone_fee_agrees_with_the_ladder(NAIHARN_ZONE_INDEX) == true;
+    assert zone_is_a_ladder_district(PHUKET_ZONE_COUNT) == false;
+}
+
+; The histogram is RECOUNTED from the table, as the ladder's is.
+test the_zone_steps_recount_from_the_table {
+    assert PHUKET_ZONE_STEPS_THB.len == PHUKET_ZONES_AT_EACH_STEP.len;
+    assert zones_at_fee(290) == 4;
+    assert zones_at_fee(390) == 2;
+    assert zones_at_fee(490) == 5;
+    assert zones_at_fee(590) == 5;
+    assert zones_at_fee(690) == 1;
+    assert zones_at_fee(990) == 1;
+    assert PHUKET_ZONES_AT_EACH_STEP[0] == zones_at_fee(PHUKET_ZONE_STEPS_THB[0]);
+    assert PHUKET_ZONES_AT_EACH_STEP[1] == zones_at_fee(PHUKET_ZONE_STEPS_THB[1]);
+    assert PHUKET_ZONES_AT_EACH_STEP[2] == zones_at_fee(PHUKET_ZONE_STEPS_THB[2]);
+    assert PHUKET_ZONES_AT_EACH_STEP[3] == zones_at_fee(PHUKET_ZONE_STEPS_THB[3]);
+    assert PHUKET_ZONES_AT_EACH_STEP[4] == zones_at_fee(PHUKET_ZONE_STEPS_THB[4]);
+    assert PHUKET_ZONES_AT_EACH_STEP[5] == zones_at_fee(PHUKET_ZONE_STEPS_THB[5]);
+    assert zones_at_fee(290) + zones_at_fee(390) + zones_at_fee(490) + zones_at_fee(590) + zones_at_fee(690) + zones_at_fee(990) == PHUKET_ZONE_COUNT;
+    assert zones_at_fee(0) == 0;
+}
+
+; The airport row is the owner's choice of an END of the published range, never a midpoint, and it
+; does not put a DISTRICT on the ladder at 690.
+test the_airport_zone_is_the_owners_end_of_the_range_and_not_a_midpoint {
+    assert AIRPORT_ZONE_FEE_THB == AIRPORT_HOTEL_FEE_MAX_THB;
+    assert AIRPORT_ZONE_FEE_THB != (AIRPORT_HOTEL_FEE_MIN_THB + AIRPORT_HOTEL_FEE_MAX_THB) / 2;
+    assert AIRPORT_ZONE_FEE_IS_THE_OWNERS_CHOICE_OF_A_RANGE_END == true;
+    assert NO_MIDPOINT_IS_DERIVED_FROM_THE_AIRPORT_RANGE == true;
+    assert districts_at_step(AIRPORT_ZONE_FEE_THB) == 0;
+    assert zones_at_fee(AIRPORT_ZONE_FEE_THB) == 1;
+    assert AIRPORT_ROW_NAME_IS_THE_SHEETS == true;
+    assert AIRPORT_ITSELF_IS_NOT_A_DELIVERY_DESTINATION == true;
+}
+
+; The ETA is absent everywhere it used to be a number, and the literals that stood in for it are
+; gone. The superseded counts are asserted beside the new ones.
+test no_zone_carries_an_eta_and_no_screen_invents_one {
+    assert ETA_IS_NOT_PUBLISHED == true;
+    assert OWNER_SAID_NO_ETA_IS_PUBLISHED_AT == ZONE_TABLE_DECIDED_AT;
+    assert ETA_COLUMNS_ARE_NULLABLE == true;
+    assert ETA_COLUMNS_WERE_NOT_NULL_BEFORE_087 == true;
+    assert ETA_COLUMNS_MADE_NULLABLE_BY_087 == 2;
+    assert ZONE_ROWS_WITH_AN_ETA_AFTER_087 == 0;
+    assert BUILT_IN_ZONES_WITH_AN_ETA == 0;
+    assert BUILT_IN_ZONES_WITH_AN_ETA_BEFORE_PHUKET == SHIPPED_ZONE_DEFAULT_COUNT_BEFORE_PHUKET;
+    assert API_SERVES_AN_ABSENT_ETA_AS_NULL == true;
+    assert A_HALF_STORED_ETA_IS_SERVED_AS_NULL == true;
+    assert ETA_RULE_SITE == "src/delivery.rs:126 served_eta";
+    assert CHECKOUT_ETA_FALLBACK_LITERALS == 0;
+    assert CHECKOUT_ETA_FALLBACK_LITERALS_BEFORE_2026_09_24 == 1;
+    assert SUCCESS_SCREEN_ETA_FALLBACK_LITERALS == 0;
+    assert SUCCESS_SCREEN_ETA_FALLBACK_LITERALS_BEFORE_2026_09_24 == 1;
+    assert ADMIN_WRITE_SUPPLIES_NO_ETA == true;
+    assert ADMIN_WRITE_DEFAULTED_THE_ETA_BEFORE_2026_09_24 == true;
+    assert absence_claim_still_holds(COVERAGE_ISLAND_ETA_SOURCES_FOUND) == true;
+}
+
+; The override falls back to the owner's table now, and no request reaches the built-in copy.
+test the_override_falls_back_to_the_owners_table_and_no_handler_reads_it {
+    assert ZONE_OVERRIDE_INVALID_FALLS_BACK_TO_DEFAULTS == true;
+    assert ZONE_OVERRIDE_FALLBACK_IS_THE_OWNERS_TABLE == true;
+    assert ZONE_OVERRIDE_FALLBACK_WAS_THE_OTHER_ISLAND_BEFORE_PHUKET == true;
+    assert BUILT_IN_ZONE_TABLE_IS_READ_BY_A_HANDLER == false;
+}
+
+; The owner's fourth decision, as constants: two rules known, sourced and deliberately unmodelled.
+test the_two_unmodelled_rules_are_named_and_neither_became_a_number {
+    assert UNMODELLED_RULE_COUNT == 2;
+    assert OUT_OF_BELT_PRICING_IS_MODELLED == false;
+    assert DELIVERY_CUTOFF_IS_MODELLED_IN_THE_SHIPPED_CODE == false;
+    assert OUT_BELT_KM_IN_THE_SHEET == 5;
+    assert OUT_BELT_PRICE_IN_THE_SHEET_THB == UNCONFIRMED_BELT_STEP_THB;
+    assert OUT_BEYOND_IN_THE_SHEET == "by agreement";
+    assert PC_RESOLVER_TREATS_THE_BELT_AS_LEGACY == true;
+    assert zones_at_fee(OUT_BELT_PRICE_IN_THE_SHEET_THB) == 0;
+    assert districts_at_step(OUT_BELT_PRICE_IN_THE_SHEET_THB) == 0;
+    assert DELIVERY_CUTOFF_MIN == 1050;
+}
+
+; Until 2026-09-24 the published count and the shipped count did not corroborate each other: twelve
+; districts priced by the shop, five zones shipped, none of them in coverage. They meet now -- the
+; shipped table contains the whole ladder at the ladder's fees -- and the old reading is asserted on
+; the constants that kept it.
+test the_published_ladder_and_the_shipped_table_now_agree_where_they_meet {
     assert LADDER_DISTRICT_COUNT == 12;
     assert DOCUMENTED_AREA_COUNT == 1;
-    assert SHIPPED_ZONE_DEFAULT_COUNT == 5;
-    assert SHIPPED_ZONE_PLACES_IN_COVERAGE == 0;
-    assert LADDER_DISTRICT_COUNT != SHIPPED_ZONE_DEFAULT_COUNT;
-    assert LADDER_DISTRICT_COUNT > SHIPPED_ZONE_DEFAULT_COUNT;
-    assert LADDER_DISTRICT_COUNT > DOCUMENTED_AREA_COUNT;
-    assert DOCUMENTED_AREA_COUNT > SHIPPED_ZONE_PLACES_IN_COVERAGE;
-    assert shipped_table_answers_for_coverage(SHIPPED_ZONE_PLACES_IN_COVERAGE) == false;
+    assert SHIPPED_ZONE_DEFAULT_COUNT_BEFORE_PHUKET == 5;
+    assert SHIPPED_ZONE_PLACES_IN_COVERAGE_BEFORE_PHUKET == 0;
+    assert LADDER_DISTRICT_COUNT > SHIPPED_ZONE_DEFAULT_COUNT_BEFORE_PHUKET;
+    assert PHUKET_ZONE_COUNT > LADDER_DISTRICT_COUNT;
+    assert PHUKET_ZONE_COUNT - LADDER_DISTRICT_COUNT == ZONES_OFF_THE_LADDER;
+    assert zones_that_disagree_with_the_ladder() == 0;
+    assert shipped_table_answers_for_coverage(SHIPPED_ZONE_PLACES_IN_COVERAGE) == true;
+    assert shipped_table_answers_for_coverage(SHIPPED_ZONE_PLACES_IN_COVERAGE_BEFORE_PHUKET) == false;
 }
 
 test the_absent_fee_has_no_place_to_live_in_the_shipped_row_shape {
@@ -1123,7 +1550,7 @@ test the_absent_fee_has_no_place_to_live_in_the_shipped_row_shape {
 test what_is_not_published_is_refused_by_name_rather_than_filled_in {
     assert ETA_IS_NOT_PUBLISHED == true;
     assert COVERAGE_BOUNDARY_IS_NOT_MACHINE_CHECKABLE == true;
-    assert TARIFF_TABLE_IS_NOT_SHIPPED == true;
+    assert SEED_TARIFF_TABLE_IS_STILL_NULL == true;
     assert NO_MAP_LINK_IS_STORED_IN_THIS_FILE == true;
     assert DELIVERY_DATE_IS_NOT_MODELLED == true;
     assert OFFICE_CLOSING_TIME_IS_NOT_PUBLISHED == true;
@@ -1203,10 +1630,12 @@ invariant the_seed_row_is_the_first_rung_and_still_the_only_one_in_this_reposito
     assert DOCUMENTED_AREA_DELIVERY_FEE_THB.len == 1 and DOCUMENTED_AREA_NAMES.len == DOCUMENTED_AREA_DELIVERY_FEE_THB.len and DOCUMENTED_AREA_COUNT == 1 and LADDER_DISTRICT_NAMES[0] == DOCUMENTED_AREA_NAMES[0] and LADDER_DISTRICT_FEE_THB[0] == DOCUMENTED_DELIVERY_FEE_THB and LADDER_DISTRICT_COUNT > DOCUMENTED_AREA_COUNT
 
 ; The interpolation ban, mechanically, and it is the part of the old prohibition that SURVIVES: a
-; district off the ladder is absent, not a fraction of 290, not the nearest step and not a
+; district in neither table is absent, not a fraction of 290, not the nearest step and not a
 ; neighbour's price. There is no function in this file from an unlisted district to a number.
-invariant no_district_off_the_ladder_ever_acquires_a_fee
-    assert area_fee_thb(LADDER_DISTRICT_COUNT) == FEE_ABSENT and area_fee_thb(LADDER_DISTRICT_COUNT + 1) == FEE_ABSENT and area_fee_thb(-1) == FEE_ABSENT and FEE_MAY_BE_INTERPOLATED == false and OFF_LADDER_DISTRICT_HAS_NO_PUBLISHED_FEE == true
+; RENAMED 2026-09-24 from no_district_off_the_ladder_ever_acquires_a_fee: six districts off the
+; ladder acquired fees that day, by the owner's word in the zone table, and none by derivation.
+invariant no_district_acquires_a_fee_by_derivation
+    assert area_fee_thb(LADDER_DISTRICT_COUNT) == FEE_ABSENT and area_fee_thb(LADDER_DISTRICT_COUNT + 1) == FEE_ABSENT and area_fee_thb(-1) == FEE_ABSENT and zone_fee_thb(PHUKET_ZONE_COUNT) == FEE_ABSENT and zone_fee_thb(-1) == FEE_ABSENT and FEE_MAY_BE_INTERPOLATED == false and A_DISTRICT_IN_NEITHER_TABLE_HAS_NO_FEE == true
 
 ; The owner's word and the measurement stay different kinds of fact. Paklok's live figure is not its
 ; measured one, the superseded figure survives beside it, and Karon -- which the decision explicitly
@@ -1268,10 +1697,20 @@ invariant the_map_link_obligation_is_load_bearing
 invariant a_complete_destination_leg_is_actually_reachable
     assert delivery_destination_ready(true, POINT_DEFAULT, false, true, EARLIEST_WINDOW_START_MIN, DEFAULT_WINDOW_MIN, 0) == true
 
-; The shipped table answers for no part of the coverage area, and its five rows account for
-; themselves so the count cannot drift unnoticed.
-invariant the_shipped_zone_table_answers_for_no_part_of_the_coverage_area
-    assert shipped_table_answers_for_coverage(SHIPPED_ZONE_PLACES_IN_COVERAGE) == false and SHIPPED_ZONE_PLACE_COUNT + SHIPPED_ZONE_HANDOVER_COUNT == SHIPPED_ZONE_DEFAULT_COUNT
+; The shipped table answers for the coverage island, its nineteen rows account for themselves, and
+; where it meets the ladder it says the ladder's number. RENAMED 2026-09-24 from
+; the_shipped_zone_table_answers_for_no_part_of_the_coverage_area, which was true of the five Koh
+; Phangan rows and is kept as a fact about them in the last two terms.
+invariant the_shipped_zone_table_answers_for_the_coverage_island_and_agrees_with_the_ladder
+    assert shipped_table_answers_for_coverage(SHIPPED_ZONE_PLACES_IN_COVERAGE) == true and SHIPPED_ZONE_PLACE_COUNT + SHIPPED_ZONE_HANDOVER_COUNT == SHIPPED_ZONE_DEFAULT_COUNT and zones_that_disagree_with_the_ladder() == 0 and shipped_table_answers_for_coverage(SHIPPED_ZONE_PLACES_IN_COVERAGE_BEFORE_PHUKET) == false and SHIPPED_ZONE_PLACE_COUNT_BEFORE_PHUKET + SHIPPED_ZONE_HANDOVER_COUNT == SHIPPED_ZONE_DEFAULT_COUNT_BEFORE_PHUKET
+
+; The zone table's parallel arrays cannot drift apart, and its histogram is a recount.
+invariant the_zone_table_arrays_stay_parallel_and_the_recount_agrees
+    assert PHUKET_ZONE_NAMES_EN.len == PHUKET_ZONE_COUNT and PHUKET_ZONE_FEE_THB.len == PHUKET_ZONE_COUNT and PHUKET_ZONE_SORT_ORDER.len == PHUKET_ZONE_COUNT and PHUKET_ZONE_SOURCE.len == PHUKET_ZONE_COUNT and PHUKET_ZONE_LADDER_INDEX.len == PHUKET_ZONE_COUNT and zones_at_fee(290) + zones_at_fee(390) + zones_at_fee(490) + zones_at_fee(590) + zones_at_fee(690) + zones_at_fee(990) == PHUKET_ZONE_COUNT
+
+; No shipped zone carries minutes, and nothing prints one in their place.
+invariant no_shipped_zone_carries_an_eta
+    assert ZONE_ROWS_WITH_AN_ETA_AFTER_087 == 0 and BUILT_IN_ZONES_WITH_AN_ETA == 0 and CHECKOUT_ETA_FALLBACK_LITERALS == 0 and SUCCESS_SCREEN_ETA_FALLBACK_LITERALS == 0 and ETA_IS_NOT_PUBLISHED == true
 
 ; This contract quotes nothing and charges nothing. Flipping either constant is the edit that would
 ; turn a promise into an invoice, so it fails here.
