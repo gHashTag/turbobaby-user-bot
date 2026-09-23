@@ -314,7 +314,22 @@ pub const FLEET_SEED_BONUS_MENTIONS : u8 = 0;
 ; A measurement with two readers and one owner is the shape this corpus wants; a measurement with
 ; two readers and two owners is the second table it exists to prevent.
 pub const SEED_MEASUREMENT_RE_RUN_AT : str = "2026-09-21";
-pub const FLEET_SEED_BYTES : u32 = 19434;
+; CORRECTED 2026-09-24: 19434 was the size of one host's CRLF WORKING COPY, not of the file. The
+; committed blob of data/fleet_seed.json, unchanged since a544414 (2026-09-13), is 19084 bytes
+; (git cat-file -s HEAD:data/fleet_seed.json) and holds 350 newlines; a checkout with
+; core.autocrlf=true writes each one as two bytes, and 19084 + 350 = 19434. So the old figure
+; reproduced only on the host that took it, and read 19084 on every LF checkout -- CI, Linux, or
+; this repository checked out with autocrlf off. The size declared now is the blob's, which no
+; checkout setting moves; the working-copy reading is kept under its _BEFORE_ name, and the line
+; count is declared beside both so the two reconcile by arithmetic, and so that gate 3 can bind
+; the one line-ending-independent number (Python reads either checkout as the same 350 lines).
+; The two zeros above do not depend on line endings; re-read the same day on the blob, the seed
+; still holds zero of each, case-insensitive.
+pub const FLEET_SEED_BYTES : u32 = 19084;
+pub const FLEET_SEED_BYTES_BEFORE_2026_09_24 : u32 = 19434;
+pub const FLEET_SEED_LINES : u32 = 350;
+pub const FLEET_SEED_BYTES_ARE_THE_COMMITTED_BLOB : bool = true;
+pub const FLEET_SEED_BYTES_REMEASURED_AT : str = "2026-09-24";
 pub const A_SECOND_CONTRACT_CITES_THIS_SEED_MEASUREMENT : bool = true;
 pub const SEED_MEASUREMENT_SECOND_READER_ID : str = "turbobaby/loyalty-ledger";
 pub const BONUS_POLICY_NOTE : str = "Measured 2026-09-20: data/fleet_seed.json contains zero occurrences of loyalty and zero of bonus, case-insensitive. That does NOT make the policy unowned. src/trios/loyalty.rs:34-46 is a standing default block holding max_bonus_usage_pct 30.0 at src/trios/loyalty.rs:43 next to three cashback percentages and three tier thresholds; src/trios/loyalty.rs:86-92 clamps a stored value into the legal percentage range or falls back to that default; src/api/orders.rs:1293-1305 turns it into a ceiling and refuses above it. All of that runs AFTER the identity here has passed, and none of it is a term of the identity, so restating any number of it here would be the hand-copied computation D15 forbids.";
@@ -548,8 +563,25 @@ test the_seed_is_silent_about_bonus_and_the_policy_is_still_owned_elsewhere {
   ; Re-run 2026-09-21 with the file's size beside the zeros, so a zero taken from a truncated or
   ; missing file cannot pass for a zero taken from the real one.
   assert SEED_MEASUREMENT_RE_RUN_AT == "2026-09-21";
-  assert FLEET_SEED_BYTES == 19434;
   assert FLEET_SEED_BYTES > 0;
+}
+
+; The seed's size, stated so that it reproduces on every checkout (corrected 2026-09-24). The blob
+; size plus one byte per line is exactly what the CRLF working copy measured, which is the whole
+; of the difference between the old figure and the new one.
+test the_seed_size_is_the_blobs_and_not_a_working_copys {
+  assert FLEET_SEED_BYTES == 19084;
+  assert FLEET_SEED_LINES == 350;
+  assert FLEET_SEED_BYTES_BEFORE_2026_09_24 == 19434;
+  assert FLEET_SEED_BYTES_BEFORE_2026_09_24 == FLEET_SEED_BYTES + FLEET_SEED_LINES;
+  assert FLEET_SEED_BYTES_ARE_THE_COMMITTED_BLOB == true;
+  assert FLEET_SEED_BYTES_REMEASURED_AT == "2026-09-24";
+  assert FLEET_SEED_BYTES_REMEASURED_AT != SEED_MEASUREMENT_RE_RUN_AT;
+  assert FLEET_SEED_LOYALTY_MENTIONS == 0;
+  assert FLEET_SEED_BONUS_MENTIONS == 0;
+}
+
+test the_seed_measurement_has_a_second_reader_and_one_owner {
   assert A_SECOND_CONTRACT_CITES_THIS_SEED_MEASUREMENT == true;
   assert SEED_MEASUREMENT_SECOND_READER_ID == "turbobaby/loyalty-ledger";
   assert SEED_MEASUREMENT_SECOND_READER_ID != ID;

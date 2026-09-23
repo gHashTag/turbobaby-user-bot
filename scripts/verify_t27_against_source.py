@@ -34,19 +34,23 @@ declared, is RED. DECISIONS.md D16 is the rule -- a gate whose input can reach z
 must pin a floor, because "found nothing" and "found nothing wrong" look identical
 from the outside. The floor on the table itself is MIN_BINDINGS.
 
-WHAT A GREEN RUN DOES NOT PROVE. Re-measured 2026-09-24, after the T27 C3 deposit comparison
-(one row, commerce.CLIENT_DEPOSIT_REFUSALS) landed on top of the owner's Phuket delivery zones
-and the catalog-honesty change: the table's 217 bindings cover 204 distinct (contract,
-constant) pairs out of 5427 top-level `pub const` declarations across the 45 files under
-specs/, touching 41 of those 45 contracts. That is 3.8% of the declared constants, and it
-is 0% of the 9753 `assert` statements. (Earlier on 2026-09-24: after the Phuket delivery zones
-(migration 087) and their sixteen bindings, 216 bindings, 203 pairs of 5418, 3.7%, 9738
-asserts, 41 contracts; on the catalog-honesty tree (the CLICK 125 redirect, the customer
-availability line and the admin Add answer on top of upstream main f0640f8), 200 bindings,
-192 pairs of 5320, 3.6%, 9558 asserts, 41 contracts; on the tree that added the status,
-cancellation and money families and the person-naming resolution of 2026-09-22/23 to the
-binding groups below, 198 bindings, 190 pairs of 5310, 3.6%, 9535 asserts, 41 contracts.)
-(2026-09-22, the binding groups alone: 168
+WHAT A GREEN RUN DOES NOT PROVE. Re-measured 2026-09-24, after the spec-hygiene change (the
+four ride-handling rows, the migration census owner's three, the nmax-155 rate's two and the
+seed's line count) landed on top of the T27 C3 deposit comparison, the owner's Phuket delivery
+zones and the catalog-honesty change: the table's 227 bindings cover 214 distinct
+(contract, constant) pairs out of 5479 top-level `pub const` declarations across the 45
+files under specs/, touching 41 of those 45 contracts. That is 3.9% of the declared
+constants, and it is 0% of the 9854 `assert` statements. (Earlier on 2026-09-24: after the
+T27 C3 deposit comparison, 217 bindings, 204 pairs of 5427, 3.8%, 9753 asserts, 41
+contracts; after the Phuket delivery zones (migration 087) and their sixteen bindings, 216
+bindings, 203 pairs of 5418, 3.7%, 9738 asserts, 41 contracts; the spec-hygiene change
+alone on f0640f8, 208 bindings, 200 pairs of 5362, 3.7%, 9636 asserts, 41 contracts; on the
+catalog-honesty tree (the CLICK 125 redirect, the customer availability line and the admin
+Add answer on top of upstream main f0640f8), 200 bindings, 192 pairs of 5320, 3.6%, 9558
+asserts, 41 contracts; on the tree that added the status, cancellation and money families
+and the person-naming resolution of 2026-09-22/23 to the binding groups below, 198
+bindings, 190 pairs of 5310, 3.6%, 9535 asserts, 41 contracts.) (2026-09-22, the binding
+groups alone: 168
 bindings, 164 pairs of 4997, 3.3%, 9038 asserts, 40 contracts. Earlier that day, before
 a review's fixes: 162 bindings, 158 pairs of 4942, 3.2%, 8940 asserts. The fixes added
 six rows, and most of the 55 constants and 98 asserts between those two readings are
@@ -379,10 +383,9 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "source": "src/api/bikes.rs",
         "extract": ("regex", r"const MAX_DISPLACEMENT_CC:\s*i32\s*=\s*([0-9_]+)\s*;"),
         "relation": "equal",
-        # :191 re-pointed 2026-09-24 (it read :178, stale before that day's +8 lines at :110).
-        "why": "catalog_write.t27:191 records that the COLUMN has no displacement "
-               "ceiling, so this API constant is the only one there is; the contract "
-               "is the only statement of what it is",
+        "why": "catalog_write.t27 records that the COLUMN has no displacement ceiling "
+               "(COLUMN_HAS_A_DISPLACEMENT_CEILING = false), so this API constant is the "
+               "only one there is; the contract is the only statement of what it is",
     },
     {
         "name": "catalog_write.WRITE_TEXT_MAX_CHARS ~ bikes.rs MAX_TEXT_LEN",
@@ -412,10 +415,9 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "source": "src/api/bikes.rs",
         "extract": ("regex", r"if code\.chars\(\)\.count\(\) > (\d+)\s*\{"),
         "relation": "equal",
-        # :268 re-pointed 2026-09-24 (it read :272, stale before that day's +8 lines at :110).
-        "why": "an inline ceiling with no name of its own -- catalog_write.t27:268 "
-               "counts seven such sites, and the contract is where they are written "
-               "down at all",
+        "why": "an inline ceiling with no name of its own -- catalog_write.t27 counts "
+               "seven such sites (INLINE_TEXT_CEILING_SITE_COUNT), and the contract is "
+               "where they are written down at all",
     },
     # --- class vocabulary, three ways --------------------------------------------------
     {
@@ -837,9 +839,14 @@ BINDINGS: tuple[dict[str, object], ...] = (
                "reading the TCP peer address; the day one line does, the limiter key "
                "stops being caller-chosen and that paragraph becomes wrong",
     },
-    # pricing_honesty.t27:330 OWNS the migration count; locale_policy.t27:173 carries a
-    # named copy of it. Binding both to the same directory pins the copy to the owner
-    # without either file having to read the other.
+    # The migration-file census. CORRECTED 2026-09-24: this comment said that pricing_honesty.t27
+    # OWNS the count and locale_policy.t27 carries a named copy (and cited both by line). A third
+    # file, schema_provenance.t27, declared itself the owner as well, and it was the one of the
+    # three whose figures no row bound. Resolved by subject: the census is turbobaby/schema-
+    # provenance's (SQL_FILES_RECURSIVE, SQL_FILES_TOP_LEVEL, WIP_SQL_FILES, bound in the three rows
+    # after this group), and the pricing-honesty and locale-policy figures are declared copies that
+    # name it. Every declaration of the count is bound to the same directory, so no copy can move
+    # without its owner or without the tree.
     {
         "name": "pricing_honesty.MIGRATION_FILES_SEARCHED ~ migrations/ recursive",
         "spec": "specs/turbobaby/pricing_honesty.t27",
@@ -880,13 +887,100 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "why": "the other half of that split; it is the half a recursive search adds "
                "and a careless one drops",
     },
+    # Added 2026-09-24: the census owner's own three figures, measured the same way as the copies
+    # above. Planted RED through a mirror of the tracked tree with one .sql file added under
+    # migrations/wip/ (RECURSIVE and WIP) and one at the top level (RECURSIVE and TOP_LEVEL).
+    {
+        "name": "schema_provenance.SQL_FILES_RECURSIVE ~ migrations/ recursive",
+        "spec": "specs/turbobaby/schema_provenance.t27",
+        "const": "SQL_FILES_RECURSIVE",
+        "source": "migrations/**/*.sql",
+        "extract": ("tree_file_count",),
+        "relation": "equal",
+        "why": "the census owner's count of every .sql file a recursive reader sees; the two "
+               "copies of it in pricing-honesty and locale-policy were bound and the owner's "
+               "was not, which left the self-declared owner the one unguarded declaration",
+    },
+    {
+        "name": "schema_provenance.SQL_FILES_TOP_LEVEL ~ migrations/*.sql",
+        "spec": "specs/turbobaby/schema_provenance.t27",
+        "const": "SQL_FILES_TOP_LEVEL",
+        "source": "migrations/*.sql",
+        "extract": ("tree_file_count",),
+        "relation": "equal",
+        "why": "what the three non-recursive read_dir walks see; the contract's collision "
+               "tripwire rests on the gap between this and the recursive count",
+    },
+    {
+        "name": "schema_provenance.WIP_SQL_FILES ~ migrations/wip/*.sql",
+        "spec": "specs/turbobaby/schema_provenance.t27",
+        "const": "WIP_SQL_FILES",
+        "source": "migrations/wip/*.sql",
+        "extract": ("tree_file_count",),
+        "relation": "equal",
+        "why": "the one file only a recursive reader sees, and the one whose number (077) "
+               "collides with a shipped migration the day it is promoted without a renumber",
+    },
+    # nmax-155's published day rate. Added 2026-09-24 with the F4 resolution: pricing-honesty
+    # owns the figure (CHEAPEST_IN_STOCK_DAY_RATE_THB, the census reading "cheapest rate on a family
+    # with units") and rental-terms carries it as REF_BASE_THB_DAY, a declared copy it computes its
+    # audit arithmetic on. Until then neither declaration was bound. Both rows read the same seed
+    # row by its family key, so the owner, the copy and the seed cannot disagree in silence. The
+    # rows do NOT prove the census half of the owner's claim (that no in-stock family is cheaper):
+    # that is arithmetic over twenty rows, and it stays the contract's own assertion. Planted RED
+    # (both rows) through --source-override on a copy of the seed with nmax-155's rate set to 450.
+    {
+        "name": "pricing_honesty.CHEAPEST_IN_STOCK_DAY_RATE_THB ~ seed nmax-155 base rate",
+        "spec": "specs/turbobaby/pricing_honesty.t27",
+        "const": "CHEAPEST_IN_STOCK_DAY_RATE_THB",
+        "source": "data/fleet_seed.json",
+        # The family row spans three lines in the seed (key, class/body/cc, money); the rate is
+        # the first field of the third. Keyed on the family, never on the value.
+        "extract": ("regex", r'"key": "nmax-155",[^\n]*\n[^\n]*\n\s*"base_rate_thb_day": (\d+),'),
+        "relation": "equal",
+        "why": "the published pre-discount rate every divergence example in the contract is "
+               "built on; a re-priced seed under a stale contract argues D11's threshold from "
+               "a number the door no longer publishes",
+    },
+    {
+        "name": "rental_terms.REF_BASE_THB_DAY ~ seed nmax-155 base rate",
+        "spec": "specs/turbobaby/rental_terms.t27",
+        "const": "REF_BASE_THB_DAY",
+        "source": "data/fleet_seed.json",
+        "extract": ("regex", r'"key": "nmax-155",[^\n]*\n[^\n]*\n\s*"base_rate_thb_day": (\d+),'),
+        "relation": "equal",
+        "why": "the declared copy of pricing-honesty's figure, which forty-odd audit assertions "
+               "compute with; bound to the same seed row as its owner so that a one-sided edit "
+               "of either is red",
+    },
+    # Added 2026-09-24. order_money.t27 declared the seed's size as 19434 bytes, which was one
+    # host's CRLF working copy: the committed blob is 19084 bytes with 350 lines, and an LF checkout
+    # (CI) reads 19084. The contract now declares the blob size and the line count; this row binds
+    # the line count, the one figure Python reads identically on either checkout (read_text uses
+    # universal newlines). The byte size has no extractor here and stays the contract's assertion.
+    # Planted RED through --source-override on a copy of the seed with one blank line appended.
+    {
+        "name": "order_money.FLEET_SEED_LINES ~ data/fleet_seed.json line count",
+        "spec": "specs/turbobaby/order_money.t27",
+        "const": "FLEET_SEED_LINES",
+        "source": "data/fleet_seed.json",
+        "extract": ("line_count",),
+        "relation": "equal",
+        "why": "the zero-mention measurements beside it were taken on a seed of this length; a "
+               "seed that grows or shrinks means the zeros were taken on a different file, and "
+               "the length is what makes the blob-versus-working-copy arithmetic checkable",
+    },
     # --- "wc -l over the tracked sources": measurements contracts state in so many words ---------
     # Five contracts open by recording how long the files they describe are, each with
-    # the sentence that it is a measurement. api_surface.t27:101, client_errors.t27:94,
-    # events_booking.t27 HTTP_SOURCE_LINES, customer_surface.t27:387 and catalog_write.t27:103. Every
-    # census that follows in those files was taken against a file of that length, so a
-    # changed length means the census was taken against a different file.
-    # catalog_write.t27:101-104 makes TWO claims, and binding one of them to a RANK was
+    # the sentence that it is a measurement, named here by declaration and not by line
+    # (three of the four line citations that stood here had drifted off their sentences by
+    # 2026-09-24): api_surface.t27 ROUTER_SOURCE_LINES, client_errors.t27 INTAKE_SOURCE_LINES,
+    # events_booking.t27 HTTP_SOURCE_LINES, customer_surface.t27 WITNESS_LINES and
+    # catalog_write.t27 ADMIN_SCREEN_LINES. Every census that follows in those files was
+    # taken against a file of that length, so a changed length means the census was taken
+    # against a different file.
+    # The sentence over catalog_write.t27's ADMIN_SCREEN_LINES makes TWO claims (the length,
+    # and "The screen is the largest file"), and binding one of them to a RANK was
     # a hole: `("tree_line_nth", 1)` answers "how long is the longest file under src/",
     # which is not what ADMIN_SCREEN_LINES says. Measured 2026-09-21 in an out-of-repo
     # mirror: with admin_screen.rs cut to 3000 lines, main.rs padded to 5802 and
@@ -899,13 +993,14 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "name": "catalog_write.ADMIN_SCREEN_LINES ~ admin_screen.rs length",
         "spec": "specs/turbobaby/catalog_write.t27",
         "const": "ADMIN_SCREEN_LINES",
-        # The path is not spelled here by choice: catalog_write.t27:98 declares it as
+        # The path is not spelled here by choice: catalog_write.t27 declares it as
         # ADMIN_SCREEN, and the binding below pins that declaration to the tree, so the
         # string this row reads is the one the contract is judged on.
         "source": "src/ui/screens/admin_screen.rs",
         "extract": ("line_count",),
         "relation": "equal",
-        "why": "catalog_write.t27:103-117 (re-pointed 2026-09-24) argues from the size of this file that no "
+        "why": "catalog_write.t27 argues from the size of this file (ADMIN_SCREEN_LINES, "
+               "then the citers counted under it, CONTRACTS_CITING_ADMIN_SCREEN) that no "
                "contract owns its write bounds; the argument is only as current as the "
                "measurement it opens with",
     },
@@ -914,7 +1009,7 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "spec": "specs/turbobaby/catalog_write.t27",
         "const": "ADMIN_SCREEN",
         "source": "src/**/*.rs",
-        # The other half of the sentence at :101-102, "The screen is the largest file".
+        # The other half of the sentence over ADMIN_SCREEN_LINES, "The screen is the largest file".
         # tree_path_nth answers with a repo-relative PATH, so the comparison is against
         # the contract's own declared path rather than against a number that any file
         # could supply.
@@ -1041,9 +1136,10 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "spec": "specs/turbobaby/customer_surface.t27",
         "const": "WITNESS_TESTS",
         "source": "tests/customer_surface_wiring.rs",
-        # Column-zero anchoring is the cheap stand-in for "attribute POSITION" that
-        # customer_surface.t27:394-401 spells out: the four extra hits the naive grep
-        # finds sit inside string literals and a comment, all indented.
+        # Column-zero anchoring is the cheap stand-in for "attribute POSITION" that the
+        # paragraph over customer_surface.t27's WITNESS_TESTS_BY_NAIVE_GREP spells out: the
+        # four extra hits the naive grep finds sit inside string literals and a comment,
+        # all indented.
         "extract": ("regex_count", r"^#\[test\]"),
         "relation": "equal",
         "why": "how many checks the only instrument actually runs",
@@ -1791,8 +1887,11 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "extract": ("regex", r'"known_tariff_example":\s*\{[^}]*"delivery_thb":\s*([0-9.]+)\s*[,}]'),
         "relation": "equal",
         "why": "the one delivery price in this repository; the contract pins its ladder's "
-               "first rung to it (delivery_terms.t27:1047), so a re-priced seed under a stale "
-               "contract leaves the repository stating two fees for one district",
+               "first rung to it (delivery_terms.t27, test "
+               "the_ladder_replaced_a_one_row_table_and_the_old_reading_is_kept: "
+               "LADDER_DISTRICT_FEE_THB[0] == DOCUMENTED_DELIVERY_FEE_THB), so a re-priced "
+               "seed under a stale contract leaves the repository stating two fees for one "
+               "district",
     },
     {
         "name": "delivery_terms.DOCUMENTED_COLLECTION_FEE_THB ~ seed known_tariff_example pickup",
@@ -2200,8 +2299,9 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "relation": "equal",
         "why": "band_index_for_days starts two_weeks at this day and 079 seeds the same "
                "min_days that GET /api/rental-terms serves; the owner's 14-vs-15 cut is "
-               "unmapped (rental_terms.t27:607-616), so re-cutting it in the contract must "
-               "meet the seeded table. A later migration re-cutting the band is not seen",
+               "unmapped (rental_terms.t27 TERM_BUCKET_BOUNDARY_IS_MAPPED = false), so "
+               "re-cutting it in the contract must meet the seeded table. A later migration "
+               "re-cutting the band is not seen",
     },
     {
         "name": "rental_terms.DAYS_PER_MONTH ~ 079 month band min_days",
@@ -2961,6 +3061,74 @@ BINDINGS: tuple[dict[str, object], ...] = (
                "from the game, and this copy of bike_catalog.CLASSES is where that has to "
                "be confronted -- the owner's own binding does not reach the copy",
     },
+    # --- ride handling: the contract's CHOSEN game-unit map against the shipped module ---
+    # Added 2026-09-24. ride_game.t27 declares the handling map (top_speed, steer_rate) and says
+    # the five numbers in it are CHOSEN and measured nowhere; assets/game/ride.js:104-110 says the
+    # canonical game-unit map IS that contract. The asset was already pinned before this group:
+    # tests/ride_asset_wiring.rs, test ride_handling_and_silhouettes_keep_separate_catalog_inputs,
+    # holds the literals 400, 1 and { scooter: 120, motorcycle: 90 } and both consuming lines under
+    # cargo test, so an edit to ride.js alone was already red. What nothing tied was the asset to
+    # the CONTRACT: an edit to ride_game.t27 alone, or an edit to ride.js made together with the
+    # matching edit to that test's literals, passed every gate. These rows close that. Each row
+    # reads one declaration line at column zero, so a second declaration of the same name, a key
+    # order swapped inside STEER_RATE_SU, or the constant moved into a block turns it RED rather
+    # than green. The witness pins the one expression in handlingFor that consumes the constants
+    # (ride.js:137-138), the same lines the Rust test pins: a value that still matches while the
+    # formula stops using it -- a multiply turned into an add, a lookup replaced by a literal --
+    # is the drift the value alone cannot see. Planted RED 2026-09-24 through --source-override
+    # on a scratch copy of ride.js with 400 -> 401, 1 -> 2, scooter 120 -> 121 and motorcycle
+    # 90 -> 91, one at a time, and with the ride.js:137 expression rewritten as
+    # INTERCEPT * PER_CC + cc (both speed witnesses).
+    {
+        "name": "ride_game.SPEED_INTERCEPT_GU ~ ride.js SPEED_INTERCEPT_GU",
+        "spec": "specs/turbobaby/ride_game.t27",
+        "const": "SPEED_INTERCEPT_GU",
+        "source": "assets/game/ride.js",
+        "extract": ("regex", r"^const SPEED_INTERCEPT_GU = (\d+);"),
+        "witness": r"const topSpeedGu = SPEED_INTERCEPT_GU \+ SPEED_PER_CC_GU \* cc;",
+        "relation": "equal",
+        "why": "the intercept is the CHOSEN compression of the fleet's 6.0x displacement span "
+               "to 2.19x in top speed; ride.js evaluates it before mounting a rider, so a "
+               "local re-tune -- even one the Rust asset test's literal is moved to match -- "
+               "moves every family's handling away from the contract's published game-unit "
+               "map",
+    },
+    {
+        "name": "ride_game.SPEED_PER_CC_GU ~ ride.js SPEED_PER_CC_GU",
+        "spec": "specs/turbobaby/ride_game.t27",
+        "const": "SPEED_PER_CC_GU",
+        "source": "assets/game/ride.js",
+        "extract": ("regex", r"^const SPEED_PER_CC_GU = (\d+);"),
+        "witness": r"const topSpeedGu = SPEED_INTERCEPT_GU \+ SPEED_PER_CC_GU \* cc;",
+        "relation": "equal",
+        "why": "the slope is what makes top speed strictly increasing in displacement (the "
+               "contract's invariant is SPEED_PER_CC_GU >= 1); at 0 every family rides "
+               "identically and the whole displacement span is decorative (issue #13)",
+    },
+    {
+        "name": "ride_game.STEER_RATE_SCOOTER_SU ~ ride.js STEER_RATE_SU.scooter",
+        "spec": "specs/turbobaby/ride_game.t27",
+        "const": "STEER_RATE_SCOOTER_SU",
+        "source": "assets/game/ride.js",
+        "extract": ("regex", r"^const STEER_RATE_SU = \{ scooter: (\d+), motorcycle: \d+ \};"),
+        "witness": r"const steerRateSu = STEER_RATE_SU\[klass\];",
+        "relation": "equal",
+        "why": "the scooter half of the closed two-class steering lookup; the contract grounds "
+               "only its DIRECTION (scooters steer quicker, KB_faq's beginner advice), so a "
+               "value moved in ride.js alone is a new design choice made outside the contract",
+    },
+    {
+        "name": "ride_game.STEER_RATE_MOTORCYCLE_SU ~ ride.js STEER_RATE_SU.motorcycle",
+        "spec": "specs/turbobaby/ride_game.t27",
+        "const": "STEER_RATE_MOTORCYCLE_SU",
+        "source": "assets/game/ride.js",
+        "extract": ("regex", r"^const STEER_RATE_SU = \{ scooter: \d+, motorcycle: (\d+) \};"),
+        "witness": r"const steerRateSu = STEER_RATE_SU\[klass\];",
+        "relation": "equal",
+        "why": "the motorcycle half of the same lookup; the chosen 4:3 ratio against the "
+               "scooter rate is the only thing that separates the classes in the game, and "
+               "the contract's steer_rate_separates_the_two_classes test reads these numbers",
+    },
     # --- tree group: schema provenance, runtime config, legacy retirement, observability, publication ---
     # Added 2026-09-22. Each row was measured both sides by hand at a33e500 and went RED for at
     # least one drift its `why` names: a file row through --source-override on a planted copy, a
@@ -3363,7 +3531,11 @@ ONE_GROUP_EXTRACTORS = (
 # Then the owner's Phuket delivery zones (migration 087) added the sixteen delivery_terms
 # rows of the delivery zones group, each planted RED once by hand: 216 rows, floor 216.
 # Then T27 C3 bound commerce.CLIENT_DEPOSIT_REFUSALS: 217 rows, floor 217.
-MIN_BINDINGS = 217
+# Then the spec-hygiene change added ten over the same 41 contracts: the four
+# ride-handling constants against assets/game/ride.js, schema-provenance's three census
+# figures, nmax-155's rate in pricing-honesty and in rental-terms, and order-money's seed
+# line count. 227 rows, floor 227.
+MIN_BINDINGS = 227
 
 
 # ---------------------------------------------------------------------------------

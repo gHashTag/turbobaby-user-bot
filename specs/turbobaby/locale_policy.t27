@@ -186,10 +186,21 @@ pub const STORAGE_CONSTRAINS_THE_PUBLISHED_SET : bool = false;
 ; no CHECK and no constraint on a language column, so the search still finds none. The two
 ; src/db/mod.rs citations above moved four lines when that file joined MIGRATIONS (892-915 and 895
 ; before). The 2026-09-21 count is kept under its own name.
-pub const MIGRATION_COUNT_OWNER_ID : str = "turbobaby/pricing-honesty";
-pub const MIGRATION_COUNT_OWNER_DECL : str = "MIGRATION_FILES_SEARCHED";
+; CORRECTED 2026-09-24, the same day: the owner named here was the wrong one. turbobaby/pricing-honesty called
+; the count its own, and so did turbobaby/schema-provenance, whose subject is the migration tree and
+; which declares the census as SQL_FILES_RECURSIVE 88 (with SQL_FILES_TOP_LEVEL 87 and WIP_SQL_FILES
+; 1) and lists this file among its sibling copies. The two owners were resolved that day in favour
+; of schema-provenance, and pricing-honesty now carries its figure as a copy too. So this copy names
+; the census owner directly, by ID and declaration, instead of a file that is itself a copy. This
+; file's own search is unchanged by the re-pointing; the edge as first written is kept below under
+; _BEFORE_ names.
+pub const MIGRATION_COUNT_OWNER_ID : str = "turbobaby/schema-provenance";
+pub const MIGRATION_COUNT_OWNER_DECL : str = "SQL_FILES_RECURSIVE";
+pub const MIGRATION_COUNT_OWNER_ID_BEFORE_2026_09_24 : str = "turbobaby/pricing-honesty";
+pub const MIGRATION_COUNT_OWNER_DECL_BEFORE_2026_09_24 : str = "MIGRATION_FILES_SEARCHED";
 pub const MIGRATION_COUNT_IS_A_COPY : bool = true;
 pub const MIGRATION_COUNT_REMEASURED_AT : str = "2026-09-24";
+pub const MIGRATION_COUNT_OWNER_REPOINTED_AT : str = "2026-09-24";
 pub const MIGRATION_FILES_SEARCHED_BEFORE_087 : u8 = 87;
 
 ; --- The enumerated variant set, and the gap -------------------------------------------------
@@ -396,16 +407,20 @@ test the_shared_value_is_a_coincidence_of_two_measurements_and_not_an_inheritanc
 }
 
 ; The count above is not this file's to own. This test fails the day the copy stops naming its
-; owner, or the day the owner edge stops agreeing with the reuse edge already declared.
+; owner. Since 2026-09-24 the owner is the schema census and not the pricing contract, so the edge
+; no longer coincides with the reuse edge to pricing-honesty, and the test says that too.
 test the_migration_count_is_carried_as_a_copy_and_its_owner_is_named {
   assert MIGRATION_FILES_SEARCHED == 88;
   assert MIGRATION_FILES_SEARCHED == MIGRATION_FILES_SEARCHED_BEFORE_087 + 1;
   assert MIGRATION_COUNT_IS_A_COPY == true;
-  assert MIGRATION_COUNT_OWNER_ID == "turbobaby/pricing-honesty";
-  assert MIGRATION_COUNT_OWNER_DECL == "MIGRATION_FILES_SEARCHED";
-  assert MIGRATION_COUNT_OWNER_ID == REUSES_PRICING_HONESTY_ID;
+  assert MIGRATION_COUNT_OWNER_ID == "turbobaby/schema-provenance";
+  assert MIGRATION_COUNT_OWNER_DECL == "SQL_FILES_RECURSIVE";
+  assert MIGRATION_COUNT_OWNER_ID != REUSES_PRICING_HONESTY_ID;
+  assert MIGRATION_COUNT_OWNER_ID_BEFORE_2026_09_24 == REUSES_PRICING_HONESTY_ID;
+  assert MIGRATION_COUNT_OWNER_DECL_BEFORE_2026_09_24 == "MIGRATION_FILES_SEARCHED";
   assert MIGRATION_COUNT_OWNER_ID != ID;
   assert MIGRATION_COUNT_REMEASURED_AT == "2026-09-24";
+  assert MIGRATION_COUNT_OWNER_REPOINTED_AT == "2026-09-24";
 }
 
 ; The absence, re-measured rather than inherited. A false absence is the one claim a reader

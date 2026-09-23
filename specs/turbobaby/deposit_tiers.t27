@@ -204,7 +204,10 @@ pub const TIER_FAMILY_COUNT_SUM : u8 = 13;
 ; catalog owns DISPLACEMENTS_CC and turbobaby/ride-game declares DISPLACEMENTS_CC under the same
 ; name, and both are now pub const DISPLACEMENTS_CC : [7]u16 with identical elements
 ; -- and the sentence is kept in the past tense rather than deleted, because
-; the reason this file carries no copy is the drift being POSSIBLE, not the drift being present. A file whose whole argument is that displacement and class are NOT its
+; the reason this file carries no copy is the drift being POSSIBLE, not the drift being present.
+; CORRECTED 2026-09-24: turbobaby/ride-game no longer declares DISPLACEMENTS_CC at all. It names
+; turbobaby/bike-catalog as the owner of the displacement domain and takes a displacement as a bare
+; argument, so the second declaration measured above is gone and only the owner's remains. A file whose whole argument is that displacement and class are NOT its
 ; axis has no business carrying one more copy of either, so both are gone. The class of a family
 ; is read from the seed's class column (families[13].class == "scooter" for xadv-750) and cited
 ; in prose where it is needed; the displacement of a family is carried by the family key itself
@@ -220,7 +223,18 @@ pub const DEPOSIT_10000_OCCURRENCES : u8 = 0;
 ; deposits are all drawn from the same six tiers, which is the evidence that the set is closed
 ; rather than merely enumerated from the 14 in-stock rows. They must never read as available,
 ; and deposit_thb_of_family() deliberately does not answer for them.
-pub const PRICE_LIST_ONLY_UNITS : u8 = 0;
+; RESOLVED 2026-09-24: HOW MANY UNITS these families have is not this file's fact. A unit count is
+; fleet availability, and turbobaby/availability (REUSES_AVAILABILITY_ID above) declares this one as
+; PRICE_LIST_ONLY_UNITS, 0, beside PRICE_LIST_ONLY_FAMILIES. This file declared the same zero under
+; the same name until this edit, although its own header says it validates only the lengths and
+; totals of its own deposit tables; a review of 2026-09-23 recorded the pair as a restated fact
+; with no gate reading both sides. The copy is dropped, not pinned. What it stood for here -- these
+; rows never read as available -- is carried by deposit_thb_of_family refusing them
+; (DEPOSIT_NOT_IN_FLEET), and the count itself is consumed from the owner by name.
+pub const PRICE_LIST_ONLY_UNIT_COUNT_IS_DECLARED_HERE : bool = false;
+pub const AVAILABILITY_UNIT_COUNT_DECLARATION : str = "PRICE_LIST_ONLY_UNITS";
+pub const RESTATEMENT_DROPPED_ON_RESOLUTION : [1]str = ["PRICE_LIST_ONLY_UNITS"];
+pub const RESTATEMENT_RESOLVED_AT : str = "2026-09-24";
 pub const PRICE_LIST_ONLY_KEYS : [7]str = [
   "pcx-150", "adv-150", "pcx-160", "adv-160", "rebel-300", "xsr-900", "r7",
 ];
@@ -813,7 +827,23 @@ test a_tariff_only_key_and_an_unknown_key_are_not_answered_here {
     assert deposit_thb_of_family("r7") == DEPOSIT_NOT_IN_FLEET;
     assert deposit_thb_of_family("") == DEPOSIT_NOT_IN_FLEET;
     assert DEPOSIT_NOT_IN_FLEET < 0;
-    assert PRICE_LIST_ONLY_UNITS == 0;
+    assert PRICE_LIST_ONLY_UNIT_COUNT_IS_DECLARED_HERE == false;
+}
+
+; The unit count of the price-list-only families belongs to turbobaby/availability. The edge is the
+; owner's ID plus the owner's declaration name, the same shape as MARKET_FX_DECLARATION, and the
+; dropped name is listed so a grep for it lands on the resolution rather than on nothing.
+test the_price_list_only_unit_count_is_consumed_from_availability {
+    assert REUSES_AVAILABILITY_ID == "turbobaby/availability";
+    assert REUSES_AVAILABILITY_ID != ID;
+    assert AVAILABILITY_UNIT_COUNT_DECLARATION == "PRICE_LIST_ONLY_UNITS";
+    assert PRICE_LIST_ONLY_UNIT_COUNT_IS_DECLARED_HERE == false;
+    assert RESTATEMENT_DROPPED_ON_RESOLUTION.len == 1;
+    assert RESTATEMENT_DROPPED_ON_RESOLUTION[0] == AVAILABILITY_UNIT_COUNT_DECLARATION;
+    assert RESTATEMENT_RESOLVED_AT == "2026-09-24";
+    assert RESTATEMENT_RESOLVED_AT != MEASURED_AT;
+    assert deposit_thb_of_family("pcx-150") == DEPOSIT_NOT_IN_FLEET;
+    assert deposit_thb_of_family("r7") == DEPOSIT_NOT_IN_FLEET;
 }
 
 ; Row by row, key beside amount, the way the in-stock table is checked above. Membership in the

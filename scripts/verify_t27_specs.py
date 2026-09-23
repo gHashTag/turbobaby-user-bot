@@ -114,15 +114,16 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         "module": "turbobaby-delivery-terms",
         "id": "turbobaby/delivery-terms",
         # Raised 2026-09-24 from 253/46 to the measured count when the owner's Phuket zone
-        # table landed in the contract (88 declarations, 10 checks).
-        "min_declarations": 341,
-        "min_checks": 56,
+        # table landed in the contract (88 declarations, 10 checks), then to the measured
+        # count again when the spec-hygiene re-read landed on top of it.
+        "min_declarations": 354,
+        "min_checks": 57,
     },
     "specs/turbobaby/deposit_tiers.t27": {
         "module": "deposit-tiers",
         "id": "turbobaby/deposit-tiers",
-        "min_declarations": 131,
-        "min_checks": 51,
+        "min_declarations": 137,
+        "min_checks": 52,
     },
     "specs/turbobaby/events_booking.t27": {
         "module": "turbobaby-events-booking",
@@ -157,7 +158,7 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/locale_policy.t27": {
         "module": "turbobaby-locale-policy",
         "id": "turbobaby/locale-policy",
-        "min_declarations": 122,
+        "min_declarations": 125,
         "min_checks": 34,
     },
     "specs/turbobaby/loyalty_ledger.t27": {
@@ -187,8 +188,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/order_money.t27": {
         "module": "turbobaby-order-money",
         "id": "turbobaby/order-money",
-        "min_declarations": 108,
-        "min_checks": 35,
+        "min_declarations": 114,
+        "min_checks": 37,
     },
     "specs/turbobaby/order_presentation.t27": {
         "module": "turbobaby-order-presentation",
@@ -211,7 +212,7 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/pricing_honesty.t27": {
         "module": "pricing-honesty",
         "id": "turbobaby/pricing-honesty",
-        "min_declarations": 108,
+        "min_declarations": 115,
         "min_checks": 40,
     },
     "specs/turbobaby/promo_broadcast.t27": {
@@ -223,8 +224,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/publication.t27": {
         "module": "turbobaby-publish-proof",
         "id": "turbobaby/publication",
-        "min_declarations": 157,
-        "min_checks": 38,
+        "min_declarations": 166,
+        "min_checks": 39,
     },
     "specs/turbobaby/rate_limit.t27": {
         "module": "turbobaby-rate-limit",
@@ -241,8 +242,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/rental_terms.t27": {
         "module": "rental-terms",
         "id": "turbobaby/rental-terms",
-        "min_declarations": 170,
-        "min_checks": 58,
+        "min_declarations": 190,
+        "min_checks": 62,
     },
     "specs/turbobaby/request_identity.t27": {
         "module": "turbobaby-request-identity",
@@ -253,7 +254,7 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/ride_game.t27": {
         "module": "ride-game",
         "id": "turbobaby/ride-game",
-        "min_declarations": 210,
+        "min_declarations": 214,
         "min_checks": 65,
     },
     "specs/turbobaby/ride_runtime.t27": {
@@ -271,8 +272,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/schema_provenance.t27": {
         "module": "turbobaby-schema-provenance",
         "id": "turbobaby/schema-provenance",
-        "min_declarations": 210,
-        "min_checks": 50,
+        "min_declarations": 217,
+        "min_checks": 51,
     },
     "specs/turbobaby/star_award.t27": {
         "module": "turbobaby-star-award",

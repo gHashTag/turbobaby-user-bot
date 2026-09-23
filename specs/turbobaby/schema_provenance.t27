@@ -242,6 +242,17 @@ pub const SQL_FILE_CENSUS_SIBLING_COPY_OWNERS : [2]str = [
   "turbobaby/pricing-honesty", "turbobaby/locale-policy",
 ];
 pub const SQL_FILE_CENSUS_SIBLING_COPY_DECLARATION : str = "MIGRATION_FILES_SEARCHED";
+; INBOUND CONFIRMED 2026-09-24. Until that day this file called itself the census owner and the
+; sibling it listed first, turbobaby/pricing-honesty, called ITSELF the owner of the same count and
+; never named this file; turbobaby/locale-policy followed pricing-honesty. A review of 2026-09-23
+; recorded the two self-declared owners. Resolved by subject in this file's favour: pricing-honesty
+; now declares MIGRATION_COUNT_IS_OWNED_HERE false and names this ID and SQL_FILES_RECURSIVE,
+; SQL_FILES_TOP_LEVEL and WIP_SQL_FILES as the owner's declarations, and locale-policy's copy names
+; this ID and SQL_FILES_RECURSIVE. Gate 3 binds the three figures here to the tree, where until then
+; only the two copies were bound -- the self-declared owner was the one unguarded declaration.
+pub const SQL_FILE_CENSUS_OWNERSHIP_IS_CONTESTED : bool = false;
+pub const SQL_FILE_CENSUS_OWNERSHIP_WAS_CONTESTED_BEFORE_2026_09_24 : bool = true;
+pub const SQL_FILE_CENSUS_SIBLINGS_NAMING_THIS_OWNER : u8 = 2;
 pub const WIP_COLLISION_TRIPWIRE : str = "migrations/wip/077_quest_progress.sql claims a number migrations/077_bikes.sql owns. Three non-recursive read_dir walks of migrations/ keep the subdirectory invisible, so nothing collides today and nothing reports it either. The moment the file is moved up it becomes a duplicate prefix and src/db/mod.rs:1388 fails. Renumber the promoted file to the next free slot above the highest migrations/*.sql on disk at that time; never renumber the bike migrations (D1).";
 
 pub fn collision_is_live(candidate: u8, in_wip_subdirectory: bool) bool {
@@ -737,6 +748,9 @@ test the_recursive_count_names_its_owner_and_its_two_sibling_copies {
   assert SQL_FILE_CENSUS_SIBLING_COPY_OWNERS[0] != ID;
   assert SQL_FILE_CENSUS_SIBLING_COPY_OWNERS[1] != ID;
   assert SQL_FILE_CENSUS_SIBLING_COPY_DECLARATION == "MIGRATION_FILES_SEARCHED";
+  assert SQL_FILE_CENSUS_OWNERSHIP_IS_CONTESTED == false;
+  assert SQL_FILE_CENSUS_OWNERSHIP_WAS_CONTESTED_BEFORE_2026_09_24 == true;
+  assert SQL_FILE_CENSUS_SIBLINGS_NAMING_THIS_OWNER == SQL_FILE_CENSUS_SIBLING_COPIES;
 }
 
 test the_wip_file_is_read_by_a_recursive_walk_and_its_number_is_not {

@@ -13,6 +13,13 @@ decisions rather than omissions (see DECISIONS.md D9, D12, D14).
 
     python3 scripts/verify_fleet_seed.py           # quiet unless something is wrong
     python3 scripts/verify_fleet_seed.py -v        # print what passed
+    python3 scripts/verify_fleet_seed.py --seed /tmp/planted.json   # negative control
+
+--seed reads another copy of the fleet seed in place of data/fleet_seed.json; the SQL
+seed and the market contract are always the tracked ones. It exists so that a planted
+copy can show this gate going red (tests/fleet_seed_negative_control.rs, added
+2026-09-24: until then nothing had ever seen it fail). A run with --seed says so in
+its report, so its OK can never be mistaken for a verdict on the tracked file.
 
 Exit 0 = the two files agree. Exit 1 = they do not, with every mismatch listed.
 Exit 2 = a file is missing or unparseable, which is a different failure and is
@@ -180,19 +187,35 @@ def sql_number(raw: str) -> float | None:
     return None if raw == "NULL" else float(raw)
 
 
+def shown(path: Path) -> str:
+    """Repo-relative when the path is inside the repository, as given otherwise."""
+    try:
+        return path.resolve().relative_to(REPO).as_posix()
+    except ValueError:
+        return str(path)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("-v", "--verbose", action="store_true", help="print what passed")
+    ap.add_argument(
+        "--seed",
+        type=Path,
+        default=SEED_JSON,
+        metavar="PATH",
+        help="read this fleet seed JSON instead of data/fleet_seed.json (negative control)",
+    )
     args = ap.parse_args()
+    seed_json: Path = args.seed
 
-    for path in (SEED_JSON, SEED_SQL):
+    for path in (seed_json, SEED_SQL):
         if not path.exists():
-            fail(f"{path.relative_to(REPO)} does not exist")
+            fail(f"{shown(path)} does not exist")
 
     try:
-        seed = json.loads(SEED_JSON.read_text())
+        seed = json.loads(seed_json.read_text())
     except json.JSONDecodeError as exc:
-        fail(f"{SEED_JSON.relative_to(REPO)} is not valid JSON: {exc}")
+        fail(f"{shown(seed_json)} is not valid JSON: {exc}")
 
     sql = SEED_SQL.read_text()
     if "-- Families" not in sql or "-- Units" not in sql:
@@ -301,7 +324,7 @@ def main() -> int:
     if problems:
         print(
             f"verify_fleet_seed: {len(problems)} mismatch(es) between "
-            f"data/fleet_seed.json, migrations/082_bikes_seed.sql "
+            f"{shown(seed_json)}, migrations/082_bikes_seed.sql "
             f"and the market contract:",
             file=sys.stderr,
         )
@@ -312,13 +335,18 @@ def main() -> int:
     if args.verbose:
         offered = sum(1 for r in sql_families if r["offered"] == "TRUE")
         market = seed.get("market", {})
+        whose = (
+            ""
+            if seed_json.resolve() == SEED_JSON.resolve()
+            else f" (seed read from {shown(seed_json)}, NOT the tracked data/fleet_seed.json)"
+        )
         print(
             f"verify_fleet_seed: OK — {len(sql_families)} families "
             f"({offered} offered), {len(sql_units)} units "
             f"({rented} rented, {available} available); "
             f"{len(price_list_only)} price-list-only families correctly absent; "
             f"market profile {market.get('country_code')}/{market.get('currency_code')} "
-            "matches specs/turbobaby/market_profile.t27"
+            f"matches specs/turbobaby/market_profile.t27{whose}"
         )
     return 0
 
