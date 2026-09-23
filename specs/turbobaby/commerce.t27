@@ -42,6 +42,10 @@ pub const DEAL_INVALID : u8 = 0;
 pub const DEAL_RENTAL : u8 = 1;
 pub const DEAL_SALE : u8 = 2;
 pub const DEAL_NAMES : [2]str = ["bike_rental", "bike_sale"];
+; Added 2026-09-22: the variants src/db/orders.rs declares in `pub enum BikeDeal`, measured 2
+; (BikeRental, BikeSale). serde tags each variant on its own, so this counts the deal kinds that
+; can reach the wire whether or not a test names them; DEAL_NAMES spells them and is held to it.
+pub const DEAL_KIND_COUNT : u8 = 2;
 
 ; Cart lifecycle. Converted and abandoned are terminal; a failed locked checkout may reopen.
 pub const CART_STATE_INVALID : u8 = 0;
@@ -243,6 +247,8 @@ test commerce_deal_discriminant_accepts_exactly_rental_or_sale {
     assert commerce_deal_is_known(3) == false;
     assert DEAL_NAMES[0] == "bike_rental";
     assert DEAL_NAMES[1] == "bike_sale";
+    assert DEAL_KIND_COUNT == 2;
+    assert DEAL_NAMES.len == DEAL_KIND_COUNT;
 }
 
 test commerce_deal_shape_is_exclusive {

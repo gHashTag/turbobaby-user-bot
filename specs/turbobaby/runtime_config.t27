@@ -228,6 +228,12 @@ pub const WEB_APP_URL_GUARD_IS_ALLOWLIST : bool = false;
 pub const WEB_APP_URL_DENYLIST_ENTRIES : u8 = 2;
 pub const BOT_USERNAME_CONTENT_CHECKS : u8 = 0;
 pub const BOT_USERNAME_BLANK_CHECK_EXISTS : bool = true;
+; Re-measured 2026-09-22: still false, and its scope is now worth stating. From that date
+; scripts/verify_t27_against_source.py holds WEB_APP_URL_DENYLIST_ENTRIES to the count of
+; contains() arms at src/config.rs:119-120, and tests/t27_gates_run.rs runs that script under
+; cargo test, so the SIZE of the denylist is pinned. What the guard DOES is not: the test module
+; of src/config.rs (:316-556) never resolves WEB_APP_URL, and no file under tests/ calls
+; Config::from_env, so a guard that stopped substituting the canonical URL would still pass.
 pub const GUARD_IS_PINNED_BY_A_TEST : bool = false;
 
 pub fn wrong_target_is_caught(value_is_blank: bool, value_matches_denylist: bool) bool {

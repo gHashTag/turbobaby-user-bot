@@ -17,7 +17,9 @@
 ; matters: this corpus is wired to a COMPILER GATE and not to a consumer, and no shipped surface
 ; reads FAMILY_DEPOSIT_THB. A reader who took the old sentence at face value would have
 ; concluded that no .t27 is wired to anything, which stopped being true without this file
-; noticing. The catalog
+; noticing. (Re-measured 2026-09-22, and stale again within the day: the same grep returns 19
+; files, three of which name THIS file and all three of which are gates, two of them reading a
+; deposit. WIRING_REMEASURED_NOTE below has the list; still no shipped surface.) The catalog
 ; screen renders deposit_thb as it arrives from the API (the field at
 ; src/ui/screens/catalog_screen.rs:124 rendered through money_thb at :834, and the field at
 ; src/ui/components/bike_card.rs:115 rendered through thb_or_dash at :203 (:107 and :195 before
@@ -43,6 +45,16 @@
 ; no second copy to gate and says so in its own words at :116, "declares no second copy of that
 ; algebra". An undeclared third copy
 ; of a money column is exactly the defect D15 names, so it is declared here.
+; Re-measured 2026-09-22: still ungated as a TABLE. scripts/verify_t27_against_source.py now binds
+; TIER_2_THB and TIER_3_THB to the xmax-300 and xmax-300-new rows of migrations/082_bikes_seed.sql,
+; and the executed asserts tie deposit_thb_of_family on those two keys to FAMILY_DEPOSIT_THB[6] and
+; [7], so two of its fourteen entries are held to their own seed rows through that chain. The COUNT
+; of absent entries is held to the seed as well: the same script binds
+; FAMILIES_WITHOUT_PUBLISHED_DEPOSIT to the NULL-deposit family rows of that migration, and an
+; executed assert recounts it from FAMILY_DEPOSIT_THB through families_on_tier(TIER_NONE) -- though
+; no gate ties entry [0] to click-125's own row. No other entry is compared with its own row: [2],
+; [4] and [8] carry the amounts of the two bound rungs, and equal amounts are not the same rows. The
+; table as a whole is not compared.
 ; --
 ; WHY (measured 2026-09-12): the deposit is the sixth heaviest topic in the dialog history the
 ; tariff was derived from -- 375 client messages -- and issue #18 asked for
@@ -98,10 +110,21 @@ pub const CURRENCY : str = "THB";
 ; stopped being true and the sentence went on asserting it, which is the one failure mode a
 ; reader never checks. The live numbers are kept here so the next drift shows up as a failing
 ; assert rather than as confident prose. Measured 2026-09-21.
-pub const WIRING_GREP_HITS : u8 = 6;
-pub const WIRING_GREP_HITS_NAMING_THIS_FILE : u8 = 1;
+; CORRECTED 2026-09-22: that promise could not be kept, and the numbers below are re-measured.
+; Each assert on them compares a constant with a literal, so a drift in the TREE never fails one;
+; only an edit to this file can. The grep went from 6 files at 32ebe5c to 8 at f4d84a1 and 19 at
+; 2c21df1, all on 2026-09-21 and with every assert here green -- and 2c21df1 edited this very file.
+; These are a DATED READING: re-measure and re-date them, do not trust them as a live check. They
+; are also not bound in scripts/verify_t27_against_source.py, on purpose: the scope is six globs
+; and a tree binding takes one, and a census of the whole tree bound as a live check would go red
+; on every new file that cites a spec. Was 6 and 1 (2026-09-21), now 19 and 3; the old reading is
+; kept word for word in WIRING_NOTE and the new one is WIRING_REMEASURED_NOTE.
+pub const WIRING_GREP_HITS : u8 = 19;
+pub const WIRING_GREP_HITS_NAMING_THIS_FILE : u8 = 3;
 pub const WIRING_CONSUMERS_OF_THIS_FILE : u8 = 0;
+pub const WIRING_REMEASURED_AT : str = "2026-09-22";
 pub const WIRING_NOTE : str = "grep for .t27 and specs/turbobaby across *.rs, *.toml, *.py, *.sh, .github/ and Makefile returns six files on 2026-09-21: scripts/verify_fleet_seed.py, scripts/verify_t27_specs.py, src/trios/market.rs, src/trios/pricing.rs, tests/market_clock_wiring.rs, .github/workflows/ci.yml. One of the six names this file -- scripts/verify_t27_specs.py:119-121 -- and it pins the module name and the ID only. Zero of the six read a deposit. The contract-versus-wiring gap is therefore real and narrower than it was stated: this corpus is wired to a compiler gate, not to a consumer.";
+pub const WIRING_REMEASURED_NOTE : str = "re-measured 2026-09-22 at a33e500 with the commerce source bindings applied: was 6 files and 1 naming this file on 2026-09-21. The same grep over the same six globs returns 19 files: .github/workflows/ci.yml, scripts/execute_t27_assertions.py, scripts/verify_fleet_seed.py, scripts/verify_t27_against_source.py, scripts/verify_t27_specs.py, src/api/cache.rs, src/notification_queue.rs, src/promo.rs, src/trios/market.rs, src/trios/pricing.rs, src/trios/validation.rs, src/ui/api/types.rs, tests/api_document_pairing.rs, tests/events_money_decision_wiring.rs, tests/market_clock_wiring.rs, tests/notification_drain_wiring.rs, tests/promo_copy_wiring.rs, tests/t27_gates_run.rs, tests/wire_absence_wiring.rs. Three name this file and all three are gates. scripts/verify_t27_specs.py pins its module name, its ID, a declaration floor and a check floor -- the floors were already there at 32ebe5c, so the old note's module name and the ID only was narrower than that file. scripts/execute_t27_assertions.py executes every assert here, FAMILY_DEPOSIT_THB included, and lists three of its functions as measured front-end disagreements. scripts/verify_t27_against_source.py binds TIER_2_THB, TIER_3_THB, NOT_OFFERED_KEYS and FAMILIES_WITHOUT_PUBLISHED_DEPOSIT to migrations/082_bikes_seed.sql. So two of the three READ a deposit out of this file, both are gates and neither is a consumer: WIRING_CONSUMERS_OF_THIS_FILE counts shipped consumers and is still 0.";
 
 ; --- The six tiers ----------------------------------------------------------------------
 ; The closed set of tier values measured in the published seed. The sources publish an AMOUNT
@@ -834,14 +857,18 @@ test zero_is_not_a_tier_and_absent_is_not_zero {
 ; The header's wiring claim, as literals. It is asserted rather than described because the
 ; sentence it replaces was false for an unknown length of time and nothing could have caught
 ; it: a prose absence has no failing state. These three numbers do.
+; Corrected 2026-09-22: they do not. Each assert below compares a constant with a literal, so
+; only an edit to this file can fail one, and the tree moved from 6 to 19 under them in a day.
+; They pin the dated reading in the constants, re-taken on 2026-09-22 (WIRING_REMEASURED_NOTE).
 test the_wiring_absence_is_a_measured_number_and_not_a_flat_nothing {
-    // Six files outside specs/ name a .t27 or specs/turbobaby. The old claim was zero.
-    assert WIRING_GREP_HITS == 6;
-    // Exactly one of them names this file, and it is the corpus gate.
-    assert WIRING_GREP_HITS_NAMING_THIS_FILE == 1;
+    // Nineteen files outside specs/ name a .t27 or specs/turbobaby, re-measured 2026-09-22.
+    // Six on 2026-09-21. The old claim was zero.
+    assert WIRING_GREP_HITS == 19;
+    // Three of them name this file and all three are gates. One on 2026-09-21.
+    assert WIRING_GREP_HITS_NAMING_THIS_FILE == 3;
     assert WIRING_GREP_HITS_NAMING_THIS_FILE < WIRING_GREP_HITS;
     // The claim that actually mattered, and the only one that survived re-measurement:
-    // nothing READS a deposit out of this file.
+    // no shipped consumer READS a deposit out of this file. Two gates do, re-measured 2026-09-22.
     assert WIRING_CONSUMERS_OF_THIS_FILE == 0;
 }
 

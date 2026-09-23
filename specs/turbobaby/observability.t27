@@ -51,6 +51,10 @@
 ; the first pass. It carries 12 recording-rule expressions, no Rust test reads it, and it names no
 ; dead metric -- every series it touches is an axum_ built-in or another wwb: rule -- so the
 ; dead-name count below does not move and only the coverage fraction does.
+; (Corrected 2026-09-22: the binary emits 41 names, not 29 -- the note above
+; EMITTED_METRIC_NAME_COUNT says where the 29 came from. Against 41 the guarded dashboard still
+; names 0 that do not exist, and the dead names are still the same five: none of the 41 is a
+; db_pool_ name.)
 ; --
 ; WHERE THE BRIEF IS REFUTED, three times, all measured 2026-09-21.
 ; FIRST, and it is the brief's headline number. The brief calls
@@ -110,6 +114,7 @@
 ; below. It fixes no log line format, for the reason above. It transcribes no counter: the 29
 ; emitted names are a COUNT here, the naming RULE is the subject, and the only names written out
 ; are the five that are referenced and never emitted -- which is the measurement, not the table.
+; (41 emitted names since the correction of 2026-09-22; still a count, still not transcribed.)
 ; It declares no HTTP status code, no gate, no identity rule. The digest strings in
 ; src/trios/health.rs are shipped Russian sentences: they are cited by path and line and never
 ; quoted, here or in a test. It carries nothing from D14 -- no renter, handle, phone, key code,
@@ -253,7 +258,18 @@ pub const LOG_RENDERING_NOTE : str = "src/main.rs:394-405 installs a JSON subscr
 ; A name exists in exactly one place: a string literal inside counter!(...) or gauge!(...). Nothing
 ; in src/ composes a metric name at runtime, so the set of emitted names is decidable by reading
 ; the source, which is what both guards below do.
-pub const EMITTED_METRIC_NAME_COUNT : u16 = 29;
+; CORRECTED 2026-09-22: 41, not 29, and 29 was never right. src/metrics.rs holds 41 counter!/gauge!
+; name literals -- 41 distinct names, every one above its #[cfg(test)] at :330 -- and held the same
+; 41 when this file was first committed (d1877db); no metric macro is invoked anywhere else under
+; src/. 29 is the dashboard name guard's view: declared_metrics in src/main.rs searches for the
+; markers `counter!("` and `gauge!("`, so the twelve literals opened as `counter!(` with the name
+; on the next line -- src/metrics.rs:21, :35, :127, :141, :150, :159, :168, :233, :242, :256, :295
+; and :303 -- are invisible to it, and this count copied what it sees. "What both guards below do"
+; is therefore too strong for the name guard: it reads 29 of the 41 names. None of the twelve is
+; referenced by any of the four PromQL artifacts today, so no finding below moves; a panel that
+; used one would be refused by that guard as undeclared. The count is now held to src/metrics.rs
+; by scripts/verify_t27_against_source.py.
+pub const EMITTED_METRIC_NAME_COUNT : u16 = 41;
 pub const METRIC_NAME_IS_A_STRING_LITERAL : bool = true;
 pub const METRIC_NAME_IS_COMPOSED_AT_RUNTIME : bool = false;
 ; src/metrics.rs:508, every_metric_helper_is_wired: a declared helper with zero call sites fails
@@ -581,7 +597,8 @@ test a_metric_name_exists_only_where_a_literal_and_a_call_site_do {
   assert METRIC_NAME_IS_COMPOSED_AT_RUNTIME == false;
   assert DECLARED_TO_WIRED_IS_GUARDED == true;
   assert UNWIRED_HELPER_EXEMPTIONS == 0;
-  assert EMITTED_METRIC_NAME_COUNT == 29;
+  // 29 until 2026-09-22: the name guard's view, blind to the twelve multi-line literals.
+  assert EMITTED_METRIC_NAME_COUNT == 41;
 }
 
 test a_reference_resolves_only_when_name_key_and_value_all_exist {

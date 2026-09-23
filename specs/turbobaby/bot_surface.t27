@@ -642,6 +642,24 @@ pub const SPECS_NAMING_A_SLASH_COMMAND_2026_09_21 : u8 = 5;
 pub const SPECS_MATCHING_PARSE_MODE_2026_09_21 : u8 = 0;
 pub const SPECS_MATCHING_CALLBACK_DATA_2026_09_21 : u8 = 0;
 pub const SPECS_MATCHING_BOTCOMMANDS_2026_09_21 : u8 = 0;
+; Re-measured 2026-09-22 and deliberately NOT bound: a census of the corpus moves with every new
+; contract. The 43 and 42 above are KEPT as the 2026-09-21 reading and the denominator of the
+; 2026_09_21 counts. "The finished 43-file corpus" was not finished: 14b01ac added
+; order_presentation.t27 and person_naming.t27 later on 2026-09-21, and specs/ holds 45 tracked
+; .t27 files. Re-run at a33e500 over the 44 other files, the same five greps: telegram reaches 23,
+; one more -- turbobaby/person-naming, which names Telegram as the platform whose updates deliver a
+; customer's name, and a telegram id and handle among what it refuses to carry (D14's privacy
+; fields). That is the platform and a privacy field, not a command surface, and parse_mode,
+; callback_data and BotCommands are 0 in it as in every other file here. A slash-prefixed command
+; name still reaches the same five.
+pub const CORPUS_FILE_COUNT_REMEASURED : u8 = 45;
+pub const CORPUS_FILES_OTHER_THAN_THIS_ONE_REMEASURED : u8 = 44;
+pub const CORPUS_FILE_COUNT_REMEASURED_AT : str = "2026-09-22";
+pub const SPECS_MATCHING_TELEGRAM_2026_09_22 : u8 = 23;
+pub const SPECS_NAMING_A_SLASH_COMMAND_2026_09_22 : u8 = 5;
+pub const SPECS_MATCHING_PARSE_MODE_2026_09_22 : u8 = 0;
+pub const SPECS_MATCHING_CALLBACK_DATA_2026_09_22 : u8 = 0;
+pub const SPECS_MATCHING_BOTCOMMANDS_2026_09_22 : u8 = 0;
 ; The withdrawn characterisation, named so it cannot quietly come back.
 pub const EVERY_TELEGRAM_HIT_IS_A_COLUMN_OR_PRIVACY_FIELD : bool = false;
 pub const ANY_OTHER_SPEC_DECLARES_A_COMMAND_SURFACE : bool = false;
@@ -933,6 +951,24 @@ test the_mid_wave_counts_are_superseded_by_the_dated_re_measurement {
   assert THE_ONE_SLASH_COMMAND_HIT != "specs/turbobaby/ai_assist.t27:26";
 }
 
+; Corrected 2026-09-22: the dated pair above was taken over 43 files, and the corpus grew to 45 the
+; same day. Each reading is compared only with the corpus it was taken over.
+test the_dated_re_measurement_was_re_run_over_the_grown_corpus {
+  assert CORPUS_FILE_COUNT_REMEASURED == 45;
+  assert CORPUS_FILES_OTHER_THAN_THIS_ONE_REMEASURED == 44;
+  assert CORPUS_FILES_OTHER_THAN_THIS_ONE_REMEASURED + 1 == CORPUS_FILE_COUNT_REMEASURED;
+  assert CORPUS_FILE_COUNT_REMEASURED_AT == "2026-09-22";
+  assert CORPUS_FILE_COUNT_REMEASURED > CORPUS_FILE_COUNT;
+  assert SPECS_MATCHING_TELEGRAM_2026_09_22 == 23;
+  assert SPECS_MATCHING_TELEGRAM_2026_09_22 == SPECS_MATCHING_TELEGRAM_2026_09_21 + 1;
+  assert SPECS_MATCHING_TELEGRAM_2026_09_22 < CORPUS_FILES_OTHER_THAN_THIS_ONE_REMEASURED;
+  assert SPECS_NAMING_A_SLASH_COMMAND_2026_09_22 == 5;
+  assert SPECS_NAMING_A_SLASH_COMMAND_2026_09_22 == SPECS_NAMING_A_SLASH_COMMAND_2026_09_21;
+  assert SPECS_MATCHING_PARSE_MODE_2026_09_22 == 0;
+  assert SPECS_MATCHING_CALLBACK_DATA_2026_09_22 == 0;
+  assert SPECS_MATCHING_BOTCOMMANDS_2026_09_22 == 0;
+}
+
 test the_narrow_zeros_are_the_only_absence_still_claimed {
   assert SPECS_MATCHING_PARSE_MODE_2026_09_21 == 0;
   assert SPECS_MATCHING_CALLBACK_DATA_2026_09_21 == 0;
@@ -1030,7 +1066,7 @@ invariant the_withdrawn_characterisation_never_comes_back
   assert EVERY_TELEGRAM_HIT_IS_A_COLUMN_OR_PRIVACY_FIELD == false and ANY_OTHER_SPEC_DECLARES_A_COMMAND_SURFACE == false
 
 invariant the_corpus_counts_are_never_read_without_their_denominator
-  assert SPECS_MATCHING_TELEGRAM_2026_09_21 < CORPUS_FILES_OTHER_THAN_THIS_ONE and SPECS_NAMING_A_SLASH_COMMAND_2026_09_21 < CORPUS_FILES_OTHER_THAN_THIS_ONE
+  assert SPECS_MATCHING_TELEGRAM_2026_09_21 < CORPUS_FILES_OTHER_THAN_THIS_ONE and SPECS_NAMING_A_SLASH_COMMAND_2026_09_21 < CORPUS_FILES_OTHER_THAN_THIS_ONE and SPECS_MATCHING_TELEGRAM_2026_09_22 < CORPUS_FILES_OTHER_THAN_THIS_ONE_REMEASURED and SPECS_NAMING_A_SLASH_COMMAND_2026_09_22 < CORPUS_FILES_OTHER_THAN_THIS_ONE_REMEASURED
 
 invariant the_order_buttons_borrow_their_vocabulary
   assert CALLBACK_OWNS_NO_STATUS_VOCABULARY == true and REUSES_ORDER_STATUS_ID == "turbobaby/order-status"

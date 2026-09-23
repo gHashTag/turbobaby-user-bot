@@ -60,7 +60,9 @@
 ; src/api/bikes.rs:478; admin_list_bikes serves the same unpaged shape at src/api/bikes.rs:1100.
 ; A grep for cursor over src/api/ returns zero, and the 184 lines that carry the word over src/
 ; are the CSS property with TWO exceptions (re-measured 2026-09-21). 182 of the 184 hold the
-; literal property (src/main.rs:1910 is one). The other two are Rust identifiers that PRODUCE a
+; literal property (src/main.rs:1910 is one). (Re-measured 2026-09-22: 185 lines, 183 of them the
+; property; the same two exceptions, and still zero under src/api/. CURSOR_WORD_LINES_IN_SRC says
+; which line was added.) The other two are Rust identifiers that PRODUCE a
 ; value for that property and never a pagination token: cursor_style at
 ; src/ui/game/shop_game.rs:1710 returns "pointer" or "default", and btn_cursor at
 ; src/ui/screens/checkout_screen.rs:1664 picks "pointer" or "not-allowed". The exceptions are
@@ -361,8 +363,15 @@ pub const SHIPPED_PAGE_LADDERS_ON_THIS_ENDPOINT : u8 = 0;
 ; the property. The split is declared because "all" is checked by one counterexample, and a
 ; reader who finds one stops trusting the sentence that mattered -- which is the last number
 ; here, not the first two. Measured 2026-09-21.
-pub const CURSOR_WORD_LINES_IN_SRC : u16 = 184;
-pub const CURSOR_WORD_LINES_AS_CSS_PROPERTY : u16 = 182;
+; CORRECTED 2026-09-22: the first two were 184 and 182. Re-measured at a33e500, git grep -n cursor
+; over src/ returns 185 lines in .rs files, against 184 at 2c21df1^. 2c21df1 (2026-09-21 19:31)
+; split the cart's checkout button in src/ui/screens/cart_screen.rs into a disabled copy for an
+; unpriced cart (cursor: not-allowed) and the linked one (cursor: pointer), where one cursor:
+; pointer line stood before, so the added line is the CSS property. The
+; two identifier lines above are unchanged and the pagination count is still zero, which is the
+; number this census exists for.
+pub const CURSOR_WORD_LINES_IN_SRC : u16 = 185;
+pub const CURSOR_WORD_LINES_AS_CSS_PROPERTY : u16 = 183;
 pub const CURSOR_WORD_LINES_AS_CSS_IDENTIFIER : u16 = 2;
 pub const CURSOR_WORD_LINES_AS_PAGINATION : u16 = 0;
 
