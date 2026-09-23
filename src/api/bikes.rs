@@ -406,7 +406,7 @@ impl CatalogFilter {
 /// Families with `offered = false` (CLICK 125, D12) are never listed —
 /// `db::bikes::list_offered_families` filters them — but
 /// `GET /api/bikes/:key` still serves them, so a saved link can be answered
-/// with the redirect to PCX 150 / ADV 150 / NMAX 155 instead of a 404. There is
+/// with the D12 redirect (NMAX 155 since 2026-09-24) instead of a 404. There is
 /// deliberately no `?include_unoffered` flag: it would fork that rule into two
 /// places.
 async fn list_bikes(
@@ -627,7 +627,7 @@ fn family_json(
     // for it (D12, #25's fifth criterion). CLICK 125 is the measured case: the
     // seasonal grid still carries 187/day for it, and that figure is stale —
     // not a tariff. The family stays serialisable and the detail endpoint stays
-    // 200, because the PCX 150 / ADV 150 / NMAX 155 redirect needs that page to
+    // 200, because the D12 redirect (NMAX 155 since 2026-09-24) needs that page to
     // exist. Never bookable and never priced is not the same as hidden.
     let (client_rate_thb_day, client_rate_source) = if listing.bike.offered {
         door.resolve(&listing.bike.key)

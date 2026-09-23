@@ -892,7 +892,7 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "source": "src/ui/screens/admin_screen.rs",
         "extract": ("line_count",),
         "relation": "equal",
-        "why": "catalog_write.t27:103-116 argues from the size of this file that no "
+        "why": "catalog_write.t27:103-117 (re-pointed 2026-09-24) argues from the size of this file that no "
                "contract owns its write bounds; the argument is only as current as the "
                "measurement it opens with",
     },

@@ -404,7 +404,7 @@ pub async fn list_offered_families(
 ///
 /// Returns unoffered families too — the caller reads `bike.offered` and
 /// decides. For `click-125` that means saying it is not rented for now and
-/// pointing at PCX 150 / ADV 150 / NMAX 155 (D12), which is more use to a
+/// pointing at NMAX 155 (D12, since 2026-09-24), which is more use to a
 /// customer than a 404.
 #[allow(unreachable_pub)] // Read by the catalog endpoints in src/api/*.rs and by integration tests as lib consumers.
 pub async fn find_family_by_key(
