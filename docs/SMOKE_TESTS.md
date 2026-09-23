@@ -1,5 +1,19 @@
 # Smoke tests — order endpoint defences
 
+> **Not the post-deploy check (note of 2026-09-24).** This file sends write
+> requests to a *local* backend in order to exercise the order defences. Do not
+> point it at production. To check production after a deploy or a rollback, use
+> `scripts/postdeploy-smoke.sh`, which sends GET requests only. The rollback
+> itself is described in [`ROLLBACK.md`](ROLLBACK.md).
+>
+> Part of this file is stale. The setup reads `/api/strains`, and §1, §2, §4, §7
+> and §13 build order lines from a `strain_id`. That route no longer exists in
+> `src/api/`, and the `strains` table was dropped by
+> `migrations/083_drop_cannabis_catalog.sql`. The server now rejects a line that
+> carries only a `strain_id` as malformed (`src/api/orders.rs`, the comment on
+> the strain lookup). Nothing in those sections was rewritten, and the remaining
+> sections were not re-checked on 2026-09-24.
+
 Manual curl-based smoke for the three defences shipped in cycles #56 — #58:
 
 * **Price authority** across every catalog (cycle #58 / C)
