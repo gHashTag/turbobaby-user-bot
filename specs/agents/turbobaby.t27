@@ -6,7 +6,7 @@ module turbobaby-agent;
 ; definition issue #23 asks for, stated once in the form the corpus already uses for an
 ; agent: KIND/ID/NAME identity, the documents that bind it, entry and exit invariants,
 ; and SKILLS/TOOLS bound only where a source names them.
-;
+//
 ; WHY (measured 2026-09-12). The epic names an owner agent; nothing in the repository
 ; defined one, so the assignment was a label with nothing behind it. Two further
 ; measurements shaped what is below. First, this world is not a letter of the t27
@@ -16,7 +16,7 @@ module turbobaby-agent;
 ; (27%) carry no test, invariant or bench, and all 27 agent cards are in that 187. L4
 ; TESTABILITY is therefore declared but not enforced; this card carries tests anyway,
 ; because a card nobody can check is a claim, not a specification.
-;
+//
 ; What this card never does: it does not grant the agent write access to the owner's
 ; operations spreadsheets, it does not name a price, and it does not restate the fleet.
 ; Numbers live in data/fleet_seed.json with their provenance; decisions live in

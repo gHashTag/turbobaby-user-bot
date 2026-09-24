@@ -5,13 +5,13 @@ module turbobaby-publish-proof;
 ; This contract owns only publication evidence. Domain behavior remains in the other canonical
 ; specs under specs/turbobaby, and deployment remains an owner-controlled action outside this
 ; repository. A file being parseable is not proof that it was discovered, published, or shown.
-;
+; --
 ; WHY (measured 2026-09-13). The published t27 world scan accepts public repositories owned by
 ; its configured owners, but deliberately skips GitHub repositories marked as formal forks. The
 ; TurboBaby repository preserves the upstream content and history as a standalone derivative and
 ; reports isFork false, so it can be discovered after canonical files are tracked. Recreating it
 ; as a formal fork would make every correct local contract invisible to that scan.
-;
+; --
 ; WHY (measured 2026-09-20, spec browser). There are two independent public surfaces and they no
 ; longer have the same answer. The spec browser is proved: the generated manifest answers with
 ; this repository's entry, the deployed shared-core route resolves this repository's modules by
@@ -20,7 +20,7 @@ module turbobaby-publish-proof;
 ; that both were observed. The live claim below is written as the conjunction of those witnesses
 ; and the local commit check, so it cannot outlive them: remove a witness and the claim stops
 ; following.
-;
+; --
 ; WHY (measured 2026-09-20, Queen). The Queen board is still not publication of this world, and
 ; the reason recorded on 2026-09-13 was right in its verdict and wrong in its fact. The endpoint
 ; is not absent. It answered 404 when this file was written and served a payload today: 200, one
@@ -31,7 +31,7 @@ module turbobaby-publish-proof;
 ; snapshot and not the board. This repository cannot remove that external blocker, and this file
 ; never claims the board or the agent card is live. It only defines the evidence that would make
 ; such a claim true.
-;
+; --
 ; The namespaced owner card is specs/agents/turbobaby.t27 with ID turbobaby/BOT. It intentionally
 ; takes no seat in the closed t27 alphabet. Current upstream agent generation recognizes that
 ; alphabet schema, not an arbitrary namespaced world, so tracked source is necessary but not yet

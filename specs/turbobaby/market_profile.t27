@@ -323,7 +323,7 @@ test unrenderable_symbol_codepoints_are_refused {
   assert symbol_codepoint_is_assigned(8364) == true;
   assert symbol_codepoint_is_assigned(-1) == false;
   assert symbol_codepoint_is_assigned(1114112) == false;
-  ; The surrogate gap: not assignable, not renderable.
+  // The surrogate gap: not assignable, not renderable.
   assert symbol_codepoint_is_assigned(55296) == false;
   assert symbol_codepoint_is_assigned(57343) == false;
   assert symbol_codepoint_is_assigned(57344) == true;

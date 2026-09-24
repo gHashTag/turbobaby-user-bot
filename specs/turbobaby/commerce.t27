@@ -212,9 +212,9 @@ pub fn commerce_idempotency_record_is_durable(transaction_committed: bool) bool 
 ; The checkout join. It consumes decisions from the shape, price, availability/sale, quote,
 ; fulfillment, and idempotency owners; it performs none of their underlying computations.
 pub fn commerce_checkout_decision(deal_kind: u8, cart_state: u8, shape_valid: bool, price_authorized: bool, upstream_fulfillable: bool, quote_snapshot_valid: bool, fulfillment_valid: bool, idempotency_decision: u8) u8 {
-    ; A committed replay is already proven to have the same payload. It must return before the
-    ; cart and domain gates: the first commit converted the cart and may have consumed the last
-    ; available unit, so re-running those gates would make a successful retry look unavailable.
+    // A committed replay is already proven to have the same payload. It must return before the
+    // cart and domain gates: the first commit converted the cart and may have consumed the last
+    // available unit, so re-running those gates would make a successful retry look unavailable.
     if (commerce_idempotency_returns_prior(idempotency_decision)) {
         return CHECKOUT_RETURN_PRIOR;
     }
