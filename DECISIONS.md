@@ -430,24 +430,29 @@ still open.
 
 ## D19 addendum — rental only, Phuket only, decided 2026-09-24
 
-Owner decision in chat, 2026-09-24: «Аренда только пхукет». Earlier the same week the owner
-kept the referral programme, loyalty and the ride game, and put events and bike sales on the
-retirement plan. So a customer may only rent a bike, and only in Phuket. Kept at the end of this
-file, like the two entries above, so that no line citation into it moves.
+Owner decision in chat, 2026-09-24, verbatim: «Ареда [sic] только пхукет» — rental only, Phuket
+only. Earlier the same week the owner kept the referral programme, loyalty and the ride game, and
+put events and bike sales on the retirement plan. So a customer may only rent a bike, and only in
+Phuket. Kept at the end of this file, like the two entries above, so that no line citation into it
+moves.
 
-This reverses two things D19 left open on purpose, and says so rather than editing D19: the
-event screens and endpoints no longer wait for "a future TurboBaby event" on a public slate, and
-issue #11's customer buy-out (migration 086) is withdrawn from customers. Nothing is deleted —
-a placed order may carry a sale line and a booking may name an event — so the retirement follows
-this repository's precedent: data kept, surfaces changed, the change named.
+This reverses two earlier choices and says so rather than editing them. D19 kept the event screens
+and endpoints for "a future TurboBaby event" on a clean public slate; they no longer wait for one.
+The customer buy-out is not D19's: issue #11 asked for sales, and migration 086 added the
+`for_sale` flag the bike detail's sale block read; it is withdrawn from customers too. Nothing is
+deleted — a placed order may carry a sale line and a booking may name an event — so the retirement
+follows this repository's precedent: data kept, surfaces changed, the change named.
 
 * **Events.** `/events`, `/events/:id` and `/my-bookings` stay declared and render the catalog,
   as `/sets` and `/sommelier` do; the events screens stay compiled and unmounted. The admin API
   can no longer store an event as public (`EVENTS_PUBLISHABLE = false` in `src/api/events.rs`),
-  and every customer read filters that flag, so the calendar answers empty. The event share card
-  answers not found, as the retired strain kind does. Kept: the customer's bookings list and
-  self-cancel over HTTP and the admin cancel (the two Stars refund paths), the guest list, the
-  24-hour reminder to a seat already held, the admin Events tab, and the event rows 085 hid.
+  and migration **088** hides, in 085's shape, any row still public — one made public between 085
+  and this change, which nobody has read production to rule out. Every customer read and the promo
+  sweeper's event scans filter that flag, so once 088 has run the calendar answers empty; until
+  it runs, such a row would still be served. The event share card answers not found, as the
+  retired strain kind does. Kept: the customer's bookings list and self-cancel over HTTP and the
+  admin cancel (the two Stars refund paths), the guest list, the 24-hour reminder to a seat
+  already held, the admin Events tab, and every event row; none of these filters the flag.
 * **Bike sales.** The bike detail overlay renders no buy-out block. `GET /api/bikes` and
   `GET /api/bikes/:key` serve `for_sale: false` and `sale_price_thb: null` whatever the row
   holds; the admin list keeps the stored values and no row is written. `POST /api/orders`
@@ -457,9 +462,23 @@ this repository's precedent: data kept, surfaces changed, the change named.
   Пхукете» → «Аренда на Пхукете», "Rent or buy on Phuket" → "Rent on Phuket". The served API
   description, the README and the agent card lose "and sales" the same way. No sentence was
   written new.
-* **Phuket.** No customer sentence names another place; the Phangan zones went with 087.
+* **Phuket.** No customer sentence names another place: `tests/rental_only_wiring.rs` reads the
+  Mini App's translations, the bot's locale file and the screens' own strings. The Koh Phangan
+  zones were deactivated by 087, but a returning customer's checkout could still submit the zone
+  id it had saved before, which the server refuses with 422. The checkout now sends a saved zone
+  only while the served list holds it (`served_zone_id` in `src/trios/store.rs`); otherwise it
+  sends none, as a customer who never chose does.
+* **Open, for the owner.** `GET /api/loyalty/tiers` is public and serves each tier's stored perks;
+  the seed (`migrations/009_loyalty_tiers_seed.sql`) gives the top tier «VIP мероприятия», an
+  events promise, and other tiers perks from the old shop. Only the admin screen renders the list,
+  and production may hold other values. Dropping the events perk would be a deletion, not new copy,
+  and waits for the owner. So does whether "rental only" also retires the legacy paths that sell
+  goods (`/accessories`, `/tea`), which `legacy_retirement.t27` records as open.
 
 The contracts carry the details: `specs/turbobaby/legacy_retirement.t27` records the ruling and
-classifies it (the target is hidden data under an unreachable surface, which that file does not
-call a completed retirement), `events_booking.t27`, `catalog_api.t27`, `commerce.t27` and
-`deeplink.t27` correct the facts it changed, and `tests/rental_only_wiring.rs` guards the source.
+classifies each surface on its own inputs (events: hidden data under an unreachable surface;
+bike sales: no row hidden, the offer masked on read — neither a completed retirement),
+`events_booking.t27` owns what the events surface still answers and describes 088,
+`catalog_api.t27`, `commerce.t27` and `deeplink.t27` correct the facts the ruling changed,
+`schema_provenance.t27` carries the migration census 088 moved, and `tests/rental_only_wiring.rs`
+guards the source.

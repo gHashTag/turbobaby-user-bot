@@ -127,8 +127,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/events_booking.t27": {
         "module": "turbobaby-events-booking",
         "id": "turbobaby/events-booking",
-        "min_declarations": 317,
-        "min_checks": 83,
+        "min_declarations": 326,
+        "min_checks": 85,
     },
     "specs/turbobaby/game_score.t27": {
         "module": "turbobaby-game-score",
@@ -151,13 +151,13 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/legacy_retirement.t27": {
         "module": "turbobaby-legacy-retirement",
         "id": "turbobaby/legacy-retirement",
-        "min_declarations": 156,
-        "min_checks": 43,
+        "min_declarations": 165,
+        "min_checks": 44,
     },
     "specs/turbobaby/locale_policy.t27": {
         "module": "turbobaby-locale-policy",
         "id": "turbobaby/locale-policy",
-        "min_declarations": 126,
+        "min_declarations": 127,
         "min_checks": 34,
     },
     "specs/turbobaby/loyalty_ledger.t27": {
@@ -211,7 +211,7 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/pricing_honesty.t27": {
         "module": "pricing-honesty",
         "id": "turbobaby/pricing-honesty",
-        "min_declarations": 118,
+        "min_declarations": 120,
         "min_checks": 40,
     },
     "specs/turbobaby/promo_broadcast.t27": {
@@ -271,7 +271,7 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/schema_provenance.t27": {
         "module": "turbobaby-schema-provenance",
         "id": "turbobaby/schema-provenance",
-        "min_declarations": 225,
+        "min_declarations": 233,
         "min_checks": 51,
     },
     "specs/turbobaby/star_award.t27": {

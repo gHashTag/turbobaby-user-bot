@@ -7,7 +7,7 @@ mod common;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
-use sea_orm::ConnectionTrait;
+use sea_orm::{ConnectionTrait, DbBackend, Statement};
 use tower::ServiceExt;
 
 #[tokio::test]
@@ -120,7 +120,12 @@ async fn admin_can_create_and_list_event() {
 
     assert_eq!(response.status(), StatusCode::OK, "create event failed");
 
+    // Events left every customer surface on the owner's ruling of 2026-09-24
+    // (rental only): the admin API stores no event as public, whatever the
+    // request asks. So the customer calendar stays empty, and the event is
+    // listed to the admin, stored non-public.
     let response = app
+        .clone()
         .oneshot(
             Request::builder()
                 .uri("/api/events")
@@ -137,21 +142,60 @@ async fn admin_can_create_and_list_event() {
         .get("events")
         .and_then(|v| v.as_array())
         .expect("events array");
+    assert!(
+        events.is_empty(),
+        "an event the admin API created reached the customer calendar: {events:?}"
+    );
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/admin/events")
+                .header("X-Telegram-Init-Data", &init_data)
+                .header("X-Admin-Token", admin_token)
+                .header("X-Admin-Telegram-Id", "42")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("admin list events");
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let bytes = response.into_body().collect().await.unwrap().to_bytes();
+    let body: serde_json::Value = serde_json::from_slice(&bytes).expect("json body");
+    let events = body
+        .get("events")
+        .and_then(|v| v.as_array())
+        .expect("events array");
     assert_eq!(events.len(), 1);
     assert_eq!(events[0]["title"], "Test Event");
+    assert_eq!(
+        events[0]["is_public"], false,
+        "asked for public, stored public"
+    );
 }
 
+/// An event a customer can book, as the paths these tests exercise need one.
+///
+/// Created through the admin API, which since the owner's ruling of 2026-09-24
+/// (rental only) stores every event non-public; that is checked here. The row
+/// is then published by SQL, as `integration_event_attendees.rs` seeds its
+/// rows, because what the callers test -- booking, the waitlist, both refund
+/// paths, the Stars deduction -- is kept for a seat a customer already holds,
+/// and needs an event that was bookable when the seat was taken.
 async fn create_public_event(
     app: axum::Router,
+    db: &turbobaby_bot::db::Database,
     title: &str,
     starts_at: &str,
     max_seats: i32,
 ) -> (axum::Router, String) {
-    create_public_event_with_stars(app, title, starts_at, max_seats, None).await
+    create_public_event_with_stars(app, db, title, starts_at, max_seats, None).await
 }
 
 async fn create_public_event_with_stars(
     app: axum::Router,
+    db: &turbobaby_bot::db::Database,
     title: &str,
     starts_at: &str,
     max_seats: i32,
@@ -186,6 +230,31 @@ async fn create_public_event_with_stars(
     let bytes = response.into_body().collect().await.unwrap().to_bytes();
     let body: serde_json::Value = serde_json::from_slice(&bytes).expect("json body");
     let id = body["id"].as_str().expect("event id").to_string();
+
+    let stored = db
+        .orm
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT is_public FROM events WHERE id = $1",
+            [id.clone().into()],
+        ))
+        .await
+        .expect("read the stored flag")
+        .expect("the created event row");
+    assert!(
+        !stored
+            .try_get::<bool>("", "is_public")
+            .expect("is_public column"),
+        "the admin API stored an event as public"
+    );
+    db.orm
+        .execute(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "UPDATE events SET is_public = TRUE WHERE id = $1",
+            [id.clone().into()],
+        ))
+        .await
+        .expect("publish the fixture event");
     (app, id)
 }
 
@@ -287,7 +356,8 @@ async fn user_can_list_and_cancel_own_booking() {
         .execute_unprepared("TRUNCATE events, event_bookings CASCADE")
         .await;
 
-    let (app, event_id) = create_public_event(app, "Bookable", "2030-07-25T18:00:00Z", 10).await;
+    let (app, event_id) =
+        create_public_event(app, &db, "Bookable", "2030-07-25T18:00:00Z", 10).await;
     let user_id: i64 = 1001;
 
     let (app, status, _) = book_event(app, &event_id, user_id).await;
@@ -345,7 +415,7 @@ async fn admin_can_cancel_user_booking() {
         .await;
 
     let (app, event_id) =
-        create_public_event(app, "Admin Cancel", "2030-07-25T18:00:00Z", 10).await;
+        create_public_event(app, &db, "Admin Cancel", "2030-07-25T18:00:00Z", 10).await;
     let user_id: i64 = 1002;
     let (app, status, book_body) = book_event(app, &event_id, user_id).await;
     assert_eq!(status, StatusCode::OK);
@@ -385,7 +455,8 @@ async fn waitlist_opens_when_capacity_full() {
         .execute_unprepared("TRUNCATE events, event_bookings CASCADE")
         .await;
 
-    let (app, event_id) = create_public_event(app, "Full House", "2030-07-25T18:00:00Z", 2).await;
+    let (app, event_id) =
+        create_public_event(app, &db, "Full House", "2030-07-25T18:00:00Z", 2).await;
 
     let (app, status, _) = book_event(app, &event_id, 2001).await;
     assert_eq!(status, StatusCode::OK);
@@ -428,7 +499,8 @@ async fn waitlist_auto_promotes_on_cancel() {
         .execute_unprepared("TRUNCATE events, event_bookings CASCADE")
         .await;
 
-    let (app, event_id) = create_public_event(app, "Promote Demo", "2030-07-25T18:00:00Z", 2).await;
+    let (app, event_id) =
+        create_public_event(app, &db, "Promote Demo", "2030-07-25T18:00:00Z", 2).await;
 
     let (app, _, book1) = book_event(app, &event_id, 2101).await;
     let booking1_id = book1["booking_id"]
@@ -524,7 +596,8 @@ async fn timezone_edge_case_lists_bangkok_midnight_range() {
         .await;
 
     // Event at 01:00 Asia/Bangkok = 18:00 UTC the previous day.
-    let (app, _event_id) = create_public_event(app, "Late Night", "2030-08-10T18:00:00Z", 10).await;
+    let (app, _event_id) =
+        create_public_event(app, &db, "Late Night", "2030-08-10T18:00:00Z", 10).await;
 
     let response = app
         .oneshot(
@@ -558,9 +631,15 @@ async fn paid_event_booking_deducts_stars() {
 
     let user_id: i64 = 3001;
     let idem_key = "paid_event_test_001";
-    let (app, event_id) =
-        create_public_event_with_stars(app, "Paid Workshop", "2030-07-25T18:00:00Z", 10, Some(50))
-            .await;
+    let (app, event_id) = create_public_event_with_stars(
+        app,
+        &db,
+        "Paid Workshop",
+        "2030-07-25T18:00:00Z",
+        10,
+        Some(50),
+    )
+    .await;
 
     let app = add_stars(app, user_id, 50, "credit_paid_event_001").await;
     let (app, balance_before) = get_stars_balance(app, user_id).await;
@@ -657,6 +736,7 @@ async fn paid_event_booking_fails_without_stars() {
     let user_id: i64 = 3002;
     let (app, event_id) = create_public_event_with_stars(
         app,
+        &db,
         "Expensive Workshop",
         "2030-07-25T18:00:00Z",
         10,

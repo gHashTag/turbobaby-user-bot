@@ -315,14 +315,23 @@ pub const REPOINTED_ROUTE_COUNT : u8 = 5;
 ; catalog from their handlers at :175-200, exactly as /sets and /sommelier do, so 2 + 3 = 5. The
 ; paragraph above still reads "two further legacy paths" because it was true of the tree it
 ; measured. The three new members differ from the first two in one respect, and it is counted
-; rather than blurred: /sets and /sommelier lost their SCREENS, which were deleted, while the three
-; event paths lost only their MOUNT -- src/ui/screens/events_screen.rs still compiles and no route
-; renders it. Which surface the three served, and what it still answers over HTTP, is
-; turbobaby/events-booking's to say. None of the three is one of the eight LEGACY_LIVE_ROUTES,
-; which did not change.
+; rather than blurred: /sets and /sommelier lost their SCREENS, which were deleted, while the
+; event paths lost only their MOUNT. Whether their screens are kept, how many paths that is, and
+; what the surface still answers over HTTP are turbobaby/events-booking's to state, and this file
+; does not restate them: the kept-screen count arrives below as a parameter, from the owner named
+; by ID and declaration. None of the three is one of the eight LEGACY_LIVE_ROUTES, which did not
+; change.
 pub const REPOINTED_ROUTE_COUNT_BEFORE_2026_09_24 : u8 = 2;
 pub const REPOINTED_WITH_THE_SCREEN_DELETED : u8 = 2;
-pub const REPOINTED_WITH_THE_SCREEN_KEPT_UNMOUNTED : u8 = 3;
+pub const REPOINTED_KEPT_SCREEN_COUNT_OWNER_ID : str = "turbobaby/events-booking";
+pub const REPOINTED_KEPT_SCREEN_COUNT_OWNER_DECL : str = "EVENT_SCREENS_UNROUTED_BY_THE_RULING";
+
+; The split, with the kept half as a parameter: the paths whose screen was deleted are this file's
+; count, and the paths whose screen was kept are the owner's above. The set is split when the two
+; halves are the whole of REPOINTED_ROUTE_COUNT.
+pub fn repointed_set_splits(screens_deleted: u8, screens_kept_unmounted: u8) bool {
+    return screens_deleted + screens_kept_unmounted == REPOINTED_ROUTE_COUNT;
+}
 
 ; HTTP routes, merged into the public router at src/api/mod.rs:89, :91 and :97.
 ; CORRECTED 2026-09-22: QUEST_HTTP_ROUTE_COUNT was 13 and LEGACY_HTTP_ROUTE_COUNT was 44. The
@@ -402,16 +411,28 @@ pub fn next_surface_is_decided_here(owner_has_ranked: bool) bool {
 ; The owner ruled on 2026-09-24 that a customer may only RENT a bike, and only in Phuket. Events and
 ; bike sales leave every customer surface; the referral programme, loyalty and the ride game stay.
 ; Rows are kept -- a placed order may carry a sale line and a booking may name an event, and both
-; must keep reading -- so the target is a surface no customer reaches, over rows that are hidden or
-; simply not served, and never a dropped table. Neither surface is one of the eight above: the
-; ruling ranks two surfaces this file never counted, so NEXT_SURFACE_NOTE stays true of the eight
-; and this file still picks nothing.
-; Run through this file's own machine, the target is retirement_state(false, false, false, true),
-; which is STATE_DATA_HIDDEN, and surface_is_retired answers false for it. That is not smoothed over:
+; must keep reading -- so the target is a surface no customer reaches, and never a dropped table.
+; The two surfaces the ruling was briefed as naming, events and bike sales, are not among the eight
+; above. Whether "rental only" also reaches any of the eight is NOT settled here: two of them,
+; /accessories and /tea, take orders for goods, which is not a rental, and the question is put to
+; the owner rather than answered by this file. So NEXT_SURFACE_NOTE stays true of the eight -- no
+; ranking of them exists yet -- and this file still picks nothing.
+; Each ruled surface is run through this file's own machine on its OWN inputs, because they are not
+; the same. The events rows are hidden: 085 and migrations/088_unpublish_events.sql flip
+; events.is_public, and the admin API can publish none (turbobaby/events-booking), so events are
+; retirement_state(false, false, false, true), STATE_DATA_HIDDEN. No bike-sale row is hidden: the
+; stored sale flag and asking price are untouched and the admin list still serves them; what
+; changed is that the public catalog reads mask them (turbobaby/catalog-api) and the order path
+; refuses a new sale line (turbobaby/commerce). Fed that true input, the machine answers
+; retirement_state(false, false, false, false), STATE_LIVE, and the input is not bent to reach
+; another state: none of the five states names a mask on read, and STATE_LIVE here says only that
+; no data was hidden and no table dropped, not that a customer reaches the offer. Whether a mask on
+; read deserves a state of its own is this file's open question, recorded, not decided. Either
+; way surface_is_retired answers false for both, and that is not smoothed over:
 ; here "retired" means STATE_FULLY_RETIRED, which needs a dropped table, and the owner forbade the
 ; drop. So nothing in the corpus may claim either surface is GONE -- may_claim_surface_is_gone needs
-; zero route, handler and screen declarations, and the three event paths and their screen are kept
-; on purpose -- and COMPLETED_RETIREMENT_COUNT stays 1. What each surface answers today is owned
+; zero route, handler and screen declarations, and the event paths in REPOINTED_ROUTE_COUNT stay
+; declared on purpose -- and COMPLETED_RETIREMENT_COUNT stays 1. What each surface answers today is owned
 ; elsewhere and named by ID: the events surface by turbobaby/events-booking, the public catalog wire
 ; by turbobaby/catalog-api, the order path by turbobaby/commerce.
 pub const OWNER_RULING_AT : str = "2026-09-24";
@@ -422,9 +443,15 @@ pub const OWNER_RULED_SURFACE_COUNT : u8 = 2;
 pub const OWNER_RULED_SURFACES : [2]str = ["events", "bike_sale"];
 pub const OWNER_KEPT_SURFACE_COUNT : u8 = 3;
 pub const OWNER_KEPT_SURFACES : [3]str = ["referrals", "loyalty", "ride_game"];
-pub const OWNER_RULED_TARGET_STATE : u8 = 1;
+pub const OWNER_RULED_EVENTS_ROWS_HIDDEN : bool = true;
+pub const OWNER_RULED_EVENTS_STATE : u8 = 1;
+pub const OWNER_RULED_BIKE_SALE_ROWS_HIDDEN : bool = false;
+pub const OWNER_RULED_BIKE_SALE_MASKED_ON_READ : bool = true;
+pub const OWNER_RULED_BIKE_SALE_STATE : u8 = 0;
+pub const A_MASK_ON_READ_HAS_A_STATE_HERE : bool = false;
 pub const OWNER_RULING_COMPLETES_A_RETIREMENT : bool = false;
-pub const OWNER_RULING_RANKS_ONE_OF_THE_EIGHT : bool = false;
+pub const OWNER_RULING_BRIEFED_SURFACES_ARE_AMONG_THE_EIGHT : bool = false;
+pub const OWNER_RULING_SCOPE_OVER_THE_EIGHT_IS_OPEN : bool = true;
 
 pub fn ruled_surface_state(customer_reachable: bool, rows_hidden: bool) u8 {
     return retirement_state(customer_reachable, OWNER_RULING_DROPS_A_TABLE, false, rows_hidden);
@@ -651,7 +678,7 @@ test this_file_refuses_to_choose_the_next_surface {
     assert next_surface_is_decided_here(false) == false;
 }
 
-test the_owners_ruling_targets_hidden_data_and_claims_no_completed_retirement {
+test the_owners_ruling_is_classified_per_surface_and_claims_no_completed_retirement {
     assert OWNER_RULING_AT == "2026-09-24";
     assert OWNER_RULING_KEEPS_ROWS == true;
     assert OWNER_RULING_DROPS_A_TABLE == false;
@@ -661,22 +688,38 @@ test the_owners_ruling_targets_hidden_data_and_claims_no_completed_retirement {
     assert OWNER_KEPT_SURFACES.len == OWNER_KEPT_SURFACE_COUNT;
     assert OWNER_KEPT_SURFACES[0] == "referrals";
     assert OWNER_KEPT_SURFACES[2] == "ride_game";
-    assert OWNER_RULED_TARGET_STATE == STATE_DATA_HIDDEN;
-    assert ruled_surface_state(false, true) == OWNER_RULED_TARGET_STATE;
+    assert OWNER_RULED_EVENTS_STATE == STATE_DATA_HIDDEN;
+    assert ruled_surface_state(false, OWNER_RULED_EVENTS_ROWS_HIDDEN) == OWNER_RULED_EVENTS_STATE;
+    // Bike sales: no row hidden, the offer masked on read. The true input gives STATE_LIVE, and
+    // no state of the five names the mask.
+    assert OWNER_RULED_BIKE_SALE_ROWS_HIDDEN == false;
+    assert OWNER_RULED_BIKE_SALE_MASKED_ON_READ == true;
+    assert OWNER_RULED_BIKE_SALE_STATE == STATE_LIVE;
+    assert ruled_surface_state(false, OWNER_RULED_BIKE_SALE_ROWS_HIDDEN) == OWNER_RULED_BIKE_SALE_STATE;
+    assert A_MASK_ON_READ_HAS_A_STATE_HERE == false;
     assert ruled_surface_state(true, true) == STATE_SURFACE_LIVE;
-    assert surface_is_retired(false, OWNER_RULING_DROPS_A_TABLE, false, true) == false;
+    assert surface_is_retired(false, OWNER_RULING_DROPS_A_TABLE, false, OWNER_RULED_EVENTS_ROWS_HIDDEN) == false;
+    assert surface_is_retired(false, OWNER_RULING_DROPS_A_TABLE, false, OWNER_RULED_BIKE_SALE_ROWS_HIDDEN) == false;
     assert OWNER_RULING_COMPLETES_A_RETIREMENT == false;
     assert COMPLETED_RETIREMENT_COUNT == 1;
-    assert OWNER_RULING_RANKS_ONE_OF_THE_EIGHT == false;
+    // The two briefed surfaces are not among the eight; whether the ruling reaches the eight is open.
+    assert OWNER_RULING_BRIEFED_SURFACES_ARE_AMONG_THE_EIGHT == false;
+    assert OWNER_RULING_SCOPE_OVER_THE_EIGHT_IS_OPEN == true;
+    assert next_surface_is_decided_here(false) == false;
     assert RETIREMENT_ORDER_IS_PUBLISHED == false;
 }
 
 test the_repointed_set_is_split_by_what_each_path_lost {
-    assert REPOINTED_WITH_THE_SCREEN_DELETED + REPOINTED_WITH_THE_SCREEN_KEPT_UNMOUNTED == REPOINTED_ROUTE_COUNT;
     assert REPOINTED_WITH_THE_SCREEN_DELETED == REPOINTED_ROUTE_COUNT_BEFORE_2026_09_24;
-    assert REPOINTED_WITH_THE_SCREEN_KEPT_UNMOUNTED == 3;
+    assert REPOINTED_KEPT_SCREEN_COUNT_OWNER_ID == REUSES_EVENTS_BOOKING_ID;
+    assert REPOINTED_KEPT_SCREEN_COUNT_OWNER_DECL == "EVENT_SCREENS_UNROUTED_BY_THE_RULING";
+    // Only the whole of the set splits: the deleted half alone is not it, and neither is a kept
+    // half that would put the total past REPOINTED_ROUTE_COUNT.
+    assert repointed_set_splits(REPOINTED_WITH_THE_SCREEN_DELETED, REPOINTED_ROUTE_COUNT - REPOINTED_WITH_THE_SCREEN_DELETED) == true;
+    assert repointed_set_splits(REPOINTED_WITH_THE_SCREEN_DELETED, 0) == false;
+    assert repointed_set_splits(REPOINTED_WITH_THE_SCREEN_DELETED, REPOINTED_ROUTE_COUNT) == false;
     // A kept path over a kept screen file is never a gone surface, however dark it is.
-    assert may_claim_surface_is_gone(REPOINTED_WITH_THE_SCREEN_KEPT_UNMOUNTED, 3, 3) == false;
+    assert may_claim_surface_is_gone(1, 1, 1) == false;
 }
 
 test the_identity_of_this_contract_is_fixed {
@@ -735,7 +778,10 @@ invariant the_owners_ruling_never_counts_as_a_completed_retirement
     assert surface_is_retired(false, OWNER_RULING_DROPS_A_TABLE, false, true) == false and OWNER_RULING_COMPLETES_A_RETIREMENT == false and COMPLETED_RETIREMENT_COUNT == 1
 
 invariant a_ruled_surface_a_customer_can_still_reach_is_still_live
-    assert ruled_surface_state(true, true) == STATE_SURFACE_LIVE and ruled_surface_state(false, true) == STATE_DATA_HIDDEN
+    assert ruled_surface_state(true, true) == STATE_SURFACE_LIVE and ruled_surface_state(true, false) == STATE_SURFACE_LIVE and ruled_surface_state(false, OWNER_RULED_EVENTS_ROWS_HIDDEN) == STATE_DATA_HIDDEN
 
 invariant the_repointed_set_is_always_split_by_what_each_path_lost
-    assert REPOINTED_WITH_THE_SCREEN_DELETED + REPOINTED_WITH_THE_SCREEN_KEPT_UNMOUNTED == REPOINTED_ROUTE_COUNT
+    assert repointed_set_splits(REPOINTED_WITH_THE_SCREEN_DELETED, REPOINTED_ROUTE_COUNT - REPOINTED_WITH_THE_SCREEN_DELETED) == true and REPOINTED_WITH_THE_SCREEN_DELETED < REPOINTED_ROUTE_COUNT
+
+invariant a_bike_sale_row_is_never_called_hidden_to_reach_a_state
+    assert OWNER_RULED_BIKE_SALE_ROWS_HIDDEN == false and ruled_surface_state(false, OWNER_RULED_BIKE_SALE_ROWS_HIDDEN) == STATE_LIVE and OWNER_RULING_SCOPE_OVER_THE_EIGHT_IS_OPEN == true

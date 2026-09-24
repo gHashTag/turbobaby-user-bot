@@ -35,11 +35,12 @@ must pin a floor, because "found nothing" and "found nothing wrong" look identic
 from the outside. The floor on the table itself is MIN_BINDINGS.
 
 WHAT A GREEN RUN DOES NOT PROVE. Re-measured 2026-09-24, after the owner's rental-only ruling
-(nine rows over the same 41 contracts) landed on top of the spec-hygiene change: the table's
-236 bindings cover 223 distinct (contract, constant) pairs out of 5540 top-level `pub const`
-declarations across the 45 files under specs/, touching 41 of those 45 contracts. That is
-4.0% of the declared constants, and it is 0% of the 9958 `assert` statements. (Earlier on
-2026-09-24: after the spec-hygiene change (the four ride-handling rows, the migration census
+(nine rows over the same 41 contracts) and its review (one row: migration 088's hide) landed on
+top of the spec-hygiene change: the table's 237 bindings cover 224 distinct (contract, constant)
+pairs out of 5564 top-level `pub const` declarations across the 45 files under specs/, touching
+41 of those 45 contracts. That is 4.0% of the declared constants, and it is 0% of the 9996
+`assert` statements. (Earlier on 2026-09-24: the ruling before its review, 236 bindings, 223
+pairs of 5540, 4.0%, 9958 asserts, 41 contracts; after the spec-hygiene change (the four ride-handling rows, the migration census
 owner's three, the nmax-155 rate's two and the seed's line count), 227 bindings, 214 pairs
 of 5484, 3.9%, 9859 asserts, 41 contracts; after the
 T27 C3 deposit comparison, 217 bindings, 204 pairs of 5427, 3.8%, 9753 asserts, 41
@@ -875,8 +876,9 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "source": "migrations/*.sql",
         "extract": ("tree_file_count",),
         "relation": "equal",
-        "why": "the contract splits 87 into 86 + 1 precisely because a top-level-only "
-               "count would have been 86 while claiming to have looked everywhere",
+        "why": "the contract splits the recursive count into the top level plus the wip file "
+               "precisely because a top-level-only count would have been one short while "
+               "claiming to have looked everywhere",
     },
     {
         "name": "pricing_honesty.MIGRATION_COUNT_IN_WIP ~ migrations/wip/*.sql",
@@ -3610,6 +3612,23 @@ BINDINGS: tuple[dict[str, object], ...] = (
                "that uses either again brings the block back, and the public wire would then be "
                "all that keeps it empty",
     },
+    # Added under review the same day: the write gate above cannot reach an event row that is
+    # already public, one made public between migration 085 and the ruling. Planted RED on the
+    # tree before the fix, where the file does not exist, and on a copy whose WHERE clause was
+    # narrowed to one id (count 0 against 1).
+    {
+        "name": "events_booking.RULING_HIDE_VISIBILITY_UPDATES_ON_EVENTS ~ 088 events unpublish",
+        "spec": "specs/turbobaby/events_booking.t27",
+        "const": "RULING_HIDE_VISIBILITY_UPDATES_ON_EVENTS",
+        "source": "migrations/088_unpublish_events.sql",
+        # The statement at column zero and whole, so the migration's comments, which name the
+        # flag, are not counted, and a narrower WHERE or a DELETE in its place does not match.
+        "extract": ("regex_count", r"^UPDATE events SET is_public = FALSE WHERE is_public = TRUE;$"),
+        "relation": "equal",
+        "why": "the one statement that hides an event made public after 085; without it such a "
+               "row is still served by the calendar, the event page, a booking, a waitlist join "
+               "and the promo sweeper's event scans, whatever the admin API may now store",
+    },
 )
 
 TREE_EXTRACTORS = (
@@ -3662,8 +3681,9 @@ ONE_GROUP_EXTRACTORS = (
 # contracts: legacy-retirement's repointed count, four events-booking facts (the client
 # mounts, the three kept paths, the publish gate and the share refusal), deeplink's
 # compatibility set, commerce's sale refusal and catalog-api's two sale-offer facts. 236
-# rows, floor 236.
-MIN_BINDINGS = 236
+# rows, floor 236. Review of that change added events-booking's hide of the rows already
+# public (migration 088): 237 rows, floor 237.
+MIN_BINDINGS = 237
 
 
 # ---------------------------------------------------------------------------------

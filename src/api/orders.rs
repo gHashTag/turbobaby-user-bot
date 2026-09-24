@@ -4054,7 +4054,7 @@ mod tests {
         );
     }
 
-    /// Owner decision 2026-09-24 ("Аренда только пхукет"): bike sales are
+    /// Owner decision 2026-09-24 (rental only, Phuket only): bike sales are
     /// retired from every customer surface, so a NEW sale line is refused at
     /// the boundary -- 422, like the other "you cannot have this" refusals,
     /// with no new sentence. A malformed price is still malformed first (the

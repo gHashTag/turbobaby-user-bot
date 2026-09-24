@@ -1028,7 +1028,7 @@ pub fn CheckoutScreen() -> Element {
             "delivery_address": delivery_address(),
             "delivery_notes": delivery_notes(),
             "age_confirmed": age_confirmed(),
-            "delivery_zone_id": delivery_zone_id(),
+            "delivery_zone_id": zone_to_submit(delivery_zone_id(), zone_info.as_ref()),
         });
 
         let init_data_clone = init_data.clone();
@@ -1686,4 +1686,12 @@ pub fn CheckoutScreen() -> Element {
                 }
             }
         }
+}
+
+/// The zone id an order carries: the saved one only while the picker shows
+/// that same zone (`served_zone_id`). A returning customer's saved id can name
+/// a zone migration 087 deactivated; the picker shows the first served zone in
+/// its place, and the raw id used to be submitted anyway, for a 422.
+fn zone_to_submit(stored: Option<String>, shown: Option<&DeliveryZone>) -> Option<String> {
+    crate::trios::store::served_zone_id(stored, shown.map(|z| z.id.as_str()))
 }

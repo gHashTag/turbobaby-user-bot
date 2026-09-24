@@ -2181,17 +2181,17 @@ pub(crate) fn spawn_event_reminder_loop(
 }
 
 /// Whether the admin API may store an event as public. `false` since the
-/// owner's ruling of 2026-09-24 ("Аренда только пхукет": rental only, Phuket
-/// only), which retired events from every customer surface.
+/// owner's ruling of 2026-09-24 (rental only, Phuket only), which retired
+/// events from every customer surface.
 ///
 /// Every customer read of an event -- the calendar, one event, a booking, a
-/// waitlist join -- filters `is_public = TRUE`, and migration 085 hid every row
-/// it found. What could still reach a customer was this side: a new event
-/// defaulted to public (migration 043's `DEFAULT TRUE` agrees) and an edit could
-/// re-publish a hidden one. Both now store the requested flag ANDed with this
-/// constant, so the customer reads answer empty while the routes, the rows, the
-/// admin records, the bookings and the refund paths all stay. Flipping it back
-/// to `true` restores the old behaviour exactly; nothing was deleted.
+/// waitlist join -- filters `is_public = TRUE`. A new event defaulted to public
+/// (migration 043's `DEFAULT TRUE` agrees) and an edit could re-publish a
+/// hidden one; both now store the requested flag ANDed with this constant.
+/// Rows already public are hidden by migration 088 (085 hid the ones it found),
+/// so once 088 has run the customer reads answer empty, while the routes, the
+/// rows, the admin records, the bookings and the refund paths all stay.
+/// Flipping it back to `true` restores the old write path; nothing was deleted.
 pub(crate) const EVENTS_PUBLISHABLE: bool = false;
 
 /// The `is_public` an admin write may store: the requested flag, and never
@@ -2516,11 +2516,11 @@ mod tests {
         );
     }
 
-    /// Owner decision 2026-09-24 ("Аренда только пхукет"): events are retired
-    /// from every customer surface. Every customer read filters `is_public`
-    /// and migration 085 hid every row it found, so what could still put an
-    /// event in front of a customer was this write: a new event defaulted to
-    /// public and an edit could re-publish a hidden one. Neither can now.
+    /// Owner decision 2026-09-24 (rental only, Phuket only): events are retired
+    /// from every customer surface. Every customer read filters `is_public`,
+    /// and migrations 085 and 088 hide the rows already public, so what could
+    /// still put an event in front of a customer is this write: a new event
+    /// defaulted to public and an edit could re-publish a hidden one. Neither can.
     #[test]
     fn a_new_event_is_never_stored_public_while_events_are_retired() {
         let mut omitted = valid_create();

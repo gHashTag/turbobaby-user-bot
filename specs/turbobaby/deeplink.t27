@@ -393,10 +393,10 @@ pub const LEGACY_LINKS_DO_NOT_EXPIRE : bool = true;
 ; events screens and render the live catalog from their handlers at src/ui/routes.rs:175-200, for
 ; the reason the paragraph above gives for the first three: a link already sent never expires. The
 ; paragraph above is kept as the reading it was, and so is its adjudication, whose numbers moved
-; together as it said they must: turbobaby/legacy-retirement's REPOINTED_ROUTE_COUNT went from 2 to
-; 5 over /sets, /sommelier and the three events paths, and this set from three to six, so the two
-; counts are now six and five over different questions and still not equal by construction (/skate
-; is still a member here and not there). What a p_event payload lands on did not change: the shipped
+; together as it said they must: this set grew by the three events paths, and so did
+; turbobaby/legacy-retirement's REPOINTED_ROUTE_COUNT, whose value is that file's and is not
+; restated here. The two still answer different questions and are still not equal by construction:
+; /skate is a member here and not there. What a p_event payload lands on did not change: the shipped
 ; landing (SHIPPED_LANDING_SITE) already sent it to the fleet, and the parser still answers it.
 pub const LEGACY_ALIAS_COUNT_BEFORE_2026_09_24 : u8 = 3;
 pub const LEGACY_ROUTE_ALIASES_BEFORE_2026_09_24 : [3]str = ["/skate", "/sets", "/sommelier"];

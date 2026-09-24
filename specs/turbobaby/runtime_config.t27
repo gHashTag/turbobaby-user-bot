@@ -86,7 +86,9 @@
 ; every constant here is a variable name, a file path, a boolean or a count.
 ; RE-POINTED 2026-09-24: the src/db/mod.rs lines this file cites past line 385 moved four lines
 ; down when migrations/087_delivery_zones_phuket.sql joined MIGRATIONS, and src/delivery.rs was
-; rewritten for the owner's Phuket zones; every such citation below is re-measured.
+; rewritten for the owner's Phuket zones; every such citation below is re-measured. The same
+; day migrations/088_unpublish_events.sql joined MIGRATIONS too and moved every src/db/mod.rs
+; line past 389 four more; the two cited here are re-measured after it.
 ; phi^2 + 1/phi^2 = 3 | TRINITY
 
 module turbobaby-runtime-config;
@@ -147,7 +149,7 @@ pub const NOTIFICATION_QUEUE_INTERVAL_DECLARATION : str = "POLL_INTERVAL_SECONDS
 ; std::env::var call under src/ plus the two names handed to the collector as literals at
 ; src/config.rs:77. 24 names reach env::var inside src/config.rs; BOT_TOKEN and DATABASE_URL are
 ; read through the closure at :77-79 and so appear in no env::var call there; seven further names
-; are read only outside the resolver -- DB_POOL_MAX (src/db/mod.rs:590), DELIVERY_ZONES_JSON
+; are read only outside the resolver -- DB_POOL_MAX (src/db/mod.rs:594), DELIVERY_ZONES_JSON
 ; (src/delivery.rs:105), PROMPTPAY_ID (src/promptpay.rs:28), RUST_LOG (src/main.rs:393) and the
 ; three RAILWAY_GIT_* names (src/notify.rs:78, :84, :85). Configuration is not resolved in one
 ; place, and the seven are the measure of that.
@@ -339,7 +341,7 @@ pub fn absent_value_refuses_boot(required_always: bool, required_in_production: 
 
 ; Two names are parsed strictly, so a malformed value refuses the boot rather than being
 ; swallowed: PORT (src/config.rs:299-314, unset and empty still default) and DB_POOL_MAX
-; (src/db/mod.rs:545-567, which also refuses a zero because it would deadlock the first query).
+; (src/db/mod.rs:549-571, which also refuses a zero because it would deadlock the first query).
 ; Six are parsed tolerantly and fall back on garbage. The direction is the finding: strictness is
 ; the exception, and one of the six tolerant fallbacks is the identity-bearing default that stayed
 ; open until 2026-09-24 (src/delivery.rs:105-115, :91-101 before that day's rewrite of the file).

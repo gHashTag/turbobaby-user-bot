@@ -266,10 +266,10 @@ fn a_new_order_refuses_a_sale_line() {
 // -- The events API -------------------------------------------------------------------
 
 /// Every customer read of an event filters `is_public`, and migration 085 hid
-/// every event row that existed. What was left open was the admin write: a new
-/// event defaulted to public, and an edit could re-publish a hidden one. Both
-/// now store the flag through `storable_public_flag`, which ANDs it with
-/// `EVENTS_PUBLISHABLE`, which is false.
+/// every event row that existed then (088, below, hides any made public since).
+/// What was left open was the admin write: a new event defaulted to public, and
+/// an edit could re-publish a hidden one. Both now store the flag through
+/// `storable_public_flag`, which ANDs it with `EVENTS_PUBLISHABLE`, which is false.
 #[test]
 fn an_event_can_no_longer_be_published_to_customers() {
     let events = code_of(&source("src/api/events.rs"));
@@ -306,6 +306,30 @@ fn an_event_can_no_longer_be_published_to_customers() {
     assert!(
         update.contains("map(storable_public_flag)"),
         "an edit can re-publish a hidden event again:\n{update}"
+    );
+}
+
+/// The write gate cannot reach a row that is already public: one made public
+/// between migration 085 and the ruling. Migration 088 hides it in 085's shape
+/// -- one visibility UPDATE, no row deleted, no table dropped -- and is
+/// registered, so the runner applies it on the next boot.
+#[test]
+fn every_event_row_still_public_is_hidden_by_088() {
+    let sql = source("migrations/088_unpublish_events.sql");
+    let statements: Vec<&str> = sql
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with("--"))
+        .collect();
+    assert_eq!(
+        statements,
+        ["UPDATE events SET is_public = FALSE WHERE is_public = TRUE;"],
+        "migration 088 is no longer the one visibility UPDATE"
+    );
+    let db = source("src/db/mod.rs");
+    assert!(
+        db.contains("include_str!(\"../../migrations/088_unpublish_events.sql\")"),
+        "migration 088 is not in MIGRATIONS, so no database ever runs it"
     );
 }
 
@@ -355,38 +379,116 @@ fn the_published_self_descriptions_say_rental_only() {
 /// Every translated sentence a customer can be shown names Phuket or no place.
 /// Green on the tree it was written for (measured 2026-09-24: no i18n value
 /// names another island or city); it exists so that stays true.
+///
+/// Widened under review the same day: the place list gained the standard
+/// Russian spelling of Koh Phangan and the four village names of the zones
+/// migration 087 deactivated, in both languages, and the scan now also reads
+/// the bot's own copy (`src/locales.rs`) and every string a screen writes
+/// itself (`src/ui`), comments excepted. Still green on this tree.
 #[test]
 fn no_customer_sentence_names_a_place_other_than_phuket() {
-    let i18n = source("src/trios/i18n.rs");
+    const OTHER_PLACES: [&str; 19] = [
+        "Samui",
+        "Самуи",
+        "Phangan",
+        "Панган",
+        "Пханган",
+        "Pattaya",
+        "Паттай",
+        "Krabi",
+        "Краби",
+        "Bangkok",
+        "Бангкок",
+        // The four villages of the zones migration 087 deactivated.
+        "Thong Sala",
+        "Тонгсала",
+        "Haad Rin",
+        "Хаад Рин",
+        "Srithanu",
+        "Сритхану",
+        "Bottle Beach",
+        "Боттл Бич",
+    ];
     let mut offences = Vec::new();
+    let mut scan = |relative: &str, line_number: usize, text: &str| {
+        for place in OTHER_PLACES {
+            if text.contains(place) {
+                offences.push(format!("{relative}:{line_number} names {place}"));
+            }
+        }
+    };
+
+    let i18n = source("src/trios/i18n.rs");
     for (index, line) in i18n.lines().enumerate() {
         // Only translation arms: `T_KEY => "..."`.
         let Some(arrow) = line.find("=> \"") else {
             continue;
         };
-        let value = &line[arrow..];
-        for place in [
-            "Samui",
-            "Самуи",
-            "Phangan",
-            "Панган",
-            "Pattaya",
-            "Паттай",
-            "Krabi",
-            "Краби",
-            "Bangkok",
-            "Бангкок",
-        ] {
-            if value.contains(place) {
-                offences.push(format!("src/trios/i18n.rs:{} names {place}", index + 1));
+        scan("src/trios/i18n.rs", index + 1, &line[arrow..]);
+    }
+
+    // The bot's replies: every string literal in the locale table.
+    let locales = source("src/locales.rs");
+    for (index, line) in code_of(&locales).lines().enumerate() {
+        if line.contains('"') {
+            scan("src/locales.rs", index + 1, line);
+        }
+    }
+
+    // Strings a screen writes itself, outside the translation table.
+    let screens = rust_files_under("src/ui");
+    for path in &screens {
+        let relative = path
+            .strip_prefix(repo_root())
+            .unwrap_or(path)
+            .to_string_lossy()
+            .replace('\\', "/");
+        let text = fs::read_to_string(path)
+            .unwrap_or_else(|e| panic!("{relative} must read: {e}"))
+            .replace("\r\n", "\n");
+        for (index, line) in code_of(&text).lines().enumerate() {
+            if line.contains('"') {
+                scan(&relative, index + 1, line);
             }
         }
     }
+
     assert!(
         offences.is_empty(),
         "a customer sentence names a place other than Phuket:\n  {}",
         offences.join("\n  ")
     );
-    // D16: the scan must be reading translation arms that name Phuket.
+    // D16: each scan must be reading text that names Phuket, or it read nothing.
     assert!(i18n.contains("Пхукет") && i18n.contains("Phuket"));
+    assert!(locales.contains("Пхукет") && locales.contains("Phuket"));
+    assert!(
+        screens.len() > 20,
+        "the screen scan found {} files under src/ui",
+        screens.len()
+    );
+}
+
+/// A zone id saved before migration 087 can name a Koh Phangan row the server
+/// no longer serves; `POST /api/orders` refuses it with 422. The checkout sends
+/// the saved id only while the picker shows that same zone
+/// (`crate::trios::store::served_zone_id`, unit-tested beside it), never the
+/// raw signal.
+#[test]
+fn the_checkout_never_submits_a_saved_zone_the_served_list_lacks() {
+    let checkout = code_of(&source("src/ui/screens/checkout_screen.rs"));
+    assert!(
+        !checkout.contains("\"delivery_zone_id\": delivery_zone_id(),"),
+        "the checkout submits the raw saved zone id again"
+    );
+    assert!(
+        checkout.contains(
+            "\"delivery_zone_id\": zone_to_submit(delivery_zone_id(), zone_info.as_ref()),"
+        ),
+        "the order body no longer carries the zone the picker shows"
+    );
+    let helper = span(&checkout, "fn zone_to_submit(", "\n}", "zone_to_submit");
+    assert!(
+        helper.contains("served_zone_id(stored, shown.map(|z| z.id.as_str()))"),
+        "zone_to_submit no longer asks served_zone_id:\n{helper}"
+    );
 }
