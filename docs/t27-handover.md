@@ -12,24 +12,24 @@ what to do next.
 | | measured 2026-09-21 |
 | --- | --- |
 | canonical contracts | **45** (44 under `specs/turbobaby/` + `specs/agents/turbobaby.t27`) |
-| assertions executed, all passing | **9 859** — re-measured 2026-09-24 after #59–#62 (9 535 earlier that day, 9 514 on 2026-09-23 before that day's money family, 9 038 on 2026-09-22, 8 911 on 2026-09-21) |
+| assertions executed, all passing | **9 996** — re-measured 2026-09-24 after #63 (9 859 after #62, 9 535 earlier that day, 9 514 on 2026-09-23 before that day's money family, 9 038 on 2026-09-22, 8 911 on 2026-09-21) |
 | contract-to-contract ownership edges | 203+, **zero dangling** |
 | source lines named by some contract | **73 407 of 80 308 (91.4 %)** |
-| enforced contract-to-source bindings | **227**, across 41 of 45 contracts and 78 source files — re-measured 2026-09-24 after #59–#62 (198 earlier that day, 197 on 2026-09-23, 168 across 40 on 2026-09-22, 66 across 16 on 2026-09-21) |
+| enforced contract-to-source bindings | **237**, across 41 of 45 contracts and 80 source files — re-measured 2026-09-24 after #63 (227 after #62, 198 earlier that day, 197 on 2026-09-23, 168 across 40 on 2026-09-22, 66 across 16 on 2026-09-21) |
 
-The two re-measured rows come from gates 2 and 3, run on the landing tree on 2026-09-24 (main after
-#61 with the spec-hygiene change on top). The other three rows were not re-measured and keep their
+The two re-measured rows come from gates 2 and 3, run on the landing tree on 2026-09-24 (the
+rental-only change of #63 on top of main after #62). The other three rows were not re-measured and keep their
 2026-09-21 reading. Gate 1's 45 floors equal the pinned compiler's counts on the same tree.
 
 ```sh
 python3 scripts/execute_t27_assertions.py --no-crosscheck
-# OK - 45 spec(s), 9859 assert line(s) scanned, 9859 executed, 9859 passed, 0 failed
+# OK - 45 spec(s), 9996 assert line(s) scanned, 9996 executed, 9996 passed, 0 failed
 python3 scripts/verify_t27_against_source.py --require-git-tracked
-# OK - 227 bindings hold across 41 contracts and 78 source files
+# OK - 237 bindings hold across 41 contracts and 80 source files
 ```
 
 The last two rows are the ones to keep apart. *Named* means a contract cites the file. *Bound* means
-a gate fails when the two disagree. 91.4 % is a floor on attention; 227 (2026-09-24; 198 earlier
+a gate fails when the two disagree. 91.4 % is a floor on attention; 237 (2026-09-24; 227 after #62, 198 earlier
 that day, 197 on 2026-09-23, 168 on 2026-09-22, 66 on 2026-09-21) is the number that actually
 holds, and it is the one worth growing.
 
@@ -48,6 +48,7 @@ last read-only smoke, and a merge deploys nothing (see the last section and `doc
 | #60 | the owner's eighteen Phuket delivery zones (migration 087; Airport 690), no ETA published anywhere, the Koh Phangan rows deactivated; `dist/` bundle `a41a77c967b58518` |
 | #61 | no PromptPay QR under one satang (422); a rental deposit must equal the family's published figure, per unit |
 | #62 | spec hygiene: brain citations re-read, one owner per restated fact (the migration census is schema-provenance's), ride handling bound to `ride.js`, a negative control for the seed gate, a cannabis-era vocabulary guard, gate-1 floors equal to the measurement |
+| #63 | rental only, Phuket only (owner, 2026-09-24): buy-out and events retired from every customer surface, migration 088 hides any public event, no row deleted; `dist/` bundle `17f356526a369bb9` |
 
 ```sh
 python D:/t27work/coverage_2109.py .     # the naming measurement, if you keep the helper
@@ -418,6 +419,9 @@ None of these is unblocked by more `.t27`:
 **Decided on 2026-09-24**, and no longer open: TurboBaby's delivery zones. The owner chose the
 sheet's sixteen zones at the sheet's prices, the airport at 690, and no minutes shown. That is
 DECISIONS.md D19 addendum and `delivery_terms.t27`, recorded in the brain as decision 24.09.2026-1.
+Also decided that day: **rental only, Phuket only.** Bike sales and events leave every customer
+surface, and referrals, loyalty and the ride game stay (#63, DECISIONS.md, `legacy_retirement.t27`).
+The questions that ruling left open are listed in #63.
 
 **Opened on 2026-09-24** by the changes above. Each one waits on the owner and is named in its PR:
 
@@ -446,8 +450,8 @@ DECISIONS.md D19 addendum and `delivery_terms.t27`, recorded in the brain as dec
 
 ### 4. The axis worth growing
 
-**227 bindings over 214 distinct constants** — a reading of 2026-09-24 after #62, 214 of 5 484
-declared constants (3.9 %). Earlier that day: 198 over 190. On 2026-09-23: 197 over 189. On 2026-09-22 it was 168 bindings over 164 of 4 997 declared constants (3.3 %); on
+**237 bindings over 224 distinct constants** — a reading of 2026-09-24 after #63, 224 of 5 564
+declared constants (4.0 %). Earlier that day: 227 over 214 after #62, 198 over 190. On 2026-09-23: 197 over 189. On 2026-09-22 it was 168 bindings over 164 of 4 997 declared constants (3.3 %); on
 2026-09-21, 66 bindings of roughly 4 200. *Corrected 2026-09-24:* 4 997 is the gate-3 header's
 count — lines that start with `pub const ` at column zero — and it reproduces exactly on the
 2026-09-22 tree. The same count reads 5 310 today, which makes 3.6 %. The command below counts every
@@ -455,8 +459,8 @@ count — lines that start with `pub const ` at column zero — and it reproduce
 
 ```sh
 grep -E '^\s+"(spec|const)":' scripts/verify_t27_against_source.py \
-  | awk '/"spec":/{s=$2} /"const":/{print s" "$2}' | sort -u | wc -l                 # 214 (190 before #59)
-cat specs/turbobaby/*.t27 specs/agents/turbobaby.t27 | grep -cE '^\s*(pub\s+)?const\s'   # 5507 (5333 before #59)
+  | awk '/"spec":/{s=$2} /"const":/{print s" "$2}' | sort -u | wc -l                 # 224 (190 before #59)
+cat specs/turbobaby/*.t27 specs/agents/turbobaby.t27 | grep -cE '^\s*(pub\s+)?const\s'   # 5587 (5333 before #59)
 ```
  Every new binding is a fact that can no longer
 drift silently. `scripts/verify_t27_against_source.py` is table-driven: adding one is a few lines,
@@ -494,8 +498,8 @@ citations** — unlike a `src/` citation, which gate 3 can check.
 >
 > The work, in order: fix the seven defects listed under "What is actually left", each with a test
 > that is red before the fix and with the contract that records the defect corrected in the same
-> change; then grow `scripts/verify_t27_against_source.py` beyond its 227 bindings (re-measured
-> 2026-09-24 after #62; 198 earlier that day, 197 on 2026-09-23, 168 on 2026-09-22, 66 on
+> change; then grow `scripts/verify_t27_against_source.py` beyond its 237 bindings (re-measured
+> 2026-09-24 after #63; 227 after #62, 198 earlier that day, 197 on 2026-09-23, 168 on 2026-09-22, 66 on
 > 2026-09-21), because a contract nothing binds only describes the code.
 >
 > Three rules this corpus is built on, and they are not style: never invent a number — where the
