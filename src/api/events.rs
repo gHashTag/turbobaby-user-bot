@@ -208,7 +208,7 @@ fn validate_event_request(
             return Err(bad(format!("price_stars вне диапазона 0..1e9 ({stars})")));
         }
     }
-    let is_public = req.is_public.unwrap_or(true);
+    let is_public = storable_public_flag(req.is_public.unwrap_or(true));
     Ok((is_public, starts_at, ends_at))
 }
 
@@ -309,7 +309,7 @@ fn validate_update_request(
             return Err(bad(format!("price_stars вне диапазона 0..1e9 ({stars})")));
         }
     }
-    Ok((req.is_public, starts_at, ends_at))
+    Ok((req.is_public.map(storable_public_flag), starts_at, ends_at))
 }
 
 fn event_row(r: &sea_orm::QueryResult) -> Value {
@@ -2180,6 +2180,28 @@ pub(crate) fn spawn_event_reminder_loop(
     });
 }
 
+/// Whether the admin API may store an event as public. `false` since the
+/// owner's ruling of 2026-09-24 ("Аренда только пхукет": rental only, Phuket
+/// only), which retired events from every customer surface.
+///
+/// Every customer read of an event -- the calendar, one event, a booking, a
+/// waitlist join -- filters `is_public = TRUE`, and migration 085 hid every row
+/// it found. What could still reach a customer was this side: a new event
+/// defaulted to public (migration 043's `DEFAULT TRUE` agrees) and an edit could
+/// re-publish a hidden one. Both now store the requested flag ANDed with this
+/// constant, so the customer reads answer empty while the routes, the rows, the
+/// admin records, the bookings and the refund paths all stay. Flipping it back
+/// to `true` restores the old behaviour exactly; nothing was deleted.
+pub(crate) const EVENTS_PUBLISHABLE: bool = false;
+
+/// The `is_public` an admin write may store: the requested flag, and never
+/// `true` while [`EVENTS_PUBLISHABLE`] is false. Used on create (where an
+/// omitted flag still reads as a request for public) and on edit (where an
+/// omitted flag leaves the stored one alone).
+fn storable_public_flag(requested: bool) -> bool {
+    requested && EVENTS_PUBLISHABLE
+}
+
 // ── Tests ────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -2492,5 +2514,32 @@ mod tests {
             },
             "a count that is false about this event was accepted as harmless"
         );
+    }
+
+    /// Owner decision 2026-09-24 ("Аренда только пхукет"): events are retired
+    /// from every customer surface. Every customer read filters `is_public`
+    /// and migration 085 hid every row it found, so what could still put an
+    /// event in front of a customer was this write: a new event defaulted to
+    /// public and an edit could re-publish a hidden one. Neither can now.
+    #[test]
+    fn a_new_event_is_never_stored_public_while_events_are_retired() {
+        let mut omitted = valid_create();
+        omitted.is_public = None;
+        assert!(!validate_event_request(&omitted).expect("valid create").0);
+        // `valid_create` asks for a public event outright.
+        assert!(
+            !validate_event_request(&valid_create())
+                .expect("valid create")
+                .0
+        );
+
+        let update = |body: Value| -> Option<bool> {
+            let req: UpdateEventRequest = serde_json::from_value(body).expect("update body");
+            validate_update_request(&req).expect("valid update").0
+        };
+        assert_eq!(update(json!({ "is_public": true })), Some(false));
+        assert_eq!(update(json!({ "is_public": false })), Some(false));
+        // An edit that does not mention the flag leaves the stored one alone.
+        assert_eq!(update(json!({})), None);
     }
 }

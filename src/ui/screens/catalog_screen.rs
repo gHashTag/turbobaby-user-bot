@@ -1,4 +1,4 @@
-//! TurboBaby fleet catalog — the rental / sales list screen.
+//! TurboBaby fleet catalog — the rental list screen (rental only since 2026-09-24).
 //!
 //! Replaces the cannabis menu grid. Two screens make up the catalog: this
 //! list, and [`BikeDetail`](crate::ui::screens::bike_detail::BikeDetail),
@@ -123,24 +123,24 @@ pub struct ApiBike {
     pub deposit_thb: Option<f64>,
     #[serde(default)]
     pub monthly_low_season_thb: Option<f64>,
-    /// Buy-out price. Never derived from what TurboBaby paid for the unit
-    /// (D14) — when the shop publishes no sale price this stays `None`.
+    /// Buy-out price. Parsed and, since 2026-09-24, not rendered: the owner
+    /// ruled that day that a customer may only rent. Never derived from what
+    /// TurboBaby paid for the unit (D14).
     #[serde(default)]
     pub sale_price_thb: Option<f64>,
-    /// Whether this family is offered for sale at all. `None` means the API
-    /// does not say, and the detail screen falls back to "there is a
-    /// published sale price" rather than claiming anything.
+    /// Whether this family is offered for sale. Parsed and, since 2026-09-24,
+    /// not rendered, like `sale_price_thb`; the public API now serves it as
+    /// `false` and the price as `null` whatever the row holds
+    /// (`BikeListing::with_sale_withheld`), and the admin list keeps both.
     ///
-    /// This used to be the live case for every response: `bikes.for_sale` did
-    /// not exist as a column, so `/api/bikes` served no such key and serde
-    /// filled it with `None` on every family — leaving the left half of
-    /// `bike_detail.rs`'s `for_sale == Some(true) || sale_price.is_some()`
-    /// dead since the day it was written. `migrations/086_bikes_for_sale.sql`
-    /// added the column and the DTO now carries it, so the key is always
-    /// present on the wire (`the_wire_always_carries_for_sale` in
-    /// `src/api/bikes.rs`). `Option` stays because an old cached bundle
-    /// talking to a new server, or the reverse, must degrade rather than fail
-    /// to parse.
+    /// Until 2026-09-24 the detail screen showed a buy-out block on
+    /// `for_sale == Some(true) || sale_price.is_some()`, a data gate one
+    /// admin tick could open. `migrations/086_bikes_for_sale.sql` added the
+    /// column, so the key is always present on the wire
+    /// (`the_wire_always_carries_for_sale` in `src/api/bikes.rs`), and it
+    /// stays there so that no money key is ever omitted (D9). `Option` stays
+    /// because an old cached bundle talking to a new server, or the reverse,
+    /// must degrade rather than fail to parse.
     #[serde(default)]
     pub for_sale: Option<bool>,
     /// `Some(false)` closes the family to new rentals (D12: CLICK 125).

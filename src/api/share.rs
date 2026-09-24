@@ -299,11 +299,11 @@ async fn load_card(
             "SELECT name AS title, COALESCE(description, '') AS description, \
              total_price::float8 AS price, image_url FROM sets WHERE id = $1"
         }
-        ShareKind::Event => {
-            "SELECT title AS title, COALESCE(description, '') AS description, \
-             price_baht::float8 AS price, image_url, starts_at, ends_at \
-             FROM events WHERE id = $1"
-        }
+        // Events left every customer surface on 2026-09-24 (owner: rental
+        // only), and this lookup had no `is_public` filter, so a hidden event
+        // still rendered into a card by id. Answered as the strain kind above:
+        // parseable, so the client wire cannot diverge, and not found.
+        ShareKind::Event => return Ok(None),
     };
     let row = state
         .db

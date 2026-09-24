@@ -427,3 +427,39 @@ ETA, because none is published; the shop promises a window. The pickup row stays
 The table, its sources and the two rules it does not model (the sheet's out-of-belt price
 and the 17:30 cut-off) are in `specs/turbobaby/delivery_terms.t27`. The legacy screens are
 still open.
+
+## D19 addendum — rental only, Phuket only, decided 2026-09-24
+
+Owner decision in chat, 2026-09-24: «Аренда только пхукет». Earlier the same week the owner
+kept the referral programme, loyalty and the ride game, and put events and bike sales on the
+retirement plan. So a customer may only rent a bike, and only in Phuket. Kept at the end of this
+file, like the two entries above, so that no line citation into it moves.
+
+This reverses two things D19 left open on purpose, and says so rather than editing D19: the
+event screens and endpoints no longer wait for "a future TurboBaby event" on a public slate, and
+issue #11's customer buy-out (migration 086) is withdrawn from customers. Nothing is deleted —
+a placed order may carry a sale line and a booking may name an event — so the retirement follows
+this repository's precedent: data kept, surfaces changed, the change named.
+
+* **Events.** `/events`, `/events/:id` and `/my-bookings` stay declared and render the catalog,
+  as `/sets` and `/sommelier` do; the events screens stay compiled and unmounted. The admin API
+  can no longer store an event as public (`EVENTS_PUBLISHABLE = false` in `src/api/events.rs`),
+  and every customer read filters that flag, so the calendar answers empty. The event share card
+  answers not found, as the retired strain kind does. Kept: the customer's bookings list and
+  self-cancel over HTTP and the admin cancel (the two Stars refund paths), the guest list, the
+  24-hour reminder to a seat already held, the admin Events tab, and the event rows 085 hid.
+* **Bike sales.** The bike detail overlay renders no buy-out block. `GET /api/bikes` and
+  `GET /api/bikes/:key` serve `for_sale: false` and `sale_price_thb: null` whatever the row
+  holds; the admin list keeps the stored values and no row is written. `POST /api/orders`
+  refuses a new `bike_sale` line with 422; placed sale orders still read. The admin sale
+  inputs stay, as the admin tabs of the Woody catalogue stayed under 085.
+* **Copy.** The catalog subtitle loses its buying half, word for word: «Аренда и выкуп на
+  Пхукете» → «Аренда на Пхукете», "Rent or buy on Phuket" → "Rent on Phuket". The served API
+  description, the README and the agent card lose "and sales" the same way. No sentence was
+  written new.
+* **Phuket.** No customer sentence names another place; the Phangan zones went with 087.
+
+The contracts carry the details: `specs/turbobaby/legacy_retirement.t27` records the ruling and
+classifies it (the target is hidden data under an unreachable surface, which that file does not
+call a completed retirement), `events_booking.t27`, `catalog_api.t27`, `commerce.t27` and
+`deeplink.t27` correct the facts it changed, and `tests/rental_only_wiring.rs` guards the source.

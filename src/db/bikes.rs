@@ -539,6 +539,30 @@ pub async fn list_service_records_for_unit(
     Ok(models.into_iter().map(BikeServiceRecord::from).collect())
 }
 
+// ──────────────────────────────────────────────────────────────────
+// The public view
+// ──────────────────────────────────────────────────────────────────
+
+impl BikeListing {
+    /// The family as a CUSTOMER may see it: the same listing with its sale
+    /// offer withheld. The owner ruled on 2026-09-24 that a customer may only
+    /// rent (rental only, Phuket only), so `GET /api/bikes` and
+    /// `GET /api/bikes/:key` serve `for_sale: false` and
+    /// `sale_price_thb: null` whatever the row holds.
+    ///
+    /// Both keys stay on the wire -- a money key is never omitted (D9), and an
+    /// old cached client keeps parsing -- and the row is not touched: this is
+    /// a copy for serialisation, the mask-on-read shape `public_display_name`
+    /// set, so the admin list, which serialises the stored listing, still
+    /// shows the shop's own sale fields.
+    pub(crate) fn with_sale_withheld(&self) -> BikeListing {
+        let mut public = self.clone();
+        public.bike.for_sale = false;
+        public.bike.sale_price_thb = None;
+        public
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -771,5 +795,26 @@ mod tests {
             discount: f64::NAN,
         });
         assert_eq!(broken.discount, None);
+    }
+
+    /// Owner decision 2026-09-24: the public view of a family carries no sale
+    /// offer, and taking it leaves the stored listing exactly as it was.
+    #[test]
+    fn test_the_public_view_withholds_the_sale_offer_and_keeps_the_row() {
+        let mut stored = BikeListing {
+            bike: Bike::from(bike_model(Some(449.0), Some(3000.0), None, Some(250_000.0))),
+            units_available: 2,
+        };
+        stored.bike.for_sale = true;
+        let public = stored.with_sale_withheld();
+        assert!(!public.bike.for_sale);
+        assert_eq!(public.bike.sale_price_thb, None);
+        // Everything a renter needs is untouched.
+        assert_eq!(public.bike.base_rate_thb_day, Some(449.0));
+        assert_eq!(public.bike.deposit_thb, Some(3000.0));
+        assert_eq!(public.units_available, 2);
+        // And the stored listing, which the admin serialises, keeps both.
+        assert!(stored.bike.for_sale);
+        assert_eq!(stored.bike.sale_price_thb, Some(250_000.0));
     }
 }

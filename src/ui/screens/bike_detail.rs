@@ -1,10 +1,16 @@
-//! One bike family in full: specs, the price block, the published term ladder,
-//! who confirms availability, and the buy-out block.
+//! One bike family in full: specs, the price block, the published term ladder
+//! and who confirms availability. The buy-out block that closed this list
+//! until 2026-09-24 is gone: the owner ruled that day that a customer may only
+//! rent (rental only, Phuket only), so the screen renders no sale price, no
+//! sale heading and no sale enquiry, whatever the family row holds. The wire
+//! fields `sale_price_thb` and `for_sale` stay parsed in `catalog_screen.rs`
+//! and the `T_BIKE_SALE_*` keys stay translated, as `colors_available` and
+//! `T_BIKE_FILTER_FREE_NOW` did when their render was removed.
 //!
 //! # Money
 //!
-//! Not one number is formatted here. Every price, deposit, monthly rate and
-//! sale price goes through [`money_thb`](super::catalog_screen::money_thb),
+//! Not one number is formatted here. Every price, deposit and monthly rate
+//! goes through [`money_thb`](super::catalog_screen::money_thb),
 //! the single renderer in `catalog_screen.rs`, which returns an em dash for a
 //! value the shop has not published (D9). There is no `unwrap_or(0.0)` and no
 //! `unwrap_or_default()` in this file. The big number is present only when
@@ -67,10 +73,9 @@ use crate::trios::i18n::{
     T_BIKE_COLORS_ALL, T_BIKE_DEPOSIT, T_BIKE_MODEL_YEARS, T_BIKE_MONTHLY_LOW_SEASON,
     T_BIKE_NOT_OFFERED_ALTERNATIVES, T_BIKE_NOT_OFFERED_TITLE, T_BIKE_PER_DAY,
     T_BIKE_PRICE_ON_REQUEST, T_BIKE_PRICE_TITLE, T_BIKE_QUOTE_NOTE, T_BIKE_RATE_PER_DAY,
-    T_BIKE_SALE_PRICE, T_BIKE_SALE_TITLE, T_BIKE_TARIFF_BEFORE_DISCOUNT, T_BIKE_TERMS_NOTE,
-    T_BIKE_TERMS_TITLE, T_BIKE_TERM_DAYS, T_BIKE_TERM_DAYS_OPEN, T_BIKE_TERM_DISCOUNT_ONE,
-    T_BIKE_TERM_DISCOUNT_RANGE, T_BIKE_TERM_MONTH, T_BIKE_TERM_TWO_WEEKS, T_BIKE_TERM_WEEK,
-    T_BIKE_UNITS_EMPTY, T_BIKE_UNITS_TITLE,
+    T_BIKE_TARIFF_BEFORE_DISCOUNT, T_BIKE_TERMS_NOTE, T_BIKE_TERMS_TITLE, T_BIKE_TERM_DAYS,
+    T_BIKE_TERM_DAYS_OPEN, T_BIKE_TERM_DISCOUNT_ONE, T_BIKE_TERM_DISCOUNT_RANGE, T_BIKE_TERM_MONTH,
+    T_BIKE_TERM_TWO_WEEKS, T_BIKE_TERM_WEEK, T_BIKE_UNITS_EMPTY, T_BIKE_UNITS_TITLE,
 };
 use crate::ui::components::card_media::CardMedia;
 use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
@@ -246,13 +251,6 @@ fn render_detail(
             .collect::<Vec<String>>(),
     );
 
-    // D14: the sale block never derives a price from what the unit cost. A
-    // family flagged for sale with no published price shows a dash and the
-    // manager line — the enquiry action below is a real Telegram link, not a
-    // button with nothing behind it (issue #11).
-    let sale_price = finite_money(bike.sale_price_thb);
-    let show_sale_block = bike.for_sale == Some(true) || sale_price.is_some();
-
     let block = book_block(&bike, on_book.is_some());
     let family_key = bike.key.clone();
     let manager = manager_link();
@@ -427,38 +425,10 @@ fn render_detail(
                 }
             })}
 
-            // ── Buy-out ──────────────────────────────────────────────────────
-            {show_sale_block.then(|| rsx! {
-                div { style: "margin-top:16px;",
-                    h2 { style: section_title_style(), {t(lang, T_BIKE_SALE_TITLE)} }
-                    div { style: "border:4px solid #2a2a4a;background:#16213e;padding:12px;",
-                        div { style: "display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;",
-                            span { style: "font-size:13px;color:#888;", {t(lang, T_BIKE_SALE_PRICE)} }
-                            span { style: "font-size:20px;font-weight:800;color:#ffe600;text-shadow:2px 2px 0 #000;",
-                                {money_thb(bike.sale_price_thb)}
-                            }
-                        }
-                        {sale_price.is_none().then(|| rsx! {
-                            div { style: "font-size:13px;color:#888;font-style:italic;margin-top:6px;",
-                                {t(lang, T_BIKE_PRICE_ON_REQUEST)}
-                            }
-                        })}
-                        // Rendered only when a real contact exists behind it.
-                        {manager.clone().map(|url| rsx! {
-                            button {
-                                style: "
-                                    margin-top:10px;width:100%;
-                                    font-size:15px;font-weight:700;padding:12px;
-                                    background:#00e5ff;color:#000;
-                                    border:4px solid #000;box-shadow:3px 3px 0 #000;cursor:pointer;
-                                ",
-                                onclick: move |_| crate::ui::share::open_telegram_link(&url),
-                                {t(lang, T_BIKE_ASK_MANAGER)}
-                            }
-                        })}
-                    }
-                }
-            })}
+            // The buy-out block stood here until 2026-09-24 (owner: rental
+            // only). A data gate was not a retirement -- one admin tick of the
+            // sale flag put it back in front of every customer -- so the render
+            // itself is gone. The manager contact stays on the Book block below.
 
             // ── Book ─────────────────────────────────────────────────────────
             div { style: "margin-top:20px;",

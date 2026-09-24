@@ -473,7 +473,7 @@ async fn list_bikes(
 
     let families = listings
         .iter()
-        .map(|l| family_json(l, &discounts, &door))
+        .map(|l| family_json(&l.with_sale_withheld(), &discounts, &door))
         .collect::<Result<Vec<Value>, StatusCode>>()?;
     let body = json!({ "bikes": families }).to_string();
 
@@ -555,7 +555,7 @@ async fn get_bike(
     let units = load_units(&state, &listing.bike.id).await?;
     let door = ask_door(&[listing.bike.key.as_str()]).await;
 
-    let bike = family_detail_json(&listing, &discounts, &units, &door)?;
+    let bike = family_detail_json(&listing.with_sale_withheld(), &discounts, &units, &door)?;
     Ok(Json(json!({ "bike": bike })))
 }
 
@@ -2710,6 +2710,38 @@ mod tests {
             unique.len(),
             keys.len(),
             "two selections collapsed to one cache key: {keys:?}"
+        );
+    }
+
+    #[test]
+    fn the_public_catalog_serves_both_sale_keys_withheld() {
+        // Owner decision 2026-09-24: rental only. `list_bikes` and `get_bike`
+        // serialise `with_sale_withheld()`; `admin_list_bikes` serialises the
+        // stored listing. Both keys stay present on the public body (D9, and
+        // `the_wire_always_carries_for_sale` above), with nothing behind them.
+        let mut stored = listing("xmax-300-new", "motorcycle", Some(900.0));
+        stored.bike.for_sale = true;
+        stored.bike.sale_price_thb = Some(250_000.0);
+
+        let public = family_json(
+            &stored.with_sale_withheld(),
+            &scooter_ladder(),
+            &silent_door(),
+        )
+        .expect("json");
+        assert_eq!(obj_of(&public).get("for_sale"), Some(&json!(false)));
+        assert_eq!(obj_of(&public).get("sale_price_thb"), Some(&json!(null)));
+        // The rental half of the card is untouched.
+        assert_eq!(
+            obj_of(&public).get("base_rate_thb_day"),
+            Some(&json!(900.0))
+        );
+
+        let admin = family_json(&stored, &scooter_ladder(), &silent_door()).expect("json");
+        assert_eq!(obj_of(&admin).get("for_sale"), Some(&json!(true)));
+        assert_eq!(
+            obj_of(&admin).get("sale_price_thb"),
+            Some(&json!(250_000.0))
         );
     }
 }

@@ -6,9 +6,9 @@
 use crate::ui::components::lazy_screen::LazyScreen;
 use crate::ui::screens::{
     ARHuntScreen, AccessoriesScreen, AdminScreen, CartScreen, CatalogScreen, CheckoutScreen,
-    EventDetailScreen, EventsScreen, GameScreen, HomeScreen, LocationQuestScreen, MenuScreen,
-    MyBookingsScreen, OrderDetailScreen, OrdersScreen, ProfileScreen, QuestScreen, ReferralsScreen,
-    RideScreen, SuccessScreen, TeaScreen, TechTreeScreen, TreasureHuntScreen,
+    GameScreen, HomeScreen, LocationQuestScreen, MenuScreen, OrderDetailScreen, OrdersScreen,
+    ProfileScreen, QuestScreen, ReferralsScreen, RideScreen, SuccessScreen, TeaScreen,
+    TechTreeScreen, TreasureHuntScreen,
 };
 use crate::ui::share::{PendingOrder, PendingReorder, SharedProduct};
 use dioxus::prelude::*;
@@ -172,30 +172,30 @@ fn Tea() -> Element {
     }
 }
 
+/// `/events`, `/events/:id` and `/my-bookings` survive as compatibility
+/// aliases, exactly as `/sets` does. Events left every customer surface on the
+/// owner's ruling of 2026-09-24 (rental only, Phuket only); the rows stay, the
+/// events screens stay compiled and unmounted, and an old link or bookmark
+/// lands on the catalog instead of a router miss or a hidden calendar.
 #[component]
 fn Events() -> Element {
     rsx! {
-        LazyScreen {
-            EventsScreen {}
-        }
+        CatalogScreen {}
     }
 }
 
 #[component]
 fn EventDetail(id: String) -> Element {
+    let _ = id;
     rsx! {
-        LazyScreen {
-            EventDetailScreen { id }
-        }
+        CatalogScreen {}
     }
 }
 
 #[component]
 fn MyBookings() -> Element {
     rsx! {
-        LazyScreen {
-            MyBookingsScreen {}
-        }
+        CatalogScreen {}
     }
 }
 

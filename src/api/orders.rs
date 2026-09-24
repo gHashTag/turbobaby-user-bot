@@ -378,11 +378,11 @@ fn validate_bike_lines(items: &[OrderItem], today: chrono::NaiveDate) -> Result<
                     Some(DepositForm::Passport) | None => {}
                 }
             }
-            BikeDeal::BikeSale { price_thb } => {
-                if !quoted_ok(*price_thb) {
-                    return Err(StatusCode::BAD_REQUEST);
-                }
+            BikeDeal::BikeSale { price_thb } if !quoted_ok(*price_thb) => {
+                return Err(StatusCode::BAD_REQUEST);
             }
+            // Retired 2026-09-24 (owner: rental only). Placed sale lines still read.
+            BikeDeal::BikeSale { .. } => return Err(StatusCode::UNPROCESSABLE_ENTITY),
         }
     }
     Ok(())
@@ -3496,7 +3496,7 @@ mod tests {
                     deposit: None,
                 },
             ),
-            bike_item("cb-650r", 1.0, BikeDeal::BikeSale { price_thb: None }),
+            // A sale line stood here until 2026-09-24: see bike_sale_lines_are_retired.
         ];
         assert!(validate_bike_lines(&items, today()).is_ok());
     }
@@ -4052,5 +4052,47 @@ mod tests {
                 published: 3000.0
             })
         );
+    }
+
+    /// Owner decision 2026-09-24 ("Аренда только пхукет"): bike sales are
+    /// retired from every customer surface, so a NEW sale line is refused at
+    /// the boundary -- 422, like the other "you cannot have this" refusals,
+    /// with no new sentence. A malformed price is still malformed first (the
+    /// 400 tests above are unchanged), and `BikeDeal::BikeSale` stays in the
+    /// vocabulary because placed orders carry it.
+    #[test]
+    fn bike_sale_lines_are_retired() {
+        for price in [None, Some(250_000.0)] {
+            let items = vec![bike_item(
+                "cb-650r",
+                1.0,
+                BikeDeal::BikeSale { price_thb: price },
+            )];
+            assert_eq!(
+                validate_bike_lines(&items, today()).unwrap_err(),
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "a sale line priced {price:?} was admitted"
+            );
+        }
+        // A sale line cannot ride along with a rental either.
+        let mixed = vec![
+            bike_item(
+                "xadv-750",
+                1.0,
+                BikeDeal::BikeRental {
+                    rental_start: today() + chrono::Duration::days(2),
+                    rental_end: today() + chrono::Duration::days(9),
+                    rate_thb_day: None,
+                    deposit: None,
+                },
+            ),
+            bike_item("cb-650r", 1.0, BikeDeal::BikeSale { price_thb: None }),
+        ];
+        assert_eq!(
+            validate_bike_lines(&mixed, today()).unwrap_err(),
+            StatusCode::UNPROCESSABLE_ENTITY
+        );
+        // The rental alone is still admitted with its money absent (D9/D11).
+        assert!(validate_bike_lines(&mixed[..1], today()).is_ok());
     }
 }

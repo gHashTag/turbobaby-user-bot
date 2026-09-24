@@ -1273,7 +1273,7 @@ fn get_ru_translation(key: Key) -> Value {
 
         // Bikes
         T_BIKE_CATALOG_TITLE => "Байки",
-        T_BIKE_CATALOG_DESC => "Аренда и выкуп на Пхукете",
+        T_BIKE_CATALOG_DESC => "Аренда на Пхукете",
         T_BIKE_FILTER_SCOOTER => "Скутеры",
         T_BIKE_FILTER_MOTORCYCLE => "Мотоциклы",
         T_BIKE_FILTER_FREE_NOW => "Свободны сейчас",
@@ -1872,7 +1872,7 @@ fn get_en_translation(key: Key) -> Value {
 
         // Bikes
         T_BIKE_CATALOG_TITLE => "Bikes",
-        T_BIKE_CATALOG_DESC => "Rent or buy on Phuket",
+        T_BIKE_CATALOG_DESC => "Rent on Phuket",
         T_BIKE_FILTER_SCOOTER => "Scooters",
         T_BIKE_FILTER_MOTORCYCLE => "Motorcycles",
         T_BIKE_FILTER_FREE_NOW => "Free now",

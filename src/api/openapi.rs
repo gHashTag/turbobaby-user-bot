@@ -143,7 +143,7 @@ pub(crate) async fn get_loyalty_tiers_doc() {}
         // that read the spec. The rebrand sweeps grep source for user-visible
         // strings, and a string is user-visible when the machine hands it out,
         // not only when a screen paints it.
-        description = "REST API for TurboBaby Bot — motorbike rental and sales Telegram Mini App. \
+        description = "REST API for TurboBaby Bot — motorbike rental Telegram Mini App. \
                        Provides endpoints for the bike catalog, rentals, orders, loyalty program, and admin management.",
         contact(
             name = "TurboBaby Bot",

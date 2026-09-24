@@ -118,7 +118,13 @@ pub const REUSES_PUBLICATION_ID : str = "turbobaby/publication";
 pub const REUSES_DELIVERY_TERMS_ID : str = "turbobaby/delivery-terms";
 pub const REUSES_GAME_SCORE_ID : str = "turbobaby/game-score";
 pub const REUSES_RIDE_GAME_ID : str = "turbobaby/ride-game";
-pub const REUSE_EDGE_COUNT : u8 = 7;
+; Added 2026-09-24 with the owner's ruling recorded near the end of this file: the two owners this
+; file hands the ruling's details to, by ID -- the events surface and the order path. CORRECTED
+; 2026-09-24: REUSE_EDGE_COUNT was 7; the seven above are unchanged and the two below make it 9.
+pub const REUSES_EVENTS_BOOKING_ID : str = "turbobaby/events-booking";
+pub const REUSES_COMMERCE_ID : str = "turbobaby/commerce";
+pub const REUSE_EDGE_COUNT : u8 = 9;
+pub const REUSE_EDGE_COUNT_BEFORE_2026_09_24 : u8 = 7;
 
 ; --- The states ---------------------------------------------------------------------------------
 ; Five values, of which three are the partial states this tree actually exhibits. STATE_LIVE is
@@ -302,7 +308,21 @@ pub fn retired_set_is_trustworthy(derived_from_migrations: bool, honours_recreat
 ; and what a live catalog is belongs to turbobaby/catalog-api and turbobaby/availability.
 pub const LEGACY_LIVE_ROUTE_COUNT : u8 = 8;
 pub const LEGACY_LIVE_ROUTES : [8]str = ["/accessories", "/tea", "/quest/:id", "/game", "/treasure-hunt", "/ar-hunt", "/location-quest", "/tech-tree"];
-pub const REPOINTED_ROUTE_COUNT : u8 = 2;
+pub const REPOINTED_ROUTE_COUNT : u8 = 5;
+; CORRECTED 2026-09-24: REPOINTED_ROUTE_COUNT was 2, and 2 stays below as the reading it was. On the
+; owner's ruling of that day (recorded near the end of this file) three more client paths --
+; /events at src/ui/routes.rs:39, /events/:id at :41 and /my-bookings at :43 -- render the live
+; catalog from their handlers at :175-200, exactly as /sets and /sommelier do, so 2 + 3 = 5. The
+; paragraph above still reads "two further legacy paths" because it was true of the tree it
+; measured. The three new members differ from the first two in one respect, and it is counted
+; rather than blurred: /sets and /sommelier lost their SCREENS, which were deleted, while the three
+; event paths lost only their MOUNT -- src/ui/screens/events_screen.rs still compiles and no route
+; renders it. Which surface the three served, and what it still answers over HTTP, is
+; turbobaby/events-booking's to say. None of the three is one of the eight LEGACY_LIVE_ROUTES,
+; which did not change.
+pub const REPOINTED_ROUTE_COUNT_BEFORE_2026_09_24 : u8 = 2;
+pub const REPOINTED_WITH_THE_SCREEN_DELETED : u8 = 2;
+pub const REPOINTED_WITH_THE_SCREEN_KEPT_UNMOUNTED : u8 = 3;
 
 ; HTTP routes, merged into the public router at src/api/mod.rs:89, :91 and :97.
 ; CORRECTED 2026-09-22: QUEST_HTTP_ROUTE_COUNT was 13 and LEGACY_HTTP_ROUTE_COUNT was 44. The
@@ -376,6 +396,38 @@ pub const NEXT_SURFACE_NOTE : str = "No source in this repository ranks the lega
 
 pub fn next_surface_is_decided_here(owner_has_ranked: bool) bool {
     return false;
+}
+
+; --- The owner's ruling of 2026-09-24: rental only, Phuket only ----------------------------------
+; The owner ruled on 2026-09-24 that a customer may only RENT a bike, and only in Phuket. Events and
+; bike sales leave every customer surface; the referral programme, loyalty and the ride game stay.
+; Rows are kept -- a placed order may carry a sale line and a booking may name an event, and both
+; must keep reading -- so the target is a surface no customer reaches, over rows that are hidden or
+; simply not served, and never a dropped table. Neither surface is one of the eight above: the
+; ruling ranks two surfaces this file never counted, so NEXT_SURFACE_NOTE stays true of the eight
+; and this file still picks nothing.
+; Run through this file's own machine, the target is retirement_state(false, false, false, true),
+; which is STATE_DATA_HIDDEN, and surface_is_retired answers false for it. That is not smoothed over:
+; here "retired" means STATE_FULLY_RETIRED, which needs a dropped table, and the owner forbade the
+; drop. So nothing in the corpus may claim either surface is GONE -- may_claim_surface_is_gone needs
+; zero route, handler and screen declarations, and the three event paths and their screen are kept
+; on purpose -- and COMPLETED_RETIREMENT_COUNT stays 1. What each surface answers today is owned
+; elsewhere and named by ID: the events surface by turbobaby/events-booking, the public catalog wire
+; by turbobaby/catalog-api, the order path by turbobaby/commerce.
+pub const OWNER_RULING_AT : str = "2026-09-24";
+pub const OWNER_RULING_NOTE : str = "Rental only, Phuket only: events and bike sales leave every customer surface; the referral programme, loyalty and the ride game stay; no row is deleted and no table is dropped.";
+pub const OWNER_RULING_KEEPS_ROWS : bool = true;
+pub const OWNER_RULING_DROPS_A_TABLE : bool = false;
+pub const OWNER_RULED_SURFACE_COUNT : u8 = 2;
+pub const OWNER_RULED_SURFACES : [2]str = ["events", "bike_sale"];
+pub const OWNER_KEPT_SURFACE_COUNT : u8 = 3;
+pub const OWNER_KEPT_SURFACES : [3]str = ["referrals", "loyalty", "ride_game"];
+pub const OWNER_RULED_TARGET_STATE : u8 = 1;
+pub const OWNER_RULING_COMPLETES_A_RETIREMENT : bool = false;
+pub const OWNER_RULING_RANKS_ONE_OF_THE_EIGHT : bool = false;
+
+pub fn ruled_surface_state(customer_reachable: bool, rows_hidden: bool) u8 {
+    return retirement_state(customer_reachable, OWNER_RULING_DROPS_A_TABLE, false, rows_hidden);
 }
 
 ; --- Tests -----------------------------------------------------------------------------------------
@@ -529,7 +581,9 @@ test the_live_legacy_surface_is_counted_and_repointed_paths_are_counted_apart {
     assert LEGACY_LIVE_ROUTES[0] == "/accessories";
     assert LEGACY_LIVE_ROUTES[3] == "/game";
     assert LEGACY_LIVE_ROUTES[7] == "/tech-tree";
-    assert REPOINTED_ROUTE_COUNT == 2;
+    // 2 until 2026-09-24, when the three event paths joined /sets and /sommelier.
+    assert REPOINTED_ROUTE_COUNT == 5;
+    assert REPOINTED_ROUTE_COUNT_BEFORE_2026_09_24 == 2;
 }
 
 test the_legacy_http_route_total_is_the_sum_of_its_three_modules {
@@ -582,7 +636,11 @@ test the_reuse_edges_are_named_and_no_sibling_decision_is_restated {
     assert REUSES_DELIVERY_TERMS_ID == "turbobaby/delivery-terms";
     assert REUSES_GAME_SCORE_ID == "turbobaby/game-score";
     assert REUSES_RIDE_GAME_ID == "turbobaby/ride-game";
-    assert REUSE_EDGE_COUNT == 7;
+    assert REUSES_EVENTS_BOOKING_ID == "turbobaby/events-booking";
+    assert REUSES_COMMERCE_ID == "turbobaby/commerce";
+    // 7 until 2026-09-24.
+    assert REUSE_EDGE_COUNT == 9;
+    assert REUSE_EDGE_COUNT_BEFORE_2026_09_24 == 7;
 }
 
 test this_file_refuses_to_choose_the_next_surface {
@@ -591,6 +649,34 @@ test this_file_refuses_to_choose_the_next_surface {
     assert RETIREMENT_ORDER_IS_PUBLISHED == false;
     assert next_surface_is_decided_here(true) == false;
     assert next_surface_is_decided_here(false) == false;
+}
+
+test the_owners_ruling_targets_hidden_data_and_claims_no_completed_retirement {
+    assert OWNER_RULING_AT == "2026-09-24";
+    assert OWNER_RULING_KEEPS_ROWS == true;
+    assert OWNER_RULING_DROPS_A_TABLE == false;
+    assert OWNER_RULED_SURFACES.len == OWNER_RULED_SURFACE_COUNT;
+    assert OWNER_RULED_SURFACES[0] == "events";
+    assert OWNER_RULED_SURFACES[1] == "bike_sale";
+    assert OWNER_KEPT_SURFACES.len == OWNER_KEPT_SURFACE_COUNT;
+    assert OWNER_KEPT_SURFACES[0] == "referrals";
+    assert OWNER_KEPT_SURFACES[2] == "ride_game";
+    assert OWNER_RULED_TARGET_STATE == STATE_DATA_HIDDEN;
+    assert ruled_surface_state(false, true) == OWNER_RULED_TARGET_STATE;
+    assert ruled_surface_state(true, true) == STATE_SURFACE_LIVE;
+    assert surface_is_retired(false, OWNER_RULING_DROPS_A_TABLE, false, true) == false;
+    assert OWNER_RULING_COMPLETES_A_RETIREMENT == false;
+    assert COMPLETED_RETIREMENT_COUNT == 1;
+    assert OWNER_RULING_RANKS_ONE_OF_THE_EIGHT == false;
+    assert RETIREMENT_ORDER_IS_PUBLISHED == false;
+}
+
+test the_repointed_set_is_split_by_what_each_path_lost {
+    assert REPOINTED_WITH_THE_SCREEN_DELETED + REPOINTED_WITH_THE_SCREEN_KEPT_UNMOUNTED == REPOINTED_ROUTE_COUNT;
+    assert REPOINTED_WITH_THE_SCREEN_DELETED == REPOINTED_ROUTE_COUNT_BEFORE_2026_09_24;
+    assert REPOINTED_WITH_THE_SCREEN_KEPT_UNMOUNTED == 3;
+    // A kept path over a kept screen file is never a gone surface, however dark it is.
+    assert may_claim_surface_is_gone(REPOINTED_WITH_THE_SCREEN_KEPT_UNMOUNTED, 3, 3) == false;
 }
 
 test the_identity_of_this_contract_is_fixed {
@@ -644,3 +730,12 @@ invariant an_unreproducible_footprint_figure_is_never_adopted
 
 invariant this_file_never_chooses_the_next_surface_or_a_date
     assert next_surface_is_decided_here(true) == false and THIS_FILE_PICKS_THE_NEXT_SURFACE == false and THIS_FILE_CARRIES_A_DELETION_DATE == false and RETIREMENT_ORDER_IS_PUBLISHED == false
+
+invariant the_owners_ruling_never_counts_as_a_completed_retirement
+    assert surface_is_retired(false, OWNER_RULING_DROPS_A_TABLE, false, true) == false and OWNER_RULING_COMPLETES_A_RETIREMENT == false and COMPLETED_RETIREMENT_COUNT == 1
+
+invariant a_ruled_surface_a_customer_can_still_reach_is_still_live
+    assert ruled_surface_state(true, true) == STATE_SURFACE_LIVE and ruled_surface_state(false, true) == STATE_DATA_HIDDEN
+
+invariant the_repointed_set_is_always_split_by_what_each_path_lost
+    assert REPOINTED_WITH_THE_SCREEN_DELETED + REPOINTED_WITH_THE_SCREEN_KEPT_UNMOUNTED == REPOINTED_ROUTE_COUNT
