@@ -547,10 +547,10 @@ pub fn refund_decision(money_taken: bool, passport_held: bool, agreed_amount: i3
         return REFUND_REFUSED_FORM_ILLEGAL;
     }
     if (passport_held == true) {
-        ; The document goes back and nothing else moves. A request that names a method, a
-        ; currency or an amount is asking for something this deposit never was -- buying a
-        ; held passport out for money is a different transaction, not a refund -- so each of
-        ; the three is refused by the gate that owns it.
+        // The document goes back and nothing else moves. A request that names a method, a
+        // currency or an amount is asking for something this deposit never was -- buying a
+        // held passport out for money is a different transaction, not a refund -- so each of
+        // the three is refused by the gate that owns it.
         if (requested_method != DEPOSIT_FIELD_UNRECORDED) {
             return REFUND_REFUSED_METHOD_CHANGED;
         }
@@ -562,19 +562,19 @@ pub fn refund_decision(money_taken: bool, passport_held: bool, agreed_amount: i3
         }
         return REFUND_RETURN_DOCUMENT;
     }
-    ; Past the form gate and not the passport, so money_taken is true: those are the only two
-    ; legal states of the pair.
+    // Past the form gate and not the passport, so money_taken is true: those are the only two
+    // legal states of the pair.
     if (money_method_index_of(agreed_method) == MONEY_METHOD_NONE) {
         return REFUND_REFUSED_METHOD_UNRECORDED;
     }
     if (agreed_currency == DEPOSIT_FIELD_UNRECORDED) {
         return REFUND_REFUSED_CURRENCY_UNRECORDED;
     }
-    ; publishable_deposit() is reused here for exactly what it is: a sign test on an amount.
-    ; Its parameter is named for THB because every published rung is in THB, but the test it
-    ; performs is currency-free and nothing here converts. An amount that is not positive was
-    ; never agreed -- DEPOSIT_ABSENT is the orders.rs amount None, and 0 is the D9 defect, a
-    ; figure that reads as "no deposit owed".
+    // publishable_deposit() is reused here for exactly what it is: a sign test on an amount.
+    // Its parameter is named for THB because every published rung is in THB, but the test it
+    // performs is currency-free and nothing here converts. An amount that is not positive was
+    // never agreed -- DEPOSIT_ABSENT is the orders.rs amount None, and 0 is the D9 defect, a
+    // figure that reads as "no deposit owed".
     if (!publishable_deposit(agreed_amount)) {
         return REFUND_REFUSED_AMOUNT_UNAGREED;
     }
@@ -649,7 +649,7 @@ test the_tier_the_issue_asked_for_is_published_nowhere {
     assert DEPOSIT_10000_OCCURRENCES == 0;
     assert is_published_tier(10000) == false;
     assert tier_index_of(10000) == TIER_NONE;
-    ; ...and the constant is the recount of all 21 published rows, not a number typed twice.
+    // ...and the constant is the recount of all 21 published rows, not a number typed twice.
     assert published_rows_at_amount(10000) == DEPOSIT_10000_OCCURRENCES;
     assert published_rows_at_amount(10000) == 0;
 }
@@ -811,7 +811,7 @@ test at_750cc_the_top_rung_is_the_xadv_and_only_the_xadv {
 ; ---- the measurement that forced the shape of this spec --------------------------------
 
 test the_xmax_300_pair_refutes_a_function_of_class_and_displacement {
-    ; Both rows: class "scooter", displacement_cc 300. Different deposits.
+    // Both rows: class "scooter", displacement_cc 300. Different deposits.
     assert deposit_thb_of_family("xmax-300") == 5000;
     assert deposit_thb_of_family("xmax-300-new") == 7000;
     assert deposit_thb_of_family("xmax-300-new") != deposit_thb_of_family("xmax-300");
@@ -866,8 +866,8 @@ test the_tariff_only_rows_pin_each_key_to_its_own_published_deposit {
     assert PRICE_LIST_ONLY_DEPOSIT_THB[5] == TIER_5_THB;
     assert PRICE_LIST_ONLY_KEYS[6] == "r7";
     assert PRICE_LIST_ONLY_DEPOSIT_THB[6] == TIER_6_THB;
-    ; No tariff-only family sits on the 7000 rung, which is why the set of six is closed over
-    ; these rows without any of them being the reason a rung exists.
+    // No tariff-only family sits on the 7000 rung, which is why the set of six is closed over
+    // these rows without any of them being the reason a rung exists.
     assert published_rows_at_amount(TIER_3_THB) == TIER_FAMILY_COUNTS[2];
 }
 
