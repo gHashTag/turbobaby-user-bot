@@ -85,7 +85,7 @@ before doing anything else.
   that fails ends the process, so `/health` never answers. Railway's health check then fails the
   deployment (`railway.toml`: path `/health`, timeout 300 s, restart `ON_FAILURE` up to 10 times).
 * **Migrations are forward-only** (DECISIONS.md D2). `migrations/` holds no down migration.
-  `run_migrations` (`src/db/mod.rs:604`) applies each file once and records its name in
+  `run_migrations` (`src/db/mod.rs:608`) applies each file once and records its name in
   `_schema_migrations`.
 * **Rolling the code back leaves the schema where the newest deployment put it.** An older binary
   walks its own, shorter `MIGRATIONS` list and finds every name already recorded, so it starts on
@@ -100,7 +100,7 @@ before doing anything else.
   recorded and applies only the missing ones.
 * **Never empty `_schema_migrations` to "reset" after a rollback.** On an established database with
   an empty tracker, the runner marks only migrations up to `076_promo_broadcast.sql` as applied
-  (`LAST_PRE_BIKE_MIGRATION`, `src/db/mod.rs:399`). It then runs 077 onward again over live data.
+  (`LAST_PRE_BIKE_MIGRATION`, `src/db/mod.rs:403`). It then runs 077 onward again over live data.
 
 ## 5. Hazards that ride on an older build
 

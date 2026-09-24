@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/gHashTag/turbobaby-user-bot/actions/workflows/ci.yml/badge.svg)](https://github.com/gHashTag/turbobaby-user-bot/actions/workflows/ci.yml)
 
-TurboBaby — motorbike **rental and sales** in Kamala, Phuket, as a Telegram Mini
+TurboBaby — motorbike **rental** in Kamala, Phuket, as a Telegram Mini
 App. Rust backend (Axum + Teloxide), Dioxus/WASM frontend, PostgreSQL.
 
 The tree is a full-history derivative of

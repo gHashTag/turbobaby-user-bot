@@ -61,9 +61,24 @@ async fn create_event_with_photos_and_video_round_trips() {
         .expect("event id")
         .to_string();
 
+    // Events left every customer surface on the owner's ruling of 2026-09-24
+    // (rental only): the admin API stores no event as public, so the public
+    // detail does not answer this one. The gallery round-trips through the
+    // admin detail, which reads the same rows.
     let detail = get_event_public(app.clone(), &event_id).await;
-    assert_eq!(detail.status, StatusCode::OK, "public detail must succeed");
-    let ev = &detail.body["event"];
+    assert_eq!(
+        detail.status,
+        StatusCode::NOT_FOUND,
+        "a new event reached the public detail"
+    );
+
+    let admin_detail = get_event_admin(app.clone(), &event_id, &admin_token).await;
+    assert_eq!(
+        admin_detail.status,
+        StatusCode::OK,
+        "admin detail must succeed"
+    );
+    let ev = &admin_detail.body["event"];
     assert_eq!(ev["video_url"], "https://example.com/video.mp4");
     let photos = ev["photos"].as_array().expect("photos array");
     assert_eq!(photos.len(), 2);
@@ -73,24 +88,6 @@ async fn create_event_with_photos_and_video_round_trips() {
     assert!(photos
         .iter()
         .any(|p| p == "https://example.com/photo-b.jpg"));
-
-    let admin_detail = get_event_admin(app.clone(), &event_id, &admin_token).await;
-    assert_eq!(
-        admin_detail.status,
-        StatusCode::OK,
-        "admin detail must succeed"
-    );
-    assert_eq!(
-        admin_detail.body["event"]["video_url"],
-        "https://example.com/video.mp4"
-    );
-    assert_eq!(
-        admin_detail.body["event"]["photos"]
-            .as_array()
-            .unwrap()
-            .len(),
-        2
-    );
 }
 
 #[tokio::test]
@@ -161,7 +158,10 @@ async fn update_event_replaces_photos() {
     let update_resp = put_admin_event(app.clone(), &event_id, &admin_token, &update_body).await;
     assert_eq!(update_resp.status, StatusCode::OK);
 
-    let detail = get_event_public(app, &event_id).await;
+    // Read back through the admin detail: the public one answers no event the
+    // admin API created since 2026-09-24 (see the first test in this file).
+    let detail = get_event_admin(app, &event_id, &admin_token).await;
+    assert_eq!(detail.status, StatusCode::OK, "admin detail must succeed");
     let photos = detail.body["event"]["photos"].as_array().unwrap();
     assert_eq!(photos.len(), 1);
     assert_eq!(photos[0], "https://example.com/new1.jpg");

@@ -87,8 +87,8 @@
 ; receipt -- a named refusal and a note saying what is missing stand in place of a plausible
 ; number.
 ; RE-POINTED 2026-09-24: every src/db/mod.rs line this file cites past line 385 moved four lines
-; down when migrations/087_delivery_zones_phuket.sql joined the MIGRATIONS list. The numbers are
-; re-measured; the old ones are these minus four, and nothing they point at changed.
+; down when migrations/087_delivery_zones_phuket.sql joined MIGRATIONS, and four more with
+; migrations/088_unpublish_events.sql the same day; re-measured, and nothing they point at changed.
 ; phi^2 + 1/phi^2 = 3 | TRINITY
 
 module turbobaby-notification-queue;
@@ -606,9 +606,9 @@ pub fn send_is_attempted(chat_id_present: bool, admitted: bool) bool {
 ; --- Localization boundary --------------------------------------------------------------------------
 ; src/notification_queue.rs:146-150 reads the language per row and falls back to a literal written in
 ; the drain. The read cannot distinguish a missing user from a failed query --
-; src/db/mod.rs:872-889 returns the same None for both and says so at :870-871 -- so a database
+; src/db/mod.rs:876-893 returns the same None for both and says so at :874-875 -- so a database
 ; hiccup degrades to the fallback rather than deferring the row. The failure is not unobserved,
-; since the query error reaches a warn at src/db/mod.rs:881; it is unreadable HERE, because the
+; since the query error reaches a warn at src/db/mod.rs:885; it is unreadable HERE, because the
 ; None handed to the drain carries no reason and no branch on this path can act on the difference. Whether that literal
 ; agrees with the published fallback is turbobaby/locale-policy's to state; what is recorded here is
 ; that the transport keeps its own copy instead of asking.

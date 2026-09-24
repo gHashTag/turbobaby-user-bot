@@ -596,7 +596,7 @@ mod tests {
 
     #[test]
     fn a_dash_never_travels_alone() {
-        // The spec's invariant of the same name (pricing_honesty.t27:422).
+        // The spec's invariant the_dash_never_travels_alone (pricing_honesty.t27).
         // D11 lists silence in `must_not_emit` beside invention, so a render
         // that emits no number must emit a sentence.
         for silent in [

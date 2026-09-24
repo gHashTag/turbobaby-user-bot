@@ -29,8 +29,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     AGENT_CARD: {
         "module": "turbobaby-agent",
         "id": "turbobaby/BOT",
-        "min_declarations": 35,
-        "min_checks": 8,
+        "min_declarations": 38,
+        "min_checks": 9,
     },
     "specs/turbobaby/ai_assist.t27": {
         "module": "turbobaby-ai-assist",
@@ -71,8 +71,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/catalog_api.t27": {
         "module": "catalog-api",
         "id": "turbobaby/catalog-api",
-        "min_declarations": 128,
-        "min_checks": 42,
+        "min_declarations": 140,
+        "min_checks": 44,
     },
     "specs/turbobaby/catalog_write.t27": {
         "module": "turbobaby-catalog-write",
@@ -95,8 +95,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/commerce.t27": {
         "module": "commerce",
         "id": "turbobaby/commerce",
-        "min_declarations": 160,
-        "min_checks": 55,
+        "min_declarations": 168,
+        "min_checks": 57,
     },
     "specs/turbobaby/customer_surface.t27": {
         "module": "turbobaby-customer-surface",
@@ -107,8 +107,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/deeplink.t27": {
         "module": "turbobaby-deeplink",
         "id": "turbobaby/deeplink",
-        "min_declarations": 160,
-        "min_checks": 44,
+        "min_declarations": 165,
+        "min_checks": 45,
     },
     "specs/turbobaby/delivery_terms.t27": {
         "module": "turbobaby-delivery-terms",
@@ -127,8 +127,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/events_booking.t27": {
         "module": "turbobaby-events-booking",
         "id": "turbobaby/events-booking",
-        "min_declarations": 291,
-        "min_checks": 78,
+        "min_declarations": 326,
+        "min_checks": 85,
     },
     "specs/turbobaby/game_score.t27": {
         "module": "turbobaby-game-score",
@@ -151,13 +151,13 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/legacy_retirement.t27": {
         "module": "turbobaby-legacy-retirement",
         "id": "turbobaby/legacy-retirement",
-        "min_declarations": 133,
-        "min_checks": 38,
+        "min_declarations": 165,
+        "min_checks": 44,
     },
     "specs/turbobaby/locale_policy.t27": {
         "module": "turbobaby-locale-policy",
         "id": "turbobaby/locale-policy",
-        "min_declarations": 126,
+        "min_declarations": 127,
         "min_checks": 34,
     },
     "specs/turbobaby/loyalty_ledger.t27": {
@@ -211,7 +211,7 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/pricing_honesty.t27": {
         "module": "pricing-honesty",
         "id": "turbobaby/pricing-honesty",
-        "min_declarations": 118,
+        "min_declarations": 120,
         "min_checks": 40,
     },
     "specs/turbobaby/promo_broadcast.t27": {
@@ -271,7 +271,7 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/schema_provenance.t27": {
         "module": "turbobaby-schema-provenance",
         "id": "turbobaby/schema-provenance",
-        "min_declarations": 225,
+        "min_declarations": 233,
         "min_checks": 51,
     },
     "specs/turbobaby/star_award.t27": {

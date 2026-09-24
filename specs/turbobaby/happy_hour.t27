@@ -341,8 +341,8 @@ pub fn window_to_serve(row_present: bool, shape_agrees: bool, bounds_legal: bool
 
 ; --- How far the number travels -----------------------------------------------------------------------
 ; src/trios/store.rs:271-316 is the only function in the tree that spends a happy-hour percent,
-; and it is called from five places, all of them its own unit tests (src/trios/store.rs:659,
-; :677, :710, :717, :728). No file under src/ui/, assets/ or e2e/ fetches the endpoint. The
+; and it is called from five places, all of them its own unit tests (src/trios/store.rs:674,
+; :692, :725, :732, :743). No file under src/ui/, assets/ or e2e/ fetches the endpoint. The
 ; discount is therefore published and unspent: a published number with no customer price behind
 ; it. That is the honest refusal this file declares in place of an effect it cannot find.
 pub const APPLIER : str = "src/trios/store.rs:271-316 calculate_cart_total";
@@ -355,6 +355,8 @@ pub const DISCOUNT_REACHES_A_PRICE : bool = false;
 ; /happy-hour. "Customer-visible" is therefore a word this file does not use of the window: the
 ; endpoint publishes it and nothing in this tree renders it.
 pub const UI_CLIENT_FETCHES_THIS_ENDPOINT : bool = false;
+; RE-POINTED 2026-09-24: the five src/trios/store.rs call sites cited above moved fifteen lines
+; down when served_zone_id was added above that file's test module; nothing they point at changed.
 
 pub fn reaches_a_customer_price(http_consumers: u8, production_appliers: u8) bool {
   return http_consumers >= 1 or production_appliers >= 1;

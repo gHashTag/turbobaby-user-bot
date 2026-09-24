@@ -164,13 +164,13 @@ pub const STORAGE_DEFAULT_LOCALE : str = "en";
 pub const DEFAULTS_AGREE : bool = false;
 pub const STORAGE_COLUMN : str = "migrations/001_initial.sql:4 user_languages.language VARCHAR(10) NOT NULL DEFAULT en";
 ; Measured by searching every .sql file under migrations/ for a CHECK or a constraint naming
-; that column: there is none. The search is recursive and the count says so -- 87 files sit at
-; the top level and one more in migrations/wip, and a top-level-only count would have been 87
-; while claiming to have looked everywhere. src/db/mod.rs:896-919 set_user_lang writes the code
-; it is handed after a length truncation (src/db/mod.rs:899, to 50 characters), with no
+; that column: there is none. The search is recursive and the count says so -- 88 files sit at
+; the top level and one more in migrations/wip, and a top-level-only count would have been 88
+; while claiming to have looked everywhere. src/db/mod.rs:900-923 set_user_lang writes the code
+; it is handed after a length truncation (src/db/mod.rs:903, to 50 characters), with no
 ; membership test. So the store admits a code the shop does not publish, and the read path
 ; resolves it exactly like any other unpublished code.
-pub const MIGRATION_FILES_SEARCHED : u8 = 88;
+pub const MIGRATION_FILES_SEARCHED : u8 = 89;
 pub const STORAGE_CONSTRAINS_THE_PUBLISHED_SET : bool = false;
 ; WHOSE COUNT THIS IS. turbobaby/pricing-honesty raised the same figure first, in a declaration
 ; of the same name, for a different search over the same directory. Two contracts declaring one
@@ -186,6 +186,12 @@ pub const STORAGE_CONSTRAINS_THE_PUBLISHED_SET : bool = false;
 ; no CHECK and no constraint on a language column, so the search still finds none. The two
 ; src/db/mod.rs citations above moved four lines when that file joined MIGRATIONS (892-915 and 895
 ; before). The 2026-09-21 count is kept under its own name.
+; CORRECTED 2026-09-24, later the same day: 89 recursive, 88 at the top level, 90 counting every
+; file. migrations/088_unpublish_events.sql arrived (turbobaby/events-booking, the owner's
+; rental-only ruling); it holds no CHECK and no constraint on a language column, so the search
+; still finds none. The two src/db/mod.rs citations above moved four more lines when it joined
+; MIGRATIONS (896-919 and 899 between the two changes). The count between them is kept under
+; _BEFORE_088; the next paragraph's figures are the census as it stood before 088.
 ; CORRECTED 2026-09-24, the same day: the owner named here was the wrong one. turbobaby/pricing-honesty called
 ; the count its own, and so did turbobaby/schema-provenance, whose subject is the migration tree and
 ; which declares the census as SQL_FILES_RECURSIVE 88 (with SQL_FILES_TOP_LEVEL 87 and WIP_SQL_FILES
@@ -202,6 +208,7 @@ pub const MIGRATION_COUNT_IS_A_COPY : bool = true;
 pub const MIGRATION_COUNT_REMEASURED_AT : str = "2026-09-24";
 pub const MIGRATION_COUNT_OWNER_REPOINTED_AT : str = "2026-09-24";
 pub const MIGRATION_FILES_SEARCHED_BEFORE_087 : u8 = 87;
+pub const MIGRATION_FILES_SEARCHED_BEFORE_088 : u8 = 88;
 
 ; --- The enumerated variant set, and the gap -------------------------------------------------
 ; src/trios/core.rs:8-17 enum Lang: Russian, English, Thai, Chinese, Hebrew, German, French,
@@ -410,8 +417,9 @@ test the_shared_value_is_a_coincidence_of_two_measurements_and_not_an_inheritanc
 ; owner. Since 2026-09-24 the owner is the schema census and not the pricing contract, so the edge
 ; no longer coincides with the reuse edge to pricing-honesty, and the test says that too.
 test the_migration_count_is_carried_as_a_copy_and_its_owner_is_named {
-  assert MIGRATION_FILES_SEARCHED == 88;
-  assert MIGRATION_FILES_SEARCHED == MIGRATION_FILES_SEARCHED_BEFORE_087 + 1;
+  assert MIGRATION_FILES_SEARCHED == 89;
+  assert MIGRATION_FILES_SEARCHED == MIGRATION_FILES_SEARCHED_BEFORE_088 + 1;
+  assert MIGRATION_FILES_SEARCHED_BEFORE_088 == MIGRATION_FILES_SEARCHED_BEFORE_087 + 1;
   assert MIGRATION_COUNT_IS_A_COPY == true;
   assert MIGRATION_COUNT_OWNER_ID == "turbobaby/schema-provenance";
   assert MIGRATION_COUNT_OWNER_DECL == "SQL_FILES_RECURSIVE";
@@ -515,7 +523,7 @@ test the_two_defaults_do_not_agree {
   assert defaults_agree(PRIMARY_LOCALE, PRIMARY_LOCALE) == true;
   assert DEFAULTS_AGREE == false;
   assert STORAGE_CONSTRAINS_THE_PUBLISHED_SET == false;
-  assert MIGRATION_FILES_SEARCHED == 88;
+  assert MIGRATION_FILES_SEARCHED == 89;
 }
 
 test a_missing_arm_renders_the_identifier_and_only_a_test_catches_it {

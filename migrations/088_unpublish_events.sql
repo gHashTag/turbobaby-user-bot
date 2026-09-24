@@ -1,0 +1,25 @@
+-- 088: no event stays public (owner ruling, 2026-09-24: rental only, Phuket only).
+--
+-- The owner ruled in chat on 2026-09-24 that a customer may only rent a bike,
+-- and only in Phuket: events leave every customer surface, and nothing is
+-- deleted (DECISIONS.md, the D19 addendum of that date). Since that change the
+-- admin API stores no event as public (EVENTS_PUBLISHABLE in
+-- src/api/events.rs), so no NEW public row can appear. What that cannot reach
+-- is a row that is ALREADY public. 085 hid every event it found, but D19 then
+-- expected TurboBaby events to be created on a clean public slate, and the
+-- create route defaulted to public: an event created or re-published between
+-- 085 and this change would still be answered by the calendar, the event page,
+-- a booking and a waitlist join, and scanned by the promo sweeper, all of which
+-- filter `is_public = TRUE`. Whether such a row exists is a production read
+-- this change does not make; this statement closes it either way.
+--
+-- 085's shape, one flag on one table. Rows are KEPT: a customer's bookings,
+-- their own bookings list and cancel, the admin's records and guest list, and
+-- the 24-hour reminder to a seat already held do not filter the flag and are
+-- untouched. Idempotent: where 085 left nothing public it updates no row.
+-- Reversible the way 085 is -- flip the flag back -- once EVENTS_PUBLISHABLE
+-- is true again.
+--
+-- No table is dropped and no row is deleted. Forward-only, per D2.
+
+UPDATE events SET is_public = FALSE WHERE is_public = TRUE;

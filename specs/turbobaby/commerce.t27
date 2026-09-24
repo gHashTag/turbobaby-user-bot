@@ -37,6 +37,25 @@ pub const ID : str = "turbobaby/commerce";
 pub const NAME : str = "TurboBaby commerce transaction contract";
 pub const IMPLEMENTATION_BOUNDARY : str = "cart -> checkout lock -> committed order";
 
+; CORRECTED 2026-09-24. The header's "It covers both rental and sale" is kept as written and is now
+; half history. The owner ruled on 2026-09-24 that a customer may only rent (rental only, Phuket
+; only; turbobaby/legacy-retirement records the ruling), so the sale half of this file describes
+; lines that already exist and no longer a line a customer can place. Placed orders still carry
+; bike_sale and still deserialize through BikeDeal::BikeSale, which is why DEAL_NAMES and
+; DEAL_KIND_COUNT below do not move. src/api/orders.rs validate_bike_lines now refuses a NEW sale
+; line with 422, the status its other "you cannot have this" refusals use, and with no new sentence;
+; a malformed sale price is still refused as malformed first. So upstream_saleable, "the equivalent
+; decision supplied by the sale owner" in the header, has a supplier from this date and its answer
+; is no. Also corrected, because it was never true: until this date no contract owned that decision
+; ("saleable" occurred in this file only), and the order path never asked it -- a sale line naming
+; any known family was admitted, which is the gap the ruling closed.
+pub const SALE_LINE_ADMITTED_AT_CHECKOUT : bool = false;
+pub const SALE_LINE_ADMITTED_AT_CHECKOUT_BEFORE_2026_09_24 : bool = true;
+pub const SALE_LINE_REFUSAL_ARMS : u8 = 1;
+pub const PLACED_SALE_LINES_STILL_READ : bool = true;
+pub const SALE_OWNER_ID : str = "turbobaby/legacy-retirement";
+pub const SALE_OWNER_WAS_NAMED_BEFORE_2026_09_24 : bool = false;
+
 ; Exactly one tagged deal shape per bike line.
 pub const DEAL_INVALID : u8 = 0;
 pub const DEAL_RENTAL : u8 = 1;
@@ -348,6 +367,7 @@ test commerce_checkout_accepts_a_complete_rental_without_seeing_domain_arithmeti
 }
 
 test commerce_checkout_accepts_sale_only_through_the_sale_upstream_gate {
+    // Algebra only since 2026-09-24: the sale upstream now answers no (SALE_LINE_ADMITTED_AT_CHECKOUT).
     const upstream_fulfillable = commerce_deal_fulfillable(DEAL_SALE, false, true);
     const shape_valid = commerce_deal_shape_valid(DEAL_SALE, false, true);
     const quote_valid = commerce_quote_snapshot_valid(true, true, true, true, true);
@@ -381,6 +401,20 @@ test commerce_order_transition_refuses_mutation_after_terminal_state {
     assert commerce_order_transition_allowed(false, true, false) == true;
     assert commerce_order_transition_allowed(true, true, false) == true;
     assert commerce_order_transition_allowed(true, false, true) == false;
+}
+
+test commerce_a_new_sale_line_is_refused_and_a_placed_one_still_reads {
+    assert SALE_LINE_ADMITTED_AT_CHECKOUT == false;
+    assert SALE_LINE_ADMITTED_AT_CHECKOUT_BEFORE_2026_09_24 == true;
+    assert SALE_LINE_REFUSAL_ARMS == 1;
+    assert PLACED_SALE_LINES_STILL_READ == true;
+    assert DEAL_KIND_COUNT == 2;
+    assert DEAL_NAMES[1] == "bike_sale";
+    assert SALE_OWNER_ID == "turbobaby/legacy-retirement";
+    assert SALE_OWNER_WAS_NAMED_BEFORE_2026_09_24 == false;
+    assert commerce_deal_fulfillable(DEAL_SALE, true, SALE_LINE_ADMITTED_AT_CHECKOUT) == false;
+    assert commerce_deal_fulfillable(DEAL_RENTAL, true, SALE_LINE_ADMITTED_AT_CHECKOUT) == true;
+    assert commerce_deal_fulfillable(DEAL_SALE, false, SALE_LINE_ADMITTED_AT_CHECKOUT_BEFORE_2026_09_24) == true;
 }
 
 invariant commerce_deal_domain_has_exactly_two_shapes
@@ -933,3 +967,6 @@ invariant commerce_capacity_is_counted_on_the_family_and_not_locked_on_a_unit
 
 invariant commerce_no_reservation_mechanism_is_invented_here
     assert OVERLAP_RESERVATION_IS_NOT_SHIPPED == true and CONFIRMED_OVERLAP_COUNT_IS_NOT_DERIVABLE == true
+
+invariant commerce_no_new_sale_line_is_fulfillable_while_sales_are_retired
+    assert commerce_deal_fulfillable(DEAL_SALE, true, SALE_LINE_ADMITTED_AT_CHECKOUT) == false and DEAL_NAMES.len == DEAL_KIND_COUNT and PLACED_SALE_LINES_STILL_READ == true

@@ -34,13 +34,15 @@ declared, is RED. DECISIONS.md D16 is the rule -- a gate whose input can reach z
 must pin a floor, because "found nothing" and "found nothing wrong" look identical
 from the outside. The floor on the table itself is MIN_BINDINGS.
 
-WHAT A GREEN RUN DOES NOT PROVE. Re-measured 2026-09-24, after the spec-hygiene change (the
-four ride-handling rows, the migration census owner's three, the nmax-155 rate's two and the
-seed's line count) landed on top of the T27 C3 deposit comparison, the owner's Phuket delivery
-zones and the catalog-honesty change: the table's 227 bindings cover 214 distinct
-(contract, constant) pairs out of 5484 top-level `pub const` declarations across the 45
-files under specs/, touching 41 of those 45 contracts. That is 3.9% of the declared
-constants, and it is 0% of the 9859 `assert` statements. (Earlier on 2026-09-24: after the
+WHAT A GREEN RUN DOES NOT PROVE. Re-measured 2026-09-24, after the owner's rental-only ruling
+(nine rows over the same 41 contracts) and its review (one row: migration 088's hide) landed on
+top of the spec-hygiene change: the table's 237 bindings cover 224 distinct (contract, constant)
+pairs out of 5564 top-level `pub const` declarations across the 45 files under specs/, touching
+41 of those 45 contracts. That is 4.0% of the declared constants, and it is 0% of the 9996
+`assert` statements. (Earlier on 2026-09-24: the ruling before its review, 236 bindings, 223
+pairs of 5540, 4.0%, 9958 asserts, 41 contracts; after the spec-hygiene change (the four ride-handling rows, the migration census
+owner's three, the nmax-155 rate's two and the seed's line count), 227 bindings, 214 pairs
+of 5484, 3.9%, 9859 asserts, 41 contracts; after the
 T27 C3 deposit comparison, 217 bindings, 204 pairs of 5427, 3.8%, 9753 asserts, 41
 contracts; after the Phuket delivery zones (migration 087) and their sixteen bindings, 216
 bindings, 203 pairs of 5418, 3.7%, 9738 asserts, 41 contracts; the spec-hygiene change
@@ -874,8 +876,9 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "source": "migrations/*.sql",
         "extract": ("tree_file_count",),
         "relation": "equal",
-        "why": "the contract splits 87 into 86 + 1 precisely because a top-level-only "
-               "count would have been 86 while claiming to have looked everywhere",
+        "why": "the contract splits the recursive count into the top level plus the wip file "
+               "precisely because a top-level-only count would have been one short while "
+               "claiming to have looked everywhere",
     },
     {
         "name": "pricing_honesty.MIGRATION_COUNT_IN_WIP ~ migrations/wip/*.sql",
@@ -2725,14 +2728,16 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "const": "PAYLOAD_LOCALE_GREP_HITS",
         "source": "src/trios/deeplink.rs",
         # Zero expected (D16): the witness proves this is still the parser's file.
-        # The command the contract first cited (deeplink.t27:454, `grep -cin
+        # The command the contract first cited (deeplink.t27:469, `grep -cin
         # "lang|locale"`) is a basic regex, where `|` is a literal, so it could not count a
         # line naming lang or locale alone; the contract records that correction, dated
-        # 2026-09-22, at :448-452. The pattern here is a real alternation, case-folded.
+        # 2026-09-22, at :475-481. The pattern here is a real alternation, case-folded.
+        # (Re-pointed 2026-09-24: :454 and :448-452 until the rental-only correction added
+        # fifteen lines above them; :448-452 had already missed the correction by twelve.)
         "extract": ("regex_count", r"(?i)lang|locale"),
         "witness": r"pub fn parse\(payload: &str\) -> Option<Target>",
         "relation": "equal",
-        "why": "deeplink.t27:454-459 rests 'a forwarded link cannot pin a stranger to the "
+        "why": "deeplink.t27:469-474 rests 'a forwarded link cannot pin a stranger to the "
                "sender's language' on this grep being zero; the day the grammar grows a locale "
                "segment, that paragraph is false",
     },
@@ -3487,6 +3492,143 @@ BINDINGS: tuple[dict[str, object], ...] = (
                "moves, the contract's 'tracked source is necessary' leg points at a file "
                "no gate reads",
     },
+    # --- rental only, Phuket only: the owner's ruling of 2026-09-24 -------------------------------
+    # Added 2026-09-24 with the ruling that events and bike sales leave every customer surface.
+    # Each row was measured on both sides by hand, on the tree before the change (f49c372) and
+    # after it, and every row whose value the change moved went from one reading to the other:
+    # REPOINTED 2 -> 5, mounts 3 -> 0, sale-key lines 3 -> 0, withheld reads 0 -> 2. The rest pin
+    # a shape the change created (the refusal arms, the publish gate) or kept (the paths).
+    {
+        "name": "legacy_retirement.REPOINTED_ROUTE_COUNT ~ routes.rs handlers that are only the catalog",
+        "spec": "specs/turbobaby/legacy_retirement.t27",
+        "const": "REPOINTED_ROUTE_COUNT",
+        "source": "src/ui/routes.rs",
+        # A handler whose WHOLE body renders the catalog: /sets and /sommelier since their
+        # screens were deleted, and the three events paths since 2026-09-24. Home renders the
+        # catalog too, but behind a branch, and Menu mounts MenuScreen, so neither matches. An
+        # EventDetail keeps its `id` prop (`let _ = id;`) so an old /events/<id> still parses.
+        "extract": ("regex_count", r"fn \w+\([^)]*\) -> Element \{\s*(?:let _ = \w+;\s*)?rsx! \{\s*CatalogScreen \{\}\s*\}\s*\}"),
+        "relation": "equal",
+        "why": "the count LEGACY_LIVE_ROUTES cannot see: a kept path repointed to the live catalog; "
+               "a handler put back onto a retired screen, or a sixth path repointed without the "
+               "contract, turns this red",
+    },
+    {
+        "name": "events_booking.EVENT_SCREENS_MOUNTED_BY_THE_CLIENT_ROUTER ~ routes.rs absence",
+        "spec": "specs/turbobaby/events_booking.t27",
+        "const": "EVENT_SCREENS_MOUNTED_BY_THE_CLIENT_ROUTER",
+        "source": "src/ui/routes.rs",
+        # A MOUNT is the component followed by its brace; the import list names the screens
+        # without one. Zero expected (D16), so the witness proves the scan still sees a mount.
+        "extract": ("regex_count", NOT_IN_A_LINE_COMMENT
+                    + r"\b(?:EventsScreen|EventDetailScreen|MyBookingsScreen)\s*\{"),
+        "witness": r"CatalogScreen \{\}",
+        "relation": "equal",
+        "why": "the owner's ruling took events off every customer surface; a handler that mounts "
+               "an events screen again puts the calendar and its booking modal back in front of "
+               "every customer holding an old link",
+    },
+    {
+        "name": "events_booking.SCREEN_ROUTES ~ routes.rs events path attributes",
+        "spec": "specs/turbobaby/events_booking.t27",
+        "const": "SCREEN_ROUTES",
+        "source": "src/ui/routes.rs",
+        "extract": ("regex_all", r'^\s*#\[route\("(/events|/events/:id|/my-bookings)"\)\]'),
+        "relation": "list_equal",
+        "why": "the three paths stay DECLARED because a link already sent never expires; one "
+               "deleted is a router miss for every customer who kept it",
+    },
+    {
+        "name": "events_booking.EVENTS_PUBLISHABLE ~ events.rs EVENTS_PUBLISHABLE",
+        "spec": "specs/turbobaby/events_booking.t27",
+        "const": "EVENTS_PUBLISHABLE",
+        "source": "src/api/events.rs",
+        "extract": ("regex", r"pub\(crate\) const EVENTS_PUBLISHABLE:\s*bool\s*=\s*(true|false)\s*;"),
+        # A `false` reads as zero to the D16 rule, and the value means nothing unless the
+        # write path still consults it: the witness pins the gate both validators call.
+        "witness": r"fn storable_public_flag\(requested: bool\) -> bool \{\s*requested && EVENTS_PUBLISHABLE\s*\}",
+        "relation": "equal",
+        "why": "every customer read of an event filters is_public; flipped to true, the admin "
+               "API publishes again and the calendar, the booking and the promo sweep reach "
+               "customers with no other line changing",
+    },
+    {
+        "name": "events_booking.EVENT_SHARE_REFUSAL_ARMS ~ share.rs event kind answers not found",
+        "spec": "specs/turbobaby/events_booking.t27",
+        "const": "EVENT_SHARE_REFUSAL_ARMS",
+        "source": "src/api/share.rs",
+        "extract": ("regex_count", NOT_IN_A_LINE_COMMENT + r"ShareKind::Event => return Ok\(None\)"),
+        "witness": r"ShareKind::Strain => return Ok\(None\)",
+        "relation": "equal",
+        "why": "the event lookup behind the share card has no is_public filter, so building the "
+               "card again renders a hidden event for anyone who names its id",
+    },
+    {
+        "name": "deeplink.LEGACY_ROUTE_ALIASES ~ routes.rs compatibility path attributes",
+        "spec": "specs/turbobaby/deeplink.t27",
+        "const": "LEGACY_ROUTE_ALIASES",
+        "source": "src/ui/routes.rs",
+        # Presence only, in any order (the contract lists /skate first, the router declares it
+        # last). What each path renders is the REPOINTED row's and the ride contracts' business.
+        "extract": ("regex_all", r'^\s*#\[route\("(/skate|/sets|/sommelier|/events|/events/:id|/my-bookings)"\)\]'),
+        "relation": "set_equal",
+        "why": "LEGACY_LINKS_DO_NOT_EXPIRE: every path in the compatibility set must stay "
+               "declared, or links already in customers' Telegram histories become router misses",
+    },
+    {
+        "name": "commerce.SALE_LINE_REFUSAL_ARMS ~ orders.rs validate_bike_lines sale arm",
+        "spec": "specs/turbobaby/commerce.t27",
+        "const": "SALE_LINE_REFUSAL_ARMS",
+        "source": "src/api/orders.rs",
+        "extract": ("regex_count", NOT_IN_A_LINE_COMMENT
+                    + r"BikeDeal::BikeSale \{ \.\. \} => return Err\(StatusCode::UNPROCESSABLE_ENTITY\)"),
+        "relation": "equal",
+        "why": "SALE_LINE_ADMITTED_AT_CHECKOUT is false; without this arm POST /api/orders admits "
+               "a sale line for any known family again, with no sale owner asked",
+    },
+    {
+        "name": "catalog_api.PUBLIC_READS_WITHHOLDING_THE_SALE_OFFER ~ bikes.rs public serialisers",
+        "spec": "specs/turbobaby/catalog_api.t27",
+        "const": "PUBLIC_READS_WITHHOLDING_THE_SALE_OFFER",
+        "source": "src/api/bikes.rs",
+        # The two public calls spell their listing `l` and `listing`; the unit test beside them
+        # spells it `stored` and is not a public read, so it is not counted.
+        "extract": ("regex_count", NOT_IN_A_LINE_COMMENT
+                    + r"(?:family_json|family_detail_json)\(&(?:l|listing)\.with_sale_withheld\(\)"),
+        "relation": "equal",
+        "why": "the public list and the public detail each serve the family with its sale offer "
+               "withheld; one fewer and that read serves the stored flag and asking price again",
+    },
+    {
+        "name": "catalog_api.SALE_BLOCK_KEY_LINES_IN_UI ~ src/ui/ absence",
+        "spec": "specs/turbobaby/catalog_api.t27",
+        "const": "SALE_BLOCK_KEY_LINES_IN_UI",
+        "source": "src/ui/**/*.rs",
+        "extract": ("tree_regex_count", NOT_IN_A_LINE_COMMENT + r"\bT_BIKE_SALE_(?:TITLE|PRICE)\b"),
+        # Zero expected (D16): the scan must still see the detail screen's Book control.
+        "witness": r"T_BIKE_BOOK",
+        "relation": "equal",
+        "why": "the buy-out heading and price label were the whole customer sale block; a line "
+               "that uses either again brings the block back, and the public wire would then be "
+               "all that keeps it empty",
+    },
+    # Added under review the same day: the write gate above cannot reach an event row that is
+    # already public, one made public between migration 085 and the ruling. Planted RED on the
+    # tree before the fix, where the file does not exist, and on a copy whose WHERE clause was
+    # narrowed to one id (count 0 against 1).
+    {
+        "name": "events_booking.RULING_HIDE_VISIBILITY_UPDATES_ON_EVENTS ~ 088 events unpublish",
+        "spec": "specs/turbobaby/events_booking.t27",
+        "const": "RULING_HIDE_VISIBILITY_UPDATES_ON_EVENTS",
+        "source": "migrations/088_unpublish_events.sql",
+        # The statement at column zero and whole, so the migration's comments, which name the
+        # flag, are not counted, and a narrower WHERE or a DELETE in its place does not match.
+        "extract": ("regex_count", r"^UPDATE events SET is_public = FALSE WHERE is_public = TRUE;$"),
+        "relation": "equal",
+        "why": "the one statement that hides an event made public after 085; without it such a "
+               "row is still served by the calendar, the event page, a booking, a waitlist join "
+               "and the promo sweeper's event scans, whatever the admin API may now store",
+    },
 )
 
 TREE_EXTRACTORS = (
@@ -3535,7 +3677,13 @@ ONE_GROUP_EXTRACTORS = (
 # ride-handling constants against assets/game/ride.js, schema-provenance's three census
 # figures, nmax-155's rate in pricing-honesty and in rental-terms, and order-money's seed
 # line count. 227 rows, floor 227.
-MIN_BINDINGS = 227
+# Then the owner's rental-only ruling of 2026-09-24 added nine rows over the same 41
+# contracts: legacy-retirement's repointed count, four events-booking facts (the client
+# mounts, the three kept paths, the publish gate and the share refusal), deeplink's
+# compatibility set, commerce's sale refusal and catalog-api's two sale-offer facts. 236
+# rows, floor 236. Review of that change added events-booking's hide of the rows already
+# public (migration 088): 237 rows, floor 237.
+MIN_BINDINGS = 237
 
 
 # ---------------------------------------------------------------------------------

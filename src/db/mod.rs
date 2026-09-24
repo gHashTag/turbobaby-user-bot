@@ -387,6 +387,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "087_delivery_zones_phuket.sql",
         include_str!("../../migrations/087_delivery_zones_phuket.sql"),
     ),
+    (
+        "088_unpublish_events.sql",
+        include_str!("../../migrations/088_unpublish_events.sql"),
+    ),
 ];
 
 /// The last migration that shipped before the bike domain, and therefore the last

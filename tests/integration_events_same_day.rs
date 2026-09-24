@@ -322,14 +322,51 @@ async fn the_admin_endpoint_accepts_four_events_on_one_date() {
         );
     }
 
-    let all = get_events(&app).await;
+    // Events left every customer surface on the owner's ruling of 2026-09-24
+    // (rental only): the admin API stores every event non-public, so the
+    // customer calendar shows none of the four. Whether the write path refused
+    // the second event of the day is read from the admin's own list instead,
+    // which answers every row.
+    let shown = on_day(&get_events(&app).await, DAY).len();
+    assert_eq!(
+        shown, 0,
+        "the calendar shows {shown} of the admin's new events"
+    );
+
+    let resp = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::GET)
+                .uri("/api/admin/events")
+                .header(
+                    "X-Telegram-Init-Data",
+                    common::make_init_data(42, "dummy_test_token"),
+                )
+                .header("X-Admin-Token", "test_password")
+                .header("X-Admin-Telegram-Id", "42")
+                .body(Body::empty())
+                .expect("request"),
+        )
+        .await
+        .expect("response");
+    assert_eq!(resp.status(), StatusCode::OK, "GET /api/admin/events");
+    let bytes = axum::body::to_bytes(resp.into_body(), 1 << 22)
+        .await
+        .expect("body");
+    let listed: serde_json::Value = serde_json::from_slice(&bytes).expect("json");
+    let all = listed["events"].as_array().cloned().unwrap_or_default();
     let day = on_day(&all, DAY);
     assert_eq!(
         day.len(),
         SCHEDULE.len(),
-        "created {} events on {DAY} and the calendar shows {}",
+        "created {} events on {DAY} and the admin list shows {}",
         SCHEDULE.len(),
         day.len()
+    );
+    assert!(
+        day.iter().all(|e| e["is_public"] == false),
+        "the admin API stored an event as public: {day:?}"
     );
     // And each is its own row rather than the last create having overwritten
     // the earlier ones, which is what a one-per-day rule would look like.

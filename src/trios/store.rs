@@ -530,6 +530,21 @@ pub fn validate_checkout_for(
     Ok(())
 }
 
+/// The delivery zone an order carries: the one the customer has stored, but
+/// only while the zone the picker shows is that same zone.
+///
+/// A stored id comes from an earlier checkout (local storage or the cloud
+/// draft) and can name a row the server no longer serves -- migration 087
+/// deactivated the Koh Phangan zones -- and `POST /api/orders` refuses an
+/// inactive zone with 422. The picker already shows the first served zone in
+/// its place, so `shown` differs from `stored` exactly when the served list
+/// does not hold it; the order then carries no zone, as it does for a customer
+/// who never chose. With nothing shown (no list loaded) there is nothing to
+/// judge against, and the stored id goes as it is for the server to decide.
+pub fn served_zone_id(stored: Option<String>, shown: Option<&str>) -> Option<String> {
+    stored.filter(|id| shown.is_none_or(|shown| shown == id))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1102,5 +1117,28 @@ mod tests {
             PickupType::Pickup,
         );
         assert!(order.can_cancel());
+    }
+
+    /// A returning customer's saved zone may be one migration 087 deactivated.
+    /// The picker shows the first served zone instead, and the order must not
+    /// carry the stale id the server refuses with 422.
+    #[test]
+    fn a_saved_zone_the_served_list_no_longer_holds_is_not_submitted() {
+        // The picker fell back to another zone: the saved one is not served.
+        assert_eq!(served_zone_id(Some("zone-a".into()), Some("zone-b")), None);
+        // Saved and shown agree: the choice goes as made.
+        assert_eq!(
+            served_zone_id(Some("zone-a".into()), Some("zone-a")),
+            Some("zone-a".to_string())
+        );
+        // No choice: none is made up from what the picker shows.
+        assert_eq!(served_zone_id(None, Some("zone-b")), None);
+        // An empty saved id (what a zoneless order leaves behind) is no zone.
+        assert_eq!(served_zone_id(Some(String::new()), Some("zone-b")), None);
+        // No list to judge against: the saved id goes, and the server decides.
+        assert_eq!(
+            served_zone_id(Some("zone-a".into()), None),
+            Some("zone-a".to_string())
+        );
     }
 }

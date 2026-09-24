@@ -21,7 +21,7 @@
 ; whose content fits the cap and whose surrounding whitespace does not is refused by the button
 ; and admitted by the handler: the customer gets a greyed-out button and a "too long" sentence
 ; for a field the validator would have passed. That is the same dead-button failure the gate
-; was written to end (src/trios/store.rs:1051-1053).
+; was written to end (src/trios/store.rs:1066-1068).
 ;   The third gate is the server, and it requires the PRESENCE of ZERO of the four
 ; contact-bearing fields: customer_name is optional and only length-capped
 ; (src/api/orders.rs:117-121), customer_phone is optional and shape-checked only when present
@@ -30,8 +30,8 @@
 ; refusal but a branch into an anonymous rate limit (src/api/orders.rs:884-899). Two of the six
 ; blockers have no server counterpart of any kind.
 ;   The repository does have an agreement test, and it is why the split has stayed invisible.
-; src/trios/store.rs:1049-1070 asserts the button and the validator agree over FIVE hand-written
-; rows (src/trios/store.rs:1056-1060), and not one of those rows carries a leading or trailing
+; src/trios/store.rs:1064-1085 asserts the button and the validator agree over FIVE hand-written
+; rows (src/trios/store.rs:1071-1075), and not one of those rows carries a leading or trailing
 ; space. Five rows, zero of them padded. The agreement is proven exactly where it cannot fail,
 ; and a single padded row would turn the test red.
 ; --
@@ -73,7 +73,7 @@
 ;       :1133, :1601 and :1680), so there is no reachable order that the button refuses for a
 ;       missing identity or an unticked age box and the handler admits. The function's argument
 ;       list is a fact about the function; the gate is the call site. The shipped agreement test
-;       passing `true` for both at src/trios/store.rs:1063 is therefore correct rather than a
+;       passing `true` for both at src/trios/store.rs:1078 is therefore correct rather than a
 ;       hole -- the hole is the padding the same five rows also lack.
 ; --
 ; WHAT THIS FILE NEVER DOES: D14 (DECISIONS.md:186-200) forbids a phone number in this
@@ -392,7 +392,7 @@ pub fn blocker_is_known(blocker: u8) bool {
 ; Each blocker carries a translation key (src/trios/store.rs:430-447) whose sentences ship at
 ; src/trios/i18n.rs:869-884 and :1468-1483. Cited by path and never quoted: two of them embed
 ; an example number (src/trios/i18n.rs:873 and :1472), which D14 keeps out of this file.
-; Coverage is proven, not assumed: src/trios/store.rs:1072-1093 walks all six blockers against
+; Coverage is proven, not assumed: src/trios/store.rs:1087-1108 walks all six blockers against
 ; both published locales and fails on an empty or untranslated sentence. Which locales are
 ; published is turbobaby/locale-policy's answer, and the count is not restated here.
 pub const EVERY_BLOCKER_CARRIES_A_MESSAGE_KEY : bool = true;
@@ -477,8 +477,11 @@ pub fn the_two_client_gates_split(has_identity: bool, cart_lines: u16, age_confi
   return has_identity and cart_lines >= 1 and age_confirmed and padding_splits_the_two_gates(trimmed_chars, raw_chars, cap);
 }
 
-; The shipped agreement test, src/trios/store.rs:1049-1070: five hand-written rows at
-; src/trios/store.rs:1056-1060. The witness it would need is a padded one, and it has none.
+; The shipped agreement test, src/trios/store.rs:1064-1085: five hand-written rows at
+; src/trios/store.rs:1071-1075. The witness it would need is a padded one, and it has none.
+; RE-POINTED 2026-09-24: every src/trios/store.rs line this file cites inside that file's test
+; module moved fifteen lines down when served_zone_id (the checkout's saved-zone rule) was added
+; above the module; the numbers here and above are re-measured, and nothing they point at changed.
 pub const AGREEMENT_ROWS_SHIPPED : u8 = 5;
 pub const AGREEMENT_ROWS_CARRYING_PADDING : u8 = 0;
 
