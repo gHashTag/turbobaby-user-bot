@@ -14,7 +14,7 @@
 -- this change does not make; this statement closes it either way.
 --
 -- 085's shape, one flag on one table. Rows are KEPT: a customer's bookings,
--- his own bookings list and cancel, the admin's records and guest list, and
+-- their own bookings list and cancel, the admin's records and guest list, and
 -- the 24-hour reminder to a seat already held do not filter the flag and are
 -- untouched. Idempotent: where 085 left nothing public it updates no row.
 -- Reversible the way 085 is -- flip the flag back -- once EVENTS_PUBLISHABLE
