@@ -529,12 +529,25 @@ pub const TARIFF_TABLE_NOTE : str = "data/fleet_seed.json:307 sets rental_terms.
 ; and nothing was written to it here. The 1490 belt step is NOT confirmed and is not modelled; see
 ; the section on unmodelled rules. The ladder itself is unchanged: area_fee_thb still answers
 ; FEE_ABSENT off the ladder, and six zones off the ladder are priced by the zone table instead.
+; CORRECTED 2026-09-24, later the same day. "The brain still records them as unconfirmed" and
+; "nothing was written to it" were true of the read they came from and are not true of the node
+; now. The owner's decision was recorded in the brain that day from the PC side, as decision
+; 24.09.2026-1 (brain:business_rules:1712-1734, read 2026-09-24): the five sheet zones at the
+; sheet's prices, the airport at 690, no minutes shown. The older note at :1426-1429 still says the
+; five are not confirmed by the 2026-09-06 decision, which is what it was about, and it was not
+; edited; the brain now holds both, and the later entry is the owner's word on the zone table. That
+; entry leaves the 1490 belt step and the 17:30 cut-off outside the decision (:1727-1731).
 pub const UNCONFIRMED_SHEET_ZONE_COUNT : i32 = 5;
 pub const UNCONFIRMED_BELT_STEP_THB : i32 = 1490;
 pub const UNCONFIRMED_ZONES_ARE_NOT_FEES : bool = false;
 pub const UNCONFIRMED_ZONES_WERE_NOT_FEES_BEFORE_2026_09_24 : bool = true;
 pub const SHEET_ZONES_THE_OWNER_CONFIRMED_ON_2026_09_24 : i32 = 5;
-pub const THE_BRAIN_STILL_RECORDS_THEM_AS_UNCONFIRMED : bool = true;
+pub const THE_BRAIN_STILL_RECORDS_THEM_AS_UNCONFIRMED : bool = false;
+pub const THE_BRAIN_RECORDED_THEM_ONLY_AS_UNCONFIRMED_BEFORE_DECISION_2026_09_24_1 : bool = true;
+pub const THE_BRAINS_OLDER_NOTE_STILL_SAYS_NOT_CONFIRMED : bool = true;
+pub const OWNER_ZONE_DECISION_NUMBER : str = "24.09.2026-1";
+pub const OWNER_ZONE_DECISION_BRAIN_CITATION : str = "brain:business_rules:1712-1734";
+pub const OWNER_ZONE_DECISION_LEAVES_THE_BELT_STEP_OUT : bool = true;
 pub const OFF_LADDER_DISTRICT_HAS_NO_PUBLISHED_FEE : bool = false;
 pub const OFF_LADDER_DISTRICT_HAD_NO_PUBLISHED_FEE_BEFORE_2026_09_24 : bool = true;
 pub const A_DISTRICT_IN_NEITHER_TABLE_HAS_NO_FEE : bool = true;
@@ -1244,7 +1257,12 @@ test a_district_off_the_ladder_is_an_absence_and_never_a_derived_number {
     assert UNCONFIRMED_ZONES_ARE_NOT_FEES == false;
     assert UNCONFIRMED_ZONES_WERE_NOT_FEES_BEFORE_2026_09_24 == true;
     assert SHEET_ZONES_THE_OWNER_CONFIRMED_ON_2026_09_24 == UNCONFIRMED_SHEET_ZONE_COUNT;
-    assert THE_BRAIN_STILL_RECORDS_THEM_AS_UNCONFIRMED == true;
+    assert THE_BRAIN_STILL_RECORDS_THEM_AS_UNCONFIRMED == false;
+    assert THE_BRAIN_RECORDED_THEM_ONLY_AS_UNCONFIRMED_BEFORE_DECISION_2026_09_24_1 == true;
+    assert THE_BRAINS_OLDER_NOTE_STILL_SAYS_NOT_CONFIRMED == true;
+    assert OWNER_ZONE_DECISION_NUMBER == "24.09.2026-1";
+    assert OWNER_ZONE_DECISION_BRAIN_CITATION == "brain:business_rules:1712-1734";
+    assert OWNER_ZONE_DECISION_LEAVES_THE_BELT_STEP_OUT == true;
     assert districts_at_step(UNCONFIRMED_BELT_STEP_THB) == 0;
     assert zones_at_fee(UNCONFIRMED_BELT_STEP_THB) == 0;
     assert OFF_ISLAND_RULE_IS_ONLY_NO_DELIVERY == true;

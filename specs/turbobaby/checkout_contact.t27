@@ -43,7 +43,7 @@
 ;       crate::trios::market::MARKET_DIALING.default_calling_code; src/trios/market.rs:92 holds
 ;       the value; data/fleet_seed.json:30 holds the deployment copy;
 ;       tests/market_clock_wiring.rs:256-258 fails if the Rust constant and the seed disagree;
-;       scripts/verify_fleet_seed.py:164 pins the seed field's shape. The debt is real but
+;       scripts/verify_fleet_seed.py:171 pins the seed field's shape. The debt is real but
 ;       narrower, and it is pinned below instead: the profile is a compile-time &'static str
 ;       (src/trios/market.rs:86 and :92), so a market swap is a recompile -- src/trios/market.rs
 ;       says so in its own words at :69-71 -- and the profile reaches exactly ONE of the
@@ -253,7 +253,7 @@ pub fn market_swap_reaches_every_branch() bool {
 ;   src/trios/market.rs:86 is still the profile field and :92 still holds the value; :69-71 still
 ;     says in the source's own words that a market swap is an edit here and in the seed.
 ;   data/fleet_seed.json:30 still holds the deployment copy, tests/market_clock_wiring.rs:256-258
-;     still fails when the constant and the seed disagree, and scripts/verify_fleet_seed.py:164
+;     still fails when the constant and the seed disagree, and scripts/verify_fleet_seed.py:171
 ;     still pins the field's shape.
 ;   src/trios/store.rs:401 is still the SINGLE read of DEFAULT_COUNTRY_CODE in the normalizer --
 ;     grep gives two hits in the whole file, the declaration at :325 and that one use -- and

@@ -413,8 +413,8 @@ pub const COPY_RULE : str = "Each vocabulary named in COPY_NAMES is declared in 
 
 ; THE REFUSAL, and the reason all seven are still copies (six since 2026-09-24). No import form in the pinned compiler
 ; carries a constant across files. scripts/verify_t27_specs.py fails any malformed UseDecl
-; (lines 431-436), keeps EMPTY_IMPORT_PATTERNS for an emitted empty import (lines 290-293), and
-; fails the file when any of the five generators emits one (lines 458-461). The corpus reaches
+; (verify_spec, its UseDecl walk), keeps EMPTY_IMPORT_PATTERNS for an emitted empty import, and fails
+; the file when any of the five generators emits one (verify_spec's GENERATORS loop). The corpus reaches
 ; the same conclusion in prose at docs/t27-semantic-merge-matrix.md:127-129: the pinned compiler
 ; does not provide a sound cross-file import form, so the contracts exchange abstract inputs and
 ; do not pretend that brace imports resolve. What is missing is the import, not the number, and
@@ -429,6 +429,8 @@ pub const COPY_RULE : str = "Each vocabulary named in COPY_NAMES is declared in 
 ; in that file several hundred lines down at once. The three checks themselves were re-read and
 ; are unchanged in substance; only their addresses moved. The matrix sentence moved for the same
 ; kind of reason and now reads the same words at 127-129.
+; RE-CITED BY NAME 2026-09-24: the three verifier addresses had drifted again (to about 444-450, 304
+; and 472-475), so they now name verify_spec and EMPTY_IMPORT_PATTERNS rather than lines.
 pub const SHARED_VOCABULARY_IMPORT_IS_NOT_SHIPPED : bool = true;
 pub const SHARED_VOCABULARY_IMPORT_NOTE : str = "No import form in the pinned compiler carries a constant across files: scripts/verify_t27_specs.py rejects a malformed UseDecl and fails any file whose five generators emit an empty import, and docs/t27-semantic-merge-matrix.md records that the contracts exchange abstract inputs rather than pretend brace imports resolve. Until an import exists, a shared vocabulary can only be a pinned copy with a named owner. Deleting a copy is not the alternative for a table this file needs to state its own laws, such as CATALOG_KEYS, and a new shared-facts contract would be a thirteenth copy, not a single source. CORRECTED 2026-09-24: this note named DISPLACEMENTS_CC beside CATALOG_KEYS until that day. Measured, no law here needed the displacement list as a declaration -- top_speed takes a bare displacement -- so that copy was dropped and its owner named instead.";
 

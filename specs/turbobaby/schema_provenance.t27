@@ -50,8 +50,8 @@
 ; by turbobaby/deposit-tiers in the comment above FAMILY_DEPOSIT_THB: that
 ; scripts/verify_fleet_seed.py "knows nothing about .t27". It is false, and the measurement is
 ; unchanged -- that gate reads exactly one .t27 file (MARKET_SPEC at
-; scripts/verify_fleet_seed.py:34, read at :112, parsed one constant at a time by spec_const at
-; :90-95) and pins the seed's 13-field market block to its constants.
+; scripts/verify_fleet_seed.py:41, read at :119, parsed one constant at a time by spec_const at
+; :97-102) and pins the seed's 13-field market block to its constants.
 ; Re-opened at review on 2026-09-21 and BOTH OWNERS HAVE CORRECTED THEIR OWN TEXT. Neither now
 ; claims the gate is .t27-blind; each says instead that the script gates turbobaby/market and
 ; not its own table, and each gives a narrower checkable reason for its copy still being
@@ -557,7 +557,7 @@ pub fn direction_writes_to_a_live_database(direction: u8) bool {
 ; --- What the seed gate covers -------------------------------------------------------------------
 ; scripts/verify_fleet_seed.py pins migrations/082_bikes_seed.sql to data/fleet_seed.json field by
 ; field, and it is the only gate in this repository that takes a .t27 constant as EVIDENCE ABOUT
-; ANOTHER ARTIFACT: MARKET_SPEC at scripts/verify_fleet_seed.py:34, read at :112 and parsed one
+; ANOTHER ARTIFACT: MARKET_SPEC at scripts/verify_fleet_seed.py:41, read at :119 and parsed one
 ; constant at a time by spec_const at :90-95 -- a regex over the file's own text, no compiler
 ; involved -- comparing the seed's market block to the 13 contract fields listed at :72-86. The
 ; spec there is the source of truth and the SQL is the thing on trial.

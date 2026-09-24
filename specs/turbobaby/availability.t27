@@ -40,7 +40,7 @@
 ; declares UNIT_STATUS_RETIRED, src/api/bikes.rs:797-803 is the four-value UNIT_STATUSES array
 ; and the test the_four_statuses_match_the_check_constraint pins it at src/api/bikes.rs:2493,
 ; src/db/entities/bike_unit.rs:40 and src/db/bikes.rs:42 restate it (both still exact),
-; scripts/verify_fleet_seed.py:60 parses no other value, and src/ui/screens/admin_screen.rs:522
+; scripts/verify_fleet_seed.py:67 parses no other value, and src/ui/screens/admin_screen.rs:522
 ; renders it as a label. The sixth witness this sentence used to call is WITHDRAWN rather than
 ; re-addressed: it claimed the sibling spec bike_catalog.t27 already writes "retired", and that
 ; spec contains the word nowhere at all -- the citation was not stale, the claim was false.
@@ -124,7 +124,7 @@ pub const SEED_GATE_NOTE : str = "scripts/verify_fleet_seed.py is no longer .t27
 ; nowhere. turbobaby/order-status does name the set, and names this file as its owner, so it is
 ; corroboration of ownership and not an independent source for the value.
 pub const RETIRED_SIBLING_WITNESS : str = "";
-pub const RETIRED_SIBLING_WITNESS_NOTE : str = "No sibling contract independently writes the fourth unit status. The withdrawn citation was bike_catalog.t27, which contains no occurrence of retired at all (measured 2026-09-21). The only contract that names the four-value set is turbobaby/order-status, and it names it while crediting turbobaby/availability as the owner, so it restates this file rather than confirming it. The shipped sources carry the refutation on their own: src/api/bikes.rs:794, src/api/bikes.rs:797-803, the test at src/api/bikes.rs:2493, src/db/entities/bike_unit.rs:40, src/db/bikes.rs:42, scripts/verify_fleet_seed.py:60 and src/ui/screens/admin_screen.rs:522.";
+pub const RETIRED_SIBLING_WITNESS_NOTE : str = "No sibling contract independently writes the fourth unit status. The withdrawn citation was bike_catalog.t27, which contains no occurrence of retired at all (measured 2026-09-21). The only contract that names the four-value set is turbobaby/order-status, and it names it while crediting turbobaby/availability as the owner, so it restates this file rather than confirming it. The shipped sources carry the refutation on their own: src/api/bikes.rs:794, src/api/bikes.rs:797-803, the test at src/api/bikes.rs:2493, src/db/entities/bike_unit.rs:40, src/db/bikes.rs:42, scripts/verify_fleet_seed.py:67 and src/ui/screens/admin_screen.rs:522.";
 
 ; --- The measured fleet ---------------------------------------------------------------------
 ; 14 in-stock families in the seed's own order, so a diff against data/fleet_seed.json reads
@@ -133,7 +133,7 @@ pub const RETIRED_SIBLING_WITNESS_NOTE : str = "No sibling contract independentl
 ; STILL ungated -- but for a narrower reason than this paragraph used to give (re-verified
 ; 2026-09-21). It used to say scripts/verify_fleet_seed.py pins migrations/082_bikes_seed.sql to
 ; the JSON and knows nothing about .t27. The first half holds; the second is now FALSE. That
-; script reads exactly one spec: MARKET_SPEC at scripts/verify_fleet_seed.py:34 is
+; script reads exactly one spec: MARKET_SPEC at scripts/verify_fleet_seed.py:41 is
 ; specs/turbobaby/market_profile.t27, and check_market_profile at :98-140 compares the seed's
 ; market block against that contract's constants field by field. It is a spec gate, and it gates
 ; a different spec. What keeps this table ungated is narrower and checkable: the word

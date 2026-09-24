@@ -38,9 +38,9 @@ WHAT A GREEN RUN DOES NOT PROVE. Re-measured 2026-09-24, after the spec-hygiene 
 four ride-handling rows, the migration census owner's three, the nmax-155 rate's two and the
 seed's line count) landed on top of the T27 C3 deposit comparison, the owner's Phuket delivery
 zones and the catalog-honesty change: the table's 227 bindings cover 214 distinct
-(contract, constant) pairs out of 5479 top-level `pub const` declarations across the 45
+(contract, constant) pairs out of 5484 top-level `pub const` declarations across the 45
 files under specs/, touching 41 of those 45 contracts. That is 3.9% of the declared
-constants, and it is 0% of the 9854 `assert` statements. (Earlier on 2026-09-24: after the
+constants, and it is 0% of the 9859 `assert` statements. (Earlier on 2026-09-24: after the
 T27 C3 deposit comparison, 217 bindings, 204 pairs of 5427, 3.8%, 9753 asserts, 41
 contracts; after the Phuket delivery zones (migration 087) and their sixteen bindings, 216
 bindings, 203 pairs of 5418, 3.7%, 9738 asserts, 41 contracts; the spec-hygiene change
@@ -187,7 +187,7 @@ REPO = Path(__file__).resolve().parents[1]
 # than a missing one.
 
 # One seeded unit row of migrations/082_bikes_seed.sql, in the shape
-# scripts/verify_fleet_seed.py:47-56 already uses: (family, code, year, colour,
+# scripts/verify_fleet_seed.py:54-63 already uses: (family, code, year, colour,
 # status). Named once because four bindings below narrow it and one uses it whole as
 # a witness.
 STATUS_ANY = "(?:available|rented|service|retired)"

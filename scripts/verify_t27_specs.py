@@ -24,7 +24,7 @@ CANONICAL_ROOT = REPO_ROOT / "specs" / "turbobaby"
 AGENT_CARD = "specs/agents/turbobaby.t27"
 
 # To add a contract: add one entry after measuring its parse declaration floor and its
-# test/invariant/bench floor with the pinned compiler. Discovery supplies the tripwire.
+# test/invariant/bench floor with the pinned compiler. Discovery supplies the tripwire. All 45 floors equal the measured counts as of 2026-09-24.
 SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     AGENT_CARD: {
         "module": "turbobaby-agent",
@@ -35,7 +35,7 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/ai_assist.t27": {
         "module": "turbobaby-ai-assist",
         "id": "turbobaby/ai-assist",
-        "min_declarations": 217,
+        "min_declarations": 223,
         "min_checks": 45,
     },
     "specs/turbobaby/api_surface.t27": {
@@ -59,8 +59,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/bot_surface.t27": {
         "module": "turbobaby-bot-surface",
         "id": "turbobaby/bot-surface",
-        "min_declarations": 223,
-        "min_checks": 55,
+        "min_declarations": 232,
+        "min_checks": 56,
     },
     "specs/turbobaby/cart_persistence.t27": {
         "module": "turbobaby-cart-persistence",
@@ -95,8 +95,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/commerce.t27": {
         "module": "commerce",
         "id": "turbobaby/commerce",
-        "min_declarations": 149,
-        "min_checks": 54,
+        "min_declarations": 160,
+        "min_checks": 55,
     },
     "specs/turbobaby/customer_surface.t27": {
         "module": "turbobaby-customer-surface",
@@ -107,16 +107,15 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/deeplink.t27": {
         "module": "turbobaby-deeplink",
         "id": "turbobaby/deeplink",
-        "min_declarations": 154,
-        "min_checks": 43,
+        "min_declarations": 160,
+        "min_checks": 44,
     },
     "specs/turbobaby/delivery_terms.t27": {
         "module": "turbobaby-delivery-terms",
         "id": "turbobaby/delivery-terms",
-        # Raised 2026-09-24 from 253/46 to the measured count when the owner's Phuket zone
-        # table landed in the contract (88 declarations, 10 checks), then to the measured
-        # count again when the spec-hygiene re-read landed on top of it.
-        "min_declarations": 354,
+        # Raised 2026-09-24 from 253/46 to the measured count when the owner's Phuket zone table
+        # landed (88 declarations, 10 checks), and again when the spec-hygiene re-read landed.
+        "min_declarations": 359,
         "min_checks": 57,
     },
     "specs/turbobaby/deposit_tiers.t27": {
@@ -134,8 +133,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/game_score.t27": {
         "module": "turbobaby-game-score",
         "id": "turbobaby/game-score",
-        "min_declarations": 113,
-        "min_checks": 33,
+        "min_declarations": 121,
+        "min_checks": 34,
     },
     "specs/turbobaby/happy_hour.t27": {
         "module": "turbobaby-happy-hour",
@@ -152,20 +151,20 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/legacy_retirement.t27": {
         "module": "turbobaby-legacy-retirement",
         "id": "turbobaby/legacy-retirement",
-        "min_declarations": 127,
+        "min_declarations": 133,
         "min_checks": 38,
     },
     "specs/turbobaby/locale_policy.t27": {
         "module": "turbobaby-locale-policy",
         "id": "turbobaby/locale-policy",
-        "min_declarations": 125,
+        "min_declarations": 126,
         "min_checks": 34,
     },
     "specs/turbobaby/loyalty_ledger.t27": {
         "module": "turbobaby-loyalty-ledger",
         "id": "turbobaby/loyalty-ledger",
-        "min_declarations": 194,
-        "min_checks": 46,
+        "min_declarations": 206,
+        "min_checks": 47,
     },
     "specs/turbobaby/market_profile.t27": {
         "module": "turbobaby-market",
@@ -194,7 +193,7 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/order_presentation.t27": {
         "module": "turbobaby-order-presentation",
         "id": "turbobaby/order-presentation",
-        "min_declarations": 560,
+        "min_declarations": 570,
         "min_checks": 73,
     },
     "specs/turbobaby/order_status.t27": {
@@ -212,7 +211,7 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/pricing_honesty.t27": {
         "module": "pricing-honesty",
         "id": "turbobaby/pricing-honesty",
-        "min_declarations": 115,
+        "min_declarations": 118,
         "min_checks": 40,
     },
     "specs/turbobaby/promo_broadcast.t27": {
@@ -236,7 +235,7 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/referral_program.t27": {
         "module": "turbobaby-referral-program",
         "id": "turbobaby/referral-program",
-        "min_declarations": 261,
+        "min_declarations": 264,
         "min_checks": 59,
     },
     "specs/turbobaby/rental_terms.t27": {
@@ -266,13 +265,13 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/runtime_config.t27": {
         "module": "turbobaby-runtime-config",
         "id": "turbobaby/runtime-config",
-        "min_declarations": 202,
+        "min_declarations": 206,
         "min_checks": 54,
     },
     "specs/turbobaby/schema_provenance.t27": {
         "module": "turbobaby-schema-provenance",
         "id": "turbobaby/schema-provenance",
-        "min_declarations": 217,
+        "min_declarations": 225,
         "min_checks": 51,
     },
     "specs/turbobaby/star_award.t27": {
@@ -290,14 +289,14 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/validation_bounds.t27": {
         "module": "turbobaby-validation-bounds",
         "id": "turbobaby/validation-bounds",
-        "min_declarations": 213,
-        "min_checks": 58,
+        "min_declarations": 221,
+        "min_checks": 60,
     },
     "specs/turbobaby/webapp_bridge.t27": {
         "module": "turbobaby-webapp-bridge",
         "id": "turbobaby/webapp-bridge",
-        "min_declarations": 245,
-        "min_checks": 60,
+        "min_declarations": 263,
+        "min_checks": 61,
     },
 }
 
