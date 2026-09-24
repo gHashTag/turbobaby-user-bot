@@ -92,7 +92,13 @@ pub const ZERO_DAY_RATES : u8 = 0;
 ; pcx-150, price-list-only: the cheapest number the tariff publishes anywhere.
 pub const CHEAPEST_PUBLISHED_DAY_RATE_THB : i16 = 349;
 ; nmax-155: the cheapest rate attached to a family that actually has units.
+; OWNED HERE, and named as owned since 2026-09-24: turbobaby/rental-terms computes its audit
+; arithmetic on the same row and carries the figure as REF_BASE_THB_DAY, which it now declares a
+; copy of this declaration (REF_BASE_IS_A_COPY, REF_BASE_OWNER_DECLARATION). Gate 3 binds both to
+; nmax-155's base_rate_thb_day in data/fleet_seed.json, so neither can move alone.
 pub const CHEAPEST_IN_STOCK_DAY_RATE_THB : i16 = 449;
+pub const CHEAPEST_IN_STOCK_FAMILY : str = "nmax-155";
+pub const CHEAPEST_IN_STOCK_RATE_COPY_DECLARATION : str = "REF_BASE_THB_DAY";
 ; xadv-750: the dearest, and the number that fixes the width of the amount field.
 pub const DEAREST_IN_STOCK_DAY_RATE_THB : i16 = 2788;
 ; Derived: click-125's rate, deposit and monthly, plus xadv-750's monthly.
@@ -303,6 +309,9 @@ pub const SUB_BAHT_GAP_IS_UNREPRESENTABLE_HERE : bool = true;
 ; number would rot -- re-opened 2026-09-21, both declarations exist and still carry exactly this
 ; arithmetic). This file compares two amounts. It
 ; computes neither of them, and it holds no discount, rate or rounding rule of its own.
+; CORRECTED 2026-09-24: "owns REF_BASE_THB_DAY" was half right. Rental-terms owns the arithmetic
+; and the choice of NMAX 155 as its reference; the 449 inside REF_BASE_THB_DAY is this file's
+; CHEAPEST_IN_STOCK_DAY_RATE_THB, and rental-terms now declares its constant a copy of that one.
 pub const REUSES_RENTAL_TERMS_ID : str = "turbobaby/rental-terms";
 
 ; Audit-only, tied to the discriminant instead of repeating the claim. The file side of a
@@ -343,11 +352,26 @@ pub const MIGRATION_FILES_SEARCHED : u8 = 88;
 ; over all 88 the same day and still returns zero rows for divergence; counting every file under
 ; migrations/ now returns 89, still the wrong arithmetic for the same reason. The 2026-09-21
 ; figures are kept below under their own names.
-pub const MIGRATION_COUNT_IS_OWNED_HERE : bool = true;
-pub const MIGRATION_COUNT_COPY_HOLDER_ID : str = "turbobaby/locale-policy";
+; CORRECTED 2026-09-24, the same day: THIS CONTRACT DOES NOT OWN THIS COUNT. The paragraph above claimed it,
+; and so did turbobaby/schema-provenance, whose subject is the migration tree: it declares the same
+; census as SQL_FILES_RECURSIVE 88, SQL_FILES_TOP_LEVEL 87 and WIP_SQL_FILES 1, names itself the
+; census owner, and lists this file as a sibling copy -- while this file never named it. A review of
+; 2026-09-23 recorded two self-declared owners of one measurement. Resolved by subject: the census
+; is schema-provenance's. What stays here is the USE of the number -- the divergence search read
+; all 88 files and found no sink -- carried as a declared copy with the owner named by ID and by
+; declaration, and gate 3 now binds the owner's three figures to the tree beside this file's.
+; The claim as written is kept under a _BEFORE_ name, and so is the copy holder it named, because
+; turbobaby/locale-policy now names the census owner instead of this file.
+pub const MIGRATION_COUNT_IS_OWNED_HERE : bool = false;
+pub const MIGRATION_COUNT_IS_OWNED_HERE_BEFORE_2026_09_24 : bool = true;
+pub const REUSES_SCHEMA_PROVENANCE_ID : str = "turbobaby/schema-provenance";
+pub const MIGRATION_COUNT_OWNER_DECLARATIONS : [3]str = ["SQL_FILES_RECURSIVE", "SQL_FILES_TOP_LEVEL", "WIP_SQL_FILES"];
+pub const MIGRATION_COUNT_IS_A_COPY : bool = true;
+pub const MIGRATION_COUNT_COPY_HOLDER_ID_BEFORE_2026_09_24 : str = "turbobaby/locale-policy";
 pub const MIGRATION_COUNT_TOP_LEVEL : u8 = 87;
 pub const MIGRATION_COUNT_IN_WIP : u8 = 1;
 pub const MIGRATION_COUNT_REMEASURED_AT : str = "2026-09-24";
+pub const MIGRATION_COUNT_OWNERSHIP_RESOLVED_AT : str = "2026-09-24";
 pub const MIGRATION_FILES_SEARCHED_BEFORE_087 : u8 = 87;
 pub const MIGRATION_COUNT_TOP_LEVEL_BEFORE_087 : u8 = 86;
 pub const MIGRATION_COUNT_REMEASURED_AT_BEFORE_087 : str = "2026-09-21";
@@ -595,17 +619,27 @@ test persistence_of_a_divergence_is_refused_for_lack_of_a_sink {
 
 ; The file side's number is somebody else's output. Naming that owner is what keeps this
 ; contract from growing a second copy of the class-discount step.
-; The count this contract owns, and the name of the file that copies it. This fails the day the
-; two halves of the directory stop adding up to the whole, which is the arithmetic that made the
-; wrong version of this measurement look right.
-test this_contract_owns_the_migration_file_count_and_names_its_copy_holder {
+; The count this contract USES, and whose it is. Until 2026-09-24 this test was named for owning
+; the count and naming its copy holder; the census is turbobaby/schema-provenance's, and the test
+; now says so. It still fails the day the two halves of the directory stop adding up to the whole,
+; which is the arithmetic that made the wrong version of this measurement look right.
+test the_migration_file_count_is_a_named_copy_of_the_schema_census {
   assert MIGRATION_FILES_SEARCHED == 88;
-  assert MIGRATION_COUNT_IS_OWNED_HERE == true;
+  assert MIGRATION_COUNT_IS_OWNED_HERE == false;
+  assert MIGRATION_COUNT_IS_OWNED_HERE_BEFORE_2026_09_24 == true;
+  assert MIGRATION_COUNT_IS_A_COPY == true;
+  assert REUSES_SCHEMA_PROVENANCE_ID == "turbobaby/schema-provenance";
+  assert REUSES_SCHEMA_PROVENANCE_ID != ID;
+  assert MIGRATION_COUNT_OWNER_DECLARATIONS.len == 3;
+  assert MIGRATION_COUNT_OWNER_DECLARATIONS[0] == "SQL_FILES_RECURSIVE";
+  assert MIGRATION_COUNT_OWNER_DECLARATIONS[1] == "SQL_FILES_TOP_LEVEL";
+  assert MIGRATION_COUNT_OWNER_DECLARATIONS[2] == "WIP_SQL_FILES";
+  assert MIGRATION_COUNT_OWNERSHIP_RESOLVED_AT == "2026-09-24";
   assert MIGRATION_COUNT_TOP_LEVEL == 87;
   assert MIGRATION_COUNT_IN_WIP == 1;
   assert MIGRATION_COUNT_TOP_LEVEL + MIGRATION_COUNT_IN_WIP == MIGRATION_FILES_SEARCHED;
-  assert MIGRATION_COUNT_COPY_HOLDER_ID == "turbobaby/locale-policy";
-  assert MIGRATION_COUNT_COPY_HOLDER_ID != ID;
+  assert MIGRATION_COUNT_COPY_HOLDER_ID_BEFORE_2026_09_24 == "turbobaby/locale-policy";
+  assert MIGRATION_COUNT_COPY_HOLDER_ID_BEFORE_2026_09_24 != ID;
   assert MIGRATION_COUNT_REMEASURED_AT == "2026-09-24";
   assert MIGRATION_FILES_SEARCHED_BEFORE_087 == 87;
   assert MIGRATION_COUNT_TOP_LEVEL_BEFORE_087 + MIGRATION_COUNT_IN_WIP == MIGRATION_FILES_SEARCHED_BEFORE_087;
@@ -618,6 +652,8 @@ test the_file_side_arithmetic_is_owned_by_the_rental_terms_contract {
     assert REUSES_RENTAL_TERMS_ID == "turbobaby/rental-terms";
     assert REUSES_RENTAL_TERMS_ID != ID;
     assert REUSES_RENTAL_TERMS_ID != REUSES_AVAILABILITY_ID;
+    assert CHEAPEST_IN_STOCK_FAMILY == "nmax-155";
+    assert CHEAPEST_IN_STOCK_RATE_COPY_DECLARATION == "REF_BASE_THB_DAY";
 }
 
 ; --- invariants --------------------------------------------------------------------------

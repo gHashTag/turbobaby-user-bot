@@ -561,6 +561,10 @@ pub const SEED_MEASUREMENT_OWNER_ID : str = "turbobaby/order-money";
 ; cashback, so the cashback zero has no owner in the corpus and is declared here as this file's own
 ; re-run, dated. Re-run 2026-09-21: data/ holds exactly one file, data/fleet_seed.json at 19434
 ; bytes, and a case-insensitive grep of it returns 0 for loyalty, 0 for bonus and 0 for cashback.
+; CORRECTED 2026-09-24: the 19434 here and in the header was a CRLF working copy's size. The committed
+; blob is 19084 bytes with 350 lines, and turbobaby/order-money, which owns the seed measurement,
+; now declares the blob's size as FLEET_SEED_BYTES and the old reading under a _BEFORE_ name. The
+; three zeros do not depend on line endings; re-run the same day on the blob, still 0, 0 and 0.
 pub const SEED_MEASUREMENT_OWNER_DECLARATIONS : [2]str = [
   "FLEET_SEED_LOYALTY_MENTIONS",
   "FLEET_SEED_BONUS_MENTIONS",

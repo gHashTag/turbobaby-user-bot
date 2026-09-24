@@ -40,7 +40,7 @@
 ; What remains is that the clock is a build-time const (src/trios/market.rs:63-67, :72) and no
 ; file under src/ reads the seed's market block at runtime: editing data/fleet_seed.json alone
 ; moves no window, and the agreement between the three copies is held by a Rust test and a
-; Python verifier (scripts/verify_fleet_seed.py:82-84) rather than by a read. That is the gap
+; Python verifier (scripts/verify_fleet_seed.py:89-91) rather than by a read. That is the gap
 ; pinned below, and it is a smaller and truer one than the brief's.
 ; --
 ; WHAT THIS FILE NEVER DOES. It invents no window and no percentage: every hour and every
@@ -120,7 +120,7 @@ pub const MARKET_CLOCK_IS_WIRED : bool = true;
 ; No file under src/ opens data/fleet_seed.json; every mention of it there is a doc comment.
 pub const MARKET_BLOCK_RUNTIME_READERS : u8 = 0;
 pub const CLOCK_IS_A_BUILD_TIME_CONST : bool = true;
-pub const CLOCK_PIN_KIND : str = "seed pinned to the Rust const by tests/market_clock_wiring.rs and to the contract by scripts/verify_fleet_seed.py:82-84, the three clock rows of its market field map; neither is a read";
+pub const CLOCK_PIN_KIND : str = "seed pinned to the Rust const by tests/market_clock_wiring.rs and to the contract by scripts/verify_fleet_seed.py:89-91, the three clock rows of its market field map; neither is a read";
 
 ; A seed edit reaches the customer only through a rebuild, because nothing reads it at runtime.
 pub fn seed_edit_moves_the_window(runtime_reads_the_seed: bool, rebuilt: bool) bool {

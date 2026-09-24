@@ -485,8 +485,10 @@ class Parser:
             declared = self.parse_type()
         self.expect("op", "=")
         if self.at("kw", "packed") or self.at("kw", "struct"):
-            # `pub const UnitSlot = packed struct { ... };`
-            # specs/turbobaby/availability.t27:224, bike_catalog.t27:227, ride_game.t27:198.
+            # `pub const UnitSlot = packed struct { ... };` -- UnitSlot in
+            # specs/turbobaby/availability.t27, CatalogRow in bike_catalog.t27 and Handling
+            # in ride_game.t27, named rather than addressed by line since 2026-09-24,
+            # when an edit above Handling moved it twenty lines off its citation.
             self.accept("kw", "packed")
             self.expect("kw", "struct")
             fields = self.parse_struct_body()
@@ -497,7 +499,8 @@ class Parser:
         return ("const", name, declared, expression, line)
 
     def parse_struct_decl(self):
-        # `pub struct OptionalRate { ... }` -- specs/turbobaby/pricing_honesty.t27:144.
+        # `pub struct OptionalRate { ... }` -- OptionalRate and RenderedRate in
+        # specs/turbobaby/pricing_honesty.t27.
         line = self.expect("kw", "struct").line
         name = self.expect("ident").value
         fields = self.parse_struct_body()
@@ -773,8 +776,8 @@ class Parser:
                 self.expect("op", ")")
                 return ("call", token.value, args, token.line)
             if self.at("op", "{"):
-                # `OptionalRate{ .tag = RATE_PRESENT, ... }`
-                # specs/turbobaby/pricing_honesty.t27:199. Unambiguous against a block
+                # `OptionalRate{ .tag = RATE_PRESENT, ... }`, as rate_present in
+                # specs/turbobaby/pricing_honesty.t27 returns it. Unambiguous against a block
                 # because every `if` and `while` condition in this grammar is
                 # parenthesised, so a '{' after an expression is never a block opener.
                 self.next()
@@ -1657,12 +1660,14 @@ def crosscheck(compiler, path, declarations, evaluator_consts):
         a `ConstDecl` carrying the name, whose single child is an `ExprIdentifier`
         (the struct body never becomes a value), and a separate `StructDecl` whose
         `name` is the EMPTY STRING and whose children are bare `ExprIdentifier`s.
-        Measured 2026-09-21 on specs/turbobaby/availability.t27:224 (nodes 48 and 49
-        of the parse), and the same on bike_catalog.t27:227 and ride_game.t27:198.
+        Measured 2026-09-21 on UnitSlot in specs/turbobaby/availability.t27 (nodes 48
+        and 49 of the parse), and the same on CatalogRow in bike_catalog.t27 and on
+        Handling in ride_game.t27.
         Two consequences worth stating: the struct's name and its field names never
         reach the AST at all, and the declaration floors in
         scripts/verify_t27_specs.py count one such declaration twice.
-      * A `pub struct Name { ... }` (pricing_honesty.t27:144, 180) keeps its name and
+      * A `pub struct Name { ... }` (OptionalRate and RenderedRate in
+        pricing_honesty.t27) keeps its name and
         produces no ConstDecl.
       * TestBlock and InvariantBlock arrive with `children: []`, which is the whole
         reason this gate exists; only their NAMES can be compared.

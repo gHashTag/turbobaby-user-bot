@@ -58,7 +58,10 @@
 ; 3. "no milestone amount or threshold unless the repository publishes one -- measure
 ;    data/fleet_seed.json for 'referral' first". The measurement is real and I re-ran it:
 ;    data/fleet_seed.json (19434 bytes, the only file in data/) holds 0 occurrences of referral,
-;    case-insensitive. The inference from that zero does not reach the ladder. The THRESHOLDS are
+;    case-insensitive. (CORRECTED 2026-09-24: 19434 is a CRLF working copy's size; the committed
+;    blob is 19084 bytes with 350 lines, as turbobaby/order-money's FLEET_SEED_BYTES now records.
+;    The zero does not depend on line endings and still holds on the blob. The note constant below
+;    keeps the reading as it was taken.) The inference from that zero does not reach the ladder. The THRESHOLDS are
 ;    published, in exactly one place and on purpose: src/db/referrals.rs:712, whose own comment at
 ;    :705-711 records that there used to be three copies of this list and that the point of
 ;    collapsing them was to stop a fourth rung being promised by one copy and paid by none. That

@@ -194,7 +194,16 @@ pub const CORPUS_REMEASURED_AT : str = "2026-09-22";
 ; --- D11, the rule that outranks everything in this file ----------------------------------
 ; These bands never become a client quote. The door answers, or a human does.
 pub const BANDS_PRODUCE_CLIENT_QUOTES : bool = false;
-pub const ON_SILENCE : str = "no number; a human quotes this price";
+; RESOLVED 2026-09-24: WHAT A SILENT DOOR IS ANSWERED WITH is not this file's to word. Until this
+; edit the next line declared it here as ON_SILENCE -- a string equal to the agent charter's
+; PRICE_ON_SILENCE and already worded apart from the owner's -- although the edge above says this
+; file neither imports nor redeclares the door's rule. turbobaby/pricing-honesty (REUSES_PRICING_ID)
+; owns what an absent price renders as: the dash carrying SAY_HUMAN_QUOTES, whose sentence is its
+; MUST_SAY. Nothing in this file read ON_SILENCE, so it is dropped and listed in
+; RESTATEMENT_DROPPED_ON_RESOLUTION rather than kept as a copy; the shape followed is
+; turbobaby/delivery-terms' OFF_LADDER_NOTE, which names that renderer and declares no sentence.
+pub const SILENCE_SENTENCE_IS_DECLARED_HERE : bool = false;
+pub const PRICING_SILENCE_DECLARATIONS : [2]str = ["SAY_HUMAN_QUOTES", "MUST_SAY"];
 
 ; --- the term ladder, in days -------------------------------------------------------------
 ; Exactly term_discount_bands.observed_terms_days. Days, not months: the issue names
@@ -281,9 +290,25 @@ pub const MOTORCYCLE_RATE_IS_GRID_RECONCILED : bool = false;
 ; it is the measurement the month band fails to reproduce on EITHER basis -- 6750 against it
 ; pre class discount, 5070 post -- and a bound that misses the published figure both ways is
 ; not a price on either.
+; WHOSE 449 THIS IS (resolved 2026-09-24). The choice of NMAX 155 as the reference, and all the
+; arithmetic done with it, are this file's. The published day rate itself is not: it is nmax-155's
+; base_rate_thb_day in data/fleet_seed.json, and turbobaby/pricing-honesty (REUSES_PRICING_ID)
+; declares it as CHEAPEST_IN_STOCK_DAY_RATE_THB -- that file owns the published-rate census, of
+; which "the cheapest rate on a family with units" is one reading. Until this edit both files
+; declared 449 in the present tense with no edge between the two declarations, and a review of
+; 2026-09-23 found neither bound by a gate. The copy stays here, because forty-odd assertions below
+; compute with it and the pinned compiler carries no constant across files
+; (SHARED_VOCABULARY_IMPORT_IS_NOT_SHIPPED in turbobaby/ride-game); what changed is that it is
+; declared a copy of a named owner, and gate 3 binds it and the owner's to the same seed row, so a
+; one-sided edit turns red instead of shipping.
 pub const REF_MODEL : str = "NMAX 155";
 pub const REF_BASE_THB_DAY : i32 = 449;
+pub const REF_BASE_IS_A_COPY : bool = true;
+pub const REF_BASE_OWNER_DECLARATION : str = "CHEAPEST_IN_STOCK_DAY_RATE_THB";
+pub const REF_BASE_SEED_FAMILY : str = "nmax-155";
 pub const REF_MONTHLY_LOW_SEASON_THB : i32 = 5000;
+pub const RESTATEMENT_DROPPED_ON_RESOLUTION : [1]str = ["ON_SILENCE"];
+pub const RESTATEMENTS_RESOLVED_AT : str = "2026-09-24";
 
 ; --- the arithmetic -----------------------------------------------------------------------
 
@@ -483,6 +508,13 @@ pub fn audit_total_thb(base_thb_day: i32, discount_bp: i32, days: i32) i32 {
 ; primary record of that ruling in the owner's own words on 2026-09-12,
 ; brain:business_rules:1661-1678, which is the same ruling DECISIONS.md D11 states;
 ; turbobaby/pricing-honesty owns the rule and this file only says where it lives.
+; RE-READ 2026-09-24, read-only, against the live node: 1661-1678 still holds the ruling's heading,
+; the owner's two quoted sentences and the first two consequences (the live sheet is the client's
+; price source; the 2026-08-17 construction is amended). The clause this paragraph paraphrases --
+; the door silent, no number of any kind, silence forbidden like invention -- is the fourth
+; consequence, at brain:business_rules:1684-1687, in the part the node labels as what follows from
+; the owner's words without further inference. Both ranges are cited now so neither is read as
+; the other.
 ; COMPOSITION_PRODUCES_CLIENT_QUOTES is tied to BANDS_PRODUCE_CLIENT_QUOTES by an invariant so
 ; that the new declarations cannot drift into a quote path while the old ones are held out of
 ; one.
@@ -515,6 +547,8 @@ pub const COMPOSITION_ROUNDING_GAP_THB_MONTH : i32 = 30;
 ; D11 again, for the new declarations, tied to the old constant by an invariant below.
 pub const COMPOSITION_PRODUCES_CLIENT_QUOTES : bool = false;
 pub const PRICE_AUTHORITY_CITATION : str = "brain:business_rules:1661-1678";
+pub const PRICE_ON_SILENCE_CITATION : str = "brain:business_rules:1684-1687";
+pub const PRICE_RULING_REREAD_AT : str = "2026-09-24";
 
 ; The sign convention, and the one number that measures the cost of getting it backwards.
 ; PEAK_EXAMPLE_SURCHARGE_BP is the brain's own example magnitude in the sign section, carried
@@ -993,6 +1027,37 @@ test the_named_owners_are_the_ones_this_file_defers_to {
     assert REUSES_CATALOG_ID == "turbobaby/bike-catalog";
     assert REUSES_PRICING_ID != ID;
     assert REUSES_CATALOG_ID != ID;
+}
+
+; Two restatements resolved on 2026-09-24. The silence sentence is gone, not copied: the file names
+; pricing-honesty's two declarations and declares none. The reference rate stays as a declared copy
+; of a named owner declaration, and the arithmetic that reads it is unchanged.
+test the_silence_sentence_and_the_reference_rate_name_their_owner {
+    assert SILENCE_SENTENCE_IS_DECLARED_HERE == false;
+    assert PRICING_SILENCE_DECLARATIONS.len == 2;
+    assert PRICING_SILENCE_DECLARATIONS[0] == "SAY_HUMAN_QUOTES";
+    assert PRICING_SILENCE_DECLARATIONS[1] == "MUST_SAY";
+    assert BANDS_PRODUCE_CLIENT_QUOTES == false;
+    assert RESTATEMENT_DROPPED_ON_RESOLUTION.len == 1;
+    assert RESTATEMENT_DROPPED_ON_RESOLUTION[0] == "ON_SILENCE";
+    assert RESTATEMENTS_RESOLVED_AT == "2026-09-24";
+    assert REF_BASE_IS_A_COPY == true;
+    assert REF_BASE_OWNER_DECLARATION == "CHEAPEST_IN_STOCK_DAY_RATE_THB";
+    assert REF_BASE_SEED_FAMILY == "nmax-155";
+    assert REF_MODEL == "NMAX 155";
+    assert REUSES_PRICING_ID == "turbobaby/pricing-honesty";
+    assert audit_daily_thb(REF_BASE_THB_DAY, CLASS_DISCOUNT_NONE) == REF_BASE_THB_DAY;
+}
+
+; The 2026-09-12 ruling is cited at two ranges since the re-read of 2026-09-24: the owner's words
+; and the source consequence at one, the silence consequence at the other.
+test the_price_ruling_is_cited_where_each_clause_stands {
+    assert PRICE_AUTHORITY_CITATION == "brain:business_rules:1661-1678";
+    assert PRICE_ON_SILENCE_CITATION == "brain:business_rules:1684-1687";
+    assert PRICE_ON_SILENCE_CITATION != PRICE_AUTHORITY_CITATION;
+    assert PRICE_RULING_REREAD_AT == "2026-09-24";
+    assert PRICE_RULING_REREAD_AT != BRAIN_READ_AT;
+    assert COMPOSITION_PRODUCES_CLIENT_QUOTES == false;
 }
 
 ; --- THE COMPOSITION, checked -------------------------------------------------------------

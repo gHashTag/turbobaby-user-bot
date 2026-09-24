@@ -12,26 +12,42 @@ what to do next.
 | | measured 2026-09-21 |
 | --- | --- |
 | canonical contracts | **45** (44 under `specs/turbobaby/` + `specs/agents/turbobaby.t27`) |
-| assertions executed, all passing | **9 535** — re-measured 2026-09-24 (9 514 on 2026-09-23 before that day's money family, 9 038 on 2026-09-22, 8 911 on 2026-09-21) |
+| assertions executed, all passing | **9 859** — re-measured 2026-09-24 after #59–#62 (9 535 earlier that day, 9 514 on 2026-09-23 before that day's money family, 9 038 on 2026-09-22, 8 911 on 2026-09-21) |
 | contract-to-contract ownership edges | 203+, **zero dangling** |
 | source lines named by some contract | **73 407 of 80 308 (91.4 %)** |
-| enforced contract-to-source bindings | **198**, across 41 of 45 contracts and 74 source files — re-measured 2026-09-24 (197 on 2026-09-23, 168 across 40 on 2026-09-22, 66 across 16 on 2026-09-21) |
+| enforced contract-to-source bindings | **227**, across 41 of 45 contracts and 78 source files — re-measured 2026-09-24 after #59–#62 (198 earlier that day, 197 on 2026-09-23, 168 across 40 on 2026-09-22, 66 across 16 on 2026-09-21) |
 
-The two re-measured rows come from gates 2 and 3, run on the landing tree on 2026-09-24 (the
-2026-09-22/23 families on top of the binding groups). The other three rows were not re-measured and
-keep their 2026-09-21 reading.
+The two re-measured rows come from gates 2 and 3, run on the landing tree on 2026-09-24 (main after
+#61 with the spec-hygiene change on top). The other three rows were not re-measured and keep their
+2026-09-21 reading. Gate 1's 45 floors equal the pinned compiler's counts on the same tree.
 
 ```sh
 python3 scripts/execute_t27_assertions.py --no-crosscheck
-# OK - 45 spec(s), 9535 assert line(s) scanned, 9535 executed, 9535 passed, 0 failed
+# OK - 45 spec(s), 9859 assert line(s) scanned, 9859 executed, 9859 passed, 0 failed
 python3 scripts/verify_t27_against_source.py --require-git-tracked
-# OK - 198 bindings hold across 41 contracts and 74 source files
+# OK - 227 bindings hold across 41 contracts and 78 source files
 ```
 
 The last two rows are the ones to keep apart. *Named* means a contract cites the file. *Bound* means
-a gate fails when the two disagree. 91.4 % is a floor on attention; 198 (2026-09-24; 197 on
-2026-09-23, 168 on 2026-09-22, 66 on 2026-09-21) is the number that actually holds, and it is the
-one worth growing.
+a gate fails when the two disagree. 91.4 % is a floor on attention; 227 (2026-09-24; 198 earlier
+that day, 197 on 2026-09-23, 168 on 2026-09-22, 66 on 2026-09-21) is the number that actually
+holds, and it is the one worth growing.
+
+### Landed on 2026-09-24, and not yet live
+
+Each of these merged to `main` as `gHashTag` after green CI. **None of it reaches a customer until
+someone deploys `main`**: production served the build of `4a5aa72` (bundle `c3a91ae8dc97ab9e`) at the
+last read-only smoke, and a merge deploys nothing (see the last section and `docs/ROLLBACK.md`).
+
+| PR | what changed |
+| --- | --- |
+| #56 | order status, cancellation and money families; the leaderboard no longer shows a player's Telegram ID as a name (`public_display_name`, on read and on write); `dist/` rebuilt |
+| #57 | e2e and monitoring pointed at TurboBaby's own origin |
+| #58 | `scripts/postdeploy-smoke.sh` (GET only) and `docs/ROLLBACK.md` |
+| #59 | CLICK 125 redirects to NMAX 155 only; no seeded unit count shown as availability; admin Add reports success only on a 2xx |
+| #60 | the owner's eighteen Phuket delivery zones (migration 087; Airport 690), no ETA published anywhere, the Koh Phangan rows deactivated; `dist/` bundle `a41a77c967b58518` |
+| #61 | no PromptPay QR under one satang (422); a rental deposit must equal the family's published figure, per unit |
+| #62 | spec hygiene: brain citations re-read, one owner per restated fact (the migration census is schema-provenance's), ride handling bound to `ride.js`, a negative control for the seed gate, a cannabis-era vocabulary guard, gate-1 floors equal to the measurement |
 
 ```sh
 python D:/t27work/coverage_2109.py .     # the naming measurement, if you keep the helper
@@ -399,10 +415,39 @@ None of these is unblocked by more `.t27`:
 * **A capacity or eviction rule for the ETag map.** Growth is reported, not bounded, because nothing
   publishes a bound.
 
+**Decided on 2026-09-24**, and no longer open: TurboBaby's delivery zones. The owner chose the
+sheet's sixteen zones at the sheet's prices, the airport at 690, and no minutes shown. That is
+DECISIONS.md D19 addendum and `delivery_terms.t27`, recorded in the brain as decision 24.09.2026-1.
+
+**Opened on 2026-09-24** by the changes above. Each one waits on the owner and is named in its PR:
+
+* **G. Deposit per bike or per line?** A multi-bike rental line is held to the per-bike published
+  deposit (#61). A deposit a manager lowered for such a rental has no field to reach an order, a
+  USD/EUR figure is refused on the order path, and a refused deposit writes no fraud event.
+* **H. The airport zone's name.** The row is "Аэропорт" / "Airport". The brain says the airport
+  itself is not served, only the hotels next to it (`AIRPORT_ITSELF_IS_NOT_A_DELIVERY_DESTINATION`).
+  Also open: whether the sheet's out-of-belt price (1490) and the 17:30 cut-off should be modelled,
+  and what checkout says when the zone list is empty.
+* **I. Catalog copy (#59).** The detail screen still says "all bikes of this model are busy right
+  now" from a seed snapshot when the seeded count is 0. The unmounted `bike_card.rs` still
+  hard-codes a count. Admin Add inserts its row before the 2xx. The brain's `knowledge_base` still
+  offers PCX 150 / ADV 150 for CLICK 125.
+* **J. Vocabulary and ownership (#62).** Should the nmax-155 rate be owned by pricing-honesty (as
+  landed) or by rental-terms? Is a named copy bound by gate 3 accepted in place of an import the
+  compiler lacks? New copy is needed for `T_MENU_DESC` / `T_MENU_NO_RESULTS`, and the strain-of-day
+  carousel is waiting to be retired.
+* **Outside the contracts, and blocking what customers see:**
+  * the price door's source and Bridge access. The door is still a stub, so every rate is quoted
+    by a human;
+  * the booking capacity rule and booking depth;
+  * a deploy of `main`, which needs a Railway token or a manual `railway up`;
+  * the `woody` database backup policy (`docs/ROLLBACK.md` §7);
+  * whether `WEB_APP_URL` / `BOT_USERNAME` are set on the service.
+
 ### 4. The axis worth growing
 
-**198 bindings over 190 distinct constants** — a reading of 2026-09-24 (197 over 189 on
-2026-09-23). On 2026-09-22 it was 168 bindings over 164 of 4 997 declared constants (3.3 %); on
+**227 bindings over 214 distinct constants** — a reading of 2026-09-24 after #62, 214 of 5 484
+declared constants (3.9 %). Earlier that day: 198 over 190. On 2026-09-23: 197 over 189. On 2026-09-22 it was 168 bindings over 164 of 4 997 declared constants (3.3 %); on
 2026-09-21, 66 bindings of roughly 4 200. *Corrected 2026-09-24:* 4 997 is the gate-3 header's
 count — lines that start with `pub const ` at column zero — and it reproduces exactly on the
 2026-09-22 tree. The same count reads 5 310 today, which makes 3.6 %. The command below counts every
@@ -410,8 +455,8 @@ count — lines that start with `pub const ` at column zero — and it reproduce
 
 ```sh
 grep -E '^\s+"(spec|const)":' scripts/verify_t27_against_source.py \
-  | awk '/"spec":/{s=$2} /"const":/{print s" "$2}' | sort -u | wc -l                 # 190
-cat specs/turbobaby/*.t27 specs/agents/turbobaby.t27 | grep -cE '^\s*(pub\s+)?const\s'   # 5333
+  | awk '/"spec":/{s=$2} /"const":/{print s" "$2}' | sort -u | wc -l                 # 214 (190 before #59)
+cat specs/turbobaby/*.t27 specs/agents/turbobaby.t27 | grep -cE '^\s*(pub\s+)?const\s'   # 5507 (5333 before #59)
 ```
  Every new binding is a fact that can no longer
 drift silently. `scripts/verify_t27_against_source.py` is table-driven: adding one is a few lines,
@@ -449,8 +494,9 @@ citations** — unlike a `src/` citation, which gate 3 can check.
 >
 > The work, in order: fix the seven defects listed under "What is actually left", each with a test
 > that is red before the fix and with the contract that records the defect corrected in the same
-> change; then grow `scripts/verify_t27_against_source.py` beyond its 198 bindings (re-measured
-> 2026-09-24; 197 on 2026-09-23, 168 on 2026-09-22, 66 on 2026-09-21), because a contract nothing binds only describes the code.
+> change; then grow `scripts/verify_t27_against_source.py` beyond its 227 bindings (re-measured
+> 2026-09-24 after #62; 198 earlier that day, 197 on 2026-09-23, 168 on 2026-09-22, 66 on
+> 2026-09-21), because a contract nothing binds only describes the code.
 >
 > Three rules this corpus is built on, and they are not style: never invent a number — where the
 > repository publishes nothing, declare the refusal and say what is missing; never restate what
@@ -458,7 +504,7 @@ citations** — unlike a `src/` citation, which gate 3 can check.
 > line number, because 72 such citations went stale here in a single day. When a fix makes a
 > contract's recorded fact false, that contract is part of the fix.
 
-## Two things that are true of this repository and cost time to learn
+## Things that are true of this repository and cost time to learn
 
 * **The test suite assumed a POSIX checkout.** Until 2026-09-21, `cargo test --features backend` on
   Windows stopped at the first binary and never reached the other forty-nine — measured 1 of 50
@@ -468,3 +514,12 @@ citations** — unlike a `src/` citation, which gate 3 can check.
 * **A merge to `main` does not deploy.** `deploy.yml` triggers on push but skips itself while
   `secret RAILWAY_TOKEN` and `variable RAILWAY_SERVICE` are absent, and this repository has zero of
   each. `main` is an integration branch today, not a shop window. Re-measure before relying on it.
+* **A rebase on Windows writes CRLF into the files it touches.** With Git for Windows'
+  system-wide `core.autocrlf=true`, the files a rebase rewrites come out CRLF, while files it leaves
+  alone keep whatever they had. Guards that look for `"\n}\n"` then fail locally and pass in CI.
+  Measured 2026-09-24: `tests/wire_absence_wiring.rs` failed 3 tests after the #60 rebase and
+  passed once the same bytes were LF. Rebase with `git -c core.autocrlf=false`.
+* **Branches that all cite the same lines conflict by meaning, not only by text.** Four branches
+  on 2026-09-24 each re-pointed `file:line` citations and each moved lines. After every merge, check
+  each citation against the tree it was written for and the line it names now. Re-cite by
+  declaration, test or function name where you can, because a name does not drift.

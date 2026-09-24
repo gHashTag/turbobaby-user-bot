@@ -326,7 +326,7 @@ pub const STEP_DEPENDS_ON_NOTHING_ELSE_NOTE : str = "brain:business_rules:626-62
 ;
 ; TWO ROWS ARE THE OWNER'S WORD AND NOT THE MEASUREMENT, and flattening that would publish a
 ; superseded number as a current one.
-; PAKLOK. brain:business_rules:1364-1398, owner's decision 2026-09-06 number 3 of four that day,
+; PAKLOK. brain:business_rules:1364-1407, owner's decision 2026-09-06 number 3 of four that day,
 ; verbatim "Paklok -- 490". The node names what it cancels rather than editing the older line away:
 ; the 2026-08-20 row "Karon and Paklok -- 390" NO LONGER HOLDS FOR PAKLOK, Karon is untouched
 ; because the owner said nothing about it, and the decision is explicitly about ONE zone. The older
@@ -334,10 +334,37 @@ pub const STEP_DEPENDS_ON_NOTHING_ELSE_NOTE : str = "brain:business_rules:626-62
 ; So the dialog evidence for Paklok -- 2 mentions at 390, brain:booking_flow:80 -- stands behind the
 ; SUPERSEDED figure. The current 490 rests on the owner's word and on nothing else, and this file
 ; says so rather than letting a mention count look like support for it.
-; MAIKHAO. brain:business_rules:1400-1425, owner's decision 2026-09-06 number 4, verbatim
+; MAIKHAO. brain:business_rules:1409-1441, owner's decision 2026-09-06 number 4, verbatim
 ; "Maikhao 990 -- a live price, not sheet garbage". Before it the rules were SILENT: the word
 ; Maikhao did not appear in the node at all, so there was nothing to tell a real step from a data
 ; entry error. The decision is about ONE zone and ONE number.
+; CORRECTED 2026-09-24, BY A READ-ONLY RE-READ OF THE LIVE NODE. Four citations in this file had
+; drifted off the facts they name, five occurrences in all. They match the node as it stood before
+; a nine-line dated note was written INSIDE the Paklok decision (a measurement of 2026-09-21 that the
+; client bot's prompt now carries Paklok at 490), which moved every line below it down by nine. Each
+; citation was re-matched by the TEXT it cites, not shifted by arithmetic. The Paklok decision now
+; spans 1364-1407; it was cited as 1364-1398, which now ends at the new note and before the
+; rollback clause that keeps the 2026-08-20 row physically in place -- the clause the paragraph
+; above leans on. The Maikhao decision spans 1409-1441 (cited as 1400-1425, which is 1409-1434 after
+; the shift and also stopped short of the rollback clause; the whole decision is cited now, the same
+; shape as the Paklok range). The sentence that the
+; rules had been silent on Maikhao is at 1420-1421 (cited as 1411-1412). The boundary naming five
+; unconfirmed sheet zones and the 1490 belt step is at 1426-1429 (cited as 1417-1420), in the prose
+; and in OFF_LADDER_NOTE. Every other brain:business_rules citation in this file was re-read the
+; same day and still lands on its fact. The old ranges are kept below under _BEFORE_ names; no
+; gate resolves either form, which is why the re-read is dated.
+pub const BRAIN_CITATIONS_REREAD_AT : str = "2026-09-24";
+pub const BRAIN_CITATION_DRIFT_LINES : i32 = 9;
+pub const BRAIN_CITATIONS_REPOINTED : i32 = 4;
+pub const BRAIN_CITATION_OCCURRENCES_REPOINTED : i32 = 5;
+pub const PAKLOK_DECISION_CITATION : str = "brain:business_rules:1364-1407";
+pub const PAKLOK_DECISION_CITATION_BEFORE_2026_09_24 : str = "brain:business_rules:1364-1398";
+pub const MAIKHAO_DECISION_CITATION : str = "brain:business_rules:1409-1441";
+pub const MAIKHAO_DECISION_CITATION_BEFORE_2026_09_24 : str = "brain:business_rules:1400-1425";
+pub const MAIKHAO_WAS_UNMENTIONED_CITATION : str = "brain:business_rules:1420-1421";
+pub const MAIKHAO_WAS_UNMENTIONED_CITATION_BEFORE_2026_09_24 : str = "brain:business_rules:1411-1412";
+pub const UNCONFIRMED_ZONES_CITATION : str = "brain:business_rules:1426-1429";
+pub const UNCONFIRMED_ZONES_CITATION_BEFORE_2026_09_24 : str = "brain:business_rules:1417-1420";
 pub const PAKLOK_LADDER_INDEX : i32 = 7;
 pub const PAKLOK_FEE_THB : i32 = 490;
 pub const PAKLOK_SUPERSEDED_FEE_THB : i32 = 390;
@@ -375,11 +402,7 @@ pub const DISTRICTS_AT_EACH_FLAT_STEP : [5]i32 = [4, 1, 3, 3, 1];
 ; same reason the airport fee is. Maikhao is not in that table AT ALL, which is a stronger fact
 ; than a missing number and the reason its fee rests on the owner's word alone: the decision that
 ; put it on the ladder says the rules had been silent on it, the word Maikhao appearing nowhere in
-; the node (brain:business_rules:1411-1412).
-; RE-READ 2026-09-24 (BRAIN_REREAD_AT). The line numbers in this block are the 2026-09-21 read's.
-; Since then nine lines were appended inside decision 3 -- a measured note that the prompt constant
-; it said was stale had been fixed the same day -- so decision 3 still begins at :1364, decision 4
-; now begins at :1409, and no existing line of either decision was altered.
+; the node (brain:business_rules:1420-1421).
 ; CORRECTED 2026-09-21 BY REVIEW. Until that day this paragraph said TWO rows carried no plain
 ; count, named Kamala and Naiharn, and gave Maikhao Kamala's sentinel. Three entries were sentinels
 ; while the prose counted two, and the shared sentinel said of Maikhao what is true of Kamala --
@@ -493,7 +516,7 @@ pub const TARIFF_TABLE_NOTE : str = "data/fleet_seed.json:307 sets rental_terms.
 ; --- What the ladder still does not answer ---------------------------------------------------------
 ; A district OFF the ladder has no published fee, and the brain does not supply one. It is not
 ; silent about the gap either, which is why this refusal can be dated and bounded instead of guessed
-; at: brain:business_rules:1417-1420, inside the Maikhao decision, states that the decision covers
+; at: brain:business_rules:1426-1429, inside the Maikhao decision, states that the decision covers
 ; ONE zone and ONE number and that five further zones carried by the owner's sheet -- Phuket Town,
 ; Cape Panwa, Thalang East, Thalang North, Naithon -- together with a 1490 belt step are NOT
 ; confirmed by it. So five names and one figure are known to EXIST and are known to be UNCONFIRMED,
@@ -506,16 +529,29 @@ pub const TARIFF_TABLE_NOTE : str = "data/fleet_seed.json:307 sets rental_terms.
 ; and nothing was written to it here. The 1490 belt step is NOT confirmed and is not modelled; see
 ; the section on unmodelled rules. The ladder itself is unchanged: area_fee_thb still answers
 ; FEE_ABSENT off the ladder, and six zones off the ladder are priced by the zone table instead.
+; CORRECTED 2026-09-24, later the same day. "The brain still records them as unconfirmed" and
+; "nothing was written to it" were true of the read they came from and are not true of the node
+; now. The owner's decision was recorded in the brain that day from the PC side, as decision
+; 24.09.2026-1 (brain:business_rules:1712-1734, read 2026-09-24): the five sheet zones at the
+; sheet's prices, the airport at 690, no minutes shown. The older note at :1426-1429 still says the
+; five are not confirmed by the 2026-09-06 decision, which is what it was about, and it was not
+; edited; the brain now holds both, and the later entry is the owner's word on the zone table. That
+; entry leaves the 1490 belt step and the 17:30 cut-off outside the decision (:1727-1731).
 pub const UNCONFIRMED_SHEET_ZONE_COUNT : i32 = 5;
 pub const UNCONFIRMED_BELT_STEP_THB : i32 = 1490;
 pub const UNCONFIRMED_ZONES_ARE_NOT_FEES : bool = false;
 pub const UNCONFIRMED_ZONES_WERE_NOT_FEES_BEFORE_2026_09_24 : bool = true;
 pub const SHEET_ZONES_THE_OWNER_CONFIRMED_ON_2026_09_24 : i32 = 5;
-pub const THE_BRAIN_STILL_RECORDS_THEM_AS_UNCONFIRMED : bool = true;
+pub const THE_BRAIN_STILL_RECORDS_THEM_AS_UNCONFIRMED : bool = false;
+pub const THE_BRAIN_RECORDED_THEM_ONLY_AS_UNCONFIRMED_BEFORE_DECISION_2026_09_24_1 : bool = true;
+pub const THE_BRAINS_OLDER_NOTE_STILL_SAYS_NOT_CONFIRMED : bool = true;
+pub const OWNER_ZONE_DECISION_NUMBER : str = "24.09.2026-1";
+pub const OWNER_ZONE_DECISION_BRAIN_CITATION : str = "brain:business_rules:1712-1734";
+pub const OWNER_ZONE_DECISION_LEAVES_THE_BELT_STEP_OUT : bool = true;
 pub const OFF_LADDER_DISTRICT_HAS_NO_PUBLISHED_FEE : bool = false;
 pub const OFF_LADDER_DISTRICT_HAD_NO_PUBLISHED_FEE_BEFORE_2026_09_24 : bool = true;
 pub const A_DISTRICT_IN_NEITHER_TABLE_HAS_NO_FEE : bool = true;
-pub const OFF_LADDER_NOTE : str = "A district the ladder does not name yields FEE_ABSENT, which turbobaby/pricing-honesty renders as a dash carrying the sentence that a human quotes the price. No neighbouring district's fee, no step boundary and no distance produces a number for it, and there is no function in this file that could. This is now a NARROW refusal where it used to be the whole section: twelve districts and one airport-adjacent case are published, and what remains unpublished is named. brain:business_rules:1417-1420 names five sheet zones (Phuket Town, Cape Panwa, Thalang East, Thalang North, Naithon) and a 1490 belt step as existing but explicitly unconfirmed by the owner, so they are the shape of the gap rather than candidates to fill it. CORRECTED 2026-09-24: the owner filled the gap directly that day for the shipped zone table -- the five at the sheet's prices and the airport at 690 -- so a district off the LADDER may now have a fee from the ZONE TABLE (zone_fee_thb). What survives is the interpolation ban: a district in neither table has no fee, and none is derived from a neighbour, a step or a distance.";
+pub const OFF_LADDER_NOTE : str = "A district the ladder does not name yields FEE_ABSENT, which turbobaby/pricing-honesty renders as a dash carrying the sentence that a human quotes the price. No neighbouring district's fee, no step boundary and no distance produces a number for it, and there is no function in this file that could. This is now a NARROW refusal where it used to be the whole section: twelve districts and one airport-adjacent case are published, and what remains unpublished is named. brain:business_rules:1426-1429 names five sheet zones (Phuket Town, Cape Panwa, Thalang East, Thalang North, Naithon) and a 1490 belt step as existing but explicitly unconfirmed by the owner, so they are the shape of the gap rather than candidates to fill it. CORRECTED 2026-09-24: the owner filled the gap directly that day for the shipped zone table -- the five at the sheet's prices and the airport at 690 -- so a district off the LADDER may now have a fee from the ZONE TABLE (zone_fee_thb). What survives is the interpolation ban: a district in neither table has no fee, and none is derived from a neighbour, a step or a distance.";
 ; Off the island the brain says exactly what the seed says and nothing more: delivery is Phuket only
 ; (brain:business_rules:10, brain:knowledge_base:404, brain:faq:96), an address off the island means
 ; no delivery and the client collects the bike. There is no off-island fee, no surcharge, no longer
@@ -812,8 +848,13 @@ pub fn fee_is_the_owners_word(area_index: i32) bool {
 ; problem and exits non-zero when it is given the compiler (KNOWN_FRONTEND_DISAGREEMENTS pins
 ; the three standing cases in commerce.t27 and deposit_tiers.t27; this was a fourth and a new
 ; one). CORRECTED BY REVIEW the same day, by moving the step inside the braces -- the form
-; availability.t27:342 and bot_surface.t27:167 already use, which both front ends read the same
-; way. The arithmetic is unchanged and every assert below reads as it did.
+; turbobaby/availability already uses in sum_column and turbobaby/bot-surface in
+; command_is_accepted, which both front ends read the same way. The arithmetic is unchanged and
+; every assert below reads as it did.
+; RE-POINTED 2026-09-24. Those two examples were cited as sibling FILE:LINE pairs until this edit.
+; Both still landed on their loops that day, but a sibling that gains one line above either point
+; would have made this sentence cite something else in silence, so they are named by contract ID
+; and function, which move only when someone renames them.
 pub fn districts_at_step(fee_thb: i32) i32 {
     var found : i32 = 0;
     var i : i32 = 0;
@@ -1167,6 +1208,32 @@ test the_brain_is_cited_as_a_brain_and_not_as_a_path {
     assert CORPUS_CROSSCHECKED_AT != BRAIN_READ_AT;
 }
 
+; The re-read of 2026-09-24. Each moved citation keeps its old range under a _BEFORE_ name. Every
+; START below the new note moved by the same nine lines; the two decision ranges also END later,
+; because each now closes on its decision's rollback clause, which the old ranges stopped short of.
+test the_brain_citations_were_rematched_by_text_on_2026_09_24 {
+    assert BRAIN_CITATIONS_REREAD_AT == "2026-09-24";
+    assert BRAIN_CITATIONS_REREAD_AT != BRAIN_READ_AT;
+    assert BRAIN_IS_NOT_CHECKED_BY_ANY_GATE_IN_THIS_REPOSITORY == true;
+    assert BRAIN_CITATION_DRIFT_LINES == 9;
+    assert BRAIN_CITATIONS_REPOINTED == 4;
+    assert BRAIN_CITATION_OCCURRENCES_REPOINTED == 5;
+    assert PAKLOK_DECISION_CITATION == "brain:business_rules:1364-1407";
+    assert PAKLOK_DECISION_CITATION != PAKLOK_DECISION_CITATION_BEFORE_2026_09_24;
+    assert MAIKHAO_DECISION_CITATION == "brain:business_rules:1409-1441";
+    assert MAIKHAO_DECISION_CITATION != MAIKHAO_DECISION_CITATION_BEFORE_2026_09_24;
+    assert MAIKHAO_WAS_UNMENTIONED_CITATION == "brain:business_rules:1420-1421";
+    assert MAIKHAO_WAS_UNMENTIONED_CITATION_BEFORE_2026_09_24 == "brain:business_rules:1411-1412";
+    assert UNCONFIRMED_ZONES_CITATION == "brain:business_rules:1426-1429";
+    assert UNCONFIRMED_ZONES_CITATION_BEFORE_2026_09_24 == "brain:business_rules:1417-1420";
+    assert 1426 - 1417 == BRAIN_CITATION_DRIFT_LINES;
+    assert 1420 - 1411 == BRAIN_CITATION_DRIFT_LINES;
+    assert 1409 - 1400 == BRAIN_CITATION_DRIFT_LINES;
+    assert BRAIN_LADDER_NODE_RULES == "brain:business_rules:626-645";
+    assert UNCONFIRMED_BELT_STEP_THB == 1490;
+    assert UNCONFIRMED_SHEET_ZONE_COUNT == 5;
+}
+
 test a_district_off_the_ladder_is_an_absence_and_never_a_derived_number {
     assert area_fee_thb(LADDER_DISTRICT_COUNT) == FEE_ABSENT;
     assert area_fee_thb(12) == FEE_ABSENT;
@@ -1190,7 +1257,12 @@ test a_district_off_the_ladder_is_an_absence_and_never_a_derived_number {
     assert UNCONFIRMED_ZONES_ARE_NOT_FEES == false;
     assert UNCONFIRMED_ZONES_WERE_NOT_FEES_BEFORE_2026_09_24 == true;
     assert SHEET_ZONES_THE_OWNER_CONFIRMED_ON_2026_09_24 == UNCONFIRMED_SHEET_ZONE_COUNT;
-    assert THE_BRAIN_STILL_RECORDS_THEM_AS_UNCONFIRMED == true;
+    assert THE_BRAIN_STILL_RECORDS_THEM_AS_UNCONFIRMED == false;
+    assert THE_BRAIN_RECORDED_THEM_ONLY_AS_UNCONFIRMED_BEFORE_DECISION_2026_09_24_1 == true;
+    assert THE_BRAINS_OLDER_NOTE_STILL_SAYS_NOT_CONFIRMED == true;
+    assert OWNER_ZONE_DECISION_NUMBER == "24.09.2026-1";
+    assert OWNER_ZONE_DECISION_BRAIN_CITATION == "brain:business_rules:1712-1734";
+    assert OWNER_ZONE_DECISION_LEAVES_THE_BELT_STEP_OUT == true;
     assert districts_at_step(UNCONFIRMED_BELT_STEP_THB) == 0;
     assert zones_at_fee(UNCONFIRMED_BELT_STEP_THB) == 0;
     assert OFF_ISLAND_RULE_IS_ONLY_NO_DELIVERY == true;
