@@ -1969,6 +1969,39 @@ BINDINGS: tuple[dict[str, object], ...] = (
                "34-41); bike_rental unwritable, no deal kind in a cart row and zero kinds "
                "that can write today all turn on this arm list staying these four",
     },
+    # Added 2026-09-26 with the kept-cart change: a cart kept from the previous shop is stored and
+    # never served. The contract's list of the kinds a cart serves IS the code's list, the one the
+    # cart API, the reminder and the Mini App all ask through trios::pricing::cart_kind_is_served.
+    # The witness pins the predicate to that array, so a literal of its own inside the predicate
+    # (`kind == "bike_rental" || kind == "tea"`) cannot leave this row green. Planted RED once by
+    # hand: "tea" added to the array, and the predicate rewritten to compare a literal.
+    {
+        "name": "cart_persistence.SERVED_CART_KINDS ~ trios/pricing.rs SERVED_CART_KINDS",
+        "spec": "specs/turbobaby/cart_persistence.t27",
+        "const": "SERVED_CART_KINDS",
+        "source": "src/trios/pricing.rs",
+        "extract": ("regex_list", r"pub const SERVED_CART_KINDS:\s*\[&str;\s*\d+\]\s*=\s*\[(.*?)\]\s*;"),
+        "witness": r"pub fn cart_kind_is_served\(kind: &str\) -> bool \{\s*SERVED_CART_KINDS\.contains\(&kind\)\s*\}",
+        # set_equal: the list is read by membership only (contains), so an order is not a fact.
+        "relation": "set_equal",
+        "why": "which stored cart lines a customer is shown at all: the owner's rulings of "
+               "2026-09-24 and 2026-09-25 (answer 12) leave the rental line and nothing else, and "
+               "a kind added here reaches the cart API, the reminder and the Mini App at once",
+    },
+    # The same change's census of the reminder's reads of cart_items: both carry the served-kind
+    # filter, the inner join (witness) included, which is what keeps a cart of hidden rows from ever
+    # being due. Planted RED once by hand: the join's filter removed (count 1, witness blind).
+    {
+        "name": "cart_persistence.REMINDER_KIND_FILTERED_QUERIES ~ cart_abandonment.rs kind filters",
+        "spec": "specs/turbobaby/cart_persistence.t27",
+        "const": "REMINDER_KIND_FILTERED_QUERIES",
+        "source": "src/cart_abandonment.rs",
+        "extract": ("regex_count", r"kind = ANY\(\$\d\)"),
+        "witness": r"JOIN cart_items ci ON ci\.cart_id = c\.id AND ci\.kind = ANY\(\$3\)",
+        "relation": "equal",
+        "why": "the reminder sums, names and spends a rung on the lines these two queries return; "
+               "a read without the filter would put a hidden line's name into a Telegram message",
+    },
     {
         "name": "cart_persistence.CARTS_COLUMNS ~ cart entity fields",
         "spec": "specs/turbobaby/cart_persistence.t27",
@@ -3811,7 +3844,11 @@ ONE_GROUP_EXTRACTORS = (
 # OWNER_ANSWER_3_WITHHELD_TX_TYPE_COUNT to src/trios/legacy_view.rs, each planted RED once by
 # hand: 243 rows over the same 41 contracts and 81 source files on its own branch, floor 243.
 # Merged 2026-09-26 on the integration branch: 245 rows, floor 245 (the measured table size).
-MIN_BINDINGS = 245
+# Then the kept-cart change of 2026-09-26 bound cart_persistence.SERVED_CART_KINDS to the shared
+# list in src/trios/pricing.rs and REMINDER_KIND_FILTERED_QUERIES to the reminder, each planted
+# RED once by hand: 241 rows over the same 41 contracts on its own branch, floor 241. Merged
+# 2026-09-26 on the integration branch: 247 rows, floor 247 (the measured table size).
+MIN_BINDINGS = 247
 
 
 # ---------------------------------------------------------------------------------
