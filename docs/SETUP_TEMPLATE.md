@@ -66,7 +66,7 @@ git add dist && git commit && git push
 
 ## 7. Ассеты (логотип, спрайты игры, картинки)
 - Все статич. ассеты лежат в `assets/` и `styles/` (в репо).
-- Перенос/бэкап: `./scripts/export-assets.sh` → `exports/woody-assets-<дата>.tar.gz`
+- Перенос/бэкап: `./scripts/export-assets.sh` → `exports/turbobaby-assets-<дата>.tar.gz`
   (+ manifest + sha256). Восстановление: `tar -xzf <архив> -C <repo-root>`.
 - Замени `assets/logo/*`, `assets/packs/*` на свой брендинг по желанию.
 
