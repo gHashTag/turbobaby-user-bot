@@ -1270,6 +1270,18 @@ pub const DETAIL_ERROR_STATE_HAS_A_KEY_AND_ALSO_LEAKS_THE_TEXT : bool = true;
 ; KEYLESS_CUSTOMER_STRING_SITES), and that fallback names THIS shop, so an order the previous shop
 ; took now reads as placed with this one, on the detail's labelled delivery row too. No neutral
 ; shop wording was given and none is supplied here (RETIRED_SHOP_FALLBACK_NOTE).
+; DECIDED 2026-09-26, by the operator, announced to the owner with no objection: an order of the
+; previous shop must NOT be shown as this shop's. No wording was needed, because the decision is to
+; show no shop label at all for such an order. So a withheld shop is served as an EMPTY shop
+; (RETIRED_SHOP_SERVED_AS; WITHHELD_SHOP in the rules' module), never as null: null is what an
+; order naming no shop is served, and those keep the fallback. Each owned screen reads the served
+; shop through shown_shop and prints no shop label for the empty one -- the list prints the date
+; alone where it printed the shop and the date, and the detail leaves out its labelled delivery row,
+; label and value -- while an order of this shop prints its stored shop, and one naming no shop the
+; keyless fallback, exactly as before; the two fallback sites keep their literal on their cited
+; lines, so KEYLESS_CUSTOMER_STRING_SITES holds, and no cited line moved. A bundle built before the
+; decision prints an empty value for the empty shop: not this shop's name either. The Mini App's
+; checkout never sends an empty shop, so no order of this shop is read as a withheld one.
 ;
 ; WHAT DID NOT MOVE. No status, no figure, no owner question above and no cited line: each of the
 ; three print sites was replaced in place, so LIST_LINE_COUNT and DETAIL_LINE_COUNT hold.
@@ -1298,8 +1310,15 @@ pub const RETIRED_LINE_ADMIN_READS_KEEP_THE_ROW : bool = true;
 pub const RETIRED_LINE_PRINTED_IN_THE_READERS_LANGUAGE : bool = true;
 pub const RETIRED_LINE_MOVED_A_CITED_LINE : bool = false;
 pub const RETIRED_SHOP_IS_WITHHELD : bool = true;
-pub const RETIRED_SHOP_READS_AS_THIS_SHOP : bool = true;
-pub const RETIRED_SHOP_FALLBACK_NOTE : str = "A withheld shop is served as null, and both owned screens print their keyless shop fallback for null, which names this shop, so an order the previous shop took now reads as placed with this one. No neutral shop wording was given with answer 3; the owner decides whether that line should say something else.";
+pub const RETIRED_SHOP_READS_AS_THIS_SHOP : bool = false;
+pub const RETIRED_SHOP_READ_AS_THIS_SHOP_UNTIL : str = "2026-09-26";
+pub const RETIRED_SHOP_DECIDED_AT : str = "2026-09-26";
+pub const RETIRED_SHOP_DECIDED_BY : str = "operator, announced to the owner, no objection";
+pub const RETIRED_SHOP_LABEL_SHOWN : bool = false;
+pub const RETIRED_SHOP_SERVED_AS : str = "";
+pub const RETIRED_SHOP_LABEL_RULE : str = "shown_shop, src/trios/legacy_view.rs";
+pub const THIS_SHOPS_ORDERS_KEEP_THEIR_LABEL : bool = true;
+pub const RETIRED_SHOP_FALLBACK_NOTE : str = "CLOSED 2026-09-26. Until then a withheld shop was served as null, and both owned screens printed their keyless shop fallback for null, which names this shop, so an order the previous shop took read as placed with this one. The operator decided that such an order shows no shop label at all: it is served as the empty shop and both owned screens print no shop label for it, while null keeps the fallback.";
 
 ; A line is of a retired kind unless its bike is an object.
 pub fn order_presentation_line_is_retired(bike_is_an_object: bool) bool {
@@ -2461,15 +2480,26 @@ test a_line_of_the_old_catalogue_is_served_by_the_neutral_name_and_its_stored_fi
   assert RETIRED_LINE_WITNESS == "tests/legacy_view_wiring.rs";
 }
 
-test a_withheld_shop_reads_as_this_one_and_the_owner_is_asked_about_it {
+test a_withheld_shop_carries_no_shop_label_and_never_reads_as_this_one {
   assert RETIRED_SHOP_IS_WITHHELD == true;
-  assert RETIRED_SHOP_READS_AS_THIS_SHOP == true;
+  // until the operator's decision of 2026-09-26 it read as this shop, through the fallback
+  assert RETIRED_SHOP_READ_AS_THIS_SHOP_UNTIL == RETIRED_SHOP_DECIDED_AT;
+  assert RETIRED_SHOP_DECIDED_AT == "2026-09-26";
+  assert RETIRED_SHOP_READS_AS_THIS_SHOP == false;
+  assert RETIRED_SHOP_LABEL_SHOWN == false;
+  assert RETIRED_SHOP_SERVED_AS == "";
   assert RETIRED_SHOP_FALLBACK_NOTE != "";
+  // this shop's orders, and those naming no shop, keep their label and the fallback sites
+  assert THIS_SHOPS_ORDERS_KEEP_THEIR_LABEL == true;
   assert LABELLED_DELIVERY_ROW_VALUE_IS_A_SHOP_NAME == true;
   assert KEYLESS_CUSTOMER_STRING_SITE_COUNT == 6;
+  assert RETIRED_LINE_WITNESS == "tests/legacy_view_wiring.rs";
 }
 
 ; --- Invariants -----------------------------------------------------------------------------------
+
+invariant an_order_of_the_previous_shop_never_reads_as_this_one
+  assert RETIRED_SHOP_READS_AS_THIS_SHOP == false and RETIRED_SHOP_LABEL_SHOWN == false and THIS_SHOPS_ORDERS_KEEP_THEIR_LABEL == true
 
 invariant a_line_of_the_old_catalogue_is_never_served_more_than_its_name_and_stored_figures
   assert order_presentation_retired_line_field_count(true, true) == 3 and RETIRED_LINE_SERVES_AN_ID == false and RETIRED_LINE_SERVES_AN_UNDECLARED_KEY == false and RETIRED_LINE_WRITES_A_ROW == false

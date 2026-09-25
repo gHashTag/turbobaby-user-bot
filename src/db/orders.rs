@@ -2309,7 +2309,12 @@ mod customer_view_tests {
             customer.items,
             serde_json::json!([{ "strain_name": neutral, "quantity": 2.0, "unit_price": 350.0 }])
         );
-        assert_eq!(customer.shop_id, None);
+        // Withheld as the empty shop, which the screens print as no shop label
+        // at all (operator, 2026-09-26), never as this shop's fallback.
+        assert_eq!(
+            customer.shop_id.as_deref(),
+            Some(crate::trios::legacy_view::WITHHELD_SHOP)
+        );
         assert_eq!(customer.total, Some(700.0));
         assert_eq!(customer.subtotal, Some(700.0));
 
