@@ -3,9 +3,9 @@
 *Rewritten 2026-09-26.* This file used to give snippets for posting events and products to the bot
 channel or the broadcast list. Neither may be posted any more: the bot rents bikes, in Phuket only
 (DECISIONS.md, "D19 addendum — rental only, Phuket only, decided 2026-09-24"), and nothing of the
-previous shop's catalogue may appear anywhere (the owner's answer 12 of 2026-09-25, DECISIONS.md,
-"D19 addendum — nothing cannabis-related anywhere"). What follows describes the links that are
-already in chats, so that nobody takes one for a live template.
+previous shop's catalogue may appear anywhere (the owner's answer 12 of 2026-09-25, recorded as
+`OWNER_RULING_2026_09_25_AT` in `specs/turbobaby/legacy_retirement.t27`). What follows describes the
+links that are already in chats, so that nobody takes one for a live template.
 
 ## The shape of a link
 
