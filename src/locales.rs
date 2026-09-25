@@ -197,7 +197,7 @@ fn ru() -> Locale {
         help_commands: "/start — начало\n/menu — меню\n/joke — анекдот\n/fact — факт\n/lang — язык"
             .into(),
         opening_sets: "Открываю наборы...".into(),
-        welcome_feature1: "Каталог: от Click 125 до X-ADV 750".into(),
+        welcome_feature1: "Каталог: от NMAX 155 до X-ADV 750".into(),
         welcome_feature2: "Тарифы на день и на месяц".into(),
         welcome_feature3: "Доставка по всему Пхукету".into(),
         welcome_feature4: "Прозрачные залоги и условия".into(),
@@ -286,7 +286,7 @@ fn en() -> Locale {
         help_commands: "/start — start\n/menu — menu\n/joke — joke\n/fact — fact\n/lang — language"
             .into(),
         opening_sets: "Opening sets...".into(),
-        welcome_feature1: "Catalog: from Click 125 to X-ADV 750".into(),
+        welcome_feature1: "Catalog: from NMAX 155 to X-ADV 750".into(),
         welcome_feature2: "Daily and monthly rates".into(),
         welcome_feature3: "Delivery across Phuket".into(),
         welcome_feature4: "Clear deposits and terms".into(),

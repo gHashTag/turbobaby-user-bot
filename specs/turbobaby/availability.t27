@@ -416,6 +416,29 @@ pub const CLICK_125_REDIRECTS_ARE_PROVISIONAL : bool = true;
 pub const CLICK_125_REDIRECTS_BEFORE_2026_09_25 : [3]str = ["pcx-150", "adv-150", "nmax-155"];
 pub const CLICK_125_REDIRECT_UNITS_AVAILABLE_BEFORE_2026_09_25 : [3]u8 = [0, 0, 5];
 
+; CORRECTED 2026-09-25, the bot's /start reply. No contract owns the welcome the bot sends on
+; /start (src/locales.rs, the welcome_feature1 field of both published locales), and its first line
+; named the catalog as running from CLICK 125 to X-ADV 750. CLICK 125 is closed to new rentals and
+; offered to nobody (D12, CLICK_125_CLOSED_ON above), so the line named a machine the shop does not
+; rent. It is recorded here because this file owns the fact the line rests on: which families are
+; offered. The lower bound is now the smallest family the seed OFFERS, measured from
+; data/fleet_seed.json: the families[] rows with offered = true -- thirteen, the price_list_only
+; block excluded -- ordered by displacement_cc. The smallest displacement, 155 cc, is shared by
+; nmax-155 (base_rate_thb_day 449) and xsr-155 (590); nmax-155 is the lower of the two by rate and
+; the lowest-rate offered family outright, so the bound is its seed model name. The upper bound is
+; unchanged: xadv-750, 750 cc, is the largest offered family, alone at that size. Nothing else in the
+; reply changed, and no other word of it is recorded here. tests/catalog_honesty_wiring.rs derives
+; both bounds from the seed by the same rule and compares them with the two locale rows and with
+; START_CATALOG_RANGE_LABELS; no gate here reads the Russian row (L3).
+pub const START_CATALOG_RANGE_KEYS : [2]str = ["nmax-155", "xadv-750"];
+pub const START_CATALOG_RANGE_LABELS : [2]str = ["NMAX 155", "X-ADV 750"];
+pub const START_CATALOG_RANGE_KEYS_BEFORE_2026_09_25 : [2]str = ["click-125", "xadv-750"];
+pub const START_CATALOG_RANGE_LOWER_BOUND_CC : u16 = 155;
+pub const START_CATALOG_RANGE_LOWER_BOUND_CC_TIES : [2]str = ["nmax-155", "xsr-155"];
+pub const START_CATALOG_RANGE_NAMES_ONLY_OFFERED_FAMILIES : bool = true;
+pub const START_CATALOG_RANGE_NAMED_A_CLOSED_FAMILY_BEFORE_2026_09_25 : bool = true;
+pub const START_CATALOG_RANGE_CORRECTED_ON : str = "2026-09-25";
+
 ; CORRECTED 2026-09-24. FILE_MAY_RULE_OUT and FILE_MAY_CONFIRM above were declared while both
 ; customer screens confirmed from the file anyway. availability_line in
 ; src/ui/screens/catalog_screen.rs printed
@@ -648,6 +671,32 @@ test the_owner_decided_the_click_redirect_and_the_screen_already_shows_it {
     assert CLICK_125_REDIRECTS_SHOWN.len == CLICK_125_REDIRECTS.len;
     assert CLICK_125_REDIRECTS_SHOWN[0] == CLICK_125_REDIRECTS[0];
     assert CLICK_125_REDIRECT_LABELS_SHOWN[0] == "NMAX 155";
+}
+
+test the_bot_start_reply_names_offered_families_only {
+    // the old lower bound is the closed family at row 0: one unit, rented, none available
+    assert START_CATALOG_RANGE_KEYS_BEFORE_2026_09_25[0] == FAMILY_KEYS[0];
+    assert START_CATALOG_RANGE_KEYS_BEFORE_2026_09_25[0] == "click-125";
+    assert FAMILY_AVAILABLE[0] == 0;
+    assert START_CATALOG_RANGE_NAMED_A_CLOSED_FAMILY_BEFORE_2026_09_25 == true;
+    // the new bounds are rows of the table: nmax-155 at row 1 and xadv-750 at row 13
+    assert START_CATALOG_RANGE_KEYS.len == 2;
+    assert START_CATALOG_RANGE_KEYS[0] == FAMILY_KEYS[1];
+    assert START_CATALOG_RANGE_KEYS[1] == FAMILY_KEYS[13];
+    assert FAMILY_AVAILABLE[1] > 0;
+    // only the lower bound moved
+    assert START_CATALOG_RANGE_KEYS[0] != START_CATALOG_RANGE_KEYS_BEFORE_2026_09_25[0];
+    assert START_CATALOG_RANGE_KEYS[1] == START_CATALOG_RANGE_KEYS_BEFORE_2026_09_25[1];
+    // 155 cc is shared by two offered families; the bound is the one of them with the lower rate
+    assert START_CATALOG_RANGE_LOWER_BOUND_CC == 155;
+    assert START_CATALOG_RANGE_LOWER_BOUND_CC_TIES[0] == START_CATALOG_RANGE_KEYS[0];
+    assert START_CATALOG_RANGE_LOWER_BOUND_CC_TIES[1] == FAMILY_KEYS[2];
+    // one label per bound, and the rule holds for every word the line names
+    assert START_CATALOG_RANGE_LABELS.len == START_CATALOG_RANGE_KEYS.len;
+    assert START_CATALOG_RANGE_LABELS[0] == "NMAX 155";
+    assert START_CATALOG_RANGE_LABELS[1] == "X-ADV 750";
+    assert START_CATALOG_RANGE_NAMES_ONLY_OFFERED_FAMILIES == true;
+    assert START_CATALOG_RANGE_CORRECTED_ON == "2026-09-25";
 }
 
 test the_customer_screens_no_longer_confirm_from_the_file {
