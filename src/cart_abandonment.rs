@@ -91,7 +91,7 @@ async fn load_abandoned_carts(
         "SELECT c.id, c.telegram_id, COALESCE(ul.language, 'en') AS lang, \
          c.reminder_variant, c.start_param, SUM(ci.unit_price * ci.quantity) AS total \
          FROM carts c \
-         JOIN cart_items ci ON ci.cart_id = c.id \
+         JOIN cart_items ci ON ci.cart_id = c.id AND ci.kind = ANY($3) \
          LEFT JOIN user_languages ul ON ul.telegram_id = c.telegram_id \
          WHERE c.reminder_count = $1 \
            AND c.updated_at < (now() - interval '1 minute' * $2) \
@@ -105,7 +105,7 @@ async fn load_abandoned_carts(
         .query_all(Statement::from_sql_and_values(
             DbBackend::Postgres,
             &sql,
-            [reminder_count.into(), threshold_minutes.into()],
+            due_cart_binds(reminder_count, threshold_minutes),
         ))
         .await?;
 
@@ -131,8 +131,8 @@ async fn load_abandoned_carts(
         let item_rows = orm
             .query_all(Statement::from_sql_and_values(
                 DbBackend::Postgres,
-                "SELECT name, quantity, unit_price FROM cart_items WHERE cart_id = $1 ORDER BY created_at",
-                [cart_id.clone().into()],
+                "SELECT name, quantity, unit_price FROM cart_items WHERE cart_id = $1 AND kind = ANY($2) ORDER BY created_at",
+                [cart_id.clone().into(), reminder_kinds().into()],
             ))
             .await?;
         let items = item_rows
@@ -325,5 +325,79 @@ fn format_item_summary(items: &[CartItemLine]) -> String {
         truncated
     } else {
         joined
+    }
+}
+
+/// The cart line kinds a reminder may read, bound as `$3` into the query that
+/// picks the due carts and as `$2` into the one that names their lines.
+///
+/// The owner ruled rental only on 2026-09-24 and, on 2026-09-25 (answer 12),
+/// that nothing of the previous shop may appear anywhere. A cart kept from
+/// that shop still holds its rows; they stay stored, and here they are
+/// invisible: the inner join filters them out before the SUM, so their money
+/// is not in the total, a cart holding nothing else is never due (no message,
+/// and its counter is not spent), and the second query never returns their
+/// names. The list is the one the cart API and the Mini App serve,
+/// `trios::pricing::SERVED_CART_KINDS` (specs/turbobaby/cart_persistence.t27).
+#[cfg(not(target_arch = "wasm32"))]
+fn reminder_kinds() -> Vec<String> {
+    crate::trios::pricing::SERVED_CART_KINDS
+        .iter()
+        .map(|kind| kind.to_string())
+        .collect()
+}
+
+/// The three values of the due-cart query in `load_abandoned_carts`, in
+/// placeholder order: `$1` the reminder counter a rung expects, `$2` its
+/// threshold in minutes, `$3` the served kinds its inner join keeps.
+#[cfg(not(target_arch = "wasm32"))]
+fn due_cart_binds(reminder_count: i32, threshold_minutes: i64) -> [sea_orm::Value; 3] {
+    [
+        reminder_count.into(),
+        threshold_minutes.into(),
+        reminder_kinds().into(),
+    ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_reminder_reads_only_the_kinds_a_cart_serves() {
+        let kinds = reminder_kinds();
+        assert_eq!(kinds, ["bike_rental"]);
+        for kind in &kinds {
+            assert!(crate::trios::pricing::cart_kind_is_served(kind));
+        }
+        for retired in ["set", "accessory", "tea", "bike_sale"] {
+            assert!(!kinds.iter().any(|k| k == retired), "{retired} is read");
+        }
+    }
+
+    /// `$3` of the due-cart query is the served list, after the two values the
+    /// rungs have always bound.
+    #[test]
+    fn the_due_cart_query_binds_the_served_kinds_third() {
+        let [count, minutes, kinds] = due_cart_binds(1, 10);
+        assert_eq!(count, sea_orm::Value::from(1_i32));
+        assert_eq!(minutes, sea_orm::Value::from(10_i64));
+        assert_eq!(kinds, sea_orm::Value::from(reminder_kinds()));
+    }
+
+    /// What the two queries leave out cannot be named: the summary is built
+    /// from the rows they return and from nothing else.
+    #[test]
+    fn the_summary_names_only_the_lines_it_is_handed() {
+        let line = |name: &str, quantity: i32| CartItemLine {
+            name: name.to_string(),
+            quantity,
+            _unit_price: 0.0,
+        };
+        assert_eq!(format_item_summary(&[]), "");
+        assert_eq!(
+            format_item_summary(&[line("Line A", 1), line("Line B", 2)]),
+            "Line A x1, Line B x2"
+        );
     }
 }
