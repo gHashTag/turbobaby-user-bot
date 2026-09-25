@@ -24,7 +24,7 @@ CANONICAL_ROOT = REPO_ROOT / "specs" / "turbobaby"
 AGENT_CARD = "specs/agents/turbobaby.t27"
 
 # To add a contract: add one entry after measuring its parse declaration floor and its
-# test/invariant/bench floor with the pinned compiler. Discovery supplies the tripwire. All 45 floors equal the measured counts as of 2026-09-24.
+# test/invariant/bench floor with the pinned compiler. Discovery supplies the tripwire. All 45 floors equal the measured counts as of 2026-09-25.
 SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     AGENT_CARD: {
         "module": "turbobaby-agent",
@@ -107,8 +107,10 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/deeplink.t27": {
         "module": "turbobaby-deeplink",
         "id": "turbobaby/deeplink",
-        "min_declarations": 165,
-        "min_checks": 45,
+        # Raised 2026-09-25 from 165/45 to the measured count when the owner's answer 7 added
+        # the seven legacy paths to the compatibility set.
+        "min_declarations": 170,
+        "min_checks": 46,
     },
     "specs/turbobaby/delivery_terms.t27": {
         "module": "turbobaby-delivery-terms",
@@ -151,8 +153,10 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/legacy_retirement.t27": {
         "module": "turbobaby-legacy-retirement",
         "id": "turbobaby/legacy-retirement",
-        "min_declarations": 165,
-        "min_checks": 44,
+        # Raised 2026-09-25 from 165/44 to the measured count when the owner's answer 7 on the
+        # eight legacy paths was recorded.
+        "min_declarations": 200,
+        "min_checks": 49,
     },
     "specs/turbobaby/locale_policy.t27": {
         "module": "turbobaby-locale-policy",

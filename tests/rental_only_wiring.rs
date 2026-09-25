@@ -10,6 +10,13 @@
 //! flag to keep a surface dark (legacy_retirement.t27: a data decision never
 //! retires a surface).
 //!
+//! The owner's answer of 2026-09-25 ("7 да") carried the ruling over the
+//! previous shop's own client paths: its goods (`/accessories`, `/tea`), its
+//! game (`/game`) and its hunts now open the catalog (the tech tree too, on
+//! this repository's reading of the same answer), the ride game, referrals and
+//! loyalty stay, and the quest a customer opens from the profile stays without
+//! its minimum-purchase line.
+//!
 //! `src/ui` is compiled only for wasm32, so no host test binary ever sees a
 //! screen. The checks below read the sources as text, the instrument
 //! `customer_surface_wiring.rs` already uses for the same reason. The server
@@ -199,6 +206,295 @@ fn the_event_paths_survive_as_catalog_aliases() {
         assert!(
             !code.contains(screen),
             "src/ui/routes.rs still reaches the retired {screen}"
+        );
+    }
+}
+
+// -- The previous shop's paths (owner, 2026-09-25) ---------------------------------
+
+/// Every client path a retirement kept for the links already sent, with the
+/// handler that answers it. The first five are the precedent: `/sets` and
+/// `/sommelier` since their screens were deleted, the three events paths since
+/// 2026-09-24. The other seven joined on the owner's answer of 2026-09-25 ("7
+/// да"): the previous shop's goods, its game and its hunts open the catalog,
+/// and so does the tech tree, which the answer does not name and which
+/// `legacy_retirement.t27` counts as an old non-rental address on its own
+/// reading. `/skate` is kept as well but renders the ride, which
+/// `tests/ride_asset_wiring.rs` pins.
+const CATALOG_ALIASES: [(&str, &str); 12] = [
+    ("/sets", "fn Sets("),
+    ("/sommelier", "fn Sommelier("),
+    ("/events", "fn Events("),
+    ("/events/:id", "fn EventDetail("),
+    ("/my-bookings", "fn MyBookings("),
+    ("/accessories", "fn Accessories("),
+    ("/tea", "fn Tea("),
+    ("/game", "fn Game("),
+    ("/treasure-hunt", "fn TreasureHunt("),
+    ("/ar-hunt", "fn ArHunt("),
+    ("/location-quest", "fn LocationQuest("),
+    ("/tech-tree", "fn TechTree("),
+];
+
+/// The screens those seven paths mounted until 2026-09-25. Nothing is deleted:
+/// each stays compiled and exported, and no handler mounts it.
+const UNMOUNTED_ON_2026_09_25: [&str; 7] = [
+    "AccessoriesScreen",
+    "TeaScreen",
+    "GameScreen",
+    "TreasureHuntScreen",
+    "ARHuntScreen",
+    "LocationQuestScreen",
+    "TechTreeScreen",
+];
+
+/// A handler body (comments stripped) that renders the catalog and nothing
+/// else: no second screen, no loading shell, no branch. Home renders the
+/// catalog too, but behind a branch and beside `HomeScreen`, so it is not one.
+fn renders_only_the_catalog(body: &str) -> bool {
+    body.contains("CatalogScreen {}")
+        && !body.replace("CatalogScreen {}", "").contains("Screen")
+        && !body.contains("if ")
+}
+
+/// Every kept path stays DECLARED, because a link already sent never expires,
+/// and its handler lands on the catalog. Read from both ends: each listed path
+/// resolves to a catalog-only handler, and every catalog-only handler in the
+/// router is a listed one, so a thirteenth repoint cannot land unrecorded.
+#[test]
+fn every_retired_path_survives_as_a_catalog_alias() {
+    let routes = source("src/ui/routes.rs");
+    let mut listed = Vec::new();
+    for (path, handler) in CATALOG_ALIASES {
+        assert!(
+            routes.contains(&format!("#[route(\"{path}\")]")),
+            "{path} is no longer declared: an old link would become a router miss"
+        );
+        let body = code_of(span(&routes, handler, "#[component]", handler));
+        assert!(
+            renders_only_the_catalog(&body),
+            "{path} no longer lands on the catalog alone ({handler}):\n{body}"
+        );
+        listed.push(handler.trim_start_matches("fn ").trim_end_matches('('));
+    }
+
+    let code = code_of(&routes);
+    let mut found = Vec::new();
+    for chunk in code.split("#[component]").skip(1) {
+        let Some(name) = chunk
+            .trim_start()
+            .strip_prefix("fn ")
+            .and_then(|rest| rest.split('(').next())
+        else {
+            continue;
+        };
+        if renders_only_the_catalog(chunk) {
+            found.push(name);
+        }
+    }
+    listed.sort_unstable();
+    found.sort_unstable();
+    assert_eq!(
+        found, listed,
+        "the handlers that render only the catalog are not the listed aliases"
+    );
+}
+
+/// How many times `code` mounts `screen`. `TeaScreen {` is a mount;
+/// `TeaScreen() -> Element {` is the definition and `TeaScreen;` the export.
+fn mounts_of(code: &str, screen: &str) -> usize {
+    let mut count = 0;
+    let mut rest = code;
+    while let Some(at) = rest.find(screen) {
+        rest = &rest[at + screen.len()..];
+        if rest.trim_start().starts_with('{') {
+            count += 1;
+        }
+    }
+    count
+}
+
+/// The seven screens are unmounted, not deleted: `src/ui/screens/mod.rs` still
+/// exports each, and no file under `src/ui` mounts one.
+#[test]
+fn the_previous_shops_screens_stay_compiled_and_unmounted() {
+    let exports = source("src/ui/screens/mod.rs");
+    for screen in UNMOUNTED_ON_2026_09_25 {
+        assert!(
+            exports
+                .lines()
+                .any(|line| line.starts_with("pub use ") && line.contains(screen)),
+            "src/ui/screens/mod.rs no longer exports {screen}: this retirement keeps the screen"
+        );
+    }
+    let mut mounts = Vec::new();
+    for path in rust_files_under("src/ui") {
+        let relative = path
+            .strip_prefix(repo_root())
+            .expect("under the repo")
+            .to_string_lossy()
+            .replace('\\', "/");
+        let code = code_of(
+            &fs::read_to_string(&path)
+                .expect("readable")
+                .replace("\r\n", "\n"),
+        );
+        for screen in UNMOUNTED_ON_2026_09_25 {
+            if mounts_of(&code, screen) > 0 {
+                mounts.push(format!("{relative} mounts {screen}"));
+            }
+        }
+    }
+    assert!(
+        mounts.is_empty(),
+        "a screen the owner retired on 2026-09-25 is mounted again:\n  {}",
+        mounts.join("\n  ")
+    );
+    // D16: the same instrument sees a mount that is there.
+    let routes = code_of(&source("src/ui/routes.rs"));
+    assert_eq!(
+        mounts_of(&routes, "RideScreen"),
+        2,
+        "/ride and /skate mount the ride"
+    );
+}
+
+/// No screen a customer can open sends them to a retired path. A navigation is
+/// a `Link { to: Route::X` or a `push`/`replace` of one; the unmounted screens
+/// themselves are left out, because code nobody can open navigates nowhere
+/// (the events screens still link to each other).
+#[test]
+fn no_mounted_screen_navigates_to_a_retired_path() {
+    const UNMOUNTED_FILES: [&str; 9] = [
+        "src/ui/screens/events_screen.rs",
+        "src/ui/screens/accessories_screen.rs",
+        "src/ui/screens/tea_screen.rs",
+        "src/ui/screens/game_screen.rs",
+        "src/ui/game/shop_game.rs",
+        "src/ui/screens/treasure_hunt_screen.rs",
+        "src/ui/screens/ar_hunt_screen.rs",
+        "src/ui/screens/location_quest_screen.rs",
+        "src/ui/screens/tech_tree_screen.rs",
+    ];
+    for file in UNMOUNTED_FILES {
+        // A renamed file must break this list, not silently widen the scan.
+        source(file);
+    }
+    let variants: Vec<&str> = CATALOG_ALIASES
+        .iter()
+        .map(|(_, handler)| handler.trim_start_matches("fn ").trim_end_matches('('))
+        .collect();
+    let mut offences = Vec::new();
+    let sources = rust_files_under("src/ui");
+    for path in &sources {
+        let relative = path
+            .strip_prefix(repo_root())
+            .expect("under the repo")
+            .to_string_lossy()
+            .replace('\\', "/");
+        if UNMOUNTED_FILES.contains(&relative.as_str()) || relative == "src/ui/routes.rs" {
+            continue;
+        }
+        let code = code_of(
+            &fs::read_to_string(path)
+                .expect("readable")
+                .replace("\r\n", "\n"),
+        );
+        for (index, line) in code.lines().enumerate() {
+            for variant in &variants {
+                for lead in ["to: Route::", "push(Route::", "replace(Route::"] {
+                    let needle = format!("{lead}{variant}");
+                    let Some(at) = line.find(&needle) else {
+                        continue;
+                    };
+                    let tail = line[at + needle.len()..].trim_start();
+                    if tail.starts_with('{') {
+                        offences.push(format!("{relative}:{} opens Route::{variant}", index + 1));
+                    }
+                }
+            }
+        }
+    }
+    assert!(
+        offences.is_empty(),
+        "a mounted screen still opens a retired path:\n  {}",
+        offences.join("\n  ")
+    );
+    // D16: the scan reads live navigation (the profile opens the orders).
+    assert!(code_of(&source("src/ui/screens/profile_screen.rs"))
+        .contains("Link { to: Route::Orders {}"));
+}
+
+/// The owner kept the quest a customer opens from the profile and had its
+/// minimum-purchase line, the previous shop's rule, removed (2026-09-25). The
+/// key stays translated, as the buy-out keys do; no screen renders it, nor the
+/// two purchase keys defined beside it.
+#[test]
+fn the_quest_screen_states_no_purchase_rule_and_stays_reachable() {
+    let mut offences = Vec::new();
+    for path in rust_files_under("src/ui") {
+        let relative = path
+            .strip_prefix(repo_root())
+            .expect("under the repo")
+            .to_string_lossy()
+            .replace('\\', "/");
+        let code = code_of(
+            &fs::read_to_string(&path)
+                .expect("readable")
+                .replace("\r\n", "\n"),
+        );
+        for key in ["T_PURCHASE_MIN", "T_PURCHASE_REQUIRED", "T_ERROR_PURCHASE"] {
+            if code.contains(key) {
+                offences.push(format!("{relative} renders {key}"));
+            }
+        }
+    }
+    assert!(
+        offences.is_empty(),
+        "a screen states the previous shop's purchase rule:\n  {}",
+        offences.join("\n  ")
+    );
+    // D16: the scan is looking at the live quest screen.
+    let quest = code_of(&source("src/ui/game/quest.rs"));
+    assert!(
+        quest.contains("T_SCAN_QR"),
+        "quest.rs no longer renders its scan control"
+    );
+
+    // What stays: the profile row, the route and the screen behind it.
+    let profile = code_of(&source("src/ui/screens/profile_screen.rs"));
+    assert!(
+        profile.contains("Link { to: Route::Quest { id: \"daily\".to_string() },"),
+        "Profile no longer opens the quest the owner kept"
+    );
+    let routes = source("src/ui/routes.rs");
+    assert!(routes.contains("#[route(\"/quest/:id\")]"));
+    let quest_handler = code_of(span(&routes, "fn Quest(", "#[component]", "fn Quest("));
+    assert!(
+        quest_handler.contains("QuestScreen { id }"),
+        "/quest/:id no longer mounts the quest screen:\n{quest_handler}"
+    );
+}
+
+/// What the owner kept (2026-09-24, again 2026-09-25): the ride game, the
+/// referral programme and the profile that carries loyalty. Each path still
+/// mounts its own screen, so no alias above swallowed a kept surface.
+#[test]
+fn the_kept_surfaces_still_mount_their_screens() {
+    let routes = source("src/ui/routes.rs");
+    for (path, handler, screen) in [
+        ("/ride", "fn Ride(", "RideScreen {}"),
+        ("/referrals", "fn Referrals(", "ReferralsScreen {}"),
+        ("/profile", "fn Profile(", "ProfileScreen {}"),
+    ] {
+        assert!(
+            routes.contains(&format!("#[route(\"{path}\")]")),
+            "{path} is no longer declared"
+        );
+        let body = code_of(span(&routes, handler, "#[component]", handler));
+        assert!(
+            body.contains(screen) && !body.contains("CatalogScreen"),
+            "{path} no longer mounts {screen}:\n{body}"
         );
     }
 }
