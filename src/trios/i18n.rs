@@ -192,7 +192,7 @@ pub const T_CHECKOUT_BLOCKED_TITLE: Key = "checkout.blocked_title";
 pub const T_CHECKOUT_FULFILLMENT: Key = "checkout.fulfillment";
 pub const T_CHECKOUT_FULFILLMENT_DELIVERY: Key = "checkout.fulfillment.delivery";
 pub const T_CHECKOUT_FULFILLMENT_PICKUP: Key = "checkout.fulfillment.pickup";
-pub const T_CHECKOUT_ERR_AGE: Key = "checkout.error.age";
+// checkout.error.age: deleted 2026-09-25 (the 20+ gate, second list #1).
 pub const T_CHECKOUT_CHANGE: Key = "checkout.change";
 pub const T_CHECKOUT_PHONE_FROM_TELEGRAM: Key = "checkout.phone_from_telegram";
 pub const T_CHECKOUT_ERR_NETWORK: Key = "checkout.error.network";
@@ -261,7 +261,7 @@ pub const T_CHECKOUT_ERR_5XX: Key = "checkout.err.5xx";
 // Loop #7: per-field checkout error messages surfaced from the server
 // response body (422 with a stable `error` code) so the UI can show a
 // sentence instead of the generic price-change hint.
-pub const T_CHECKOUT_ERR_AGE_NOT_CONFIRMED: Key = "checkout.err.age_not_confirmed";
+// checkout.err.age_not_confirmed: deleted 2026-09-25 (the 20+ gate, second list #1).
 pub const T_CHECKOUT_ERR_ZONE_INVALID: Key = "checkout.err.zone_invalid";
 
 // Generic API error messages (cycle #74). Used by
@@ -320,13 +320,13 @@ pub const T_CHECKOUT_CASH_ON_DELIVERY: Key = "checkout.cash_on_delivery";
 pub const T_CHECKOUT_PAY_ON_RECEIVE: Key = "checkout.pay_on_receive";
 pub const T_CHECKOUT_PROCESSING: Key = "checkout.processing";
 
-// Checkout trust + age gate micro-copy
+// Checkout trust micro-copy (the 20+ gate's keys here: deleted 2026-09-25)
 pub const T_CHECKOUT_TRUST_TITLE: Key = "checkout.trust_title";
-pub const T_CHECKOUT_TRUST_VERIFIED: Key = "checkout.trust.verified";
+// checkout.trust.verified: deleted 2026-09-25 (the 20+ gate, second list #1).
 pub const T_CHECKOUT_TRUST_COD: Key = "checkout.trust.cod";
 pub const T_CHECKOUT_TRUST_SECURE: Key = "checkout.trust.secure";
-pub const T_CHECKOUT_AGE_CONFIRM: Key = "checkout.age_confirm";
-pub const T_CHECKOUT_AGE_NOTICE: Key = "checkout.age_notice";
+// checkout.age_confirm: deleted 2026-09-25 (the 20+ gate, second list #1).
+// checkout.age_notice: deleted 2026-09-25 (the 20+ gate, second list #1).
 
 // Catalog shared strings
 pub const T_CATALOG_EMPTY: Key = "catalog.empty";
@@ -878,7 +878,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_CHECKOUT_FULFILLMENT => "Способ получения",
         T_CHECKOUT_FULFILLMENT_DELIVERY => "🛵 Доставка",
         T_CHECKOUT_FULFILLMENT_PICKUP => "🏪 Самовывоз",
-        T_CHECKOUT_ERR_AGE => "Подтвердите, что вам есть 20 лет",
+        // checkout.error.age: deleted 2026-09-25 (the 20+ gate, second list #1).
         T_CHECKOUT_CHANGE => "изменить",
         T_CHECKOUT_PHONE_FROM_TELEGRAM => "📱 Взять номер из Telegram",
         T_CHECKOUT_ERR_ADDRESS => "Укажите адрес доставки",
@@ -941,7 +941,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_CHECKOUT_ERR_404 => "Один из товаров больше не доступен. Обновите меню и попробуйте снова.",
         T_CHECKOUT_ERR_409 => "Этот заказ уже создан. Откройте «Мои заказы» — он там.",
         T_CHECKOUT_ERR_422 => "Цены или товары изменились с момента добавления в корзину. Обновите меню и оформите заказ заново.",
-        T_CHECKOUT_ERR_AGE_NOT_CONFIRMED => "Для оформления заказа нужно подтвердить, что вам есть 20 лет.",
+        // checkout.err.age_not_confirmed: deleted 2026-09-25 (the 20+ gate, second list #1).
         T_CHECKOUT_ERR_ZONE_INVALID => "Выбранный район доставки недоступен. Выберите другой.",
         T_CHECKOUT_ERR_429 => "Слишком быстро. Подождите минуту и попробуйте снова.",
         T_CHECKOUT_ERR_5XX => "Сервер сейчас недоступен. Попробуйте через минуту.",
@@ -988,13 +988,13 @@ fn get_ru_translation(key: Key) -> Value {
         T_CHECKOUT_CASH_ON_DELIVERY => "Оплата при получении",
         T_CHECKOUT_PAY_ON_RECEIVE => "Оплатите при получении",
         T_CHECKOUT_PROCESSING => "⏳ Оформление...",
-        // Checkout trust + age gate micro-copy
+        // Checkout trust micro-copy (the 20+ gate's keys here: deleted 2026-09-25)
         T_CHECKOUT_TRUST_TITLE => "Почему нам доверяют",
-        T_CHECKOUT_TRUST_VERIFIED => "🛡️ Проверка возраста (20+)",
+        // checkout.trust.verified: deleted 2026-09-25 (the 20+ gate, second list #1).
         T_CHECKOUT_TRUST_COD => "📦 Оплата при получении",
         T_CHECKOUT_TRUST_SECURE => "🔒 Авторизация через Telegram",
-        T_CHECKOUT_AGE_CONFIRM => "Мне исполнилось 20+",
-        T_CHECKOUT_AGE_NOTICE => "Оформляя заказ, вы подтверждаете, что вам 20+.",
+        // checkout.age_confirm: deleted 2026-09-25 (the 20+ gate, second list #1).
+        // checkout.age_notice: deleted 2026-09-25 (the 20+ gate, second list #1).
         // Catalog shared strings
         T_CATALOG_EMPTY => "Пока нет товаров",
         T_CATALOG_ERROR => "Не удалось загрузить каталог",
@@ -1478,7 +1478,7 @@ fn get_en_translation(key: Key) -> Value {
         T_CHECKOUT_FULFILLMENT => "How you get it",
         T_CHECKOUT_FULFILLMENT_DELIVERY => "🛵 Delivery",
         T_CHECKOUT_FULFILLMENT_PICKUP => "🏪 Pickup",
-        T_CHECKOUT_ERR_AGE => "Confirm that you are 20 or older",
+        // checkout.error.age: deleted 2026-09-25 (the 20+ gate, second list #1).
         T_CHECKOUT_CHANGE => "change",
         T_CHECKOUT_PHONE_FROM_TELEGRAM => "📱 Use my Telegram number",
         T_CHECKOUT_ERR_ADDRESS => "Please enter a delivery address",
@@ -1541,7 +1541,7 @@ fn get_en_translation(key: Key) -> Value {
         T_CHECKOUT_ERR_404 => "One of the items is no longer available. Refresh the menu and try again.",
         T_CHECKOUT_ERR_409 => "This order has already been placed. Open «My Orders» — it's there.",
         T_CHECKOUT_ERR_422 => "Prices or items changed since you added to cart. Refresh the menu and place the order again.",
-        T_CHECKOUT_ERR_AGE_NOT_CONFIRMED => "Please confirm you are 20+ to place an order.",
+        // checkout.err.age_not_confirmed: deleted 2026-09-25 (the 20+ gate, second list #1).
         T_CHECKOUT_ERR_ZONE_INVALID => "Selected delivery zone is unavailable. Please choose another.",
         T_CHECKOUT_ERR_429 => "Too fast. Wait a minute and try again.",
         T_CHECKOUT_ERR_5XX => "Server is currently unavailable. Try again in a minute.",
@@ -1588,13 +1588,13 @@ fn get_en_translation(key: Key) -> Value {
         T_CHECKOUT_CASH_ON_DELIVERY => "Cash on Delivery",
         T_CHECKOUT_PAY_ON_RECEIVE => "Pay when you receive",
         T_CHECKOUT_PROCESSING => "⏳ Processing...",
-        // Checkout trust + age gate micro-copy
+        // Checkout trust micro-copy (the 20+ gate's keys here: deleted 2026-09-25)
         T_CHECKOUT_TRUST_TITLE => "Why people trust us",
-        T_CHECKOUT_TRUST_VERIFIED => "🛡️ Age-verified orders (20+)",
+        // checkout.trust.verified: deleted 2026-09-25 (the 20+ gate, second list #1).
         T_CHECKOUT_TRUST_COD => "📦 Cash on delivery",
         T_CHECKOUT_TRUST_SECURE => "🔒 Telegram-secured identity",
-        T_CHECKOUT_AGE_CONFIRM => "I confirm I am 20+",
-        T_CHECKOUT_AGE_NOTICE => "By placing this order, you confirm you are 20+.",
+        // checkout.age_confirm: deleted 2026-09-25 (the 20+ gate, second list #1).
+        // checkout.age_notice: deleted 2026-09-25 (the 20+ gate, second list #1).
         // Catalog shared strings
         T_CATALOG_EMPTY => "No items yet",
         T_CATALOG_ERROR => "Failed to load. Pull to refresh or try again.",
@@ -2062,11 +2062,11 @@ pub fn get_translations(lang: Lang) -> Translations {
         T_LOADING,
         T_FILTER_ALL,
         T_CHECKOUT_TRUST_TITLE,
-        T_CHECKOUT_TRUST_VERIFIED,
+        // checkout.trust.verified: deleted 2026-09-25 (the 20+ gate, second list #1).
         T_CHECKOUT_TRUST_COD,
         T_CHECKOUT_TRUST_SECURE,
-        T_CHECKOUT_AGE_CONFIRM,
-        T_CHECKOUT_AGE_NOTICE,
+        // checkout.age_confirm: deleted 2026-09-25 (the 20+ gate, second list #1).
+        // checkout.age_notice: deleted 2026-09-25 (the 20+ gate, second list #1).
         T_CATALOG_EMPTY,
         T_CATALOG_ERROR,
         T_CATALOG_SORT_DEFAULT,

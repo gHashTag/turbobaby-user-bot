@@ -92,8 +92,11 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/checkout_contact.t27": {
         "module": "turbobaby-checkout-contact",
         "id": "turbobaby/checkout-contact",
-        "min_declarations": 210,
-        "min_checks": 62,
+        # Raised 2026-09-25 from 210/62 to the measured count when the owner removed the 20+ box
+        # for now (second list, answer 1): the age blocker's record and the counts before that day.
+        # 245 with the two constants gate 3 binds the removal by, the same day.
+        "min_declarations": 245,
+        "min_checks": 68,
     },
     "specs/turbobaby/client_errors.t27": {
         "module": "turbobaby-client-errors",
@@ -101,8 +104,9 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         # Raised 2026-09-25 from 239 to the measured count when owner question D's sentence
         # landed by delegation (9 declarations; the checks were renamed, not added). Raised
         # again the same day from 248 to 253 when the sentence was reworded to hold for every
-        # 409 (5 declarations; no check added).
-        "min_declarations": 253,
+        # 409 (5 declarations; no check added). 249 on its own branch the same day: the retired
+        # age body code's count before that day (the 20+ box, removed); merged 2026-09-26, 254.
+        "min_declarations": 254,
         "min_checks": 58,
     },
     "specs/turbobaby/commerce.t27": {
@@ -169,8 +173,9 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         # Raised 2026-09-25 from 165/44 to the measured count when the owner's answer 7 on the
         # eight legacy paths was recorded (200/49) and, with it, both halves of ruling #12
         # (client 190/48 and server 194/48 on their own); the three together measure 254/57.
-        "min_declarations": 254,
-        "min_checks": 57,
+        # 266/59 the same day, with the owner's answer on the 20+ age gate (second list, answer 1).
+        "min_declarations": 266,
+        "min_checks": 59,
     },
     "specs/turbobaby/locale_policy.t27": {
         "module": "turbobaby-locale-policy",
@@ -179,7 +184,9 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         # same day's cancel key (+1) and the deletion (-14) were reconciled in one count, with
         # two declarations naming the +1; the three together measure 136/35. Answer 5 of the
         # owner's second list that day deleted one more key, named by two declarations: 138/35.
-        "min_declarations": 138,
+        # 138/35 on its own branch too, with the five keys the removed 20+ box used (-5, two
+        # declarations naming them); merged 2026-09-26 on the integration branch, 140/35.
+        "min_declarations": 140,
         "min_checks": 35,
     },
     "specs/turbobaby/loyalty_ledger.t27": {
