@@ -23,10 +23,11 @@ readings are compared per file: every declaration name, the value of the ID cons
 and -- on the part where they do overlap -- every function body, node for node. The run
 prints how many of those agreed.
 
-That comparison is not decoration. It is what found the four functions listed in
+That comparison is not decoration. It is what found the functions listed in
 KNOWN_FRONTEND_DISAGREEMENTS below, whose bodies t27c silently truncates and then emits
 as stubs in C and Rust while `typecheck --json` still answers zero errors and zero
-warnings. Every run prints those four on stderr, green or not, because a known defect
+warnings: four when measured on 2026-09-21, two since #64 took the other two out of
+reach. Every run prints the listed ones on stderr, green or not, because a known defect
 that stops being visible is a defect nobody fixes.
 
 HOUSE RULES OBSERVED. Python 3 standard library only -- scripts/verify_fleet_seed.py
@@ -1451,25 +1452,15 @@ KNOWN_FRONTEND_DISAGREEMENTS = {
     ("specs/turbobaby/deposit_tiers.t27", "published_rows_at_amount"):
         "t27c drops both `: (i += 1)` loops, the `var j` between them, and the return",
 
-    # Measured 2026-09-21, a SECOND and unrelated class. t27c truncates a function body
-    # at the first `;`-style comment inside it. Minimal reproduction, all three shapes,
-    # against the same pinned build:
-    #   `; note` first in a body            -> the body parses to []
-    #   `; note` between two statements     -> everything after it is dropped
-    #   `; note` first inside a nested block-> that block parses to {}
-    # A `//` comment in any of those positions parses correctly, so the trigger is the
-    # `;` form specifically. Corpus reach is exactly these two functions -- they are the
-    # only two whose body span contains a `;` comment line.
-    # Consequence, measured: `t27c gen-c specs/turbobaby/commerce.t27` emits
-    # `uint8_t commerce_checkout_decision(...) { /* TODO: implement */ }` -- all nine
-    # checkout gates gone -- and `gen-rust specs/turbobaby/deposit_tiers.t27` emits a
-    # `refund_decision` that returns nothing on every path past the first gate. Both
-    # files still typecheck as {"errors": 0, "warnings": 0, "ok": true}, so
-    # scripts/verify_t27_specs.py is green on them.
-    ("specs/turbobaby/commerce.t27", "commerce_checkout_decision"):
-        "t27c truncates the body at the leading `;` comment, losing all nine gates",
-    ("specs/turbobaby/deposit_tiers.t27", "refund_decision"):
-        "t27c truncates at the `;` comments, losing the passport branch and everything after",
+    # A SECOND and unrelated class, measured 2026-09-21 and no longer pinned. t27c
+    # truncates a function body at the first `;`-style comment inside it (a `//` comment
+    # in the same place parses correctly). It reached exactly two functions,
+    # commerce_checkout_decision in commerce.t27 (`gen-c` emitted `{ /* TODO: implement */ }`,
+    # all nine checkout gates gone) and refund_decision in deposit_tiers.t27. #64 (f5e6b4f,
+    # 2026-09-24) turned those comments into `//`, and on 2026-09-25 this gate with t27c @
+    # 40003ed reported both pins stale: the two bodies now agree with t27c node for node.
+    # The compiler defect itself is not fixed; no function body in the corpus carries a
+    # `;` comment any more, so nothing here reaches it.
 }
 
 
