@@ -139,8 +139,21 @@ echo "▶ pre-compressing static assets"
       # Belt and braces: the extension list is a prediction, this is a
       # measurement. A sidecar that did not shrink is deleted rather than
       # shipped, so no future file type can quietly cost bytes.
-      if [ -f "${base}.br" ] && [ ! "${base}.br" -ot "$base" ] &&
-         [ "$(wc -c <"${base}.br")" -ge "$(wc -c <"$base")" ]; then
+      #
+      # Judged by size alone, never by date. The `[ ! -f ]` guard above means
+      # any .br here was written by the brotli call just made, so a timestamp
+      # has nothing to prove. Nor is an earlier build's sidecar left in dist/
+      # for that guard to skip: trunk's `clean_final` (0.21.14: called from
+      # `finalize_dist` at the END of every successful build) empties dist/
+      # before moving the new output in, and a failed `trunk build`, which
+      # leaves the old dist/ as it was, stops this script under `set -e`
+      # before this loop is reached. This test used to also demand that the
+      # .br not be older than its source: the Windows brotli build (1.2.0,
+      # mingw64) copies the source mtime rounded down to the whole second,
+      # bash compares with sub-second precision, so every fresh .br read as
+      # older, the size check never ran, and a 22-byte version.txt.br for a
+      # 17-byte version.txt was left behind by every Windows build.
+      if [ -f "${base}.br" ] && [ "$(wc -c <"${base}.br")" -ge "$(wc -c <"$base")" ]; then
         rm -f "${base}.br"
       fi
     fi
