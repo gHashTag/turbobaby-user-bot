@@ -507,6 +507,11 @@ a later answer may change it, and the repository says so wherever it records the
   amendment of 2026-09-24 (`CLICK_125_ALTERNATIVES` in `src/ui/screens/catalog_screen.rs`); the
   decision confirms that list. `tests/catalog_honesty_wiring.rs` now also checks the screen's
   label against the seed's `offer_instead`. No customer sentence was written or changed.
+* **The seed gate.** `scripts/verify_fleet_seed.py` now reads `pricing_policy.not_offered`: every
+  key a closed family offers must be an offered family with a unit the SQL seeds as available,
+  never a price-list-only one, and the list must name a `sources` entry with a date.
+  `tests/fleet_seed_negative_control.rs` plants the pre-2026-09-25 list and a missing source,
+  and sees the gate go red on each.
 
 The brain's `knowledge_base` still carries the three-name redirect in the places the amendment of
 2026-09-24 names; that text is the operator's to change, not this repository's.
