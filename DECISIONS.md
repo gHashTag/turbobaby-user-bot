@@ -590,3 +590,45 @@ The contracts carry the details: `specs/turbobaby/legacy_retirement.t27` records
 (`PROMO_REPORT_NAME_*`, held to the code by `tests/promo_report_names_wiring.rs`),
 `bot_surface.t27` the carousel (`CAROUSEL_RETIRED_AT`), `locale_policy.t27` the locale struct's
 four removed fields.
+
+## D8/D19 addendum — a cart kept from the previous shop is stored and not served, 2026-09-26
+
+Kept at the end of this file, like the entries above, so that no line citation into it moves.
+The rulings this rests on, verbatim: rental only, 2026-09-24, «Ареда [sic] только пхукет»;
+answer 12 of 2026-09-25, «всё что касается канабиса нигде не должно быть»; and answer 3 of the
+second list the same day, «Все канабисное аналировать» [sic], which the operator reads as:
+analyse all of it and take it out of customers' sight without deleting stored data. Nothing is
+deleted (2026-09-24).
+
+A customer who kept a cart from the previous shop still had its lines in three places, and each
+handed them back with names and pictures: the server's `cart_items` rows (every JSON answer of the
+cart API), the abandoned-cart reminder (a Telegram message naming them), and the Mini App's own
+saved cart on the device (localStorage `wwb_cart` and Telegram CloudStorage `wwb_cart_cloud`, read
+at start-up). D8's amendment kept the four old kinds in `cart_items`' CHECK so that such rows
+would not abort migration 081; the rows stay, and are now not served.
+
+* **One rule, not a new list.** A cart serves a line only of a kind in
+  `trios::pricing::SERVED_CART_KINDS` = `["bike_rental"]`, asked through
+  `trios::pricing::cart_kind_is_served`. That name is the tag of the only deal the checkout admits
+  since 2026-09-24 (`BikeDeal::BikeRental`; a new `bike_sale` line is refused, #63), and the kind
+  D8 gave the cart. A test in `src/db/orders.rs` holds the list to the enum's tag.
+* **Cart API.** `cart_model_to_resp` builds every answer (get, add, merge) from `served_rows`, so a
+  hidden row is neither listed nor summed. PATCH and DELETE of one line by id answer 404 for a
+  hidden row, as for a missing one. `clear_cart` deletes only the served lines. The write gate,
+  `parse_kind`, is unchanged; no row of the old kinds can be written today (083, 085).
+* **Reminder.** The inner join that picks due carts and the query that names their lines both
+  filter on the served kinds. A hidden line is not summed or named, and a cart holding nothing
+  else is never due: no message, and its counter is not spent.
+* **Mini App.** Both reads of a saved cart pass it through `Cart::without_retired_lines`, and
+  `CartItem::from_server` asks the same predicate before it classifies a kind. No `CartItemType`
+  variant is a rental line, so every line of a saved cart is dropped today. The client does
+  rewrite its OWN storage without them: the existing persist effect saves the cart it shows to
+  `wwb_cart` and `wwb_cart_cloud`. That is the customer's device state, not stored shop data, and
+  no write site was added.
+* **Not changed.** No row is deleted or rewritten, no table dropped, no migration added, no
+  sentence written: a kept cart reads as the empty cart the screens already render. Stored order
+  lines and the reorder button are another change's.
+
+`specs/turbobaby/cart_persistence.t27` records the rule (`SERVED_CART_KINDS` and the section dated
+2026-09-26); gate 3 binds its list to the code and counts the reminder's filtered reads;
+`tests/legacy_cart_hidden_wiring.rs` guards the three readers.
