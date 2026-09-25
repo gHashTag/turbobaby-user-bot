@@ -390,8 +390,8 @@ pub fn blocker_is_known(blocker: u8) bool {
 }
 
 ; Each blocker carries a translation key (src/trios/store.rs:430-447) whose sentences ship at
-; src/trios/i18n.rs:869-884 and :1468-1483. Cited by path and never quoted: two of them embed
-; an example number (src/trios/i18n.rs:873 and :1472), which D14 keeps out of this file.
+; src/trios/i18n.rs:872-887 and :1472-1487. Cited by path and never quoted: two of them embed
+; an example number (src/trios/i18n.rs:876 and :1476), which D14 keeps out of this file.
 ; Coverage is proven, not assumed: src/trios/store.rs:1087-1108 walks all six blockers against
 ; both published locales and fails on an empty or untranslated sentence. Which locales are
 ; published is turbobaby/locale-policy's answer, and the count is not restated here.
@@ -400,7 +400,7 @@ pub const BLOCKER_KEY_COVERAGE_IS_PROVEN_PER_PUBLISHED_LOCALE : bool = true;
 pub const BLOCKER_SENTENCES_QUOTED_HERE : [0]str = [];
 
 ; The age blocker is inherited, not designed for this product: its shipped sentence is the
-; cannabis age confirmation the bot forked with (src/trios/i18n.rs:878 and :1477), and D19
+; cannabis age confirmation the bot forked with (src/trios/i18n.rs:881 and :1481), and D19
 ; (DECISIONS.md:354) hid that heritage behind visibility flags without settling this gate --
 ; its own closing paragraph lists what it does not settle. Whether a bike-rental checkout
 ; should keep the gate is
