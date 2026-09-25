@@ -2995,7 +2995,7 @@ mod tests {
             customer_telegram: Some("alice".into()),
             items: vec![OrderItem {
                 strain_id: Some("s1".into()),
-                strain_name: Some("Indica".into()),
+                strain_name: Some("Legacy line".into()),
                 accessory_id: None,
                 accessory_name: None,
                 tea_id: None,
