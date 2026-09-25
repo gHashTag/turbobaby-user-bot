@@ -5,17 +5,14 @@
 TurboBaby — motorbike **rental** in Kamala, Phuket, as a Telegram Mini
 App. Rust backend (Axum + Teloxide), Dioxus/WASM frontend, PostgreSQL.
 
-The tree is a full-history derivative of
-[`gHashTag/woody-weed-bot`](https://github.com/gHashTag/woody-weed-bot), so
-anything still speaking of weed, strains, garden or `woody-weed` is rebrand
-debt rather than a feature. It is intentionally not marked as a formal GitHub
-fork: the published t27 world scanner skips repositories with `isFork: true`,
-which would make this repository's `.t27` contracts invisible. Add the lineage
-remote to a fresh clone with:
-
-```sh
-git remote add upstream git@github.com:gHashTag/woody-weed-bot.git
-```
+The tree is a full-history derivative of an earlier shop bot by the same
+author, so a name from that shop still met in an identifier or in the history
+is rebrand debt rather than a feature. The owner ruled on 2026-09-25 that no
+text the product sends may carry it; `tests/server_text_vocabulary_wiring.rs` and
+`tests/legacy_vocabulary_wiring.rs` list the words and the few survivors. It
+is intentionally not marked as a formal GitHub fork: the published t27 world
+scanner skips repositories with `isFork: true`, which would make this
+repository's `.t27` contracts invisible.
 
 ## Where the truth lives
 
@@ -84,7 +81,7 @@ region, because the customer base is in Thailand.
 
 **The deploy target does not exist yet.** This repository has no Actions secrets
 and no Actions variables (measured 2026-09-13), and the inherited workflow
-pushed to a Railway service named after the cannabis-era bot using a token that
+pushed to a Railway service named after the earlier bot using a token that
 is not valid here — every run failed in ~11 s with `Invalid RAILWAY_TOKEN`.
 Renaming the service string in the workflow would only have swapped one
 non-existent target for another, so the job now reads its target from
