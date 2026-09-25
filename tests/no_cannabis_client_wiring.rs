@@ -37,10 +37,13 @@
 //! * the `Trunk*.toml` files, which are tooling rather than served text, but
 //!   whose dev proxies used to point at the old shop's backend.
 //!
-//! Matching is whole-word for the Latin and Thai vocabulary and for the
-//! Russian word for strain, so `budget`, `buildWoody`, `strain_id` and
-//! `сортировка` are not hits and `"woody:contact"` is. The rest of the Russian
-//! vocabulary is matched by stem, because the words inflect. What may still hit
+//! Matching is whole-word for the Latin vocabulary and for the Russian word for
+//! strain, so `budget`, `buildWoody`, `strain_id` and `сортировка` are not hits
+//! and `"woody:contact"` is. The rest of the Russian vocabulary is matched by
+//! stem, because the words inflect. The Thai vocabulary is matched as a
+//! substring too: Thai is written without spaces between words, so a
+//! whole-word match would find the word only where it stands alone and miss it
+//! in any ordinary phrase (`ร้านกัญชา`, a cannabis shop). What may still hit
 //! is named in [`IDENTIFIER_SURVIVORS`], each with an exact count and a reason,
 //! and the list is checked from both ends.
 
@@ -130,13 +133,19 @@ const LATIN_WORDS: &[&str] = &[
     "420",
 ];
 
-/// Thai, matched whole: cannabis and hemp.
+/// Thai: cannabis and hemp. Matched as a substring, like the Russian stems:
+/// Thai letters are word characters and Thai puts no space between words, so
+/// a word boundary exists only at the edge of a phrase. No ordinary Thai word
+/// contains either of these; every compound that does is the plant.
 const THAI_WORDS: &[&str] = &["กัญชา", "กัญชง"];
 
 /// Russian stems, matched as a substring of a lower-cased text: the words
-/// inflect, and every one of these stems belongs to the plant, its slang or
-/// the old brand. `трав` alone is not here -- it is grass and herbs in general
-/// -- but its slang diminutive and its plain forms as a whole word are.
+/// inflect, and every one of these stems belongs to the plant, its slang, its
+/// paraphernalia or the old brand. `трав` alone is not here -- it is grass and
+/// herbs in general -- but its slang diminutive and its plain forms as a whole
+/// word are. `бонг` and `гриндер` are the two paraphernalia chips the
+/// accessories screen offered in Russian until the ruling; the other two
+/// («Бумага», «Трубка») are ordinary words and are not.
 const RUSSIAN_STEMS: &[&str] = &[
     "каннабис",
     "канабис",
@@ -152,6 +161,8 @@ const RUSSIAN_STEMS: &[&str] = &[
     "накур",
     "укур",
     "диспансер",
+    "бонг",
+    "гриндер",
     "вуди",
     "тгк",
     "кбд",
@@ -217,12 +228,12 @@ fn whole_word_hits(text: &str, word: &str) -> usize {
 fn vocabulary_in(text: &str, with_emoji: bool) -> Vec<String> {
     let lower = text.to_lowercase();
     let mut found = Vec::new();
-    for word in LATIN_WORDS.iter().chain(THAI_WORDS).chain(RUSSIAN_WORDS) {
+    for word in LATIN_WORDS.iter().chain(RUSSIAN_WORDS) {
         for _ in 0..whole_word_hits(&lower, word) {
             found.push((*word).to_string());
         }
     }
-    for stem in RUSSIAN_STEMS {
+    for stem in THAI_WORDS.iter().chain(RUSSIAN_STEMS) {
         for _ in 0..lower.matches(stem).count() {
             found.push((*stem).to_string());
         }
@@ -647,13 +658,19 @@ fn the_matcher_reads_words_and_stems() {
     assert_eq!(words("and agree to medical-use terms"), ["medical-use"]);
     assert_eq!(words("Fast & discreet"), ["discreet"]);
     assert_eq!(words("'woody:contact'"), ["woody"]);
-    assert_eq!(words("Всё для курения, бонг и шишки"), ["шишк"]);
+    assert_eq!(words("Всё для курения, бонг и шишки"), ["шишк", "бонг"]);
+    assert_eq!(words("Гриндер"), ["гриндер"]);
     assert_eq!(words("กัญชา"), ["กัญชา"]);
+    // Thai has no spaces between words: the word inside a phrase is a hit.
+    assert_eq!(words("ร้านกัญชา"), ["กัญชา"]);
+    assert_eq!(words("ขายกัญชาที่ภูเก็ต"), ["กัญชา"]);
+    assert_eq!(words("กัญชงไทย"), ["กัญชง"]);
     // Not hits: longer tokens, identifiers, sorting, a CSS width, grass in general.
     assert!(words("budget buildWoody strain_id woody_last_zone_id").is_empty());
     assert!(words("Сортировка по цене").is_empty());
     assert!(words("max-width: 420px").is_empty());
     assert!(words("чай из трав").is_empty());
+    assert!(words("เช่ารถมอเตอร์ไซค์ที่ภูเก็ต").is_empty());
 }
 
 #[test]
@@ -750,33 +767,61 @@ fn the_accessories_screen_offers_no_paraphernalia() {
     );
 }
 
-/// Two arms were cut to their non-cannabis half and two aligned with their
-/// other-language twin. What stays is pinned, so a cut that went too far (or
-/// a sentence that grew back) is seen.
+/// Five arms were cut to their non-cannabis half and two were aligned with
+/// their other-language twin (`specs/turbobaby/legacy_retirement.t27`,
+/// `CANNABIS_RULING_ARMS_CUT` and `CANNABIS_RULING_ARMS_ALIGNED_TO_THEIR_TWIN`).
+/// Every arm of those five keys is pinned whole, Russian table first, so a cut
+/// that went too far, a clause that grew back, or a cut that quietly gained
+/// something (an emoji, an exclamation mark) is seen: the ruling removed copy
+/// and wrote none.
 #[test]
 fn the_cut_sentences_keep_their_rental_half() {
     let i18n = read("src/trios/i18n.rs");
     let arms = |key: &str| -> Vec<String> {
+        let prefix = format!("{key} => \"");
         i18n.lines()
-            .filter(|l| l.trim_start().starts_with(&format!("{key} => \"")))
-            .map(|l| l.trim().to_string())
+            .filter_map(|l| l.trim_start().strip_prefix(&prefix))
+            .map(|rest| {
+                let rest = rest.trim_end();
+                rest.strip_suffix("\",").unwrap_or(rest).to_string()
+            })
             .collect()
     };
-    let notice = arms("T_CHECKOUT_AGE_NOTICE");
-    assert_eq!(
-        notice.len(),
-        2,
-        "T_CHECKOUT_AGE_NOTICE has one arm per table"
-    );
-    for arm in &notice {
-        assert!(arm.contains("20+"), "the age notice lost the age: {arm}");
-    }
-    let moved = arms("T_GAME_LOG_MOVED_TO_TABLE");
-    assert_eq!(moved.len(), 2);
-    for arm in &moved {
-        assert!(
-            arm.contains("TurboBaby"),
-            "both arms of the move log name TurboBaby: {arm}"
+    let pinned: &[(&str, [&str; 2], &str)] = &[
+        (
+            "T_CHECKOUT_AGE_NOTICE",
+            [
+                "Оформляя заказ, вы подтверждаете, что вам 20+.",
+                "By placing this order, you confirm you are 20+.",
+            ],
+            "cut: both lost the medical-use clause and keep the age",
+        ),
+        (
+            "T_SUCCESS_BACK_MENU",
+            ["В меню", "Back to Menu"],
+            "cut: the Russian arm lost its herb emoji; the English arm had none",
+        ),
+        (
+            "T_GAME_EVENT_HERB_DELIVERY",
+            ["Все грядки политы", "All farm plots watered"],
+            "cut: both lost the herb-delivery half and gained nothing",
+        ),
+        (
+            "T_GAME_LOG_MOVED_TO_TABLE",
+            ["TurboBaby подошёл к столу {0}", "TurboBaby moved to table {0}"],
+            "aligned: the Russian arm named the old mascot, the English one TurboBaby",
+        ),
+        (
+            "T_CHECKOUT_TRUST_TITLE",
+            ["Почему нам доверяют", "Why people trust us"],
+            "aligned: the English arm promised discretion, the Russian one asked why people trust us",
+        ),
+    ];
+    for (key, want, why) in pinned {
+        assert_eq!(
+            arms(key),
+            want.to_vec(),
+            "{key} ({why}) -- one arm per table, exactly as the sweep left it"
         );
     }
 }
