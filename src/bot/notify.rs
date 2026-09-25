@@ -25,8 +25,8 @@ use crate::locales::get_locale;
 // `build_message` has no arm for any of those kinds, and nothing has ever
 // enqueued one — they were sent directly by the deleted functions, not through
 // the queue. So the strings were deleted on 2026-09-16 along with the menu
-// label `garden`. `garden_friend_watered_legacy` is the one that genuinely does
-// survive for queued rows, and it kept its garden wording for that reason.
+// label `garden`. `garden_friend_watered_legacy`, the one that survived for
+// queued rows, went on 2026-09-26: those rows are now held unsent.
 
 /// Cycle #79: notify the customer that their order status changed.
 ///

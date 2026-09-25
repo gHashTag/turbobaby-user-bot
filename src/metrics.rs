@@ -393,7 +393,7 @@ mod tests {
         referral_invite_funnel("accepted");
         referral_invite_funnel("ordered");
         notification_queued("friend_joined");
-        friend_activity_pushed("friend_watered");
+        friend_activity_pushed("friend_ordered");
         milestone_awarded(3);
     }
 

@@ -2759,19 +2759,38 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "why": "the store takes no row claim (0 FOR UPDATE / SKIP LOCKED), so a second call "
                "site would put two drainers on the same pending rows, either free to send a "
                "row the other is sending; this row keeps 'exactly one is spawned' "
-               "(notification_queue.t27:392, :556-557) true of the code, per process and not "
-               "per deployment",
+               "(notification_queue.t27:522, :687; re-pinned 2026-09-26 -- the base's :392 and "
+               ":556-557 sat three and four lines above the sentence) true of the code, per "
+               "process and not per deployment",
     },
     {
-        "name": "notification_queue.RENDERABLE_KINDS ~ build_message arms",
+        # Since 2026-09-26 the only `"kind" =>` arms in the file are DeliverableKind::of's:
+        # build_message matches the enum, and its friend_watered arm and raw-column catch-all
+        # are gone (HELD_KINDS_DECIDED_AT). The witness pins the refusing default arm right
+        # after the last kind, the shape the value depends on and the extractor cannot see:
+        # a default arm that answered Some(..) would deliver every held row.
+        "name": "notification_queue.RENDERABLE_KINDS ~ DeliverableKind::of arms",
         "spec": "specs/turbobaby/notification_queue.t27",
         "const": "RENDERABLE_KINDS",
         "source": "src/notification_queue.rs",
         "extract": ("regex_all", r"^\s*\"(\w+)\" =>"),
         "relation": "list_equal",
-        "why": "a row whose kind lost its arm is still SENT, through the catch-all that shows "
-               "the customer the raw kind column (UNKNOWN_KIND_EMITS_THE_RAW_COLUMN); the "
-               "legacy friend_watered arm is the one most likely to be tidied away",
+        "witness": r"\"milestone\" => Some\(Self::Milestone\),\s*_ => None,",
+        "why": "a kind the drain accepts is a kind a customer can receive, and every other "
+               "row is held unsent (HELD_KINDS_DECIDED_AT); an arm added here without the "
+               "contract delivers a kind nobody cleared, and the retired friend_watered is the "
+               "one most likely to be put back",
+    },
+    {
+        "name": "notification_queue.WRITTEN_KINDS ~ insert_queue_row call sites",
+        "spec": "specs/turbobaby/notification_queue.t27",
+        "const": "WRITTEN_KINDS",
+        "source": "src/db/notifications.rs",
+        "extract": ("regex_all", r"insert_queue_row\(orm, \w+, \"(\w+)\""),
+        "relation": "list_equal",
+        "why": "the drain delivers exactly the kinds a producer writes and holds every other "
+               "row (HELD_KINDS_DECIDED_AT); a producer kind missing from this list is a "
+               "message held in silence, which tests/notification_drain_wiring.rs also refuses",
     },
     {
         "name": "promo_broadcast.ADMIN_API_ATTEMPTS_PER_WINDOW ~ admin.rs BROADCAST_RL_MAX_ATTEMPTS",
@@ -3848,7 +3867,12 @@ ONE_GROUP_EXTRACTORS = (
 # list in src/trios/pricing.rs and REMINDER_KIND_FILTERED_QUERIES to the reminder, each planted
 # RED once by hand: 241 rows over the same 41 contracts on its own branch, floor 241. Merged
 # 2026-09-26 on the integration branch: 247 rows, floor 247 (the measured table size).
-MIN_BINDINGS = 247
+# Then the held notification kinds of 2026-09-26 bound notification_queue.WRITTEN_KINDS to
+# the producers' insert_queue_row calls (and re-pointed RENDERABLE_KINDS at
+# DeliverableKind::of with a witness): 240 rows over the same 41 contracts on its own branch,
+# floor 240. Merged 2026-09-26 on the integration branch: 248 rows, floor 248 (the measured
+# table size).
+MIN_BINDINGS = 248
 
 
 # ---------------------------------------------------------------------------------
