@@ -174,8 +174,10 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         # eight legacy paths was recorded (200/49) and, with it, both halves of ruling #12
         # (client 190/48 and server 194/48 on their own); the three together measure 254/57.
         # 266/59 the same day, with the owner's answer on the 20+ age gate (second list, answer 1).
-        "min_declarations": 266,
-        "min_checks": 59,
+        # Raised the same day to 277/59 on its own branch when the owner's answer 3 (stored
+        # content out of customers' sight) was recorded; merged 2026-09-26, the measured 289/61.
+        "min_declarations": 289,
+        "min_checks": 61,
     },
     "specs/turbobaby/locale_policy.t27": {
         "module": "turbobaby-locale-policy",
@@ -186,7 +188,9 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         # owner's second list that day deleted one more key, named by two declarations: 138/35.
         # 138/35 on its own branch too, with the five keys the removed 20+ box used (-5, two
         # declarations naming them); merged 2026-09-26 on the integration branch, 140/35.
-        "min_declarations": 140,
+        # Answer 3's key added one declaration naming its recorder (137/35 on its own branch);
+        # merged 2026-09-26, 141/35.
+        "min_declarations": 141,
         "min_checks": 35,
     },
     "specs/turbobaby/loyalty_ledger.t27": {
@@ -222,8 +226,10 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/order_presentation.t27": {
         "module": "turbobaby-order-presentation",
         "id": "turbobaby/order-presentation",
-        "min_declarations": 570,
-        "min_checks": 73,
+        # Raised 2026-09-25 from 570/73 when the owner's answer 3 gave a line of the old
+        # catalogue its neutral name and withheld the previous shop's name.
+        "min_declarations": 598,
+        "min_checks": 76,
     },
     "specs/turbobaby/order_status.t27": {
         "module": "turbobaby-order-status",

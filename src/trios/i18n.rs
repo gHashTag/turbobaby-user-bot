@@ -502,7 +502,7 @@ pub const T_ORDER_DETAIL_CANCELLED_BY_USER: Key = "order.detail.cancelled_by_use
 /// and reworded 2026-09-25 under the owner's delegation; `client_errors.t27` records it.
 pub const T_ORDER_DETAIL_CANCEL_REFUSED: Key = "order.detail.cancel_refused";
 pub const T_ORDER_REORDER: Key = "order.reorder";
-
+pub const T_ORDER_LINE_PREVIOUS_CATALOGUE: Key = "order.line.previous_catalogue";
 // Profile screen hard-coded strings
 pub const T_PROFILE_MEMBERSHIP: Key = "profile.membership";
 pub const T_PROFILE_QR_CODE: Key = "profile.qr_code";
@@ -1156,7 +1156,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_ORDER_DETAIL_CANCELLED_BY_USER => "Вы отменили заказ",
         T_ORDER_DETAIL_CANCEL_REFUSED => "Отменить этот заказ в приложении уже нельзя. Напишите менеджеру.",
         T_ORDER_REORDER => "Повторить заказ",
-        // Profile screen
+        T_ORDER_LINE_PREVIOUS_CATALOGUE => "Позиция прежнего каталога",
         T_PROFILE_MEMBERSHIP => "Ваш статус",
         T_PROFILE_QR_CODE => "Ваш QR-код",
         T_PROFILE_COPY_LINK => "Копировать ссылку",
@@ -1756,7 +1756,7 @@ fn get_en_translation(key: Key) -> Value {
         T_ORDER_DETAIL_CANCELLED_BY_USER => "You cancelled the order",
         T_ORDER_DETAIL_CANCEL_REFUSED => "This order can no longer be cancelled in the app. Please message the manager.",
         T_ORDER_REORDER => "Reorder order",
-        // Profile screen
+        T_ORDER_LINE_PREVIOUS_CATALOGUE => "Item from the previous catalogue",
         T_PROFILE_MEMBERSHIP => "Your membership status",
         T_PROFILE_QR_CODE => "Your QR Code",
         T_PROFILE_COPY_LINK => "Copy Link",

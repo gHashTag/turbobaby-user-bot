@@ -319,7 +319,13 @@ fn cart_item_row(item: CartItem, lang: crate::trios::core::Lang) -> Element {
     // in both slots rather than a price of `-` beside a total of `0`.
     let line_total_str = format_price(crate::trios::pricing::cart_line_total(item.price, qty));
     let row_key = item.id.clone();
-    let image_alt = tf(lang, T_CART_IMAGE_ALT, std::slice::from_ref(&item.name));
+    // Owner, 2026-09-25, answer 3: a line of the old catalogue prints the
+    // neutral name, never the one it was stored with, and not the picture it
+    // was stored with either (on this device too): the server's rule for both.
+    let kind = crate::ui::api::http::cart_item_type_to_kind(&item.item_type);
+    let shown_name = crate::trios::legacy_view::shown_cart_line_name(lang, kind, &item.name);
+    let shown_image = crate::trios::legacy_view::cart_line_image(kind, &item.image_url);
+    let image_alt = tf(lang, T_CART_IMAGE_ALT, std::slice::from_ref(&shown_name));
 
     rsx! {
         div {
@@ -334,7 +340,7 @@ fn cart_item_row(item: CartItem, lang: crate::trios::core::Lang) -> Element {
             border-radius: 0; padding: 10px; margin-bottom: 8px;
             box-shadow: 4px 4px 0 #000;
         ",
-            if let Some(ref url) = item.image_url {
+            if let Some(ref url) = shown_image {
                 img {
                     src: "{url}",
                     alt: "{image_alt}",
@@ -353,7 +359,7 @@ fn cart_item_row(item: CartItem, lang: crate::trios::core::Lang) -> Element {
             // card. The basis keeps it from collapsing to nothing once the row
             // is allowed to wrap.
             div { style: "flex: 1 1 150px; min-width: 0;",
-                div { style: "font-size: 16px; font-weight: 700; margin-bottom: 2px; overflow-wrap: anywhere;", "{item.name}" }
+                div { style: "font-size: 16px; font-weight: 700; margin-bottom: 2px; overflow-wrap: anywhere;", "{shown_name}" }
                 div { style: "font-size: 14px; color: #8b8b9e;",
                     {tf(lang, T_CART_LINE_EACH, &[price_str.clone(), line_total_str.clone()])}
                 }
