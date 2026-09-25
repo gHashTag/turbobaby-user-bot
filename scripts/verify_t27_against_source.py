@@ -1453,7 +1453,10 @@ BINDINGS: tuple[dict[str, object], ...] = (
     # after the server class was held for a fresh reading (the unknown-outcome arms now come
     # first), same six in file order: T_SUCCESS_STATUS_LOADING, T_SUCCESS_STATUS_ERROR,
     # T_ORDER_DETAIL_CANCELLED_BY_USER, T_ORDER_DETAIL_NOT_FOUND, T_API_ERR_UNKNOWN,
-    # T_CHECKOUT_ERR_NETWORK.
+    # T_CHECKOUT_ERR_NETWORK. Re-measured 2026-09-25, when question D's key arrived for
+    # the 409 arm: seven, T_ORDER_DETAIL_CANCEL_REFUSED between T_ORDER_DETAIL_NOT_FOUND
+    # and T_API_ERR_UNKNOWN (the new test in that file names the key in a `let`, not in
+    # this shape, so it adds no capture).
     {
         "name": "client_errors.ORDER_CANCEL_OWN_KEY_NAMES ~ api_errors.rs order_cancel_line arms",
         "spec": "specs/turbobaby/client_errors.t27",
@@ -1464,9 +1467,9 @@ BINDINGS: tuple[dict[str, object], ...] = (
             r"t\(lang, (T_[A-Z0-9_]+)\)\.to_string\(\),\s*OrderCancelTone::",
         ),
         "relation": "set_equal",
-        "why": "the owner's sentence for a refused cancellation (question D) arrives as a key; "
-               "until it does, the surface speaks only existing keys, and a key added or "
-               "swapped here has to be recorded where the sentence is owned",
+        "why": "every sentence this surface speaks is a key the contract names, the one "
+               "written for question D on 2026-09-25 included; a key added or swapped here "
+               "has to be recorded where the sentence is owned",
     },
     # The delegation to the general mapper, counted as every NON-TEST call in the module
     # that defines it, whatever its spelling and whichever function holds it. Corrected
