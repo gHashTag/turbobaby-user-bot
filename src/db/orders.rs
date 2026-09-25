@@ -2214,4 +2214,32 @@ mod tests {
         let money: OrderMoney = serde_json::from_value(wire).expect("the client reads the order");
         assert_eq!(order_money_text(&money, dash).total, format_baht(0.0));
     }
+
+    /// The cart serves exactly the deal the checkout admits (2026-09-26).
+    ///
+    /// `trios::pricing::SERVED_CART_KINDS` is not a list of its own: it is the
+    /// wire tag of `BikeDeal::BikeRental`, the one deal a new order line may
+    /// carry since the rental-only ruling of 2026-09-24 (a `bike_sale` line is
+    /// refused by `validate_bike_lines`, #63). If the enum's tag moved, a cart
+    /// row of the rental kind would stop being served while the checkout still
+    /// took the line, so the two are held together here.
+    #[test]
+    fn the_cart_serves_the_tag_of_the_only_deal_the_checkout_admits() {
+        use crate::trios::pricing::{cart_kind_is_served, SERVED_CART_KINDS};
+        let rental = serde_json::to_value(BikeDeal::BikeRental {
+            rental_start: d(2026, 9, 26),
+            rental_end: d(2026, 9, 27),
+            rate_thb_day: None,
+            deposit: None,
+        })
+        .expect("a rental deal serialises");
+        let sale = serde_json::to_value(BikeDeal::BikeSale { price_thb: None })
+            .expect("a sale deal serialises");
+        let rental_kind = rental["kind"].as_str().expect("the rental deal is tagged");
+        let sale_kind = sale["kind"].as_str().expect("the sale deal is tagged");
+
+        assert_eq!(SERVED_CART_KINDS, [rental_kind]);
+        assert!(cart_kind_is_served(rental_kind));
+        assert!(!cart_kind_is_served(sale_kind));
+    }
 }
