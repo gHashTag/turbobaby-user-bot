@@ -98,8 +98,10 @@
 //!   held to a wider vocabulary by
 //!   `the_cleaned_docs_and_demo_pages_carry_no_cannabis_vocabulary`
 //!   (`CLEANED_DOC_FILES`, `CLEANED_DOC_TREES`), and every render under
-//!   `screenshots/` is classified by `every_demo_render_is_classified`. What
-//!   was left as a record, and why, is written above `CLEANED_DOC_FILES`.
+//!   `screenshots/` is classified by `every_demo_render_is_classified`; the
+//!   render beside each demo page is one found clean
+//!   (`every_demo_page_render_is_clean`). What was left as a record, and why,
+//!   is written above `CLEANED_DOC_FILES`.
 
 // A panic is how a test reports failure. The restriction lints in Cargo.toml's
 // [lints.clippy] exist for production code, as its own comment says.
@@ -1134,15 +1136,16 @@ struct Render {
     shows: &'static str,
 }
 
-/// Renders that still show the old shop. A picture cannot be reworded, and
-/// removing one is a deletion, which was not made without the owner's word;
-/// they stay until he decides, and this list is what he decides on. When one
-/// goes, its entry goes in the same change.
+/// Renders that still show the old shop. None of them is the render of a page
+/// under this tree, so none can be taken again from a page cleaned here: the
+/// six multi-section ones were taken from the demo pages at the repository
+/// root (the section titles are those of `ui-kit.html`; `typography-full.png`
+/// is a full-length page), and the rest from the running Mini App and its
+/// admin screen as they stood. Removing one is a deletion, which was not made
+/// without the owner's word; they stay until he decides, and this list is what
+/// he decides on. When one goes, or is taken again clean, its entry moves in
+/// the same change.
 const OLD_SHOP_RENDERS: &[Render] = &[
-    Render {
-        path: "screenshots/00-hello-world/screenshot.png",
-        shows: "the old shop's name under Hello World",
-    },
     Render {
         path: "screenshots/01-typography/type-scale-colors-buttons.png",
         shows: "the old shop's name and its trade in the page header",
@@ -1152,84 +1155,20 @@ const OLD_SHOP_RENDERS: &[Render] = &[
         shows: "the old shop's name, strain-type badges and per-gram product cards",
     },
     Render {
-        path: "screenshots/04-badges/screenshot.png",
-        shows: "strain-type badges",
-    },
-    Render {
-        path: "screenshots/05-strain-cards/screenshot.png",
-        shows: "strain cards with THC figures",
-    },
-    Render {
         path: "screenshots/05-strain-cards/strain-cards-and-orders.png",
         shows: "strain names in cart lines and a leaf icon on member cards",
-    },
-    Render {
-        path: "screenshots/06-order-cards/screenshot.png",
-        shows: "strain names in order cards",
-    },
-    Render {
-        path: "screenshots/07-cart/screenshot.png",
-        shows: "strain names in cart lines",
     },
     Render {
         path: "screenshots/08-member-cards/cart-member-quest.png",
         shows: "seed rewards named after a strain type",
     },
     Render {
-        path: "screenshots/08-member-cards/screenshot.png",
-        shows: "member cards with the old shop's name and a plant count",
-    },
-    Render {
-        path: "screenshots/09-quests/screenshot.png",
-        shows: "quests to the old shop's outlet and a grow lab",
-    },
-    Render {
-        path: "screenshots/10-plants/screenshot.png",
-        shows: "the grow cycle, flowering to harvest",
-    },
-    Render {
         path: "screenshots/11-modal/modal-toasts-empty-loading.png",
         shows: "a strain-type filter and a strain loading label",
     },
     Render {
-        path: "screenshots/11-modal/screenshot.png",
-        shows: "a strain detail modal with THC and CBD figures",
-    },
-    Render {
-        path: "screenshots/12-toasts/screenshot.png",
-        shows: "a strain name in a toast",
-    },
-    Render {
-        path: "screenshots/13-empty-states/screenshot.png",
-        shows: "strains in the empty cart and the garden's empty state",
-    },
-    Render {
-        path: "screenshots/14-loading/screenshot.png",
-        shows: "strain and garden loading labels",
-    },
-    Render {
-        path: "screenshots/15-inputs/screenshot.png",
-        shows: "a strain search, the old shop's domain and a strain-type select",
-    },
-    Render {
-        path: "screenshots/16-filters/screenshot.png",
-        shows: "strain-type tabs and chips",
-    },
-    Render {
         path: "screenshots/17-categories/inputs-filters-categories-nav-success.png",
         shows: "the old shop's name in the footer",
-    },
-    Render {
-        path: "screenshots/17-categories/screenshot.png",
-        shows: "the old catalogue's categories and a strain of the day",
-    },
-    Render {
-        path: "screenshots/18-navigation/screenshot.png",
-        shows: "the old shop's name, a leaf menu icon and the garden tab",
-    },
-    Render {
-        path: "screenshots/20-success/screenshot.png",
-        shows: "strain names on an order receipt",
     },
     Render {
         path: "screenshots/admin_final.png",
@@ -1301,11 +1240,14 @@ const OLD_SHOP_RENDERS: &[Render] = &[
     },
 ];
 
-/// Renders looked at 2026-09-26 that show none of it.
+/// Renders looked at 2026-09-26 that show none of it. The render of every page
+/// under this tree is here (`every_demo_page_render_is_clean`). Seventeen of
+/// them showed the old shop until 2026-09-26 and were then taken again from
+/// their cleaned page (`RERENDERED_2026_09_26`).
 const CLEAN_RENDERS: &[Render] = &[
     Render {
-        path: "screenshots/00-hello-world.png",
-        shows: "Hello World",
+        path: "screenshots/00-hello-world/screenshot.png",
+        shows: "Hello World over the TurboBaby name",
     },
     Render {
         path: "screenshots/01-typography/screenshot.png",
@@ -1320,8 +1262,76 @@ const CLEAN_RENDERS: &[Render] = &[
         shows: "buttons",
     },
     Render {
+        path: "screenshots/04-badges/screenshot.png",
+        shows: "class, status and availability badges",
+    },
+    Render {
+        path: "screenshots/05-bike-cards/screenshot.png",
+        shows: "four bike cards: the seed's models, units free and base day tariffs",
+    },
+    Render {
+        path: "screenshots/06-order-cards/screenshot.png",
+        shows: "three order cards naming the seed's models",
+    },
+    Render {
+        path: "screenshots/07-cart/screenshot.png",
+        shows: "two cart lines: the seed's models and base day tariffs",
+    },
+    Render {
+        path: "screenshots/08-member-cards/screenshot.png",
+        shows: "three loyalty tier cards",
+    },
+    Render {
+        path: "screenshots/09-quests/screenshot.png",
+        shows: "a QR check-in card and four checkpoint quests",
+    },
+    Render {
+        path: "screenshots/10-order-steps/screenshot.png",
+        shows: "the six order steps",
+    },
+    Render {
+        path: "screenshots/11-modal/screenshot.png",
+        shows: "a confirm modal and a bike modal with the seed's tariff and deposit",
+    },
+    Render {
+        path: "screenshots/12-toasts/screenshot.png",
+        shows: "five toasts, one adding a bike to the cart",
+    },
+    Render {
+        path: "screenshots/13-empty-states/screenshot.png",
+        shows: "an empty cart, no orders yet and a connection error",
+    },
+    Render {
+        path: "screenshots/14-loading/screenshot.png",
+        shows: "spinners, skeleton cards and progress bars",
+    },
+    Render {
+        path: "screenshots/15-inputs/screenshot.png",
+        shows: "text inputs, a textarea, a class select and toggles",
+    },
+    Render {
+        path: "screenshots/16-filters/screenshot.png",
+        shows: "class tabs, pill filters, class chips and the sort",
+    },
+    Render {
+        path: "screenshots/17-categories/screenshot.png",
+        shows: "a picked bike and the two classes with their model counts",
+    },
+    Render {
+        path: "screenshots/18-navigation/screenshot.png",
+        shows: "the TurboBaby header, the bottom bar and breadcrumbs to a bike",
+    },
+    Render {
         path: "screenshots/19-neon-effects/screenshot.png",
         shows: "neon text and borders",
+    },
+    Render {
+        path: "screenshots/20-success/screenshot.png",
+        shows: "an order receipt with the seed's tariff and deposit",
+    },
+    Render {
+        path: "screenshots/00-hello-world.png",
+        shows: "Hello World",
     },
     Render {
         path: "screenshots/admin_test.png",
@@ -1339,6 +1349,32 @@ const CLEAN_RENDERS: &[Render] = &[
         path: "screenshots/e2e_14_admin.png",
         shows: "a blank page",
     },
+];
+
+/// The page renders taken again on 2026-09-26, each from the cleaned
+/// `index.html` beside it, with headless Microsoft Edge at a 1271 x 869 window
+/// and device scale 2: the 2542 x 1738 pixels of the renders they replaced.
+/// Each was looked at before it was committed. Two moved with their page (git
+/// mv, nothing deleted): `05-strain-cards/` to `05-bike-cards/` and
+/// `10-plants/` to `10-order-steps/`. Git history keeps what each showed.
+const RERENDERED_2026_09_26: &[&str] = &[
+    "screenshots/00-hello-world/screenshot.png",
+    "screenshots/04-badges/screenshot.png",
+    "screenshots/05-bike-cards/screenshot.png",
+    "screenshots/06-order-cards/screenshot.png",
+    "screenshots/07-cart/screenshot.png",
+    "screenshots/08-member-cards/screenshot.png",
+    "screenshots/09-quests/screenshot.png",
+    "screenshots/10-order-steps/screenshot.png",
+    "screenshots/11-modal/screenshot.png",
+    "screenshots/12-toasts/screenshot.png",
+    "screenshots/13-empty-states/screenshot.png",
+    "screenshots/14-loading/screenshot.png",
+    "screenshots/15-inputs/screenshot.png",
+    "screenshots/16-filters/screenshot.png",
+    "screenshots/17-categories/screenshot.png",
+    "screenshots/18-navigation/screenshot.png",
+    "screenshots/20-success/screenshot.png",
 ];
 
 /// Every vocabulary hit in `text`, as (line, matched word), in reading order.
@@ -1488,6 +1524,112 @@ fn every_demo_render_is_classified() {
         "demo renders under {CLEANED_DOC_TREES:?}:\n  {}",
         problems.join("\n  ")
     );
+}
+
+/// What is wrong with the renders of `pages` (repository-relative paths of
+/// `index.html` files). A page's render is the `screenshot.png` beside it; it
+/// must be among `present` and among `clean`.
+fn page_render_problems(pages: &[String], present: &[String], clean: &[&str]) -> Vec<String> {
+    let mut out = Vec::new();
+    for page in pages {
+        let Some(dir) = page.strip_suffix("/index.html") else {
+            out.push(format!("{page}: not a page"));
+            continue;
+        };
+        let render = format!("{dir}/screenshot.png");
+        if !present.contains(&render) {
+            out.push(format!("{page}: no render beside it ({render})"));
+        } else if !clean.contains(&render.as_str()) {
+            out.push(format!(
+                "{page}: its render {render} is not in CLEAN_RENDERS, so it was not looked at \
+                 after the page was cleaned"
+            ));
+        }
+    }
+    out
+}
+
+/// (width, height) from a PNG's header, or `None` when `bytes` is not a PNG.
+fn png_size(bytes: &[u8]) -> Option<(u32, u32)> {
+    if bytes.get(..8)? != b"\x89PNG\r\n\x1a\n" || bytes.get(12..16)? != b"IHDR" {
+        return None;
+    }
+    let width = u32::from_be_bytes(bytes.get(16..20)?.try_into().ok()?);
+    let height = u32::from_be_bytes(bytes.get(20..24)?.try_into().ok()?);
+    Some((width, height))
+}
+
+/// A demo page and its render say the same thing: since 2026-09-26 the render
+/// beside every page under the cleaned trees is one looked at and found clean,
+/// and the ones taken again that day are real renders of their page's size.
+#[test]
+fn every_demo_page_render_is_clean() {
+    let files: Vec<String> = cleaned_tree_files().iter().map(|p| relative(p)).collect();
+    let pages: Vec<String> = files
+        .iter()
+        .filter(|f| f.ends_with("/index.html"))
+        .cloned()
+        .collect();
+    // D16: the tree held 21 pages on 2026-09-26.
+    assert!(
+        pages.len() >= 21,
+        "only {} page(s) found under {CLEANED_DOC_TREES:?}",
+        pages.len()
+    );
+    let clean: Vec<&str> = CLEAN_RENDERS.iter().map(|r| r.path).collect();
+    let problems = page_render_problems(&pages, &files, &clean);
+    assert!(
+        problems.is_empty(),
+        "demo page renders:\n  {}",
+        problems.join("\n  ")
+    );
+
+    for path in RERENDERED_2026_09_26 {
+        assert!(
+            clean.contains(path),
+            "{path}: taken again, so it is in CLEAN_RENDERS"
+        );
+        let page = format!(
+            "{}/index.html",
+            path.strip_suffix("/screenshot.png")
+                .unwrap_or_else(|| panic!("{path}: a page render is named screenshot.png"))
+        );
+        assert!(pages.contains(&page), "{path}: no page beside it");
+        let bytes =
+            fs::read(repo_root().join(path)).unwrap_or_else(|e| panic!("{path} must exist: {e}"));
+        assert_eq!(
+            png_size(&bytes),
+            Some((2542, 1738)),
+            "{path}: not a render of the size it replaced"
+        );
+    }
+
+    // D16: the check sees a page whose render was not looked at. The folder
+    // names the pages had until 2026-09-26, and a clean list that lost one
+    // real page's render.
+    let old_page = "screenshots/05-strain-cards/index.html".to_string();
+    let old_render = "screenshots/05-strain-cards/screenshot.png".to_string();
+    assert_eq!(
+        page_render_problems(std::slice::from_ref(&old_page), &[old_render], &clean).len(),
+        1,
+        "a page whose render is not in CLEAN_RENDERS is reported"
+    );
+    let gone_page = "screenshots/10-plants/index.html".to_string();
+    assert_eq!(
+        page_render_problems(std::slice::from_ref(&gone_page), &files, &clean).len(),
+        1,
+        "a page with no render beside it is reported"
+    );
+    let lost = "screenshots/05-bike-cards/screenshot.png";
+    let fewer: Vec<&str> = clean.iter().copied().filter(|p| *p != lost).collect();
+    let reported = page_render_problems(&pages, &files, &fewer);
+    assert_eq!(
+        reported.len(),
+        1,
+        "dropping {lost} from the clean list is reported once: {reported:?}"
+    );
+    assert!(reported[0].starts_with("screenshots/05-bike-cards/index.html"));
+    assert_eq!(png_size(b"not a png at all, twenty-four+"), None);
 }
 
 /// D16: the check sees what it looks for. Lines the cleaned files held until
