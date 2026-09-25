@@ -55,12 +55,15 @@
 //! the routing is read in `src/main.rs`, named by binding and route, not line.
 //!
 //! * `assets/` is served at /assets and again at /images (two `ServeDir`s in
-//!   `static_assets`). Its text is 13 files -- a brand preview page and its
-//!   README, seven SVGs, the three game scripts under `assets/game/` and the
-//!   vendored three.js module -- and they hold 0 hits, comments included. Its
-//!   media (webp, png, jpeg, mp4) does not read as UTF-8 and is skipped; a file
-//!   with a text extension (`SERVED_TEXT_EXTENSIONS`) that does not read fails
-//!   the scan instead.
+//!   `static_assets`). Its text is 12 files -- a brand preview page and its
+//!   README, seven SVGs, the two game scripts under `assets/game/` and the
+//!   vendored three.js module -- and they hold 0 hits, comments included. (13
+//!   and three scripts until 2026-09-25, when the owner's ruling #12 removed
+//!   the orphaned catch game with the old shop's media.) Its media (webp,
+//!   png, jpeg, mp4) does not read as UTF-8 and is skipped; a file with a text
+//!   extension (`SERVED_TEXT_EXTENSIONS`) that does not read fails the scan
+//!   instead. Which media may be served at all is
+//!   `tests/no_cannabis_client_wiring.rs`'s list.
 //! * Of `dist/`, only `index.html` is read: it is the page every SPA route in
 //!   `spa_routes` answers with (`spa_handler`) and the one `serve_dist`, the
 //!   router's fallback, answers a client route with. Trunk renders it from the

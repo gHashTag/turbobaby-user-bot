@@ -101,7 +101,7 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/customer_surface.t27": {
         "module": "turbobaby-customer-surface",
         "id": "turbobaby/customer-surface",
-        "min_declarations": 190,
+        "min_declarations": 191,
         "min_checks": 44,
     },
     "specs/turbobaby/deeplink.t27": {
@@ -133,7 +133,7 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/game_score.t27": {
         "module": "turbobaby-game-score",
         "id": "turbobaby/game-score",
-        "min_declarations": 121,
+        "min_declarations": 123,
         "min_checks": 34,
     },
     "specs/turbobaby/happy_hour.t27": {
@@ -151,8 +151,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/legacy_retirement.t27": {
         "module": "turbobaby-legacy-retirement",
         "id": "turbobaby/legacy-retirement",
-        "min_declarations": 182,
-        "min_checks": 46,
+        "min_declarations": 190,
+        "min_checks": 48,
     },
     "specs/turbobaby/locale_policy.t27": {
         "module": "turbobaby-locale-policy",
