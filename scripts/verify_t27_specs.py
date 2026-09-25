@@ -151,8 +151,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/legacy_retirement.t27": {
         "module": "turbobaby-legacy-retirement",
         "id": "turbobaby/legacy-retirement",
-        "min_declarations": 179,
-        "min_checks": 46,
+        "min_declarations": 194,
+        "min_checks": 48,
     },
     "specs/turbobaby/locale_policy.t27": {
         "module": "turbobaby-locale-policy",

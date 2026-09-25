@@ -503,6 +503,13 @@ stops SERVING or SENDING something, in code.
   not found and an empty badge list, because the stored roadmap and badges are the old shop's. The
   share card builds only from a catalogue row the public catalog shows, so a row 085 hid answers
   not found. The served OpenAPI document is held to a wider list of retired words.
+* **Promo report** (added by review the same day). The owners' sales report — the bot's `/promo`
+  and `GET /api/admin/promo-report` — prints «(название скрыто)» where a published post was about
+  the product table migration 083 dropped: a row of that table's kind, or a bestseller whose stored
+  link opens that table's card or that has no link to tell. A kind no live post writes is printed
+  empty. The rows stay and still count in the totals; `promo_posts` is not written. Whether an old
+  draft may still be SENT is the Publish button's question, answered by the same day's item-13
+  decision in `specs/turbobaby/promo_broadcast.t27`, not by this entry.
 * **Docs.** `docs/README.md` is a TurboBaby index. `README.md`, the owner agent card,
   `docs/DESIGN_SYSTEM.md` and `docs/SETUP_TEMPLATE.md` no longer describe the product as the old
   shop.
@@ -520,5 +527,7 @@ stops SERVING or SENDING something, in code.
   the profile and leaderboard reads; re-keying it is a data change for the owner.
 
 The contracts carry the details: `specs/turbobaby/legacy_retirement.t27` records the ruling
-(`OWNER_RULING_2026_09_25_AT`) and classifies the surfaces, `bot_surface.t27` the carousel
-(`CAROUSEL_RETIRED_AT`), `locale_policy.t27` the locale struct's four removed fields.
+(`OWNER_RULING_2026_09_25_AT`) and classifies the surfaces, the promo report's rule among them
+(`PROMO_REPORT_NAME_*`, held to the code by `tests/promo_report_names_wiring.rs`),
+`bot_surface.t27` the carousel (`CAROUSEL_RETIRED_AT`), `locale_policy.t27` the locale struct's
+four removed fields.
