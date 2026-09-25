@@ -34,7 +34,12 @@ declared, is RED. DECISIONS.md D16 is the rule -- a gate whose input can reach z
 must pin a floor, because "found nothing" and "found nothing wrong" look identical
 from the outside. The floor on the table itself is MIN_BINDINGS.
 
-WHAT A GREEN RUN DOES NOT PROVE. Re-measured 2026-09-24, after the owner's rental-only ruling
+WHAT A GREEN RUN DOES NOT PROVE. Re-measured 2026-09-25 on the integration of that day's owner
+answers (items 7, 10, 11, 12 client and server, and 13): the table's 239 bindings cover 226
+distinct (contract, constant) pairs out of 5698 top-level `pub const` declarations across the
+45 files under specs/, touching 41 of those 45 contracts -- 4.0% of the declared constants,
+and 0% of the 10246 `assert` statements. The reading of 2026-09-24 follows, as it was.
+Re-measured 2026-09-24, after the owner's rental-only ruling
 (nine rows over the same 41 contracts) and its review (one row: migration 088's hide) landed on
 top of the spec-hygiene change: the table's 237 bindings cover 224 distinct (contract, constant)
 pairs out of 5564 top-level `pub const` declarations across the 45 files under specs/, touching
