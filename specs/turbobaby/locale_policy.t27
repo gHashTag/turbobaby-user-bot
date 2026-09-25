@@ -223,11 +223,22 @@ pub const VARIANTS_FALLING_THROUGH_TO_ENGLISH : u8 = 6;
 ; The COUNT, never the keys. 565 declarations in src/trios/i18n.rs, every literal distinct. Two
 ; hand-maintained match blocks translate them: get_ru_translation at src/trios/i18n.rs:732 and
 ; get_en_translation at src/trios/i18n.rs:1331.
-pub const TRANSLATION_KEY_COUNT : u16 = 565;
+; CORRECTED 2026-09-25: 551, not 565. The owner's ruling of that day (#12, nothing cannabis-related
+; anywhere) deleted fourteen keys outright and added none; turbobaby/legacy-retirement records what
+; they were (CANNABIS_RULING_I18N_KEYS_DELETED). Each deleted line was replaced one-for-one by a
+; comment line, so every src/trios/i18n.rs line cited in this file still points where it did, and
+; the naive grep below falls by the same fourteen, 570 to 556, over the same five non-declaration
+; lines. The header's 565 and 570 are the 2026-09-20 reading; they are kept below under
+; _BEFORE_2026_09_25 names.
+pub const TRANSLATION_KEY_COUNT : u16 = 551;
+pub const TRANSLATION_KEY_COUNT_BEFORE_2026_09_25 : u16 = 565;
+pub const KEYS_DELETED_2026_09_25 : u16 = 14;
+pub const KEYS_DELETED_2026_09_25_RECORDED_BY_ID : str = "turbobaby/legacy-retirement";
 pub const TRANSLATION_TABLE_COUNT : u8 = 2;
 ; What a naive substring grep reports, and the five lines that make it wrong. Recorded so the
 ; next reader re-measures with the declaration shape instead of the substring.
-pub const NAIVE_GREP_COUNT : u16 = 570;
+pub const NAIVE_GREP_COUNT : u16 = 556;
+pub const NAIVE_GREP_COUNT_BEFORE_2026_09_25 : u16 = 570;
 pub const NAIVE_GREP_OVERCOUNT : u16 = 5;
 pub const NAIVE_GREP_OVERCOUNT_LINES : str = "src/trios/i18n.rs:2251, 2358 and 2374 are prose; 2260 and 2378 are the two key parsers matching their own source text";
 ; Both tables end in a bare-key arm: src/trios/i18n.rs:1326 closes the Russian match and
@@ -562,8 +573,15 @@ test the_gates_blind_spot_is_the_undeclared_literal_not_the_limit_they_state {
 }
 
 test the_key_count_is_the_declaration_count_and_not_the_grep_count {
-  assert TRANSLATION_KEY_COUNT == 565;
-  assert NAIVE_GREP_COUNT == 570;
+  // 565 and 570 until 2026-09-25, when the owner's ruling #12 deleted fourteen keys.
+  assert TRANSLATION_KEY_COUNT == 551;
+  assert NAIVE_GREP_COUNT == 556;
+  assert TRANSLATION_KEY_COUNT_BEFORE_2026_09_25 == 565;
+  assert NAIVE_GREP_COUNT_BEFORE_2026_09_25 == 570;
+  assert TRANSLATION_KEY_COUNT_BEFORE_2026_09_25 - KEYS_DELETED_2026_09_25 == TRANSLATION_KEY_COUNT;
+  assert NAIVE_GREP_COUNT_BEFORE_2026_09_25 - KEYS_DELETED_2026_09_25 == NAIVE_GREP_COUNT;
+  assert KEYS_DELETED_2026_09_25_RECORDED_BY_ID == "turbobaby/legacy-retirement";
+  assert KEYS_DELETED_2026_09_25_RECORDED_BY_ID != ID;
   assert NAIVE_GREP_OVERCOUNT == 5;
   assert NAIVE_GREP_COUNT - TRANSLATION_KEY_COUNT == NAIVE_GREP_OVERCOUNT;
   assert NAIVE_GREP_COUNT > TRANSLATION_KEY_COUNT;
@@ -631,7 +649,7 @@ invariant this_file_carries_no_translated_string_no_key_literal_and_no_number_fo
   assert TRANSLATED_STRINGS_PUBLISHED.len == 0 and KEY_LITERALS_PUBLISHED.len == 0 and NUMBER_FORMAT_FIELDS_PUBLISHED.len == 0
 
 invariant the_key_count_never_becomes_the_key_list
-  assert TRANSLATION_KEY_COUNT == 565 and KEY_LITERALS_PUBLISHED.len == 0 and TRANSLATION_KEY_COUNT > PARITY_PARSER_FLOOR_PRIMARY
+  assert TRANSLATION_KEY_COUNT == 551 and KEY_LITERALS_PUBLISHED.len == 0 and TRANSLATION_KEY_COUNT > PARITY_PARSER_FLOOR_PRIMARY
 
 invariant the_two_defaults_disagree_until_one_of_them_is_changed
   assert defaults_agree(WEB_DEFAULT_LOCALE, STORAGE_DEFAULT_LOCALE) == false and DEFAULTS_AGREE == false

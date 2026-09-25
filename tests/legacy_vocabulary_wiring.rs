@@ -4,9 +4,9 @@
 //! (DECISIONS.md D2-D5, D19) retired the catalogue, hid what it could not
 //! delete, and left a residue that is there on purpose: enums that still read
 //! cart lines and share links minted before migration 083, a strain-of-day
-//! carousel whose retirement is the owner's call, i18n keys of a retired screen
-//! whose replacement copy nobody has approved, and a migration history that is
-//! never edited (D2). What nothing guarded was the other direction -- a NEW
+//! carousel whose retirement is the owner's call, and a migration history that
+//! is never edited (D2). (The i18n keys of the retired strain menu were part of
+//! that residue until the owner's ruling of 2026-09-25 deleted them.) What nothing guarded was the other direction -- a NEW
 //! occurrence. A pasted fixture, a copied match arm or a fresh label saying
 //! "strain" or "THC" would have shipped with every test green.
 //!
@@ -15,11 +15,13 @@
 //! header) and finds the vocabulary as whole words, case-insensitively:
 //!
 //! * `strain`, `weed`, `thc`, `cbd`, `gram`, each with an optional plural `s`
-//!   (the plural is how `T_MENU_NO_RESULTS` spells it: "No {0} strains found");
+//!   (the plural is how `T_MENU_NO_RESULTS` spelt it: "No {0} strains found",
+//!   until the owner's ruling of 2026-09-25 deleted the key);
 //! * the Russian word for strain in its case forms (`сорт`, `сорта`, `сортов`,
 //!   ...), because the Russian twin of every dead key is where the word
-//!   actually lives (`T_MENU_DESC` reads "Наши премиальные сорта"). As whole
-//!   words only, so `сортировка` (sorting) is not a hit.
+//!   actually lived (`T_MENU_DESC` read "Наши премиальные сорта" until the
+//!   same ruling deleted it). As whole words only, so `сортировка` (sorting)
+//!   is not a hit.
 //!
 //! "Whole word" means the characters on either side are not letters, digits
 //! or `_`. So `telegram`, `program` and `strain_of_day` are not hits, and
@@ -326,14 +328,11 @@ const SURVIVORS: &[Survivor] = &[
         reason: "The carousel's heading, `strain_of_day`, in ru and en. It goes with the \
                  callback above.",
     },
-    // --- dead i18n keys, pending the owner's copy decision ---------------------------
-    Survivor {
-        path: "src/trios/i18n.rs",
-        hits: 3,
-        reason: "`T_MENU_DESC` (ru: \"our premium strains\") and `T_MENU_NO_RESULTS` (ru and \
-                 en) are keys of the retired strain menu. Rewording them is new customer copy, \
-                 which needs an owner-approved ru/en pair (D13); none is invented here.",
-    },
+    // `src/trios/i18n.rs` stood here with 3 hits: `T_MENU_DESC` and
+    // `T_MENU_NO_RESULTS`, keys of the retired strain menu, kept until the owner
+    // decided their copy. The owner's ruling of 2026-09-25 (#12, nothing
+    // cannabis-related anywhere) decided it: both keys were deleted, not
+    // reworded, so the file holds no hit and has no entry.
     // --- guards that must spell the vocabulary to refuse it --------------------------
     Survivor {
         path: "src/config.rs",
