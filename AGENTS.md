@@ -175,24 +175,58 @@ pkill cargo; rm -f target/.cargo-lock; rm -rf target/tmp
 **Решение:** деплой вручную, из чистой LF-выгрузки ровно того коммита, который
 выкатываешь, — НЕ `cd <репо> && railway up`: из рабочего дерева в образ уедет
 всё незакоммиченное (включая `src/`), из worktree — прошлый исходник (§13).
-Полная процедура с проверками — `docs/ROLLBACK.md` §3B, коротко:
+Полная процедура с разбором — `docs/ROLLBACK.md` §3B; команды те же, одним
+прогоном (Git Bash):
 ```
-git clone -c core.autocrlf=false --no-checkout https://github.com/gHashTag/turbobaby-user-bot.git "$DEP"
-git -C "$DEP" checkout --detach <sha>
-git -C "$DEP" status --porcelain                   # пусто
-bash "$DEP/scripts/predeploy-smoke.sh" --no-build  # SMOKE PASS
-git -C "$DEP" status --porcelain                   # всё ещё пусто
-test ! -e "$DEP/dist/assets" && echo absent        # dist/assets в выгрузке нет
-cd "$DEP"
-railway link -p woody -e production -s turbobaby-bot
-railway status                                     # woody / production / turbobaby-bot, иначе стоп
-railway up --service turbobaby-bot --environment production
+DEP=<новый пустой каталог вне всех репозиториев и worktree>
+SHA=<полный 40-символьный коммит>
+(
+  set -euo pipefail
+  : "${DEP:?set DEP}" "${SHA:?set SHA}"
+  git clone -c core.autocrlf=false --no-checkout https://github.com/gHashTag/turbobaby-user-bot.git "$DEP"
+  cd "$DEP"
+  git checkout --detach "$SHA"
+  test "$(git rev-parse HEAD)" = "$SHA"
+  test -z "$(git status --porcelain)"
+  test -z "$(git ls-files --eol | grep 'w/crlf' || true)"
+  cat dist/version.txt                          # хеш бандла, закоммиченный на $SHA
+  bash scripts/predeploy-smoke.sh --no-build    # ненулевой выход, если не SMOKE PASS
+  test -z "$(git status --porcelain)"
+  test ! -e dist/assets                         # dist/assets в выгрузке нет
+  railway link -p woody -e production -s turbobaby-bot
+  railway status
+  read -r -p 'Does railway status name woody / production / turbobaby-bot? Type yes: ' answer
+  test "$answer" = yes
+  test "$(git rev-parse HEAD)" = "$SHA"
+  test -z "$(git status --porcelain)"
+  railway up --service turbobaby-bot --environment production
+)
 ```
+Прогон закрывается на отказ: первая упавшая команда внутри скобок обрывает
+всё, что после неё. Незаданный `DEP` или `SHA`, сорвавшийся clone, CRLF,
+упавший smoke, любой ответ кроме `yes` (и отсутствие терминала для ответа) до
+`up` не доходят. Построчно так нельзя: при пустом `DEP` `git -C "$DEP"` бьёт в
+текущий каталог, `cd "$DEP"` падает и оставляет тебя на месте, `railway link`
+перепривязывает твоё собственное дерево, `railway status` по-прежнему
+показывает woody / production / turbobaby-bot — и `up` выгружает это дерево с
+незакоммиченным. link + status доказывают СЕРВИС, а не каталог; каталог
+доказывает проверка HEAD и чистоты прямо перед `up`, в том же прогоне.
+Проверено 2026-09-25 на локальной подмене репозитория, `railway` и smoke —
+заглушки: из 14 прогонов до `up` дошёл только тот, где все проверки прошли и
+ответ был `yes` (`docs/ROLLBACK.md` §3B).
+
 Никогда `-y` и никогда `--new`: по справке CLI 5.62.1 (`railway up --help`,
 2026-09-25) `up` без входа сам входит и создаёт НОВЫЙ проект с сервисом и
 деплоит в него; в каталоге без линка `-y` делает то же (`--new` «implied … for
 `-y` when nothing is linked»), а `--new` создаёт новый проект «even if one is
-already linked». Линк хранится ПО КАТАЛОГУ: link и status — в каталоге
+already linked». Под агентской обвязкой одного отказа от `-y` мало: 5.62.1 сам
+пропускает подтверждение входа («Agent harness detected … (skipping confirm)»
+в строках бинаря рядом с этим подтверждением; в том же бинаре список имён
+переменных с `CLAUDECODE`, а шелл Claude Code задаёт `CLAUDECODE` и
+`CLAUDE_CODE_ENTRYPOINT`; прочитано по строкам бинаря 2026-09-25, не запуском).
+Поэтому вход — отдельным шагом `railway login`, а `up` — только после
+`railway status` в каталоге выгрузки, назвавшего woody / production /
+turbobaby-bot. Линк хранится ПО КАТАЛОГУ: link и status — в каталоге
 выгрузки, прямо перед `up`. Потом ждать SUCCESS и пройти «Чеклист после
 деплоя».
 
@@ -229,9 +263,11 @@ railway variables --kv | grep -E 'KEY|DATABASE_URL'   # проверить
 **Симптом:** up из worktree-каталога «прошёл успешно», но на сервисе живёт
 старый код (проверяется эндпоинтом, которого в исходнике нет).
 
-**Решение:** деплой из чистого каталога:
-`git -c core.autocrlf=false archive <sha> | tar -x -C <пустой каталог>` или
-`git clone -c core.autocrlf=false` на точный SHA (§10, `docs/ROLLBACK.md` §3B).
+**Решение:** деплой из чистого каталога: `git clone -c core.autocrlf=false` на
+точный SHA одним прогоном из §10 (`docs/ROLLBACK.md` §3B). Выгрузка
+`git -c core.autocrlf=false archive <sha> | tar -x -C <пустой каталог>` тоже
+чистая, но без `.git`: ни проверку HEAD и чистоты перед `up`, ни проверку 5
+post-deploy smoke на ней не сделать — поэтому clone.
 Флаг обязателен: на Windows `core.autocrlf=true` стоит системно, `.gitattributes`
 нет, и без флага выгрузка получает CRLF — отдаваемая страница уже не равна
 коммиту (`docs/ROLLBACK.md` §1).
