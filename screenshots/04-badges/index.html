@@ -19,38 +19,35 @@
             display: inline-block; font-family: 'Press Start 2P', monospace; font-size: 7px;
             padding: 4px 10px; border-radius: var(--radius-sm); border: 1px solid; text-transform: uppercase;
         }
-        .badge-sativa { color: var(--green); border-color: var(--green); background: rgba(57,255,20,0.1); }
-        .badge-indica { color: var(--cyan); border-color: var(--cyan); background: rgba(0,229,255,0.1); }
-        .badge-hybrid { color: var(--yellow); border-color: var(--yellow); background: rgba(255,230,0,0.1); }
+        .badge-scooter { color: var(--green); border-color: var(--green); background: rgba(57,255,20,0.1); }
+        .badge-motorcycle { color: var(--cyan); border-color: var(--cyan); background: rgba(0,229,255,0.1); }
         .badge-premium { color: var(--purple); border-color: var(--purple); background: rgba(179,136,255,0.1); }
         .badge-hot { color: var(--red); border-color: var(--red); background: rgba(255,71,87,0.1); }
         .badge-new { color: var(--orange); border-color: var(--orange); background: rgba(255,159,67,0.1); }
         .badge-sold-out { color: var(--text2); border-color: var(--text2); background: rgba(139,139,158,0.1); }
-        .badge-sod { color: #000; border-color: var(--yellow); background: var(--yellow); }
+        .badge-pick { color: #000; border-color: var(--yellow); background: var(--yellow); }
         .row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
         .label { font-size: 11px; color: var(--text2); font-family: 'Press Start 2P', monospace; margin-bottom: 8px; }
     </style>
 </head>
 <body>
     <h1>04 · Badges</h1>
-    <div class="label">Strain Types</div>
+    <div class="label">Classes</div>
     <div class="row">
-        <span class="badge badge-sativa">☀️ Sativa</span>
-        <span class="badge badge-indica">🌙 Indica</span>
-        <span class="badge badge-hybrid">⚖️ Hybrid</span>
+        <span class="badge badge-scooter">🛵 Scooter</span>
+        <span class="badge badge-motorcycle">🏍️ Motorcycle</span>
     </div>
     <div class="label">Status</div>
     <div class="row">
         <span class="badge badge-premium">⭐ Premium</span>
         <span class="badge badge-hot">🔥 Hot</span>
         <span class="badge badge-new">✨ New</span>
-        <span class="badge badge-sod">🌟 SOTD</span>
+        <span class="badge badge-pick">⭐ Pick</span>
     </div>
     <div class="label">Availability</div>
     <div class="row">
         <span class="badge badge-sold-out">Sold Out</span>
         <span class="badge" style="color:var(--green);border-color:var(--green);background:rgba(57,255,20,0.1);">✓ In Stock</span>
-        <span class="badge" style="color:var(--cyan);border-color:var(--cyan);background:rgba(0,229,255,0.1);">🌿 Organic</span>
     </div>
 </body>
 </html>

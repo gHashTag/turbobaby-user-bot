@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>10 - Order Steps</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0f0f1a;
+    color: #e0e0e0;
+    font-family: 'Press Start 2P', monospace;
+    padding: 24px;
+  }
+  .section-title {
+    color: #39ff14;
+    font-size: 14px;
+    margin-bottom: 20px;
+    text-shadow: 0 0 8px rgba(57,255,20,0.5);
+    border-bottom: 2px solid #39ff14;
+    padding-bottom: 8px;
+  }
+  .step-timeline {
+    max-width: 400px;
+    margin: 0 auto;
+    position: relative;
+  }
+  .step-timeline::before {
+    content: '';
+    position: absolute;
+    left: 28px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(180deg, #39ff14, #00e5ff, #ff6b35);
+  }
+  .stage-card {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 20px;
+    position: relative;
+    align-items: flex-start;
+  }
+  .stage-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    flex-shrink: 0;
+    z-index: 1;
+  }
+  .stage-content {
+    flex: 1;
+    background: #1a1a2e;
+    border-radius: 12px;
+    padding: 16px;
+    border: 2px solid rgba(255,255,255,0.1);
+  }
+  .stage-content.active {
+    border-color: #39ff14;
+    box-shadow: 0 0 16px rgba(57,255,20,0.2);
+  }
+  .stage-name {
+    font-size: 10px;
+    margin-bottom: 4px;
+  }
+  .stage-desc {
+    font-size: 7px;
+    color: #888;
+    margin-bottom: 8px;
+  }
+  .stage-stats {
+    display: flex;
+    gap: 12px;
+  }
+  .stage-stat {
+    font-size: 7px;
+    color: #666;
+  }
+  .stage-stat span {
+    color: #39ff14;
+  }
+  .step-bar {
+    height: 8px;
+    background: rgba(0,0,0,0.4);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 8px;
+  }
+  .step-fill {
+    height: 100%;
+    border-radius: 4px;
+  }
+  .icon-received { background: rgba(139,139,158,0.2); border: 2px solid #8b8b9e; }
+  .icon-confirmed { background: rgba(57,255,20,0.1); border: 2px solid #39ff14; }
+  .icon-preparing { background: rgba(0,229,255,0.1); border: 2px solid #00e5ff; }
+  .icon-ready { background: rgba(179,136,255,0.1); border: 2px solid #b388ff; }
+  .icon-on-the-way { background: rgba(255,107,53,0.1); border: 2px solid #ff6b35; }
+  .icon-delivered { background: rgba(255,215,0,0.1); border: 2px solid #ffd700; }
+</style>
+</head>
+<body>
+  <!-- The steps, markers and status labels are the app's own: StatusArm::step and
+       T_ORDERS_STEP_* / T_ORDERS_STATUS_* in src/trios/order_status_view.rs and
+       src/trios/i18n.rs. -->
+  <div class="section-title">ORDER STEPS</div>
+
+  <div class="step-timeline">
+    <div class="stage-card">
+      <div class="stage-icon icon-received">📥</div>
+      <div class="stage-content">
+        <div class="stage-name" style="color:#8b8b9e;">Received</div>
+        <div class="stage-desc">⏳ Pending</div>
+        <div class="stage-stats">
+          <div class="stage-stat">Step: <span>1 / 6</span></div>
+        </div>
+        <div class="step-bar"><div class="step-fill" style="width:0%;background:#8b8b9e;"></div></div>
+      </div>
+    </div>
+
+    <div class="stage-card">
+      <div class="stage-icon icon-confirmed">✅</div>
+      <div class="stage-content">
+        <div class="stage-name" style="color:#39ff14;">Confirmed</div>
+        <div class="stage-desc">✅ Confirmed</div>
+        <div class="stage-stats">
+          <div class="stage-stat">Step: <span>2 / 6</span></div>
+        </div>
+        <div class="step-bar"><div class="step-fill" style="width:20%;background:#39ff14;"></div></div>
+      </div>
+    </div>
+
+    <div class="stage-card">
+      <div class="stage-icon icon-preparing">🔥</div>
+      <div class="stage-content active">
+        <div class="stage-name" style="color:#00e5ff;">Preparing</div>
+        <div class="stage-desc">🔥 Preparing</div>
+        <div class="stage-stats">
+          <div class="stage-stat">Step: <span>3 / 6</span></div>
+        </div>
+        <div class="step-bar"><div class="step-fill" style="width:40%;background:linear-gradient(90deg,#39ff14,#00e5ff);"></div></div>
+      </div>
+    </div>
+
+    <div class="stage-card">
+      <div class="stage-icon icon-ready">📦</div>
+      <div class="stage-content">
+        <div class="stage-name" style="color:#b388ff;">Ready</div>
+        <div class="stage-desc">📦 Ready</div>
+        <div class="stage-stats">
+          <div class="stage-stat">Step: <span>4 / 6</span></div>
+        </div>
+        <div class="step-bar"><div class="step-fill" style="width:60%;background:linear-gradient(90deg,#00e5ff,#b388ff);"></div></div>
+      </div>
+    </div>
+
+    <div class="stage-card">
+      <div class="stage-icon icon-on-the-way">🚗</div>
+      <div class="stage-content">
+        <div class="stage-name" style="color:#ff6b35;">On the way</div>
+        <div class="stage-desc">🚗 Out for Delivery</div>
+        <div class="stage-stats">
+          <div class="stage-stat">Step: <span>5 / 6</span></div>
+        </div>
+        <div class="step-bar"><div class="step-fill" style="width:80%;background:linear-gradient(90deg,#b388ff,#ff6b35);"></div></div>
+      </div>
+    </div>
+
+    <div class="stage-card">
+      <div class="stage-icon icon-delivered">🎉</div>
+      <div class="stage-content">
+        <div class="stage-name" style="color:#ffd700;">Delivered</div>
+        <div class="stage-desc">✅ Delivered</div>
+        <div class="stage-stats">
+          <div class="stage-stat">Step: <span>6 / 6</span></div>
+        </div>
+        <div class="step-bar"><div class="step-fill" style="width:100%;background:linear-gradient(90deg,#ff6b35,#ffd700);"></div></div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

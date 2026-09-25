@@ -95,6 +95,16 @@
 //!   runtime stage does not ship them either: it copies the server binary,
 //!   `dist`, `styles`, `assets` and `migrations`. The day one of them is
 //!   routed, it belongs in `SCANNED_ROOTS`.
+//! * Documentation and the demo pages under `screenshots/` are not this
+//!   census either. Nothing serves them, but people read them, and since
+//!   2026-09-26 the ones cleaned under the owner's ruling of 2026-09-25 are
+//!   held to a wider vocabulary by
+//!   `the_cleaned_docs_and_demo_pages_carry_no_cannabis_vocabulary`
+//!   (`CLEANED_DOC_FILES`, `CLEANED_DOC_TREES`), and every render under
+//!   `screenshots/` is classified by `every_demo_render_is_classified`; the
+//!   render beside each demo page is one found clean
+//!   (`every_demo_page_render_is_clean`). What was left as a record, and why,
+//!   is written above `CLEANED_DOC_FILES`.
 
 // A panic is how a test reports failure. The restriction lints in Cargo.toml's
 // [lints.clippy] exist for production code, as its own comment says.
@@ -1005,6 +1015,700 @@ fn a_string_is_a_string_on_every_line_it_spans() {
         cases.len(),
         wrong.join("\n  ")
     );
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Docs and demo pages (added 2026-09-26)
+// ──────────────────────────────────────────────────────────────────
+//
+// The owner ruled on 2026-09-25 (answer 12 of the list put to him that day),
+// verbatim: «всё что касается канабиса нигде не должно быть» -- nothing
+// cannabis-related may appear anywhere. The documentation and the generated
+// demo pages below were cleaned on 2026-09-26: their examples now use the
+// app's own labels and data/fleet_seed.json, or were dropped. These checks
+// keep them clean. They are not the census above: nothing serves these files,
+// so there is no comment grammar and no allowlist, and the vocabulary is wider
+// (the strain types, the trade words and the strain names the pages carried).
+//
+// Left as records, and not read here, because each describes the code or the
+// data as it was, or must name what it keeps an operator away from: the
+// migrations (D2); DECISIONS.md; docs/reports/ (the verification reports and
+// the survey of what the strain catalogue left behind); docs/t27-handover.md;
+// the audits and migration logs docs/API_MIGRATION_PLAN.md,
+// docs/SEAORM_MIGRATION.md, docs/PANIC_AUDIT.md and docs/ERROR_UX_AUDIT.md,
+// which name source files as they stood; docs/TZ2_MARKETING.md, which
+// docs/README.md files under "History, kept as written"; docs/SMOKE_TESTS.md,
+// whose own note of 2026-09-24 marks the sections built on the dropped table
+// as stale (rewriting them against the rental order API is a new test
+// procedure, not a wording change); and docs/ROLLBACK.md, which names the
+// Railway project, the database and the other shop's live service by their
+// real names so that nobody runs a command against them.
+
+/// Documentation files cleaned on 2026-09-26, each read whole.
+const CLEANED_DOC_FILES: &[&str] = &["docs/DESIGN_SYSTEM.md", "docs/event-share-templates.md"];
+
+/// Directories whose every text file (`DOC_TEXT_EXTENSIONS`) is read whole.
+/// Any other file in them must be a render listed in `OLD_SHOP_RENDERS` or
+/// `CLEAN_RENDERS`.
+const CLEANED_DOC_TREES: &[&str] = &["screenshots"];
+
+const DOC_TEXT_EXTENSIONS: &[&str] = &["html", "sh", "md"];
+
+/// Found anywhere inside a word, case-insensitively: the plant and the shop
+/// that sold it, the trade, and the strain names the demo pages carried until
+/// 2026-09-26.
+const DOC_SUBSTRINGS: &[&str] = &[
+    "cannabis",
+    "каннабис",
+    // The owner's own spelling, with one н.
+    "канабис",
+    "конопл",
+    "marijuana",
+    "марихуан",
+    "dispensar",
+    "weedpecker",
+    "woody",
+    "вуди",
+    "ganja",
+    "гандж",
+    "hashish",
+    "гашиш",
+    "trichome",
+    "травк",
+    "шишк",
+    "🌿",
+    "🍃",
+    "northern lights",
+    "sour diesel",
+    "girl scout cookies",
+    "purple haze",
+    "blue dream",
+    "white widow",
+];
+
+/// Found only as a whole word, case-insensitively: the characters on either
+/// side are not letters, digits or `_`, so `constraint`, `Telegram`,
+/// `strain_of_day` and `сортировка` are not hits.
+const DOC_WHOLE_WORDS: &[&str] = &[
+    "weed",
+    "weeds",
+    "strain",
+    "strains",
+    "thc",
+    "тгк",
+    "cbd",
+    "кбд",
+    "gacp",
+    "kush",
+    "sativa",
+    "sativas",
+    "indica",
+    "indicas",
+    "сатива",
+    "индика",
+    "bong",
+    "bongs",
+    "бонг",
+    "бонги",
+    "grinder",
+    "grinders",
+    "гриндер",
+    "stoner",
+    "420",
+    "sotd",
+    "gram",
+    "grams",
+    "грамм",
+    "грамма",
+    "граммов",
+    "граммы",
+    "сорт",
+    "сорта",
+    "сортов",
+    "сортом",
+    "сортах",
+    "сорту",
+    "сорты",
+    "сортами",
+];
+
+/// A render under `CLEANED_DOC_TREES`, and what it shows (looked at
+/// 2026-09-26).
+struct Render {
+    path: &'static str,
+    shows: &'static str,
+}
+
+/// Renders that still show the old shop. None of them is the render of a page
+/// under this tree, so none can be taken again from a page cleaned here: the
+/// six multi-section ones were taken from the demo pages at the repository
+/// root (the section titles are those of `ui-kit.html`; `typography-full.png`
+/// is a full-length page), and the rest from the running Mini App and its
+/// admin screen as they stood. Removing one is a deletion, which was not made
+/// without the owner's word; they stay until he decides, and this list is what
+/// he decides on. When one goes, or is taken again clean, its entry moves in
+/// the same change.
+const OLD_SHOP_RENDERS: &[Render] = &[
+    Render {
+        path: "screenshots/01-typography/type-scale-colors-buttons.png",
+        shows: "the old shop's name and its trade in the page header",
+    },
+    Render {
+        path: "screenshots/01-typography/typography-full.png",
+        shows: "the old shop's name, strain-type badges and per-gram product cards",
+    },
+    Render {
+        path: "screenshots/05-strain-cards/strain-cards-and-orders.png",
+        shows: "strain names in cart lines and a leaf icon on member cards",
+    },
+    Render {
+        path: "screenshots/08-member-cards/cart-member-quest.png",
+        shows: "seed rewards named after a strain type",
+    },
+    Render {
+        path: "screenshots/11-modal/modal-toasts-empty-loading.png",
+        shows: "a strain-type filter and a strain loading label",
+    },
+    Render {
+        path: "screenshots/17-categories/inputs-filters-categories-nav-success.png",
+        shows: "the old shop's name in the footer",
+    },
+    Render {
+        path: "screenshots/admin_final.png",
+        shows: "the admin's strain form",
+    },
+    Render {
+        path: "screenshots/admin_with_api.png",
+        shows: "the admin's strain form",
+    },
+    Render {
+        path: "screenshots/cdp_admin.png",
+        shows: "the admin's strain tab and garden tab",
+    },
+    Render {
+        path: "screenshots/test_admin_video.png",
+        shows: "the admin's strain tab and garden tab",
+    },
+    Render {
+        path: "screenshots/e2e_00_home.png",
+        shows: "the old shop's mascot, name and trade on the home screen",
+    },
+    Render {
+        path: "screenshots/e2e_01_menu.png",
+        shows: "the strain menu with strain-type filters",
+    },
+    Render {
+        path: "screenshots/e2e_02_sets.png",
+        shows: "packs named after strain types",
+    },
+    Render {
+        path: "screenshots/e2e_03_accessories.png",
+        shows: "smoking gear",
+    },
+    Render {
+        path: "screenshots/e2e_04_tea.png",
+        shows: "the old shop's bottom bar with its leaf menu and garden",
+    },
+    Render {
+        path: "screenshots/e2e_05_cart.png",
+        shows: "the old shop's bottom bar with its leaf menu and garden",
+    },
+    Render {
+        path: "screenshots/e2e_06_orders.png",
+        shows: "the old shop's bottom bar with its leaf menu and garden",
+    },
+    Render {
+        path: "screenshots/e2e_07_profile.png",
+        shows: "loyalty tiers named after buds, with a bud picture",
+    },
+    Render {
+        path: "screenshots/e2e_08_garden.png",
+        shows: "the garden with a cannabis plant",
+    },
+    Render {
+        path: "screenshots/e2e_10_game.png",
+        shows: "the old catch game with the old shop's name and a leaf",
+    },
+    Render {
+        path: "screenshots/e2e_11_referrals.png",
+        shows: "a referral link to the old shop's bot",
+    },
+    Render {
+        path: "screenshots/e2e_13_tech_tree.png",
+        shows: "the tech tree of growing skills",
+    },
+    Render {
+        path: "screenshots/test_menu_video.png",
+        shows: "the strain menu with strain-type filters",
+    },
+];
+
+/// Renders looked at 2026-09-26 that show none of it. The render of every page
+/// under this tree is here (`every_demo_page_render_is_clean`). Seventeen of
+/// them showed the old shop until 2026-09-26 and were then taken again from
+/// their cleaned page (`RERENDERED_2026_09_26`).
+const CLEAN_RENDERS: &[Render] = &[
+    Render {
+        path: "screenshots/00-hello-world/screenshot.png",
+        shows: "Hello World over the TurboBaby name",
+    },
+    Render {
+        path: "screenshots/01-typography/screenshot.png",
+        shows: "a type scale and a colour palette",
+    },
+    Render {
+        path: "screenshots/02-colors/screenshot.png",
+        shows: "a colour palette",
+    },
+    Render {
+        path: "screenshots/03-buttons/screenshot.png",
+        shows: "buttons",
+    },
+    Render {
+        path: "screenshots/04-badges/screenshot.png",
+        shows: "class, status and availability badges",
+    },
+    Render {
+        path: "screenshots/05-bike-cards/screenshot.png",
+        shows: "four bike cards: the seed's models, units free and base day tariffs",
+    },
+    Render {
+        path: "screenshots/06-order-cards/screenshot.png",
+        shows: "three order cards naming the seed's models",
+    },
+    Render {
+        path: "screenshots/07-cart/screenshot.png",
+        shows: "two cart lines: the seed's models and base day tariffs; no delivery price",
+    },
+    Render {
+        path: "screenshots/08-member-cards/screenshot.png",
+        shows: "three loyalty tier cards",
+    },
+    Render {
+        path: "screenshots/09-quests/screenshot.png",
+        shows: "a QR check-in card and four checkpoint quests",
+    },
+    Render {
+        path: "screenshots/10-order-steps/screenshot.png",
+        shows: "the six order steps",
+    },
+    Render {
+        path: "screenshots/11-modal/screenshot.png",
+        shows: "a confirm modal and a bike modal with the seed's tariff and deposit",
+    },
+    Render {
+        path: "screenshots/12-toasts/screenshot.png",
+        shows: "five toasts, one adding a bike to the cart",
+    },
+    Render {
+        path: "screenshots/13-empty-states/screenshot.png",
+        shows: "an empty cart, no orders yet and a connection error",
+    },
+    Render {
+        path: "screenshots/14-loading/screenshot.png",
+        shows: "spinners, skeleton cards and progress bars",
+    },
+    Render {
+        path: "screenshots/15-inputs/screenshot.png",
+        shows: "text inputs, a textarea, a class select and toggles",
+    },
+    Render {
+        path: "screenshots/16-filters/screenshot.png",
+        shows: "class tabs, pill filters, class chips and the sort",
+    },
+    Render {
+        path: "screenshots/17-categories/screenshot.png",
+        shows: "a picked bike and the two classes with their model counts",
+    },
+    Render {
+        path: "screenshots/18-navigation/screenshot.png",
+        shows: "the TurboBaby header, the bottom bar and breadcrumbs to a bike",
+    },
+    Render {
+        path: "screenshots/19-neon-effects/screenshot.png",
+        shows: "neon text and borders",
+    },
+    Render {
+        path: "screenshots/20-success/screenshot.png",
+        shows: "an order receipt with the seed's tariff and deposit; no delivery time",
+    },
+    Render {
+        path: "screenshots/00-hello-world.png",
+        shows: "Hello World",
+    },
+    Render {
+        path: "screenshots/admin_test.png",
+        shows: "an admin error message",
+    },
+    Render {
+        path: "screenshots/e2e_09_quest.png",
+        shows: "a not-found page",
+    },
+    Render {
+        path: "screenshots/e2e_12_treasure_hunt.png",
+        shows: "an empty treasure hunt",
+    },
+    Render {
+        path: "screenshots/e2e_14_admin.png",
+        shows: "a blank page",
+    },
+];
+
+/// The page renders taken again on 2026-09-26, each from the cleaned
+/// `index.html` beside it, with headless Microsoft Edge at a 1271 x 869 window
+/// and device scale 2: the 2542 x 1738 pixels of the renders they replaced.
+/// Each was looked at before it was committed. Two moved with their page (git
+/// mv, nothing deleted): `05-strain-cards/` to `05-bike-cards/` and
+/// `10-plants/` to `10-order-steps/`. Git history keeps what each showed.
+///
+/// Two were taken a second time the same day, the same way, after review found
+/// two delivery claims of the old shop still on their pages, which
+/// `data/fleet_seed.json` contradicts: `07-cart` said delivery was free (the
+/// seed publishes one area's delivery price and says every other shows a dash)
+/// and `20-success` gave a 30-45 minute estimate (the seed's same-day delivery
+/// is a window, and the owner ruled on 2026-09-24 that no travel time in
+/// minutes is shown; `tests/delivery_eta_wiring.rs`). A trial render of the
+/// unchanged `06-order-cards` page, waiting for its web fonts, matched its
+/// committed render pixel for pixel.
+const RERENDERED_2026_09_26: &[&str] = &[
+    "screenshots/00-hello-world/screenshot.png",
+    "screenshots/04-badges/screenshot.png",
+    "screenshots/05-bike-cards/screenshot.png",
+    "screenshots/06-order-cards/screenshot.png",
+    "screenshots/07-cart/screenshot.png",
+    "screenshots/08-member-cards/screenshot.png",
+    "screenshots/09-quests/screenshot.png",
+    "screenshots/10-order-steps/screenshot.png",
+    "screenshots/11-modal/screenshot.png",
+    "screenshots/12-toasts/screenshot.png",
+    "screenshots/13-empty-states/screenshot.png",
+    "screenshots/14-loading/screenshot.png",
+    "screenshots/15-inputs/screenshot.png",
+    "screenshots/16-filters/screenshot.png",
+    "screenshots/17-categories/screenshot.png",
+    "screenshots/18-navigation/screenshot.png",
+    "screenshots/20-success/screenshot.png",
+];
+
+/// Every vocabulary hit in `text`, as (line, matched word), in reading order.
+fn doc_hits(text: &str) -> Vec<(usize, String)> {
+    let mut out = Vec::new();
+    for (index, line) in text.lines().enumerate() {
+        let lower: Vec<char> = line.to_lowercase().chars().collect();
+        let mut found: Vec<(usize, &str)> = Vec::new();
+        for word in DOC_SUBSTRINGS {
+            let w: Vec<char> = word.chars().collect();
+            let mut i = 0;
+            while i + w.len() <= lower.len() {
+                if lower[i..i + w.len()] == w[..] {
+                    found.push((i, *word));
+                    i += w.len();
+                } else {
+                    i += 1;
+                }
+            }
+        }
+        for word in DOC_WHOLE_WORDS {
+            let w: Vec<char> = word.chars().collect();
+            let mut i = 0;
+            while i + w.len() <= lower.len() {
+                let before = i == 0 || !is_word_char(lower[i - 1]);
+                if before && lower[i..i + w.len()] == w[..] && bounded_after(&lower, i + w.len()) {
+                    found.push((i, *word));
+                    i += w.len();
+                } else {
+                    i += 1;
+                }
+            }
+        }
+        found.sort_unstable();
+        out.extend(found.into_iter().map(|(_, w)| (index + 1, w.to_string())));
+    }
+    out
+}
+
+fn is_doc_text(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| DOC_TEXT_EXTENSIONS.contains(&e))
+}
+
+/// Every file under the cleaned trees, as repository-relative paths.
+fn cleaned_tree_files() -> Vec<PathBuf> {
+    let repo = repo_root();
+    let mut files = Vec::new();
+    for tree in CLEANED_DOC_TREES {
+        let path = repo.join(tree);
+        assert!(
+            path.is_dir(),
+            "{tree} is missing; the check would pass by reading nothing"
+        );
+        walk(&path, &mut files);
+    }
+    files
+}
+
+/// (path, text) of every file the vocabulary check reads.
+fn cleaned_doc_texts() -> Vec<(String, String)> {
+    let repo = repo_root();
+    let mut out = Vec::new();
+    for rel in CLEANED_DOC_FILES {
+        let text = fs::read_to_string(repo.join(rel))
+            .unwrap_or_else(|e| panic!("{rel} must exist and read as UTF-8: {e}"));
+        out.push((rel.to_string(), text));
+    }
+    for path in cleaned_tree_files() {
+        if !is_doc_text(&path) {
+            continue;
+        }
+        let rel = relative(&path);
+        let text = fs::read_to_string(&path).unwrap_or_else(|e| {
+            panic!("{rel}: a text file that does not read as UTF-8 ({e}); the check cannot skip it")
+        });
+        out.push((rel, text));
+    }
+    out
+}
+
+#[test]
+fn the_cleaned_docs_and_demo_pages_carry_no_cannabis_vocabulary() {
+    let texts = cleaned_doc_texts();
+    // D16: a check that reads nothing passes for the worst reason. The trees
+    // held 24 text files on 2026-09-26.
+    let in_trees = texts.len() - CLEANED_DOC_FILES.len();
+    assert!(
+        in_trees >= 20,
+        "only {in_trees} text file(s) read under {CLEANED_DOC_TREES:?}"
+    );
+    let mut offences = Vec::new();
+    for (rel, text) in &texts {
+        assert!(
+            text.lines().count() >= 5,
+            "{rel} read as {} line(s); the check would prove nothing",
+            text.lines().count()
+        );
+        for (line, word) in doc_hits(text) {
+            offences.push(format!("{rel}:{line} `{word}`"));
+        }
+    }
+    assert!(
+        offences.is_empty(),
+        "a cleaned doc or demo page carries the cannabis-era vocabulary again (owner, \
+         2026-09-25: nothing cannabis-related anywhere):\n  {}",
+        offences.join("\n  ")
+    );
+}
+
+#[test]
+fn every_demo_render_is_classified() {
+    let mut problems = Vec::new();
+    let mut seen = Vec::new();
+    for path in cleaned_tree_files() {
+        if is_doc_text(&path) {
+            continue;
+        }
+        let rel = relative(&path);
+        let old = OLD_SHOP_RENDERS.iter().filter(|r| r.path == rel).count();
+        let clean = CLEAN_RENDERS.iter().filter(|r| r.path == rel).count();
+        if path.extension().and_then(|e| e.to_str()) != Some("png") {
+            problems.push(format!(
+                "{rel}: neither a text file the vocabulary check reads nor a png render"
+            ));
+        } else if old + clean != 1 {
+            problems.push(format!(
+                "{rel}: listed {} time(s); a render is looked at and listed exactly once, in \
+                 OLD_SHOP_RENDERS or CLEAN_RENDERS",
+                old + clean
+            ));
+        }
+        seen.push(rel);
+    }
+    for r in OLD_SHOP_RENDERS.iter().chain(CLEAN_RENDERS) {
+        assert!(!r.shows.trim().is_empty(), "{}: say what it shows", r.path);
+        if !seen.iter().any(|s| s == r.path) {
+            problems.push(format!(
+                "{}: listed, and not in the tree; drop the entry in the same change",
+                r.path
+            ));
+        }
+    }
+    assert!(
+        problems.is_empty(),
+        "demo renders under {CLEANED_DOC_TREES:?}:\n  {}",
+        problems.join("\n  ")
+    );
+}
+
+/// What is wrong with the renders of `pages` (repository-relative paths of
+/// `index.html` files). A page's render is the `screenshot.png` beside it; it
+/// must be among `present` and among `clean`.
+fn page_render_problems(pages: &[String], present: &[String], clean: &[&str]) -> Vec<String> {
+    let mut out = Vec::new();
+    for page in pages {
+        let Some(dir) = page.strip_suffix("/index.html") else {
+            out.push(format!("{page}: not a page"));
+            continue;
+        };
+        let render = format!("{dir}/screenshot.png");
+        if !present.contains(&render) {
+            out.push(format!("{page}: no render beside it ({render})"));
+        } else if !clean.contains(&render.as_str()) {
+            out.push(format!(
+                "{page}: its render {render} is not in CLEAN_RENDERS, so it was not looked at \
+                 after the page was cleaned"
+            ));
+        }
+    }
+    out
+}
+
+/// (width, height) from a PNG's header, or `None` when `bytes` is not a PNG.
+fn png_size(bytes: &[u8]) -> Option<(u32, u32)> {
+    if bytes.get(..8)? != b"\x89PNG\r\n\x1a\n" || bytes.get(12..16)? != b"IHDR" {
+        return None;
+    }
+    let width = u32::from_be_bytes(bytes.get(16..20)?.try_into().ok()?);
+    let height = u32::from_be_bytes(bytes.get(20..24)?.try_into().ok()?);
+    Some((width, height))
+}
+
+/// A demo page and its render say the same thing: since 2026-09-26 the render
+/// beside every page under the cleaned trees is one looked at and found clean,
+/// and the ones taken again that day are real renders of their page's size.
+#[test]
+fn every_demo_page_render_is_clean() {
+    let files: Vec<String> = cleaned_tree_files().iter().map(|p| relative(p)).collect();
+    let pages: Vec<String> = files
+        .iter()
+        .filter(|f| f.ends_with("/index.html"))
+        .cloned()
+        .collect();
+    // D16: the tree held 21 pages on 2026-09-26.
+    assert!(
+        pages.len() >= 21,
+        "only {} page(s) found under {CLEANED_DOC_TREES:?}",
+        pages.len()
+    );
+    let clean: Vec<&str> = CLEAN_RENDERS.iter().map(|r| r.path).collect();
+    let problems = page_render_problems(&pages, &files, &clean);
+    assert!(
+        problems.is_empty(),
+        "demo page renders:\n  {}",
+        problems.join("\n  ")
+    );
+
+    for path in RERENDERED_2026_09_26 {
+        assert!(
+            clean.contains(path),
+            "{path}: taken again, so it is in CLEAN_RENDERS"
+        );
+        let page = format!(
+            "{}/index.html",
+            path.strip_suffix("/screenshot.png")
+                .unwrap_or_else(|| panic!("{path}: a page render is named screenshot.png"))
+        );
+        assert!(pages.contains(&page), "{path}: no page beside it");
+        let bytes =
+            fs::read(repo_root().join(path)).unwrap_or_else(|e| panic!("{path} must exist: {e}"));
+        assert_eq!(
+            png_size(&bytes),
+            Some((2542, 1738)),
+            "{path}: not a render of the size it replaced"
+        );
+    }
+
+    // D16: the check sees a page whose render was not looked at. The folder
+    // names the pages had until 2026-09-26, and a clean list that lost one
+    // real page's render.
+    let old_page = "screenshots/05-strain-cards/index.html".to_string();
+    let old_render = "screenshots/05-strain-cards/screenshot.png".to_string();
+    assert_eq!(
+        page_render_problems(std::slice::from_ref(&old_page), &[old_render], &clean).len(),
+        1,
+        "a page whose render is not in CLEAN_RENDERS is reported"
+    );
+    let gone_page = "screenshots/10-plants/index.html".to_string();
+    assert_eq!(
+        page_render_problems(std::slice::from_ref(&gone_page), &files, &clean).len(),
+        1,
+        "a page with no render beside it is reported"
+    );
+    let lost = "screenshots/05-bike-cards/screenshot.png";
+    let fewer: Vec<&str> = clean.iter().copied().filter(|p| *p != lost).collect();
+    let reported = page_render_problems(&pages, &files, &fewer);
+    assert_eq!(
+        reported.len(),
+        1,
+        "dropping {lost} from the clean list is reported once: {reported:?}"
+    );
+    assert!(reported[0].starts_with("screenshots/05-bike-cards/index.html"));
+    assert_eq!(png_size(b"not a png at all, twenty-four+"), None);
+}
+
+/// D16: the check sees what it looks for. Lines the cleaned files held until
+/// 2026-09-26 are planted in the real text of a cleaned file, and each is
+/// reported on the line it was planted on; near misses are not reported.
+#[test]
+fn a_planted_old_line_is_caught_in_a_cleaned_file() {
+    let rel = CLEANED_DOC_FILES[0];
+    let clean = fs::read_to_string(repo_root().join(rel))
+        .unwrap_or_else(|e| panic!("{rel} must exist and read as UTF-8: {e}"));
+    assert!(
+        doc_hits(&clean).is_empty(),
+        "{rel} must be clean before anything is planted in it"
+    );
+    let planted: &[(&str, &[&str])] = &[
+        ("            label: \"Sativa\".to_string(),", &["sativa"]),
+        ("            \"OG Kush — Legendary\"", &["kush"]),
+        (
+            "let rarity = Rarity::from_str(&strain.rarity);",
+            &["strain"],
+        ),
+        (
+            "<div class=\"name\">Northern Lights</div><span class=\"thc\">THC: 18%</span>",
+            &["northern lights", "thc", "thc"],
+        ),
+        ("    CACHE_DIR=\"/tmp/woody-e2e-cache\"", &["woody"]),
+        ("<p style=\"color:#ffd700;\">💰 $12.00/gram</p>", &["gram"]),
+        (
+            "<div class=\"quest-desc\">Visit the main dispensary</div>",
+            &["dispensar"],
+        ),
+        ("<span class=\"badge badge-sod\">🌟 SOTD</span>", &["sotd"]),
+        (
+            "<div class=\"header-logo\">🌿 WOODY</div>",
+            &["🌿", "woody"],
+        ),
+        ("## Product (strain / accessory / tea / set)", &["strain"]),
+    ];
+    let mut text = clean.clone();
+    if !text.ends_with('\n') {
+        text.push('\n');
+    }
+    let base = text.lines().count();
+    for (line, _) in planted {
+        text.push_str(line);
+        text.push('\n');
+    }
+    let want: Vec<(usize, String)> = planted
+        .iter()
+        .enumerate()
+        .flat_map(|(k, (_, words))| words.iter().map(move |w| (base + 1 + k, w.to_string())))
+        .collect();
+    assert_eq!(doc_hits(&text), want);
+    // Near misses: inside a longer word or an identifier.
+    for near in [
+        "constraint",
+        "Telegram",
+        "strain_of_day",
+        "grammar",
+        "сортировка",
+        "4200px",
+        "weedy",
+        "thcx",
+    ] {
+        assert!(doc_hits(near).is_empty(), "{near:?} is not a hit");
+    }
 }
 
 #[test]

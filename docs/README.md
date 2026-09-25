@@ -30,7 +30,7 @@ are in [`../DECISIONS.md`](../DECISIONS.md). This page lists what is in `docs/`.
 ## Interface
 
 - [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md) — UI tokens and variants.
-- [`event-share-templates.md`](event-share-templates.md) — deep-link share snippets for posts.
+- [`event-share-templates.md`](event-share-templates.md) — the deep links already in posts; since 2026-09-26 it holds no template to post.
 
 ## History, kept as written
 
