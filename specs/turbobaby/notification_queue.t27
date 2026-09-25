@@ -77,7 +77,8 @@
 ; --
 ; WHAT THIS FILE NEVER DOES. It quotes no message and no fragment of one, in any language; the
 ; shipped copy is a set of fields at src/locales.rs:88-89 and :94-102 -- the four cart strings
-; between them at :90-93 belong to another path -- and is cited by path. It names no
+; between them at :90-93 belong to another path, and :96-99 has been a comment since 2026-09-26,
+; where the retired garden message's field stood -- and is cited by path. It names no
 ; customer, no chat id and no telegram identifier. It declares no locale, no fallback locale and no
 ; locale set -- turbobaby/locale-policy owns those, and the drain's own hard-coded fallback is
 ; recorded here as a second copy rather than restated as a value. It declares no message subject:
@@ -328,8 +329,10 @@ pub fn row_reached_a_customer_before_2026_09_26(kind_has_an_arm: bool, chat_id_p
 ; to DeliverableKind would be held in silence: tests/notification_drain_wiring.rs holds the
 ; producers' kinds, the drain's and this file's RENDERABLE_KINDS and WRITTEN_KINDS to one list, and
 ; scripts/verify_t27_against_source.py binds both lists to the code, so that becomes a red build.
-; ALSO CHANGED, on the same ruling: the metric smoke test in src/metrics.rs pushes a live kind
-; instead of the retired one.
+; ALSO REMOVED, on the same ruling: the locale field friend_watered was rendered with (src/locales.rs,
+; the struct and both constructors), each of its lines replaced by a comment line so that no
+; citation into that file moved; turbobaby/locale-policy re-counts the struct. The metric smoke test
+; in src/metrics.rs pushes a live kind instead of the retired one.
 ; WHAT IT DOES NOT CHANGE. Admission: the insert still asks nothing about the kind, so a held kind
 ; can still be WRITTEN, though nothing here writes one. The three live kinds, their copy, the one
 ; button, the retry budget and the ordering are as they were. No row is deleted or rewritten, no

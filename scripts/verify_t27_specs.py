@@ -27,8 +27,8 @@ AGENT_CARD = "specs/agents/turbobaby.t27"
 # test/invariant/bench floor with the pinned compiler. Discovery supplies the tripwire. All 45 floors equal the measured counts as of 2026-09-25.
 # Re-measured 2026-09-25 for the two contracts the owner's CLICK 125 redirect decision changed:
 # availability 114 -> 120 declarations and 32 -> 34 checks, order_money 114 -> 115 declarations.
-# Re-measured 2026-09-26 for the contract the notification queue's held kinds changed:
-# notification_queue 270 -> 306 declarations and 52 -> 54 checks.
+# Re-measured 2026-09-26 for the two contracts the notification queue's held kinds changed:
+# notification_queue 270 -> 306 declarations and 52 -> 54 checks, locale_policy 136 -> 139 and 35 -> 36.
 SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     AGENT_CARD: {
         "module": "turbobaby-agent",
@@ -171,8 +171,10 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         # 131 on the client half of ruling #12 alone and 130/35 on its server half alone; the
         # same day's cancel key (+1) and the deletion (-14) were reconciled in one count, with
         # two declarations naming the +1; the three together measure 136/35.
-        "min_declarations": 136,
-        "min_checks": 35,
+        # Raised 2026-09-26 to 139/36: the struct surface re-counted after the queue's held kinds
+        # took the retired garden message's field (two declarations and one test).
+        "min_declarations": 139,
+        "min_checks": 36,
     },
     "specs/turbobaby/loyalty_ledger.t27": {
         "module": "turbobaby-loyalty-ledger",
