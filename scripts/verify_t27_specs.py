@@ -229,8 +229,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/promo_broadcast.t27": {
         "module": "turbobaby-promo-broadcast",
         "id": "turbobaby/promo-broadcast",
-        "min_declarations": 176,
-        "min_checks": 54,
+        "min_declarations": 205,
+        "min_checks": 62,
     },
     "specs/turbobaby/publication.t27": {
         "module": "turbobaby-publish-proof",
