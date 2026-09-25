@@ -460,7 +460,8 @@ pub fn ruled_surface_state(customer_reachable: bool, rows_hidden: bool) u8 {
 ; --- The owner's ruling of 2026-09-25: nothing cannabis-related anywhere -------------------------
 ; Answer 12 of the numbered list put to the owner on 2026-09-25 rules that nothing cannabis-related
 ; may appear anywhere. Its server half changes what is SERVED or SENT, in code; it deletes no row,
-; drops no table and adds no migration. Six server surfaces moved, each named with where it lives:
+; drops no table and adds no migration. Seven server surfaces moved, each named with where it lives
+; (the seventh was added by review the same day, see PROMO_REPORT_NAME_DECIDED_AT):
 ;   1. the retired carousel's buttons already in chats answer with the rental menu and read no
 ;      table -- turbobaby/bot-surface, CAROUSEL_RETIRED_AT;
 ;   2. GET /api/loyalty/tiers serves every perks list empty (the stored perks are the old shop's
@@ -474,7 +475,11 @@ pub fn ruled_surface_state(customer_reachable: bool, rows_hidden: bool) u8 {
 ;   5. the bot's admin heading loses the old catalogue's tab list and the fact-post reply its leaf
 ;      -- src/bot/commands.rs;
 ;   6. the bot locale file loses four fields: the carousel's heading and arrows, and the old unit
-;      of sale -- src/locales.rs.
+;      of sale -- src/locales.rs;
+;   7. the owners' promo sales report -- the bot's /promo and GET /api/admin/promo-report -- no
+;      longer prints the stored name of a published post about the product table migration 083
+;      dropped -- src/trios/promo.rs report_kind_and_name, called by src/promo.rs report; the rows
+;      stay and still count. The rule is PROMO_REPORT_NAME_* below.
 ; tests/server_text_vocabulary_wiring.rs holds every string the server can send to it from now on.
 ; Run through this file's machine, the tech tree is what bike sales were on 2026-09-24: rows kept,
 ; none hidden, masked on read, which is STATE_LIVE because no state names a mask on read (see
@@ -486,10 +491,11 @@ pub const OWNER_RULING_2026_09_25_AT : str = "2026-09-25";
 pub const OWNER_RULING_2026_09_25_NOTE : str = "Nothing cannabis-related anywhere. Server surfaces stop serving or sending it, in code; no row is deleted, no table is dropped and no migration is added.";
 pub const OWNER_RULING_2026_09_25_ADDS_A_MIGRATION : bool = false;
 pub const OWNER_RULING_2026_09_25_DELETES_ROWS : bool = false;
-pub const OWNER_RULING_2026_09_25_SERVER_SURFACE_COUNT : u8 = 6;
-pub const OWNER_RULING_2026_09_25_SERVER_SURFACES : [6]str = [
+pub const OWNER_RULING_2026_09_25_SERVER_SURFACE_COUNT : u8 = 7;
+pub const OWNER_RULING_2026_09_25_SERVER_SURFACES : [7]str = [
     "retired_carousel_buttons", "loyalty_tier_perks_and_old_shop_tier", "tech_tree_reads",
     "share_card_for_hidden_rows", "bot_admin_and_fact_post_copy", "bot_locale_fields",
+    "promo_report_names",
 ];
 pub const OWNER_RULING_2026_09_25_GUARD : str = "tests/server_text_vocabulary_wiring.rs";
 pub const TECH_TREE_ROWS_HIDDEN : bool = false;
@@ -497,6 +503,57 @@ pub const TECH_TREE_MASKED_ON_READ : bool = true;
 pub const TECH_TREE_STATE : u8 = 0;
 pub const RETIRED_READER_STATE_AFTER_THE_2026_09_25_RULING : u8 = 3;
 pub const ALLOWLIST_SIZE_MOVED_BY_THE_2026_09_25_RULING : bool = false;
+
+; --- Surface 7: the names the promo sales report prints ------------------------------------------
+; DECIDED 2026-09-25 by the operator, applying the owner's ruling of that day; added by review the
+; same day. The label printed in place of a withheld name is admin-facing copy chosen then, and is
+; cited here by name (REPORT_WITHHELD_NAME in src/trios/promo.rs), not quoted.
+;
+; WHY. promo_posts keeps every row the promoter ever wrote, and from 2026-08-19 until migration 083
+; it also wrote about the product table 083 dropped: rows of the kind whose subject variant left
+; with 083, and bestseller rows drawn from that table. The report printed each row's stored
+; subject_name -- the old shop's product name -- to the owners in /promo (30 days) and on the admin
+; route (up to 365 days). Whether production holds such a published row today was not read; the
+; rule does not depend on the answer.
+;
+; THE RULE, fail closed (report_may_print_name). A stored name is printed only when a subject the
+; promoter can build today writes the row's kind AND the link stored with the row opens the
+; deep-link kind a live post of that kind opens. A row with no stored link (drafted before
+; migration 076) is judged by its kind alone, except a bestseller: bestsellers were drawn from two
+; tables until 083 and only the link tells which. Otherwise the name is withheld; the kind is kept
+; when a live subject writes it and printed empty when none does, because that word is the retired
+; one or one nobody here classified (the database forked from another shop's bot, DECISIONS.md D19).
+; No row is hidden, so the report's post count and totals do not move, and nothing in the table is
+; written.
+;
+; WHAT IT DOES NOT DECIDE. Whether a stored draft may still be SENT: that is the Publish button's
+; question, and the same day's item-13 decision in turbobaby/promo-broadcast answers it there
+; (publish_refusal in src/promo.rs, refusing every stored kind). This file claims no line of
+; publish. Names of posts about the old shop's other tables -- accessories, teas, sets, events,
+; which migration 085 hid rather than dropped -- are still printed: this surface withholds only a
+; name the dropped table supplied, and PROMO_REPORT_OTHER_TABLES_NAMES_PRINTED keeps that visible.
+pub const PROMO_REPORT_NAME_DECIDED_AT : str = "2026-09-25";
+pub const PROMO_REPORT_NAME_DECIDED_BY : str = "operator, applying the owner's ruling of 2026-09-25 (answer 12)";
+pub const PROMO_REPORT_NAME_SITE : str = "src/promo.rs report";
+pub const PROMO_REPORT_NAME_DECISION : str = "src/trios/promo.rs report_kind_and_name";
+pub const PROMO_REPORT_NAME_LABEL : str = "src/trios/promo.rs REPORT_WITHHELD_NAME";
+pub const PROMO_REPORT_NAME_WIRING_TEST : str = "tests/promo_report_names_wiring.rs";
+pub const PROMO_REPORT_READER_COUNT : u8 = 2;
+pub const PROMO_REPORT_ROWS_HIDDEN : bool = false;
+pub const PROMO_REPORT_WRITES_THE_TABLE : bool = false;
+pub const PROMO_REPORT_UNCLASSIFIED_KIND_IS_WITHHELD : bool = true;
+pub const PROMO_REPORT_OTHER_TABLES_NAMES_PRINTED : bool = true;
+pub const PROMO_PUBLISH_REFUSAL_OWNER_ID : str = "turbobaby/promo-broadcast";
+
+pub fn report_prints_stored_name(kind_written_by_a_live_subject: bool, link_stored: bool, link_opens_the_kinds_table: bool, kind_spans_two_tables: bool) bool {
+    if (!kind_written_by_a_live_subject) {
+        return false;
+    }
+    if (link_stored) {
+        return link_opens_the_kinds_table;
+    }
+    return !kind_spans_two_tables;
+}
 
 ; --- Tests -----------------------------------------------------------------------------------------
 
@@ -770,6 +827,7 @@ test the_2026_09_25_ruling_changes_surfaces_and_no_data {
     assert OWNER_RULING_2026_09_25_SERVER_SURFACES.len == OWNER_RULING_2026_09_25_SERVER_SURFACE_COUNT;
     assert OWNER_RULING_2026_09_25_SERVER_SURFACES[0] == "retired_carousel_buttons";
     assert OWNER_RULING_2026_09_25_SERVER_SURFACES[2] == "tech_tree_reads";
+    assert OWNER_RULING_2026_09_25_SERVER_SURFACES[6] == "promo_report_names";
     // The tech tree: rows kept, none hidden, masked on read -- the bike-sale shape.
     assert TECH_TREE_ROWS_HIDDEN == OWNER_RULED_BIKE_SALE_ROWS_HIDDEN;
     assert TECH_TREE_MASKED_ON_READ == OWNER_RULED_BIKE_SALE_MASKED_ON_READ;
@@ -785,6 +843,33 @@ test the_2026_09_25_ruling_changes_surfaces_and_no_data {
     assert LEGACY_HTTP_ROUTE_COUNT == 43;
     assert COMPLETED_RETIREMENT_COUNT == 1;
     assert REUSES_BOT_SURFACE_ID == "turbobaby/bot-surface";
+}
+
+test the_promo_report_withholds_the_dropped_tables_names_and_keeps_every_row {
+    assert PROMO_REPORT_NAME_DECIDED_AT == OWNER_RULING_2026_09_25_AT;
+    assert PROMO_REPORT_NAME_DECIDED_BY == "operator, applying the owner's ruling of 2026-09-25 (answer 12)";
+    assert PROMO_REPORT_NAME_SITE == "src/promo.rs report";
+    assert PROMO_REPORT_NAME_DECISION == "src/trios/promo.rs report_kind_and_name";
+    assert PROMO_REPORT_NAME_LABEL == "src/trios/promo.rs REPORT_WITHHELD_NAME";
+    assert PROMO_REPORT_NAME_WIRING_TEST == "tests/promo_report_names_wiring.rs";
+    assert PROMO_REPORT_READER_COUNT == 2;
+    // A live kind with its own link, or with no link and one table behind it: printed.
+    assert report_prints_stored_name(true, true, true, false) == true;
+    assert report_prints_stored_name(true, true, true, true) == true;
+    assert report_prints_stored_name(true, false, false, false) == true;
+    // A bestseller whose link opens the dropped table, or with no link to tell: withheld.
+    assert report_prints_stored_name(true, true, false, true) == false;
+    assert report_prints_stored_name(true, false, false, true) == false;
+    // A kind no live subject writes, whatever its link says: withheld.
+    assert report_prints_stored_name(false, true, true, false) == false;
+    assert report_prints_stored_name(false, false, false, false) == false;
+    assert PROMO_REPORT_UNCLASSIFIED_KIND_IS_WITHHELD == true;
+    // Rows and totals stay; nothing is written; the send question is another file's.
+    assert PROMO_REPORT_ROWS_HIDDEN == false;
+    assert PROMO_REPORT_WRITES_THE_TABLE == false;
+    assert PROMO_REPORT_ROWS_HIDDEN == OWNER_RULING_2026_09_25_DELETES_ROWS;
+    assert PROMO_REPORT_OTHER_TABLES_NAMES_PRINTED == true;
+    assert PROMO_PUBLISH_REFUSAL_OWNER_ID != ID;
 }
 
 test the_identity_of_this_contract_is_fixed {
@@ -850,6 +935,9 @@ invariant the_repointed_set_is_always_split_by_what_each_path_lost
 
 invariant the_2026_09_25_ruling_never_counts_as_a_completed_retirement
     assert surface_is_retired(false, false, false, TECH_TREE_ROWS_HIDDEN) == false and OWNER_RULING_2026_09_25_DELETES_ROWS == false and OWNER_RULING_2026_09_25_ADDS_A_MIGRATION == false and COMPLETED_RETIREMENT_COUNT == 1
+
+invariant a_kind_no_live_subject_writes_never_has_its_name_printed
+    assert report_prints_stored_name(false, true, true, false) == false and report_prints_stored_name(false, false, false, false) == false and report_prints_stored_name(true, false, false, true) == false and PROMO_REPORT_ROWS_HIDDEN == false
 
 invariant a_bike_sale_row_is_never_called_hidden_to_reach_a_state
     assert OWNER_RULED_BIKE_SALE_ROWS_HIDDEN == false and ruled_surface_state(false, OWNER_RULED_BIKE_SALE_ROWS_HIDDEN) == STATE_LIVE and OWNER_RULING_SCOPE_OVER_THE_EIGHT_IS_OPEN == true
