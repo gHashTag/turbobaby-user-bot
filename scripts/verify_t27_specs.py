@@ -91,7 +91,9 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/client_errors.t27": {
         "module": "turbobaby-client-errors",
         "id": "turbobaby/client-errors",
-        "min_declarations": 239,
+        # Raised 2026-09-25 from 239 to the measured count when owner question D's sentence
+        # landed by delegation (9 declarations; the checks were renamed, not added).
+        "min_declarations": 248,
         "min_checks": 58,
     },
     "specs/turbobaby/commerce.t27": {
