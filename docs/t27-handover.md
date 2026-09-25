@@ -493,17 +493,19 @@ None of these is unblocked by more `.t27`:
   reading the status exactly, as the server does. That has a cost: a row stored in another case
   now reads Unknown on the list and detail screens, while the home and profile screens
   (customer-surface's) still fold case and show a label.
-* **D. What does a customer read when a cancellation is refused?** Since 2026-09-22 a 409 (the
-  order has already left pending) shows the generic `T_API_ERR_UNKNOWN`, whose "try again later"
-  is false here. That is recorded as a named refusal in `client_errors.t27`
-  (`CONFLICTED_CANCELLATION_HAS_A_PUBLISHED_SENTENCE = false`). Nothing publishes the sentence.
-  The brain has no Mini App node. It does publish principles for the bot: three outcomes, check
-  before repeating, and a refusal names its object. It also has one narrower precedent: in the
-  mileage-lowering flow, one specific wording was banned because it tells the person nothing. The
-  sentence has to describe the attempt, not the order. Whether it offers a next step, and through
-  which channel, is part of the question. One existing candidate is `T_BIKE_ASK_MANAGER`. The bike
-  card shows it only when the Mini App can read the bot's username, and it links to the bot's chat.
-  Adding the key moves every `i18n.rs` citation below it, so land it together with A and B.
+* **D. What does a customer read when a cancellation is refused?** *Decided 2026-09-25, by
+  delegation.* The owner answered item 11 of that day's list with "I don't understand what this
+  is, think it over" (translated), which hands the wording over and approves no text. Since then a
+  409 (the order has already left pending) shows its own key, `T_ORDER_DETAIL_CANCEL_REFUSED`, in
+  ru and en: the order is already being handled, it can't be cancelled in the app, message the
+  manager. From 2026-09-22 until then it showed the generic `T_API_ERR_UNKNOWN`, whose "try again
+  later" was false here. `client_errors.t27` records the decision (`CONFLICTED_CANCELLATION_DECISION`)
+  and the two limits it leaves open, both the owner's to change with the words. The sentence
+  describes the order, not the attempt, so its first clause is false when the order left pending
+  because the shop rejected it, or because an earlier attempt of the customer's own, whose outcome
+  was unknown, did cancel it; the re-read status label beside it then reads Cancelled. And the
+  order card has no link to the manager; `T_BIKE_ASK_MANAGER` is still the one existing candidate.
+  The key moved every `i18n.rs` citation below it; they were re-pinned in the same change.
 * **E. Which sentence, if any, stands beside a dashed order figure?** Since 2026-09-22 an absent
   total, subtotal or discount on the order screens is a bare dash. D9 asks for the dash and
   nothing more. The one published sentence for a missing price, `T_BIKE_PRICE_ON_REQUEST`, is
