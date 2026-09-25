@@ -1,7 +1,6 @@
 use crate::trios::i18n::{
-    t, tf, T_ACC_CAT_BONG, T_ACC_CAT_CLOTHING, T_ACC_CAT_GRINDER, T_ACC_CAT_LIGHTER,
-    T_ACC_CAT_OTHER, T_ACC_CAT_PAPERS, T_ACC_CAT_PIPE, T_ACC_CAT_SOUVENIR, T_ACC_CAT_STORAGE,
-    T_ACC_DESC, T_ACC_TITLE, T_ADD_TO_CART, T_CATALOG_EMPTY, T_CATALOG_ERROR, T_FILTER_ALL,
+    t, tf, T_ACC_CAT_CLOTHING, T_ACC_CAT_LIGHTER, T_ACC_CAT_OTHER, T_ACC_CAT_SOUVENIR,
+    T_ACC_CAT_STORAGE, T_ACC_TITLE, T_ADD_TO_CART, T_CATALOG_EMPTY, T_CATALOG_ERROR, T_FILTER_ALL,
     T_LOW_STOCK, T_MENU_SOLD_OUT,
 };
 use crate::ui::api::context::api_base_url;
@@ -39,29 +38,26 @@ struct AccessoriesResponse {
     accessories: Vec<ApiAccessory>,
 }
 
+// Owner's ruling 2026-09-25 (#12): nothing cannabis-related anywhere. The four
+// paraphernalia categories this screen offered as filter chips, with their
+// emoji, colours and labels, are gone, and so is the "smoking gear" subtitle.
+// A stored row that still carries one of those category strings falls to the
+// generic arms below; the row itself is data (hidden by migration 085), not
+// this screen's to rename.
 fn category_emoji(cat: &str) -> &'static str {
     match cat.to_lowercase().as_str() {
-        "grinder" => "⚙️",
-        "papers" | "rolling" => "📜",
-        "pipe" => "🪈",
-        "bong" => "💎",
         "storage" => "📦",
         "lighter" => "🔥",
         "clothing" => "👕",
         "souvenir" => "🎭",
-        "vaporizer" => "💨",
         _ => "🛠️",
     }
 }
 
 /// Accent colour per accessory category — drives the card border + on-image
-/// badge, mirroring how strain cards tint by marketing flag (menu_screen).
+/// badge.
 fn category_color(cat: &str) -> &'static str {
     match cat.to_lowercase().as_str() {
-        "grinder" | "vaporizer" => "#00e5ff",
-        "papers" | "rolling" => "#ffe600",
-        "pipe" => "#b388ff",
-        "bong" => "#39ff14",
         "storage" => "#ff9d00",
         "lighter" => "#ff4757",
         "clothing" => "#ff6b9d",
@@ -73,10 +69,6 @@ fn category_color(cat: &str) -> &'static str {
 fn localized_category_label(lang: crate::trios::core::Lang, cat: &str) -> String {
     match cat.to_lowercase().as_str() {
         "all" => t(lang, T_FILTER_ALL).to_string(),
-        "grinder" => t(lang, T_ACC_CAT_GRINDER).to_string(),
-        "papers" => t(lang, T_ACC_CAT_PAPERS).to_string(),
-        "pipe" => t(lang, T_ACC_CAT_PIPE).to_string(),
-        "bong" => t(lang, T_ACC_CAT_BONG).to_string(),
         "storage" => t(lang, T_ACC_CAT_STORAGE).to_string(),
         "lighter" => t(lang, T_ACC_CAT_LIGHTER).to_string(),
         "clothing" => t(lang, T_ACC_CAT_CLOTHING).to_string(),
@@ -85,10 +77,7 @@ fn localized_category_label(lang: crate::trios::core::Lang, cat: &str) -> String
     }
 }
 
-const CATEGORIES: &[&str] = &[
-    "All", "Grinder", "Papers", "Pipe", "Bong", "Storage", "Lighter", "Clothing", "Souvenir",
-    "Other",
-];
+const CATEGORIES: &[&str] = &["All", "Storage", "Lighter", "Clothing", "Souvenir", "Other"];
 
 #[component]
 pub fn AccessoriesScreen() -> Element {
@@ -97,7 +86,6 @@ pub fn AccessoriesScreen() -> Element {
 
     let lang = crate::ui::lang::current_lang();
     let acc_title = t(lang, T_ACC_TITLE);
-    let acc_desc = t(lang, T_ACC_DESC);
     let add_to_cart = t(lang, T_ADD_TO_CART);
     let catalog_empty = t(lang, T_CATALOG_EMPTY);
     let catalog_error = t(lang, T_CATALOG_ERROR);
@@ -169,7 +157,6 @@ pub fn AccessoriesScreen() -> Element {
         div { style: "min-height:100vh;background:#0f0f1a;color:#e8e8e8;padding-bottom:calc(96px + env(safe-area-inset-bottom));",
             div { style: "padding:20px 16px 16px;text-align:center;",
                 h1 { style: "font-size:24px;font-weight:800;color:#00e5ff;text-shadow:3px 3px 0 #000,0 0 10px rgba(0,229,255,0.5);letter-spacing:2px;", "{acc_title}" }
-                p { style: "font-size:13px;color:#888;margin-top:4px;", "{acc_desc}" }
             }
 
             div { style: "display:flex;gap:6px;padding:0 16px 12px;overflow-x:auto;",

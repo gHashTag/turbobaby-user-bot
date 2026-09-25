@@ -105,7 +105,7 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/customer_surface.t27": {
         "module": "turbobaby-customer-surface",
         "id": "turbobaby/customer-surface",
-        "min_declarations": 190,
+        "min_declarations": 191,
         "min_checks": 44,
     },
     "specs/turbobaby/deeplink.t27": {
@@ -139,7 +139,7 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/game_score.t27": {
         "module": "turbobaby-game-score",
         "id": "turbobaby/game-score",
-        "min_declarations": 121,
+        "min_declarations": 123,
         "min_checks": 34,
     },
     "specs/turbobaby/happy_hour.t27": {
@@ -158,14 +158,17 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         "module": "turbobaby-legacy-retirement",
         "id": "turbobaby/legacy-retirement",
         # Raised 2026-09-25 from 165/44 to the measured count when the owner's answer 7 on the
-        # eight legacy paths was recorded.
-        "min_declarations": 200,
-        "min_checks": 49,
+        # eight legacy paths was recorded (200/49) and, with it, the client half of ruling #12
+        # (190/48 on its own); the two together measure 225/53.
+        "min_declarations": 225,
+        "min_checks": 53,
     },
     "specs/turbobaby/locale_policy.t27": {
         "module": "turbobaby-locale-policy",
         "id": "turbobaby/locale-policy",
-        "min_declarations": 127,
+        # 131 on the client half of ruling #12 alone; 133 once the same day's cancel key (+1) and
+        # the deletion (-14) were reconciled in one count, with two declarations naming the +1.
+        "min_declarations": 133,
         "min_checks": 34,
     },
     "specs/turbobaby/loyalty_ledger.t27": {

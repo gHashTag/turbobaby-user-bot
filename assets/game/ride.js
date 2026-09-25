@@ -754,7 +754,7 @@ export function start(container, opts = {}) {
     const bike = buildBike(player);
     rider.add(bike);
 
-    // The mascot comes from the engine, so a change to Woody reaches every
+    // The mascot comes from the engine, so a change to it reaches every
     // game. He is not articulated at the hip, so he stands on the pegs rather
     // than sitting - at this scale, from behind, that is what a rider looks
     // like, and it keeps him the same bird as in the other two games.
@@ -797,7 +797,7 @@ export function start(container, opts = {}) {
     for (let i = 0; i < plan.length; i++) {
       const entry = plan[i];
       const group = buildBike(entry);
-      // Anonymous riders: Woody is one bird, and four of him on one road both
+      // Anonymous riders: the mascot is one bird, and four of him on one road both
       // cheapens him and costs thirty draw calls.
       const torso = new THREE.Mesh(
         cached('npc-torso', function () { return new THREE.CapsuleGeometry(0.22, 0.34, 3, 6); }),
