@@ -590,3 +590,30 @@ The contracts carry the details: `specs/turbobaby/legacy_retirement.t27` records
 (`PROMO_REPORT_NAME_*`, held to the code by `tests/promo_report_names_wiring.rs`),
 `bot_surface.t27` the carousel (`CAROUSEL_RETIRED_AT`), `locale_policy.t27` the locale struct's
 four removed fields.
+
+## The bike detail's «all taken» line, removed 2026-09-25
+
+Kept at the end of this file, like the entries above, so that no line citation into it moves.
+
+The owner answered a second numbered list in chat on 2026-09-25, items 1 to 5; the owner confirmed
+that numbering. Item 5 was the line the bike detail screen printed under a zero unit count,
+«Сейчас все байки этой модели заняты.» / "Every bike of this model is out right now."
+(`T_BIKE_UNITS_EMPTY`). That zero is the fleet seed of 2026-09-12 as an admin last edited it, not
+live occupancy. Answer 9 of the first list that day had not located the line, so it was left
+untouched then. Answer 5, verbatim: «Наверное» ("probably"), read as: remove it. The answer hedges,
+so the removal is recorded as hedged, and a later answer may restore the line.
+
+* **Removed.** The line, from the availability block of `src/ui/screens/bike_detail.rs`, and the
+  key `bike.units.empty` with both of its sentences, from `src/trios/i18n.rs`, deleted outright as
+  ruling #12's fourteen keys were: each deleted line became a comment line, so no line citation
+  into that file moved. Nothing was written in its place. «Наличие уточняет менеджер»
+  (`T_BIKE_AVAILABILITY_UNKNOWN`) stays and now stands alone in that block.
+* **Kept, and open.** Under the same zero the Book control is disabled with the reason «Все байки
+  этой модели заняты» / "Every bike of this model is taken" (`T_BIKE_BOOK_BLOCKED_NO_UNITS`). It
+  reads the same seeded count and says nearly the same thing, but item 5 did not name it, and a
+  disabled control must name its reason (issue #9), so changing it needs an owner-approved
+  sentence. The file may still rule a family out of booking (`FILE_MAY_RULE_OUT`).
+
+`specs/turbobaby/availability.t27` records the answer (`UNITS_EMPTY_LINE_*`, and the open reason
+as `NO_UNITS_BOOK_REASON_*`), `locale_policy.t27` the key count (552 to 551), and
+`tests/catalog_honesty_wiring.rs` guards the source.

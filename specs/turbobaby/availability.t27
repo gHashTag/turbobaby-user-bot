@@ -462,6 +462,41 @@ pub const CONFIRMING_KEYS : [4]str = ["T_BIKE_AVAILABILITY", "T_BIKE_AVAILABILIT
 pub const CONFIRMING_KEY_LINES_IN_UI : u8 = 0;
 pub const CONFIRMING_KEY_LINES_IN_UI_BEFORE_2026_09_24 : u8 = 7;
 
+; DECIDED 2026-09-25, answer 5 of the owner's second numbered list of that day. The paragraph
+; above describes the detail screen as it stood before this date: under a zero count it printed
+; T_BIKE_UNITS_EMPTY ("Every bike of this model is out right now.") below the manager line. That
+; zero is the same bike_units count, seeded on 2026-09-12 and changed only by an admin, so the
+; sentence read a file snapshot as occupancy "right now", which no live check had confirmed. On the
+; seed's counts it was reachable for the two families in OFFERED_OUT_ON_CONTRACT_KEYS; click-125
+; renders no availability block, because it is not offered. Asked whether to remove the line, the
+; owner answered "probably"; the Russian original is in DECISIONS.md, in the entry of that date on
+; this line. The answer hedges, so the removal is recorded as hedged, the way
+; CLICK_125_REDIRECTS_ARE_PROVISIONAL records a "for now": a later answer may restore the line, and
+; restoring it means declaring the key again with its two sentences, which git history keeps.
+; What changed: the availability block of src/ui/screens/bike_detail.rs renders nothing under a
+; zero count, and src/trios/i18n.rs deleted the key bike.units.empty outright, its declaration and
+; both arms each becoming a comment line, so no line of that file moved. turbobaby/locale-policy
+; owns the key count, and it moved there. The manager line, CUSTOMER_AVAILABILITY_KEY, stays and
+; now stands alone. No sentence was written in the removed one's place.
+; WHAT THE ANSWER DID NOT NAME, AND STAYS. Under the same zero the Book control is disabled with
+; T_BIKE_BOOK_BLOCKED_NO_UNITS ("Every bike of this model is taken") as its reason, read from the
+; same seeded count and saying nearly the same thing. The question named the availability line and
+; not this reason, and issue #9 forbids a disabled control without a named reason, so replacing it
+; needs an owner-approved sentence. It is kept, and it is open. FILE_MAY_RULE_OUT stays true: the
+; file still rules a family out of booking, through that control. tests/catalog_honesty_wiring.rs
+; holds both facts to the source, and holds UNITS_EMPTY_LINE_IS_SHOWN, UNITS_EMPTY_KEY_IS_DECLARED
+; and NO_UNITS_BOOK_REASON_IS_SHOWN below to what it finds there.
+pub const UNITS_EMPTY_LINE_DECIDED_ON : str = "2026-09-25";
+pub const UNITS_EMPTY_LINE_REMOVAL_IS_HEDGED : bool = true;
+pub const UNITS_EMPTY_KEY : str = "T_BIKE_UNITS_EMPTY";
+pub const UNITS_EMPTY_LINE_IS_SHOWN : bool = false;
+pub const UNITS_EMPTY_LINE_WAS_SHOWN_BEFORE_2026_09_25 : bool = true;
+pub const UNITS_EMPTY_KEY_IS_DECLARED : bool = false;
+pub const UNITS_EMPTY_REPLACEMENT_SENTENCES : u8 = 0;
+pub const NO_UNITS_BOOK_REASON_KEY : str = "T_BIKE_BOOK_BLOCKED_NO_UNITS";
+pub const NO_UNITS_BOOK_REASON_IS_SHOWN : bool = true;
+pub const NO_UNITS_BOOK_REASON_WAS_ANSWERED : bool = false;
+
 ; --- Fixtures -------------------------------------------------------------------------------
 ; Not pub: the surface of this spec is the status set, the table and the functions. The slot
 ; codes are written as their literal ordinals and every test ties the literal back to its named
@@ -711,6 +746,31 @@ test the_customer_screens_no_longer_confirm_from_the_file {
     assert FILE_MAY_RULE_OUT == true;
 }
 
+test a_seeded_zero_is_no_longer_printed_as_occupancy_and_still_rules_booking_out {
+    // the owner's second list of 2026-09-25, answer 5, hedged ("probably")
+    assert UNITS_EMPTY_LINE_DECIDED_ON == "2026-09-25";
+    assert UNITS_EMPTY_LINE_REMOVAL_IS_HEDGED == true;
+    assert UNITS_EMPTY_KEY == "T_BIKE_UNITS_EMPTY";
+    assert UNITS_EMPTY_LINE_WAS_SHOWN_BEFORE_2026_09_25 == true;
+    assert UNITS_EMPTY_LINE_IS_SHOWN == false;
+    assert UNITS_EMPTY_KEY_IS_DECLARED == false;
+    assert UNITS_EMPTY_REPLACEMENT_SENTENCES == 0;
+    // the manager line stays, and it is a different key from the one removed
+    assert CUSTOMER_AVAILABILITY_KEY == "T_BIKE_AVAILABILITY_UNKNOWN";
+    assert UNITS_EMPTY_KEY != CUSTOMER_AVAILABILITY_KEY;
+    // the line was reachable for the two offered families with no unit free on the seed
+    assert OFFERED_WITH_ZERO_AVAILABLE_FAMILIES == 2;
+    assert OFFERED_OUT_ON_CONTRACT_KEYS.len == OFFERED_WITH_ZERO_AVAILABLE_FAMILIES;
+    // what the answer did not name: the Book control's reason, from the same zero
+    assert NO_UNITS_BOOK_REASON_KEY == "T_BIKE_BOOK_BLOCKED_NO_UNITS";
+    assert NO_UNITS_BOOK_REASON_KEY != UNITS_EMPTY_KEY;
+    assert NO_UNITS_BOOK_REASON_WAS_ANSWERED == false;
+    assert NO_UNITS_BOOK_REASON_IS_SHOWN == true;
+    assert FILE_MAY_RULE_OUT == true;
+    assert FILE_MAY_CONFIRM == false;
+    assert unbookable_reason(true, 0) == REASON_NO_UNITS;
+}
+
 test the_capacity_is_scanned_from_the_table_and_not_quoted {
     // the measured maximum today, found by walking all 14 rows rather than reading row 1
     assert largest_family_units() == 10;
@@ -763,6 +823,11 @@ invariant confirmation_requires_a_live_check
 ; The customer screens follow the rule above rather than restate it (2026-09-24).
 invariant customer_screens_follow_file_may_confirm
     assert CUSTOMER_SCREENS_CONFIRM_FROM_THE_FILE == FILE_MAY_CONFIRM and CONFIRMING_KEY_LINES_IN_UI == 0
+
+; Since 2026-09-25 (the owner's second list, answer 5) a seeded zero prints no occupancy line and
+; still rules booking out: the removal took the sentence, not the direction FILE_MAY_RULE_OUT allows.
+invariant a_seeded_zero_prints_no_occupancy_line_and_still_rules_booking_out
+    assert UNITS_EMPTY_LINE_IS_SHOWN == false and UNITS_EMPTY_KEY_IS_DECLARED == false and NO_UNITS_BOOK_REASON_IS_SHOWN == FILE_MAY_RULE_OUT
 
 ; What the closed family points to is only what the bookability predicate lets through.
 invariant the_shown_click_redirect_is_bookable

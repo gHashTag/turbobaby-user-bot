@@ -56,10 +56,10 @@
 ; asserting that an unknown key comes back as itself.
 ; --
 ; A SECOND CORRECTION, TO THE MEASUREMENT METHOD. The brief prescribed
-; grep -c "pub const T_" src/trios/i18n.rs for the key count. That command returns 557 and five
+; grep -c "pub const T_" src/trios/i18n.rs for the key count. That command returns 556 and five
 ; of those lines are not declarations: src/trios/i18n.rs:2256, 2363 and 2379 are prose, and 2265
-; and 2383 are the two key parsers matching their own source text. The declaration count is 552,
-; which is also what both gates find, and 552 is what is pinned below.
+; and 2383 are the two key parsers matching their own source text. The declaration count is 551,
+; which is also what both gates find, and 551 is what is pinned below.
 ; --
 ; WHAT THIS FILE NEVER DOES. It carries no translated string and no Cyrillic: L3 forbids
 ; Cyrillic in a spec, and turbobaby/pricing-honesty already set the precedent for the whole
@@ -69,8 +69,8 @@
 ; leaves the wording to the locale layer. Both were re-opened 2026-09-21 and both still mean
 ; what this sentence claims. They were cited by line until then, and the line numbers had
 ; already drifted: the first pointed one line past the sentence it meant. That precedent is
-; named here as REUSES_PRICING_HONESTY_ID and applied to all 552 keys at once. It declares no key list --
-; restating 552 identifiers would be the largest duplication in this repository, and it would be
+; named here as REUSES_PRICING_HONESTY_ID and applied to all 551 keys at once. It declares no key list --
+; restating 551 identifiers would be the largest duplication in this repository, and it would be
 ; the fourth hand-maintained copy of a list that already has three. It publishes no third
 ; locale, and that prohibition is structural: the LENGTH of the published array, pinned by an
 ; invariant. It declares no currency glyph, separator, exponent or number format; those are
@@ -235,10 +235,19 @@ pub const VARIANTS_FALLING_THROUGH_TO_ENGLISH : u8 = 6;
 ; two changes landed together on 2026-09-25 (565 + 1 - 14 = 552; 570 + 1 - 14 = 557, both
 ; re-measured on the merged file, and the file header now says so). The 565 and 570 of the
 ; 2026-09-20 reading are kept below under _BEFORE_2026_09_25 names.
-pub const TRANSLATION_KEY_COUNT : u16 = 552;
+; CORRECTED 2026-09-25, later the same day: 551, not 552. The owner's second numbered list of that
+; day answered its item 5 "probably" to removing the bike detail screen's all-taken line, and that
+; line's key, bike.units.empty, was deleted outright the way the fourteen were: its declaration and
+; both of its arms each became a comment line, so no src/trios/i18n.rs line cited in this file
+; moved, and the naive grep falls by the same one, 557 to 556, over the same five non-declaration
+; lines. turbobaby/availability records what the key said and why it went (UNITS_EMPTY_KEY); the
+; count is this file's, and the arithmetic in the key-count test below now subtracts both deletions.
+pub const TRANSLATION_KEY_COUNT : u16 = 551;
 pub const TRANSLATION_KEY_COUNT_BEFORE_2026_09_25 : u16 = 565;
 pub const KEYS_DELETED_2026_09_25 : u16 = 14;
 pub const KEYS_DELETED_2026_09_25_RECORDED_BY_ID : str = "turbobaby/legacy-retirement";
+pub const KEYS_DELETED_BY_SECOND_LIST_ANSWER_5 : u16 = 1;
+pub const KEYS_DELETED_BY_SECOND_LIST_ANSWER_5_RECORDED_BY_ID : str = "turbobaby/availability";
 ; The one key declared the same day, T_ORDER_DETAIL_CANCEL_REFUSED, is recorded by
 ; turbobaby/client-errors, which owns the sentence.
 pub const KEYS_ADDED_2026_09_25 : u16 = 1;
@@ -246,7 +255,7 @@ pub const KEYS_ADDED_2026_09_25_RECORDED_BY_ID : str = "turbobaby/client-errors"
 pub const TRANSLATION_TABLE_COUNT : u8 = 2;
 ; What a naive substring grep reports, and the five lines that make it wrong. Recorded so the
 ; next reader re-measures with the declaration shape instead of the substring.
-pub const NAIVE_GREP_COUNT : u16 = 557;
+pub const NAIVE_GREP_COUNT : u16 = 556;
 pub const NAIVE_GREP_COUNT_BEFORE_2026_09_25 : u16 = 570;
 pub const NAIVE_GREP_OVERCOUNT : u16 = 5;
 pub const NAIVE_GREP_OVERCOUNT_LINES : str = "src/trios/i18n.rs:2256, 2363 and 2379 are prose; 2265 and 2383 are the two key parsers matching their own source text";
@@ -591,16 +600,19 @@ test the_gates_blind_spot_is_the_undeclared_literal_not_the_limit_they_state {
 }
 
 test the_key_count_is_the_declaration_count_and_not_the_grep_count {
-  // 565 and 570 until 2026-09-25, when the cancel key added one and the owner's ruling #12
-  // deleted fourteen.
-  assert TRANSLATION_KEY_COUNT == 552;
-  assert NAIVE_GREP_COUNT == 557;
+  // 565 and 570 until 2026-09-25, when the cancel key added one, the owner's ruling #12
+  // deleted fourteen, and answer 5 of the owner's second list that day deleted one more.
+  assert TRANSLATION_KEY_COUNT == 551;
+  assert NAIVE_GREP_COUNT == 556;
   assert TRANSLATION_KEY_COUNT_BEFORE_2026_09_25 == 565;
   assert NAIVE_GREP_COUNT_BEFORE_2026_09_25 == 570;
-  assert TRANSLATION_KEY_COUNT_BEFORE_2026_09_25 + KEYS_ADDED_2026_09_25 - KEYS_DELETED_2026_09_25 == TRANSLATION_KEY_COUNT;
-  assert NAIVE_GREP_COUNT_BEFORE_2026_09_25 + KEYS_ADDED_2026_09_25 - KEYS_DELETED_2026_09_25 == NAIVE_GREP_COUNT;
+  assert TRANSLATION_KEY_COUNT_BEFORE_2026_09_25 + KEYS_ADDED_2026_09_25 - KEYS_DELETED_2026_09_25 - KEYS_DELETED_BY_SECOND_LIST_ANSWER_5 == TRANSLATION_KEY_COUNT;
+  assert NAIVE_GREP_COUNT_BEFORE_2026_09_25 + KEYS_ADDED_2026_09_25 - KEYS_DELETED_2026_09_25 - KEYS_DELETED_BY_SECOND_LIST_ANSWER_5 == NAIVE_GREP_COUNT;
   assert KEYS_DELETED_2026_09_25_RECORDED_BY_ID == "turbobaby/legacy-retirement";
   assert KEYS_DELETED_2026_09_25_RECORDED_BY_ID != ID;
+  assert KEYS_DELETED_BY_SECOND_LIST_ANSWER_5 == 1;
+  assert KEYS_DELETED_BY_SECOND_LIST_ANSWER_5_RECORDED_BY_ID == "turbobaby/availability";
+  assert KEYS_DELETED_BY_SECOND_LIST_ANSWER_5_RECORDED_BY_ID != ID;
   assert KEYS_ADDED_2026_09_25 == 1;
   assert KEYS_ADDED_2026_09_25_RECORDED_BY_ID == "turbobaby/client-errors";
   assert KEYS_ADDED_2026_09_25_RECORDED_BY_ID != ID;
@@ -677,7 +689,7 @@ invariant this_file_carries_no_translated_string_no_key_literal_and_no_number_fo
   assert TRANSLATED_STRINGS_PUBLISHED.len == 0 and KEY_LITERALS_PUBLISHED.len == 0 and NUMBER_FORMAT_FIELDS_PUBLISHED.len == 0
 
 invariant the_key_count_never_becomes_the_key_list
-  assert TRANSLATION_KEY_COUNT == 552 and KEY_LITERALS_PUBLISHED.len == 0 and TRANSLATION_KEY_COUNT > PARITY_PARSER_FLOOR_PRIMARY
+  assert TRANSLATION_KEY_COUNT == 551 and KEY_LITERALS_PUBLISHED.len == 0 and TRANSLATION_KEY_COUNT > PARITY_PARSER_FLOOR_PRIMARY
 
 invariant the_two_defaults_disagree_until_one_of_them_is_changed
   assert defaults_agree(WEB_DEFAULT_LOCALE, STORAGE_DEFAULT_LOCALE) == false and DEFAULTS_AGREE == false
