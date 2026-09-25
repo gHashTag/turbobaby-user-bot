@@ -767,14 +767,6 @@ a:hover, a:focus-visible { color: var(--cyan); }
   cursor: pointer;
 }
 
-/* Sommelier card */
-.sommelier-card {
-  background: var(--card);
-  border: 4px solid var(--purple);
-  box-shadow: var(--pixel-shadow), 0 0 20px rgba(179,136,255,0.2);
-  padding: 20px;
-}
-
 /* Fact card (home) */
 .fact-card {
   background: linear-gradient(135deg, #1a3a1a, #0d2a0d);
