@@ -12,32 +12,58 @@ what to do next.
 | | measured 2026-09-21 |
 | --- | --- |
 | canonical contracts | **45** (44 under `specs/turbobaby/` + `specs/agents/turbobaby.t27`) |
-| assertions executed, all passing | **9 996** — re-measured 2026-09-24 after #63 (9 859 after #62, 9 535 earlier that day, 9 514 on 2026-09-23 before that day's money family, 9 038 on 2026-09-22, 8 911 on 2026-09-21) |
+| assertions executed, all passing | **9 996** — re-measured 2026-09-25 on `f5e6b4f`, after #64, which changed comments only (9 996 after #63 on 2026-09-24, 9 859 after #62, 9 535 earlier that day, 9 514 on 2026-09-23 before that day's money family, 9 038 on 2026-09-22, 8 911 on 2026-09-21) |
 | contract-to-contract ownership edges | 203+, **zero dangling** |
 | source lines named by some contract | **73 407 of 80 308 (91.4 %)** |
-| enforced contract-to-source bindings | **237**, across 41 of 45 contracts and 80 source files — re-measured 2026-09-24 after #63 (227 after #62, 198 earlier that day, 197 on 2026-09-23, 168 across 40 on 2026-09-22, 66 across 16 on 2026-09-21) |
+| enforced contract-to-source bindings | **237**, across 41 of 45 contracts and 80 source files — re-measured 2026-09-25 on `f5e6b4f`, after #64 (237 after #63 on 2026-09-24, 227 after #62, 198 earlier that day, 197 on 2026-09-23, 168 across 40 on 2026-09-22, 66 across 16 on 2026-09-21) |
 
-The two re-measured rows come from gates 2 and 3, run on the landing tree on 2026-09-24 (the
-rental-only change of #63 on top of main after #62). The other three rows were not re-measured and keep their
-2026-09-21 reading. Gate 1's 45 floors equal the pinned compiler's counts on the same tree.
+The two re-measured rows come from gates 2 and 3, run on 2026-09-25 on `main` at `f5e6b4f` (#64
+on top of the rental-only change of #63). Both equal the 2026-09-24 readings on #63's tree to the
+unit. The other three rows were not re-measured and keep their 2026-09-21 reading. Gate 1 passes on
+`f5e6b4f` with the pinned compiler, and its 45 floors, declarations and checks alike, still equal
+that compiler's counts. Gate 4 passes too.
 
 ```sh
+# 2026-09-25, main at f5e6b4f, pinned compiler 40003ed
+T27C=<path>/t27c python3 scripts/verify_t27_specs.py --require-compiler
+# OK - 45 manifested specs, 5 generators each; compiler=<path>
 python3 scripts/execute_t27_assertions.py --no-crosscheck
 # OK - 45 spec(s), 9996 assert line(s) scanned, 9996 executed, 9996 passed, 0 failed
 python3 scripts/verify_t27_against_source.py --require-git-tracked
 # OK - 237 bindings hold across 41 contracts and 80 source files
+python3 scripts/verify_fleet_seed.py -v
+# OK — 14 families (13 offered), 37 units (11 rented, 26 available); ...
 ```
 
+Gate 2 with a compiler configured, the form "The four gates" shows, is red on `f5e6b4f` for two
+stale allowances and no false assertion. See "Gate 2's cross-check after #64" below.
+
 The last two rows are the ones to keep apart. *Named* means a contract cites the file. *Bound* means
-a gate fails when the two disagree. 91.4 % is a floor on attention; 237 (2026-09-24; 227 after #62, 198 earlier
-that day, 197 on 2026-09-23, 168 on 2026-09-22, 66 on 2026-09-21) is the number that actually
-holds, and it is the one worth growing.
+a gate fails when the two disagree. 91.4 % is a floor on attention; 237 (after #63 on 2026-09-24,
+unchanged after #64 on 2026-09-25; 227 after #62 and 198 earlier on 2026-09-24, 197 on 2026-09-23,
+168 on 2026-09-22, 66 on 2026-09-21) is the number that actually holds, and it is the one worth
+growing.
 
 ### Landed on 2026-09-24, and not yet live
 
-Each of these merged to `main` as `gHashTag` after green CI. **None of it reaches a customer until
-someone deploys `main`**: production served the build of `4a5aa72` (bundle `c3a91ae8dc97ab9e`) at the
-last read-only smoke, and a merge deploys nothing (see the last section and `docs/ROLLBACK.md`).
+#56 to #63 merged to `main` as `gHashTag` after green CI. #64 is a squash-merge by
+`dmitrii-f-t27`. **None of it reaches a customer until someone deploys `main`**, and a merge
+deploys nothing (see the last section and `docs/ROLLBACK.md`).
+
+* **Nothing from #56 to #64 is live, as far as a read from outside can tell.** The last read-only
+  smoke, `scripts/postdeploy-smoke.sh` at 2026-09-25 01:36:54 UTC, printed `5 passed, 0 failed`.
+  Production served `/` byte-equal to the `dist/index.html` committed at `4a5aa72` (bundle
+  `c3a91ae8dc97ab9e`), `/health` answered 200 with the database ok, and `/api/delivery/zones`
+  listed 5 zones, the set from before 087. The server's own commit cannot be read from outside
+  (the `Dockerfile`'s `BUILD_VERSION` defaults to `docker`), so this rests on the served `dist/`
+  and the zone list.
+* **The deploy of `main` (`f5e6b4f`) is prepared and waits on Railway access alone.** It is a clean
+  LF export of `f5e6b4f` (`docs/ROLLBACK.md` §3B). The Railway CLI on this PC (5.62.1) is logged in
+  to an account that cannot see project `woody` yet, so `railway up` cannot run until that account
+  is invited to the project.
+* **That deploy crosses migration 087, and nothing built before `a18cdd9` can serve zones after
+  it.** Read `docs/ROLLBACK.md` §4, "Rolling back after 087", before deploying: after 087 the way
+  back is forward, or `4a5aa72` plus the owner's repair.
 
 | PR | what changed |
 | --- | --- |
@@ -49,6 +75,7 @@ last read-only smoke, and a merge deploys nothing (see the last section and `doc
 | #61 | no PromptPay QR under one satang (422); a rental deposit must equal the family's published figure, per unit |
 | #62 | spec hygiene: brain citations re-read, one owner per restated fact (the migration census is schema-provenance's), ride handling bound to `ride.js`, a negative control for the seed gate, a cannabis-era vocabulary guard, gate-1 floors equal to the measurement |
 | #63 | rental only, Phuket only (owner, 2026-09-24): buy-out and events retired from every customer surface, migration 088 hides any public event, no row deleted; `dist/` bundle `17f356526a369bb9` |
+| #64 | by `dmitrii-f-t27`, merged 2026-09-24 16:28 UTC as `f5e6b4f`: seven specs made to compile under the current t27 compiler (its message names `gHashTag/t27` master `a103752`, not the CI pin). Comments only: 33 lines in 7 specs, each `;` comment turned into `//` or `; --`, no declaration, assertion or constant touched. No Docker image input changed: `git diff 5b2800a f5e6b4f` touches `specs/` alone, which the image does not copy. What it did change in gate 2 is under "Gate 2's cross-check after #64" |
 
 ```sh
 python D:/t27work/coverage_2109.py .     # the naming measurement, if you keep the helper
@@ -63,6 +90,7 @@ T27C=<path>/t27c python3 scripts/verify_t27_specs.py --require-compiler -v
 
 # 2. behaviour: parses and EXECUTES every assertion in the corpus. Stdlib only, ~1 s.
 python3 scripts/execute_t27_assertions.py -v            # add --no-crosscheck without a compiler
+#    With a compiler it exits 1 on f5e6b4f: two stale pins ("Gate 2's cross-check after #64").
 
 # 3. drift: contract constants against the Rust and SQL they constrain.
 python3 scripts/verify_t27_against_source.py --require-git-tracked -v
@@ -80,6 +108,56 @@ repository owner unblocks it:
 gh auth refresh -h github.com -s workflow
 ```
 
+What CI runs today, read from `.github/workflows/ci.yml` at `f5e6b4f`: gate 1 in the job "T27
+Canonical Contracts", gate 4 in its own job ("Fleet Seed Provenance"), and gates 2 and 3 only
+through `tests/t27_gates_run.rs`. That file passes `--no-crosscheck` to gate 2 on purpose, so **CI
+never runs gate 2's compiler cross-check**. The next subsection is what that costs.
+
+### Gate 2's cross-check after #64
+
+Measured 2026-09-25 on `f5e6b4f` with the pinned compiler, `T27C` set and no `--no-crosscheck`:
+every assertion runs and passes (9996 of 9996), 9667 declaration names and function bodies agree
+with t27c, 4 pinned front-end disagreements are printed, and the gate **exits 1**:
+
+```
+execute_t27_assertions: FAIL - 2 structural problem(s):
+  - specs/turbobaby/commerce.t27: pinned front-end disagreement 'commerce_checkout_decision' no longer disagrees with t27c (...) -- re-measure and remove the KNOWN_FRONTEND_DISAGREEMENTS entry
+  - specs/turbobaby/deposit_tiers.t27: pinned front-end disagreement 'refund_decision' no longer disagrees with t27c (...) -- re-measure and remove the KNOWN_FRONTEND_DISAGREEMENTS entry
+```
+
+* **Why.** `KNOWN_FRONTEND_DISAGREEMENTS` in `scripts/execute_t27_assertions.py` lists each
+  function whose body the pinned compiler reads differently from the gate, and the gate fails when
+  a listed one stops disagreeing. #64 turned the `;` comments inside `commerce_checkout_decision`
+  and `refund_decision` into `//`, and t27c no longer truncates those two bodies (next section).
+* **Before #64 it was green.** The same command on `5b2800a`'s text of the seven specs exits 0,
+  with the same counts and the same 4 pins printed.
+* **Two pins are still real:** `families_on_tier` and `published_rows_at_amount` in
+  `deposit_tiers.t27`, the `while (c) : (step)` class.
+* **Not fixed here, and not a deploy blocker.** Remove the two stale entries and the script
+  header's "four functions" in one change. Nothing in it reaches the Docker image. Until then,
+  read the assertions with `--no-crosscheck` and treat any cross-check line besides those two as
+  new.
+
+### Negative controls, 2026-09-25
+
+Run on a separate clone at `f5e6b4f`, one plant at a time, each restored before the next. The
+clone ended clean (`git status --porcelain --ignored` empty), and gates 3 and 2 re-ran green at
+237 bindings and 9996 of 9996. Every plant turned its gate red (exit 1), and every message names
+the fault:
+
+| plant | gate | what it printed |
+| --- | --- | --- |
+| source drift: `DAILY_GAME_STARS_CAP` in `src/trios/stars_cap.rs`, 300 → 3000 | 3 | `star_award.PER_SOURCE_WINDOW_CAP ~ stars_cap.rs DAILY_GAME_STARS_CAP: contract=300 source=3000`, with both files and the binding's why |
+| contract drift: `PER_SOURCE_WINDOW_CAP` in `star_award.t27`, 300 → 301 | 3 | the same binding, `contract=301 source=300` |
+| the same contract drift | 2, `--no-crosscheck` | 5 of 9996 false: one assert in each of four `star_award.t27` tests, and the invariant `the_window_bound_is_per_source_and_not_per_player` (`REACHABLE_WINDOW_TOTAL_STARS == PER_SOURCE_WINDOW_CAP * 4`, 1200 vs 1204) |
+| the `star_award.PER_SOURCE_WINDOW_CAP` row deleted from `BINDINGS` | 3 | `the binding table holds 236 entries; the floor is 237 (DECISIONS.md D16)` |
+| `window_remaining(270) == 30` flipped to `!= 30` in the test `the_window_remainder_saturates_at_both_ends` | 2, `--no-crosscheck` | `9995 passed, 1 failed`, with the file, the test and both sides of the comparison |
+
+The deleted row is caught only by the `MIN_BINDINGS` floor, and the message cannot say which row
+went. From reading the gate, not from a plant: its only check on the table's size is
+`len(BINDINGS) < MIN_BINDINGS`, so a row deleted in the same change that lowers `MIN_BINDINGS` to
+236 stays green. Only a reviewer reading that diff catches it.
+
 ### Building the pinned compiler
 
 CI pins `gHashTag/t27` at `40003ed1379c8a417e13e45843de35088b88f8c0`. Two traps cost an hour here:
@@ -91,6 +169,24 @@ CI pins `gHashTag/t27` at `40003ed1379c8a417e13e45843de35088b88f8c0`. Two traps 
 
 Then `cargo build --locked --release -p t27c`.
 
+**Still the pin on `f5e6b4f`, and it still handles every spec (2026-09-25).**
+
+* **CI.** The job "T27 Canonical Contracts" (`ubuntu-latest`) checks out `gHashTag/t27` at
+  `40003ed1379c8a417e13e45843de35088b88f8c0` into `.t27-toolchain`, sets up Rust with
+  `dtolnay/rust-toolchain@stable`, runs
+  `cargo build --locked --release --manifest-path .t27-toolchain/Cargo.toml -p t27c`, and runs
+  gate 1 only, with `T27C=.t27-toolchain/target/release/t27c`.
+* **The build behind the 2026-09-25 readings** is a Windows build of the same commit, made on
+  2026-09-20. `t27c version` prints `t27c 0.1.0`, backends Zig, Verilog, C and Rust, and
+  compiler LOC 29252. Every source file in its checkout is byte-equal to `40003ed`, apart from the
+  absent `bindings/python`, which the workspace `Cargo.toml` excludes. The binary was not rebuilt
+  for this reading, so being built from those sources is likely, not proven. CI and this build
+  share the commit, not the toolchain: CI takes whatever Rust stable is current, on Linux.
+* **With it, gate 1 parses, typechecks and generates all 45 specs on `f5e6b4f`**, the seven #64
+  touched included, and it did the same on `5b2800a`. #64's message says those seven did not parse
+  for the Queen board, and that it was verified with a compiler built from `gHashTag/t27` master
+  `a103752`, not with this pin. The build steps above are not stale.
+
 ## Three defects in that compiler — filed, unfixed, and load-bearing
 
 [gHashTag/t27#4530](https://github.com/gHashTag/t27/issues/4530), with minimal reproductions:
@@ -100,6 +196,15 @@ Then `cargo build --locked --release -p t27c`.
   `typecheck` answers `ok, 0 errors, 0 warnings`;
 * a `while (cond) : (step) { }` loop **and everything after it** is dropped;
 * `packed struct` parses into two nodes, one with an empty name.
+
+*Corrected 2026-09-25:* the first defect no longer reaches the corpus at the two places it was
+pinned. #64 turned the `;` comments inside `commerce_checkout_decision` (commerce) and
+`refund_decision` (deposit-tiers) into `//`. `gen-c` from the same pinned compiler now emits
+`commerce_checkout_decision` with its real body, all nine gates in place. On `5b2800a`'s text it
+still emits the `{ /* TODO: implement */ }` stub, so the defect is in the compiler and is
+unchanged. The second defect still reaches two functions, `families_on_tier` and
+`published_rows_at_amount` in `deposit_tiers.t27`. Apart from those two, gate 2's cross-check
+finds no function body that it and t27c read differently.
 
 **Never write `while (c) : (step)` in a contract.** Two agents did; the assertion gate's cross-check
 caught both. Use `while (c) { ... i += @as(u8, 1); }`.
@@ -444,14 +549,16 @@ The questions that ruling left open are listed in #63.
   * the price door's source and Bridge access. The door is still a stub, so every rate is quoted
     by a human;
   * the booking capacity rule and booking depth;
-  * a deploy of `main`, which needs a Railway token or a manual `railway up`;
+  * a deploy of `main`, which needs a Railway token or a manual `railway up`. On 2026-09-25 the
+    manual route for `f5e6b4f` is prepared and waits only on access to project `woody` (see
+    "Landed on 2026-09-24, and not yet live"). It crosses 087: `docs/ROLLBACK.md` §4;
   * the `woody` database backup policy (`docs/ROLLBACK.md` §7);
   * whether `WEB_APP_URL` / `BOT_USERNAME` are set on the service.
 
 ### 4. The axis worth growing
 
 **237 bindings over 224 distinct constants** — a reading of 2026-09-24 after #63, 224 of 5 564
-declared constants (4.0 %). Earlier that day: 227 over 214 after #62, 198 over 190. On 2026-09-23: 197 over 189. On 2026-09-22 it was 168 bindings over 164 of 4 997 declared constants (3.3 %); on
+declared constants (4.0 %), and the same on 2026-09-25 after #64 (5 564 re-counted on both trees). Earlier on 2026-09-24: 227 over 214 after #62, 198 over 190. On 2026-09-23: 197 over 189. On 2026-09-22 it was 168 bindings over 164 of 4 997 declared constants (3.3 %); on
 2026-09-21, 66 bindings of roughly 4 200. *Corrected 2026-09-24:* 4 997 is the gate-3 header's
 count — lines that start with `pub const ` at column zero — and it reproduces exactly on the
 2026-09-22 tree. The same count reads 5 310 today, which makes 3.6 %. The command below counts every
@@ -495,12 +602,15 @@ citations** — unlike a `src/` citation, which gate 3 can check.
 > `docs/t27-handover.md` and `docs/t27-contract-map.md` first; they carry the measurements and the
 > traps. Build the pinned compiler as the handover describes, then run all four gates and quote the
 > numbers before changing anything — if they do not reproduce, say so instead of proceeding.
+> Gate 2 with a compiler configured exits 1 on `f5e6b4f` for two stale pins, and that is known
+> (see "Gate 2's cross-check after #64"); any other cross-check line is new.
 >
 > The work, in order: fix the seven defects listed under "What is actually left", each with a test
 > that is red before the fix and with the contract that records the defect corrected in the same
 > change; then grow `scripts/verify_t27_against_source.py` beyond its 237 bindings (re-measured
-> 2026-09-24 after #63; 227 after #62, 198 earlier that day, 197 on 2026-09-23, 168 on 2026-09-22, 66 on
-> 2026-09-21), because a contract nothing binds only describes the code.
+> 2026-09-25 after #64, the same as after #63 on 2026-09-24; 227 after #62, 198 earlier that day,
+> 197 on 2026-09-23, 168 on 2026-09-22, 66 on 2026-09-21), because a contract nothing binds only
+> describes the code.
 >
 > Three rules this corpus is built on, and they are not style: never invent a number — where the
 > repository publishes nothing, declare the refusal and say what is missing; never restate what
