@@ -82,10 +82,13 @@
 //!   `styles/variables.css`, `main.css` and `admin.css` (compared 2026-09-24),
 //!   which are scanned; `*.br` and `*.gz` are compressed twins; `version.txt`
 //!   is the bundle's build id.
-//! * The repository root is neither scanned nor served. `storybook.html` and
-//!   `typography.html` there still carry the old shop's name ("Woody Weed Bot";
-//!   storybook's body text calls it a cannabis delivery service), six
-//!   whole-word hits in each. Nothing routes a path to the root:
+//! * The repository root is neither scanned nor served. Until 2026-09-25
+//!   `storybook.html` and `typography.html` there carried the old shop's name
+//!   (storybook's body text called it a cannabis delivery service), six
+//!   whole-word hits in each; since that day they carry TurboBaby's, and they
+//!   are read with the other dev and ops files by
+//!   `the_dev_and_ops_files_carry_neither_the_old_name_nor_the_vocabulary`
+//!   (`DEV_OPS_FILES`), which is not this census. Nothing routes a path to the root:
 //!   `static_assets` nests /styles, /assets, /images and /uploads (a runtime
 //!   volume, not the repository), and `serve_dist` and `spa_handler` answer
 //!   from the in-memory copy of `dist/` that `walk_dir` loads. The Dockerfile's
@@ -1018,4 +1021,86 @@ fn only_migrations_up_to_076_are_history() {
         "migrations/wip/077_quest_progress.sql"
     ));
     assert!(!is_historical_migration("src/db/mod.rs"));
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Dev and ops files (added 2026-09-25)
+// ──────────────────────────────────────────────────────────────────
+
+/// Files outside the scanned roots that nobody serves to a customer, but that a
+/// developer or an operator reads or runs: the start scripts, the monitoring
+/// rules and dashboard, the asset export, the design pages at the repository
+/// root and the admin e2e suite. Until 2026-09-25 they printed or named the old
+/// shop (its name in banners, alert names, a dashboard title, an archive prefix
+/// and page titles; strain names, strain types and a per-gram price on the
+/// design pages; a catalogue tab in the e2e suite). The owner ruled that day
+/// that nothing cannabis-related may appear anywhere, and they were rebranded.
+///
+/// Left out on purpose: `.env.template`, whose header was rebranded the same
+/// day, because `runtime_config.t27` records that no test in this tree reads
+/// that file (`TEMPLATE_COVERAGE_NOTE`) and a configuration file is not opened
+/// for a word count. `lefthook.yml`, whose one remaining hit names an existing
+/// test file (`tests/integration_strain_of_day.rs`).
+const DEV_OPS_FILES: &[&str] = &[
+    "run.sh",
+    "dev.sh",
+    "docs/prometheus-alerts.yaml",
+    "docs/prometheus-recording-rules.yaml",
+    "docs/grafana-dashboard.json",
+    "scripts/export-assets.sh",
+    "storybook.html",
+    "typography.html",
+    "static_test.html",
+    "ui-kit.html",
+    "e2e/admin.spec.ts",
+    "e2e/upload.spec.ts",
+    "e2e/README.md",
+];
+
+/// Every file is read whole with no comment grammar, so a hit in a comment
+/// counts (fail closed), and the old shop's name is looked for as a substring,
+/// case-insensitively, so a compound such as an alert name is seen too.
+#[test]
+fn the_dev_and_ops_files_carry_neither_the_old_name_nor_the_vocabulary() {
+    let repo = repo_root();
+    let mut offences = Vec::new();
+    for rel in DEV_OPS_FILES {
+        let text = fs::read_to_string(repo.join(rel))
+            .unwrap_or_else(|e| panic!("{rel} must exist and read as UTF-8: {e}"));
+        // D16: an empty read passes for the worst reason.
+        assert!(
+            text.lines().count() >= 10,
+            "{rel} read as {} line(s); the guard would prove nothing",
+            text.lines().count()
+        );
+        for hit in scan_text(&text, Grammar::Plain) {
+            offences.push(format!("{rel}:{} `{}`", hit.line, hit.word));
+        }
+        for (index, line) in text.lines().enumerate() {
+            if line.to_lowercase().contains("woody") {
+                offences.push(format!("{rel}:{} the old shop's name", index + 1));
+            }
+        }
+    }
+    assert!(
+        offences.is_empty(),
+        "a dev or ops file names the old shop or its vocabulary (owner, 2026-09-25: \
+         nothing cannabis-related anywhere):\n  {}",
+        offences.join("\n  ")
+    );
+    // D16: both checks see what they look for, on lines these files held until
+    // 2026-09-25 -- a banner, an alert name and a search placeholder.
+    let planted = "echo \"🌿 Woody Weed Bot\"\n\
+                   - alert: WoodyWeedBotFastBurnCritical\n\
+                   placeholder=\"Search strains...\"";
+    let words: Vec<String> = scan_text(planted, Grammar::Plain)
+        .into_iter()
+        .map(|h| h.word)
+        .collect();
+    assert_eq!(words, ["Weed", "strains"]);
+    let named = planted
+        .lines()
+        .filter(|l| l.to_lowercase().contains("woody"))
+        .count();
+    assert_eq!(named, 2);
 }

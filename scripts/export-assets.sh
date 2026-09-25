@@ -4,7 +4,9 @@
 # exports/ (gitignored — never bloats the repo) with a manifest + checksum.
 #
 # Usage:  ./scripts/export-assets.sh
-# Output: exports/woody-assets-<UTCdate>.tar.gz  (+ .sha256, + MANIFEST.txt)
+# Output: exports/turbobaby-assets-<UTCdate>.tar.gz  (+ .sha256, + MANIFEST.txt)
+# (the prefix named the old shop until 2026-09-25; an archive made before then
+# keeps its old name and restores the same way)
 #
 # What's included:
 #   assets/   — logo, game sprites (1..14.png), packs, icons, member-cards,
@@ -22,12 +24,12 @@ mkdir -p "$OUT_DIR"
 
 # Deterministic UTC stamp (no Math.random / locale surprises).
 STAMP="$(date -u +%Y%m%d-%H%M%S)"
-ARCHIVE="$OUT_DIR/woody-assets-${STAMP}.tar.gz"
+ARCHIVE="$OUT_DIR/turbobaby-assets-${STAMP}.tar.gz"
 MANIFEST="$OUT_DIR/MANIFEST-${STAMP}.txt"
 
 echo "▶ collecting assets…"
 {
-  echo "Woody Weed Bot — asset export"
+  echo "TurboBaby — asset export"
   echo "Created (UTC): $STAMP"
   echo "Git commit:    $(git rev-parse --short HEAD 2>/dev/null || echo n/a)"
   echo ""

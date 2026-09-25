@@ -115,7 +115,7 @@ commit-msg:
           echo "❌  Commit message does not follow Conventional Commits."
           echo "   Expected: type(scope): description"
           echo "   Types: feat | fix | docs | style | refactor | test | chore | ci | build | perf | wip"
-          echo "   Example: feat(menu): add filter by strain type"
+          echo "   Example: feat(catalog): add filter by bike class"
           echo ""
           exit 1
         fi

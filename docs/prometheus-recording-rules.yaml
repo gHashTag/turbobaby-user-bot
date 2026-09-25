@@ -1,4 +1,4 @@
-# Recording rules for Woody Weed Bot.
+# Recording rules for TurboBaby.
 #
 # These pre-compute the rate aggregations that the burn-rate alerts
 # (prometheus-alerts.yaml) depend on, so the alerting query stays cheap.
