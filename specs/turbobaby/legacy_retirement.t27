@@ -457,6 +457,47 @@ pub fn ruled_surface_state(customer_reachable: bool, rows_hidden: bool) u8 {
     return retirement_state(customer_reachable, OWNER_RULING_DROPS_A_TABLE, false, rows_hidden);
 }
 
+; --- The owner's ruling of 2026-09-25: nothing cannabis-related anywhere -------------------------
+; Answer 12 of the numbered list put to the owner on 2026-09-25 rules that nothing cannabis-related
+; may appear anywhere. Its server half changes what is SERVED or SENT, in code; it deletes no row,
+; drops no table and adds no migration. Six server surfaces moved, each named with where it lives:
+;   1. the retired carousel's buttons already in chats answer with the rental menu and read no
+;      table -- turbobaby/bot-surface, CAROUSEL_RETIRED_AT;
+;   2. GET /api/loyalty/tiers serves every perks list empty (the stored perks are the old shop's
+;      promises, and no TurboBaby perk copy is approved) and omits the tier named after the old shop
+;      -- src/api/loyalty.rs, get_loyalty_tiers and retired_tier; the rows are untouched. This
+;      closes the perks question DECISIONS.md left open on 2026-09-24;
+;   3. the three public tech-tree reads answer an empty roadmap, an empty badge list and not found
+;      -- src/api/tech_tree.rs; the rows are untouched and the admin complete route is unchanged;
+;   4. the share card builds only from a catalogue row the public catalog shows (is_available), so
+;      a row 085 hid answers not found -- src/api/share.rs, load_card;
+;   5. the bot's admin heading loses the old catalogue's tab list and the fact-post reply its leaf
+;      -- src/bot/commands.rs;
+;   6. the bot locale file loses four fields: the carousel's heading and arrows, and the old unit
+;      of sale -- src/locales.rs.
+; tests/server_text_vocabulary_wiring.rs holds every string the server can send to it from now on.
+; Run through this file's machine, the tech tree is what bike sales were on 2026-09-24: rows kept,
+; none hidden, masked on read, which is STATE_LIVE because no state names a mask on read (see
+; A_MASK_ON_READ_HAS_A_STATE_HERE). The dropped strains table keeps its allowlisted reader --
+; still compiled, with no production caller since item 1 -- which is STATE_READER_ALLOWLISTED, so
+; ALLOWLIST_SIZE does not move. Nothing here is a completed retirement: COMPLETED_RETIREMENT_COUNT
+; stays 1, and none of the route counts above moves, because every route stays declared.
+pub const OWNER_RULING_2026_09_25_AT : str = "2026-09-25";
+pub const OWNER_RULING_2026_09_25_NOTE : str = "Nothing cannabis-related anywhere. Server surfaces stop serving or sending it, in code; no row is deleted, no table is dropped and no migration is added.";
+pub const OWNER_RULING_2026_09_25_ADDS_A_MIGRATION : bool = false;
+pub const OWNER_RULING_2026_09_25_DELETES_ROWS : bool = false;
+pub const OWNER_RULING_2026_09_25_SERVER_SURFACE_COUNT : u8 = 6;
+pub const OWNER_RULING_2026_09_25_SERVER_SURFACES : [6]str = [
+    "retired_carousel_buttons", "loyalty_tier_perks_and_old_shop_tier", "tech_tree_reads",
+    "share_card_for_hidden_rows", "bot_admin_and_fact_post_copy", "bot_locale_fields",
+];
+pub const OWNER_RULING_2026_09_25_GUARD : str = "tests/server_text_vocabulary_wiring.rs";
+pub const TECH_TREE_ROWS_HIDDEN : bool = false;
+pub const TECH_TREE_MASKED_ON_READ : bool = true;
+pub const TECH_TREE_STATE : u8 = 0;
+pub const RETIRED_READER_STATE_AFTER_THE_2026_09_25_RULING : u8 = 3;
+pub const ALLOWLIST_SIZE_MOVED_BY_THE_2026_09_25_RULING : bool = false;
+
 ; --- Tests -----------------------------------------------------------------------------------------
 
 test the_three_partial_states_are_named_and_the_value_set_is_closed {
@@ -722,6 +763,30 @@ test the_repointed_set_is_split_by_what_each_path_lost {
     assert may_claim_surface_is_gone(1, 1, 1) == false;
 }
 
+test the_2026_09_25_ruling_changes_surfaces_and_no_data {
+    assert OWNER_RULING_2026_09_25_AT == "2026-09-25";
+    assert OWNER_RULING_2026_09_25_ADDS_A_MIGRATION == false;
+    assert OWNER_RULING_2026_09_25_DELETES_ROWS == false;
+    assert OWNER_RULING_2026_09_25_SERVER_SURFACES.len == OWNER_RULING_2026_09_25_SERVER_SURFACE_COUNT;
+    assert OWNER_RULING_2026_09_25_SERVER_SURFACES[0] == "retired_carousel_buttons";
+    assert OWNER_RULING_2026_09_25_SERVER_SURFACES[2] == "tech_tree_reads";
+    // The tech tree: rows kept, none hidden, masked on read -- the bike-sale shape.
+    assert TECH_TREE_ROWS_HIDDEN == OWNER_RULED_BIKE_SALE_ROWS_HIDDEN;
+    assert TECH_TREE_MASKED_ON_READ == OWNER_RULED_BIKE_SALE_MASKED_ON_READ;
+    assert TECH_TREE_STATE == STATE_LIVE;
+    assert ruled_surface_state(false, TECH_TREE_ROWS_HIDDEN) == TECH_TREE_STATE;
+    assert A_MASK_ON_READ_HAS_A_STATE_HERE == false;
+    // The dropped table's reader stays, allowlisted, so the allowlist does not move.
+    assert RETIRED_READER_STATE_AFTER_THE_2026_09_25_RULING == STATE_READER_ALLOWLISTED;
+    assert retirement_state(false, true, true, false) == RETIRED_READER_STATE_AFTER_THE_2026_09_25_RULING;
+    assert ALLOWLIST_SIZE_MOVED_BY_THE_2026_09_25_RULING == false;
+    assert ALLOWLIST_SIZE == 4;
+    assert TECH_TREE_HTTP_ROUTE_COUNT == 4;
+    assert LEGACY_HTTP_ROUTE_COUNT == 43;
+    assert COMPLETED_RETIREMENT_COUNT == 1;
+    assert REUSES_BOT_SURFACE_ID == "turbobaby/bot-surface";
+}
+
 test the_identity_of_this_contract_is_fixed {
     assert ID == "turbobaby/legacy-retirement";
     assert KIND == "retirement-contract";
@@ -782,6 +847,9 @@ invariant a_ruled_surface_a_customer_can_still_reach_is_still_live
 
 invariant the_repointed_set_is_always_split_by_what_each_path_lost
     assert repointed_set_splits(REPOINTED_WITH_THE_SCREEN_DELETED, REPOINTED_ROUTE_COUNT - REPOINTED_WITH_THE_SCREEN_DELETED) == true and REPOINTED_WITH_THE_SCREEN_DELETED < REPOINTED_ROUTE_COUNT
+
+invariant the_2026_09_25_ruling_never_counts_as_a_completed_retirement
+    assert surface_is_retired(false, false, false, TECH_TREE_ROWS_HIDDEN) == false and OWNER_RULING_2026_09_25_DELETES_ROWS == false and OWNER_RULING_2026_09_25_ADDS_A_MIGRATION == false and COMPLETED_RETIREMENT_COUNT == 1
 
 invariant a_bike_sale_row_is_never_called_hidden_to_reach_a_state
     assert OWNER_RULED_BIKE_SALE_ROWS_HIDDEN == false and ruled_surface_state(false, OWNER_RULED_BIKE_SALE_ROWS_HIDDEN) == STATE_LIVE and OWNER_RULING_SCOPE_OVER_THE_EIGHT_IS_OPEN == true

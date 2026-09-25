@@ -482,3 +482,43 @@ bike sales: no row hidden, the offer masked on read — neither a completed reti
 `catalog_api.t27`, `commerce.t27` and `deeplink.t27` correct the facts the ruling changed,
 `schema_provenance.t27` carries the migration census 088 moved, and `tests/rental_only_wiring.rs`
 guards the source.
+
+## D19 addendum — nothing cannabis-related anywhere, decided 2026-09-25
+
+Owner decision, 2026-09-25, answer 12 of a numbered list, verbatim: «всё что касается канабиса нигде
+не должно быть» — nothing cannabis-related may appear anywhere. Kept at the end of this file, like
+the entries above, so that no line citation into it moves. This entry is the server half: the bot,
+the HTTP API and the docs. The Mini App's own copy is a separate change.
+
+Nothing is deleted from the database, no table is dropped and no migration is added. Every change
+stops SERVING or SENDING something, in code.
+
+* **Bot.** The strain-of-day buttons still under old messages answer with the rental menu, the one
+  `/menu` sends, instead of a strain card with a THC line and a per-gram price, and read no table.
+  `/admin` loses the line listing the old catalogue's tabs, `/factpost` its leaf, and the bot's
+  locale file the carousel's heading and arrows and the old unit of sale.
+* **API.** `GET /api/loyalty/tiers` serves every `perks` list empty and omits the tier named after
+  the old shop; that closes the perks question the 2026-09-24 addendum left open. The public
+  tech-tree reads (`/api/tech-tree/nodes`, `/nodes/:id`, `/achievements`) answer an empty roadmap,
+  not found and an empty badge list, because the stored roadmap and badges are the old shop's. The
+  share card builds only from a catalogue row the public catalog shows, so a row 085 hid answers
+  not found. The served OpenAPI document is held to a wider list of retired words.
+* **Docs.** `docs/README.md` is a TurboBaby index. `README.md`, the owner agent card,
+  `docs/DESIGN_SYSTEM.md` and `docs/SETUP_TEMPLATE.md` no longer describe the product as the old
+  shop.
+* **Guard.** `tests/server_text_vocabulary_wiring.rs` reads every string literal the server can
+  send (test code excluded) and the two front pages against the vocabulary. The few survivors are
+  listed with reasons: wire names of the retired catalogue kind, the file names of migrations 083
+  and 085, the old URLs `src/config.rs` refuses, and the key admin tokens are signed with.
+* **Kept, as records or as names.** Old migrations (D2), the history in this file, `docs/reports/`
+  and the commit history. Internal names that are never shown: the `strain` wire kind, the
+  `woody_*` localStorage keys (D19), the Railway project and service names the deploy runbook
+  checks. The reader of the dropped `strains` table stays compiled for one ignored test.
+* **Open.** The old catalogue's media under `assets/` (photos named after strains, the
+  paraphernalia, the garden sprites) is still served by path; removing it is a deletion this change
+  did not make. A loyalty profile that still stores the old shop's tier key is served that key by
+  the profile and leaderboard reads; re-keying it is a data change for the owner.
+
+The contracts carry the details: `specs/turbobaby/legacy_retirement.t27` records the ruling
+(`OWNER_RULING_2026_09_25_AT`) and classifies the surfaces, `bot_surface.t27` the carousel
+(`CAROUSEL_RETIRED_AT`), `locale_policy.t27` the locale struct's four removed fields.
