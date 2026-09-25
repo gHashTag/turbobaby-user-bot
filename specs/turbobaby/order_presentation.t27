@@ -1489,7 +1489,10 @@ pub fn order_presentation_cancel_is_told_by_a_line(answer: u8, reread: u8) bool 
 ; is the client-errors contract's refusal to hold (FAILURE_SENTENCE_DECLARATION), not this file's.
 pub const SCREEN_HAS_NO_RULE_FOR_A_REFUSED_CANCELLATION : bool = false;
 pub const SCREEN_HAS_NO_RULE_FOR_A_REFUSED_CANCELLATION_BEFORE_REPAIR : bool = true;
-pub const REFUSED_CANCELLATION_NOTE : str = "Since 2026-09-22 the screen reads the answer to a customer's cancellation through order_cancel_answer in src/trios/api_errors.rs, closes the dialog only on a confirmed success, withdraws the offer once the server has confirmed, reads the status again after every answer, holds an attempt whose outcome is unknown -- no answer, or a failure of the server's own -- until a fresh reading shows the order still cancellable, and tells every answer above the pending gate. What stays unpublished is narrower and belongs to the client-errors contract: an owner-approved sentence for the refusal the order-status contract declares once the order has left pending. The interim that ships until then, and what exactly is missing, are recorded there.";
+; CORRECTED 2026-09-25: the note's last two sentences named an unpublished sentence and the interim
+; shipped in its place. Owner question D was answered by delegation that day, so they now say
+; where the answer is recorded. Nothing the screen does changed with it.
+pub const REFUSED_CANCELLATION_NOTE : str = "Since 2026-09-22 the screen reads the answer to a customer's cancellation through order_cancel_answer in src/trios/api_errors.rs, closes the dialog only on a confirmed success, withdraws the offer once the server has confirmed, reads the status again after every answer, holds an attempt whose outcome is unknown -- no answer, or a failure of the server's own -- until a fresh reading shows the order still cancellable, and tells every answer above the pending gate. The sentence for the refusal the order-status contract declares once the order has left pending belongs to the client-errors contract. It was an interim from 2026-09-22 to 2026-09-25, when owner question D was answered by delegation, and what was decided and what it leaves open are recorded there (CONFLICTED_CANCELLATION_DECISION).";
 pub const REFUSED_CANCELLATION_NOTE_BEFORE_REPAIR : str = "The POST result is bound to a discarded local at src/ui/screens/order_detail_screen.rs:352 and the confirmation dialog is closed at :358 on both paths. No branch reads a status code, no state records a failure, and no i18n key exists for one. What the customer is told after a refused cancellation is therefore nothing, and this file declares the absence rather than a message.";
 pub const SCREEN_HAS_NO_RULE_FOR_AN_EXPIRED_LIVE_VIEW : bool = true;
 pub const EXPIRED_LIVE_VIEW_NOTE : str = "The tick loop at src/ui/screens/order_detail_screen.rs:439-446 ends after 360 iterations. Since 2026-09-22 one thing still reads the status after it: an answer to a cancellation, which drops the last reading and asks once more (CANCEL_REREAD_HANDLER_SITE), past the hour as within it. Nothing else runs. The badge at :247 depends on the presence of the last response and not on its age, and the payload at src/api/orders.rs:1908-1921 carries no timestamp that a freshness rule could consult, so there is still no shipped freshness rule to describe.";
@@ -1548,6 +1551,9 @@ pub const BIKE_LINE_ORDER_TOTAL_NOTE : str = "Owner question F. What an order ho
 ; is refused because the order has left pending. It is a question about a SENTENCE, so it is the
 ; client-errors contract's to hold (FAILURE_SENTENCE_DECLARATION) and is only named here. It is
 ; listed with the other three.
+; ANSWERED 2026-09-25: the owner delegated question D, and a 409 is told a key of its own since
+; that day. The client-errors contract holds the decision and its two named limits
+; (CONFLICTED_CANCELLATION_DECISION); A, B and C are untouched by it.
 ; Added 2026-09-22 with the money repair: questions E and F, both named refusals above -- which
 ; sentence, if any, stands beside a dashed order figure (ORDER_FIGURE_DASH_NOTE), and what an order
 ; holding a bike line shows as its total (BIKE_LINE_ORDER_TOTAL_NOTE). Letting the server send an
