@@ -31,6 +31,8 @@ AGENT_CARD = "specs/agents/turbobaby.t27"
 # (the detail's all-taken line and its key removed): availability 120 -> 132 declarations and
 # 34 -> 36 checks, locale_policy 136 -> 138 declarations. Merged 2026-09-26 on top of the /start
 # catalog line's 129/35, availability measures 141/37.
+# Re-measured 2026-09-26 for the kept-cart change (retired kinds stored, never served):
+# cart_persistence 213 -> 266 declarations and 43 -> 52 checks.
 SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     AGENT_CARD: {
         "module": "turbobaby-agent",
@@ -74,8 +76,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/cart_persistence.t27": {
         "module": "turbobaby-cart-persistence",
         "id": "turbobaby/cart-persistence",
-        "min_declarations": 213,
-        "min_checks": 43,
+        "min_declarations": 266,
+        "min_checks": 52,
     },
     "specs/turbobaby/catalog_api.t27": {
         "module": "catalog-api",

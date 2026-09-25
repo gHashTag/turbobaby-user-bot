@@ -408,7 +408,7 @@ pub struct MergeCartItemDto {
     ///
     /// Outbound it is skipped when absent rather than sent as a `0`. The
     /// server ignores this field on merge -- `collapse_merge_items`
-    /// (`src/api/cart.rs:626-634`) keeps only kind, catalog_id and quantity and
+    /// (`src/api/cart.rs:628-636`) keeps only kind, catalog_id and quantity and
     /// re-prices every line from the catalog -- so omitting it loses nothing
     /// the server reads, while a fabricated `0` would be a number this client
     /// never measured, written into a price-authoritative request. The server's
