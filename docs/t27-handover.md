@@ -547,7 +547,10 @@ The questions that ruling left open are listed in #63.
 * **I. Catalog copy (#59).** The detail screen still says "all bikes of this model are busy right
   now" from a seed snapshot when the seeded count is 0. The unmounted `bike_card.rs` still
   hard-codes a count. Admin Add inserts its row before the 2xx. The brain's `knowledge_base` still
-  offers PCX 150 / ADV 150 for CLICK 125.
+  offers PCX 150 / ADV 150 for CLICK 125. *Decided on 2026-09-25:* for now, NMAX 155 alone is
+  offered instead of CLICK 125 (DECISIONS.md, D12 amendment of that date; the seed,
+  `availability.t27`, gate 3 and the seed gate carry it). The brain's text is the operator's to
+  bring in line.
 * **J. Vocabulary and ownership (#62).** Should the nmax-155 rate be owned by pricing-honesty (as
   landed) or by rental-terms? Is a named copy bound by gate 3 accepted in place of an import the
   compiler lacks? New copy is needed for `T_MENU_DESC` / `T_MENU_NO_RESULTS`, and the strain-of-day
