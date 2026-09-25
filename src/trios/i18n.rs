@@ -499,7 +499,7 @@ pub const T_ORDER_DETAIL_CANCEL: Key = "order.detail.cancel";
 pub const T_ORDER_DETAIL_CANCEL_CONFIRM: Key = "order.detail.cancel_confirm";
 pub const T_ORDER_DETAIL_CANCELLED_BY_USER: Key = "order.detail.cancelled_by_user";
 /// A cancellation refused because the order has left pending (409). Copy chosen
-/// 2026-09-25 under the owner's delegation; `client_errors.t27` records it.
+/// and reworded 2026-09-25 under the owner's delegation; `client_errors.t27` records it.
 pub const T_ORDER_DETAIL_CANCEL_REFUSED: Key = "order.detail.cancel_refused";
 pub const T_ORDER_REORDER: Key = "order.reorder";
 
@@ -1154,7 +1154,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_ORDER_DETAIL_CANCEL => "Отменить заказ",
         T_ORDER_DETAIL_CANCEL_CONFIRM => "Отменить заказ? Бонусы и звёзды вернутся на счёт.",
         T_ORDER_DETAIL_CANCELLED_BY_USER => "Вы отменили заказ",
-        T_ORDER_DETAIL_CANCEL_REFUSED => "Этот заказ уже в работе, отменить его в приложении нельзя. Напишите менеджеру.",
+        T_ORDER_DETAIL_CANCEL_REFUSED => "Отменить этот заказ в приложении уже нельзя. Напишите менеджеру.",
         T_ORDER_REORDER => "Повторить заказ",
         // Profile screen
         T_PROFILE_MEMBERSHIP => "Ваш статус",
@@ -1754,7 +1754,7 @@ fn get_en_translation(key: Key) -> Value {
         T_ORDER_DETAIL_CANCEL => "Cancel order",
         T_ORDER_DETAIL_CANCEL_CONFIRM => "Cancel order? Bonus and stars will be refunded.",
         T_ORDER_DETAIL_CANCELLED_BY_USER => "You cancelled the order",
-        T_ORDER_DETAIL_CANCEL_REFUSED => "This order is already being handled and can't be cancelled in the app. Please message the manager.",
+        T_ORDER_DETAIL_CANCEL_REFUSED => "This order can no longer be cancelled in the app. Please message the manager.",
         T_ORDER_REORDER => "Reorder order",
         // Profile screen
         T_PROFILE_MEMBERSHIP => "Your membership status",

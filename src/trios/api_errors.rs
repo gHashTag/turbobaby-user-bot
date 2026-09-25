@@ -290,12 +290,15 @@ pub fn order_cancel_may_send(progress: OrderCancelProgress, since: StatusSinceAn
 /// those sentences speak of a cart, an item, a duplicate order and a price, and
 /// 409 is the one refusal this route actually makes (`cancel_order` in
 /// `src/api/orders.rs` answers it when the order has left pending). That
-/// refusal is told `T_ORDER_DETAIL_CANCEL_REFUSED`: the order is already being
-/// handled, the app cannot cancel it, write to the manager. Until 2026-09-25 it
-/// was told the general mapper's own fallback, whose "try again later" is false
-/// advice for it; the copy was chosen that day under the owner's delegation,
-/// and `client_errors.t27` records the decision. Any other refusal keeps that
-/// fallback.
+/// refusal is told `T_ORDER_DETAIL_CANCEL_REFUSED`: the app can no longer
+/// cancel this order, write to the manager. It says nothing about what the shop
+/// is doing with the order, because the same 409 answers an order the shop took,
+/// one it rejected and one already cancelled. Until 2026-09-25 it was told the
+/// general mapper's own fallback, whose "try again later" is false advice for
+/// it; the copy was chosen that day under the owner's delegation, reworded the
+/// same day so that it holds for every 409 (the first wording said the order was
+/// already being handled), and `client_errors.t27` records the decision. Any
+/// other refusal keeps that fallback.
 pub fn order_cancel_line(
     lang: Lang,
     progress: OrderCancelProgress,
@@ -702,7 +705,10 @@ mod tests {
     /// "try again later" is false advice: a repeat meets the same 409 for as
     /// long as the order stays where the shop moved it. Since then it has a key
     /// of its own, chosen under the owner's delegation of that day and recorded
-    /// in `client_errors.t27`.
+    /// in `client_errors.t27`. The first wording said the order was already
+    /// being handled, which is false when the shop rejected it or an earlier
+    /// attempt cancelled it; the sentence was reworded the same day to speak of
+    /// the app alone, and the last assertions below hold it there.
     #[test]
     fn a_refused_cancellation_is_told_its_own_sentence_and_not_the_fallback() {
         for lang in LANGS {
@@ -735,6 +741,19 @@ mod tests {
         // The next step it names is a person, and it is named in both locales.
         assert!(ru.contains("менеджер"), "{ru}");
         assert!(en.contains("manager"), "{en}");
+        // It says what the app can no longer do, which is true of every 409.
+        assert!(ru.contains("в приложении уже нельзя"), "{ru}");
+        assert!(en.contains("can no longer be cancelled in the app"), "{en}");
+        // And nothing about what the shop is doing with the order: the same 409
+        // answers an order the shop took, one it rejected and one already
+        // cancelled, so a claim that the order is being handled is false for
+        // two of the three (the first wording of 2026-09-25 made it).
+        for claim in ["в работе", "обрабат", "выполня"] {
+            assert!(!ru.contains(claim), "{ru} claims the order is {claim}");
+        }
+        for claim in ["being handled", "in progress", "processing", "accepted"] {
+            assert!(!en.contains(claim), "{en} claims the order is {claim}");
+        }
     }
 
     #[test]

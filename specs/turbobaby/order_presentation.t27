@@ -1552,8 +1552,8 @@ pub const BIKE_LINE_ORDER_TOTAL_NOTE : str = "Owner question F. What an order ho
 ; client-errors contract's to hold (FAILURE_SENTENCE_DECLARATION) and is only named here. It is
 ; listed with the other three.
 ; ANSWERED 2026-09-25: the owner delegated question D, and a 409 is told a key of its own since
-; that day. The client-errors contract holds the decision and its two named limits
-; (CONFLICTED_CANCELLATION_DECISION); A, B and C are untouched by it.
+; that day. The client-errors contract holds the decision and the one named limit still open, the
+; other closed by rewording that day (CONFLICTED_CANCELLATION_DECISION); A, B and C are untouched.
 ; Added 2026-09-22 with the money repair: questions E and F, both named refusals above -- which
 ; sentence, if any, stands beside a dashed order figure (ORDER_FIGURE_DASH_NOTE), and what an order
 ; holding a bike line shows as its total (BIKE_LINE_ORDER_TOTAL_NOTE). Letting the server send an
