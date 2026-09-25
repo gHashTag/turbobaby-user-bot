@@ -40,6 +40,7 @@ COMPONENTS=(
     "07-cart|screenshots/07-cart/index.html|NMAX 155"
     "08-member-cards|screenshots/08-member-cards/index.html|Member Cards"
     "09-quests|screenshots/09-quests/index.html|Quest Cards"
+    "10-order-steps|screenshots/10-order-steps/index.html|Order Steps"
     "11-modal|screenshots/11-modal/index.html|Modal"
     "12-toasts|screenshots/12-toasts/index.html|Toasts"
     "13-empty-states|screenshots/13-empty-states/index.html|Empty States"
