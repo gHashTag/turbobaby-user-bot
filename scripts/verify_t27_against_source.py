@@ -1710,6 +1710,33 @@ BINDINGS: tuple[dict[str, object], ...] = (
                "the padding split are both written against this one number, measured raw at "
                "the button outside the mode test and trimmed at the handler",
     },
+    # Added 2026-09-25 with the owner's removal of the 20+ box (second list, answer 1): the two
+    # places the removal is a number. The pushes are counted only in checkout_blockers' own
+    # `out.push(` shape; the tests build their expected lists with `vec![`, so they are not.
+    {
+        "name": "checkout_contact.BLOCKER_COUNT ~ store.rs checkout_blockers pushes",
+        "spec": "specs/turbobaby/checkout_contact.t27",
+        "const": "BLOCKER_COUNT",
+        "source": "src/trios/store.rs",
+        "extract": ("regex_count", NOT_IN_A_LINE_COMMENT + r"\bout\.push\(CheckoutBlocker::\w+\)"),
+        "relation": "equal",
+        "why": "the button's closed set of reasons; the age box left it on 2026-09-25 (the "
+               "owner, for now), and a sixth push is a reason the contract does not name",
+    },
+    {
+        "name": "checkout_contact.AGE_FIELD_COMPARISONS_IN_THE_ORDERS_MODULE ~ orders.rs absence",
+        "spec": "specs/turbobaby/checkout_contact.t27",
+        "const": "AGE_FIELD_COMPARISONS_IN_THE_ORDERS_MODULE",
+        "source": "src/api/orders.rs",
+        "extract": ("regex_count", NOT_IN_A_LINE_COMMENT + r"\bage_confirmed\s*[!=]="),
+        # The expected value is ZERO, so the scan must be shown to see the field before the
+        # zero is believed (D16): the line that stores it as sent.
+        "witness": r"age_confirmed: Set\(req\.age_confirmed\.unwrap_or\(false\)\)",
+        "relation": "equal",
+        "why": "SERVER_REQUIRES_AGE is false since the owner's answer of 2026-09-25; the "
+               "refusal it replaced was `req.age_confirmed != Some(true)`, and a comparison of "
+               "that field back in the orders module is that refusal's shape returning",
+    },
     # commerce.t27 declares FULFILLMENT_NAMES once and names neither the client's
     # Fulfillment::as_str (src/trios/store.rs) nor the server's admission list as a second
     # home for it, so it is bound to ONE source: the server's, which is what a bike line
