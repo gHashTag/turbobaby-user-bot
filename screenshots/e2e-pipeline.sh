@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# E2E Visual Regression Pipeline — Woody Weed Bot UI Kit
+# E2E Visual Regression Pipeline — TurboBaby UI Kit
 # ============================================================
 # Usage: ./screenshots/e2e-pipeline.sh [--serve|--snap|--verify|--all]
 #
@@ -35,12 +35,11 @@ COMPONENTS=(
     "02-colors|screenshots/02-colors/index.html|Color Palette"
     "03-buttons|screenshots/03-buttons/index.html|Buttons"
     "04-badges|screenshots/04-badges/index.html|Badges"
-    "05-strain-cards|screenshots/05-strain-cards/index.html|Strain Cards"
+    "05-bike-cards|screenshots/05-bike-cards/index.html|Bike Cards"
     "06-order-cards|screenshots/06-order-cards/index.html|Order Cards"
-    "07-cart|screenshots/07-cart/index.html|Northern Lights"
+    "07-cart|screenshots/07-cart/index.html|NMAX 155"
     "08-member-cards|screenshots/08-member-cards/index.html|Member Cards"
     "09-quests|screenshots/09-quests/index.html|Quest Cards"
-    "10-plants|screenshots/10-plants/index.html|Plant Growth"
     "11-modal|screenshots/11-modal/index.html|Modal"
     "12-toasts|screenshots/12-toasts/index.html|Toasts"
     "13-empty-states|screenshots/13-empty-states/index.html|Empty States"
@@ -93,12 +92,12 @@ snap() {
     
     PASS=0
     FAIL=0
-    CACHE_DIR="/tmp/woody-e2e-cache"
+    CACHE_DIR="/tmp/turbobaby-e2e-cache"
     mkdir -p "${CACHE_DIR}"
     
     # Initialize report
     cat > "${REPORT}" << 'EOF'
-# E2E Visual Regression Report — Woody Weed Bot UI Kit
+# E2E Visual Regression Report — TurboBaby UI Kit
 
 | # | Component | URL | HTTP Status | Expected Text | Result |
 |---|-----------|-----|-------------|---------------|--------|
