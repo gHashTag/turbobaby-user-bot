@@ -69,7 +69,7 @@ async fn seed_node(db: &turbobaby_bot::db::Database, id: &str, status: &str, dep
             "INSERT INTO tech_nodes \
              (id, name, description, category, icon, status, xp_required, xp_reward, \
               dependencies, unlocks, features, estimated_hours, priority) \
-             VALUES ($1, $2, '', 'core', '🌱', $3, 0, 0, $4::text[], '{}'::text[], \
+             VALUES ($1, $2, '', 'core', '🧩', $3, 0, 0, $4::text[], '{}'::text[], \
                      '{}'::text[], 0, 1)",
             [
                 id.into(),
@@ -229,9 +229,12 @@ async fn completing_a_node_requires_admin() {
     );
 }
 
+/// Owner, 2026-09-25: nothing cannabis-related anywhere. The stored roadmap is
+/// the old shop's, so the public reads no longer serve it -- not even a node
+/// seeded a moment ago. The list keeps its shape and stays consistent.
 #[tokio::test]
 #[ignore = "needs DATABASE_URL env var; run with --ignored"]
-async fn listing_nodes_is_public_and_reports_a_consistent_total() {
+async fn listing_nodes_is_public_and_serves_no_stored_node() {
     let Some((app, db)) = common::make_app_with_db().await else {
         eprintln!("DATABASE_URL not set — skipping");
         return;
@@ -248,17 +251,19 @@ async fn listing_nodes_is_public_and_reports_a_consistent_total() {
     .await;
     assert_eq!(resp.status, StatusCode::OK);
     let nodes = resp.body["nodes"].as_array().expect("nodes array");
-    assert!(!nodes.is_empty(), "the seeded node must be listed");
+    assert!(nodes.is_empty(), "a stored node was served: {}", resp.body);
     assert_eq!(
-        resp.body["total"].as_u64().unwrap_or(0) as usize,
-        nodes.len(),
+        resp.body["total"].as_u64(),
+        Some(0),
         "`total` must match the array it describes"
     );
 }
 
+/// The single-node read answers not found for a stored node too, for the
+/// same reason. The row itself is untouched: the admin route still sees it.
 #[tokio::test]
 #[ignore = "needs DATABASE_URL env var; run with --ignored"]
-async fn fetching_a_single_node_returns_it_or_404() {
+async fn fetching_a_single_node_is_not_found_even_when_it_is_stored() {
     let Some((app, db)) = common::make_app_with_db().await else {
         eprintln!("DATABASE_URL not set — skipping");
         return;
@@ -267,7 +272,7 @@ async fn fetching_a_single_node_returns_it_or_404() {
     let id = format!("tt6-{s}");
     seed_node(&db, &id, "available", &[]).await;
 
-    let found = send(
+    let stored = send(
         app.clone(),
         Request::builder()
             .uri(format!("/api/tech-tree/nodes/{id}"))
@@ -275,7 +280,12 @@ async fn fetching_a_single_node_returns_it_or_404() {
             .unwrap(),
     )
     .await;
-    assert_eq!(found.status, StatusCode::OK, "body: {}", found.body);
+    assert_eq!(
+        stored.status,
+        StatusCode::NOT_FOUND,
+        "body: {}",
+        stored.body
+    );
 
     let missing = send(
         app,
@@ -286,6 +296,11 @@ async fn fetching_a_single_node_returns_it_or_404() {
     )
     .await;
     assert_eq!(missing.status, StatusCode::NOT_FOUND);
+    assert_eq!(
+        status_of(&db, &id).await,
+        "available",
+        "the read must not change the stored row"
+    );
 }
 
 #[tokio::test]

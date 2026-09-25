@@ -1885,7 +1885,7 @@ mod tests {
 
     fn valid_set() -> SetRequest {
         SetRequest {
-            name: "Strain Set".into(),
+            name: "Legacy Set".into(),
             description: Some("desc".into()),
             icon: Some("icon".into()),
             strain_ids: Some(vec!["s1".into()]),
