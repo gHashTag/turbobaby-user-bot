@@ -11,15 +11,6 @@ This script re-derives the comparison. It is not a formatter and not a linter: i
 parses both files and asserts field equality, unit counts, and two absences that are
 decisions rather than omissions (see DECISIONS.md D9, D12, D14).
 
-Since 2026-09-25 it also reads the one decision the seed records as a LIST of family
-keys: pricing_policy.not_offered, what a closed family's customer is offered instead.
-Each offered key must be an offered family with a unit the SQL seeds as available --
-never a price-list-only family, which is what the CLICK 125 list named until the
-owner's decision of that date (DECISIONS.md, the D12 amendments of 2026-09-24 and
-2026-09-25) -- and a non-empty list must name, in offer_instead_source, an entry of
-`sources` that carries a date. The seed is a dated measurement; a decision written
-into it without a dated source is a number whose provenance nobody can check.
-
     python3 scripts/verify_fleet_seed.py           # quiet unless something is wrong
     python3 scripts/verify_fleet_seed.py -v        # print what passed
     python3 scripts/verify_fleet_seed.py --seed /tmp/planted.json   # negative control
@@ -187,6 +178,19 @@ def check_market_profile(seed: dict, problems: list[str]) -> None:
         problems.append(f"market.utc_offset_hours: {offset} is outside -12..+14")
 
 
+# Since 2026-09-25 this script also reads the one decision the seed records as a LIST of
+# family keys: pricing_policy.not_offered, what a closed family's customer is offered
+# instead. Each offered key must be an offered family with a unit the SQL seeds as
+# available -- never a price-list-only family, which is what the CLICK 125 list named
+# until the owner's decision of that date (DECISIONS.md, the D12 amendments of 2026-09-24
+# and 2026-09-25) -- and a non-empty list must name, in offer_instead_source, an entry of
+# `sources` that carries a date. The seed is a dated measurement; a decision written into
+# it without a dated source is a number whose provenance nobody can check.
+#
+# This note lives here and not in the module docstring on purpose: the specs cite lines
+# of this file (MARKET_SPEC, the unit-row regex, the market field map, the shape
+# patterns), and a paragraph added above them would move every one of those citations.
+# New code goes below check_market_profile, where no citation points.
 ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
