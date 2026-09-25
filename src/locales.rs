@@ -93,10 +93,10 @@ pub(crate) struct Locale {
     pub cart_open: String,
     // Loop #21: referrer-facing lifecycle messages (sent by notification worker)
     pub referral_friend_joined: String,
-    /// Only reachable by `notification_queue` rows queued before D5 — nothing
-    /// writes the `friend_watered` kind any more. Kept, and kept worded for the
-    /// garden, because that is what those rows are about.
-    pub garden_friend_watered_legacy: String,
+    // `garden_friend_watered_legacy` stood here, the garden message for queued
+    // `friend_watered` rows. Removed 2026-09-26 (owner: nothing cannabis-related
+    // anywhere): such rows are now held unsent (src/notification_queue.rs,
+    // `DeliverableKind`), and these comment lines keep every cited line put.
     pub referral_friend_ordered: String,
     pub referral_invite_progress_hint: String,
     pub referral_milestone_bonus: String,
@@ -221,7 +221,7 @@ fn ru() -> Locale {
         cart_open: "Открыть корзину".into(),
         // Loop #21
         referral_friend_joined: "🎉 {name} присоединился по вашей ссылке!".into(),
-        garden_friend_watered_legacy: "🔥 {name} полил растение и удерживает стрик {streak} дн.".into(),
+        // garden_friend_watered_legacy left on 2026-09-26 (see the struct).
         referral_friend_ordered: "🎉 {name} сделал первый заказ! Вам начислено {bonus} бонусных баллов.".into(),
         referral_invite_progress_hint: "Приглашайте больше друзей — получайте бонусы за их активность.".into(),
         referral_milestone_bonus: "🏆 Поздравляем! Вы достигли рубежа {milestone} друзей и получили {bonus} бонусных баллов от @{bot}.".into(),
@@ -310,7 +310,7 @@ fn en() -> Locale {
         cart_open: "Open cart".into(),
         // Loop #21
         referral_friend_joined: "🎉 {name} joined via your link!".into(),
-        garden_friend_watered_legacy: "🔥 {name} watered their plant and kept a {streak}-day streak.".into(),
+        // garden_friend_watered_legacy left on 2026-09-26 (see the struct).
         referral_friend_ordered: "🎉 {name} placed their first order! You earned {bonus} bonus points.".into(),
         referral_invite_progress_hint: "Invite more friends — earn bonuses for their activity.".into(),
         referral_milestone_bonus: "🏆 Congrats! You hit the {milestone} friends milestone and received {bonus} bonus points from @{bot}.".into(),

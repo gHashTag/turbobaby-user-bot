@@ -33,6 +33,8 @@ AGENT_CARD = "specs/agents/turbobaby.t27"
 # catalog line's 129/35, availability measures 141/37.
 # Re-measured 2026-09-26 for the kept-cart change (retired kinds stored, never served):
 # cart_persistence 213 -> 266 declarations and 43 -> 52 checks.
+# Re-measured 2026-09-26 for the two contracts the notification queue's held kinds changed:
+# notification_queue 270 -> 306 declarations and 52 -> 54 checks, locale_policy 136 -> 139 and 35 -> 36.
 SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     AGENT_CARD: {
         "module": "turbobaby-agent",
@@ -192,8 +194,11 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         # declarations naming them); merged 2026-09-26 on the integration branch, 140/35.
         # Answer 3's key added one declaration naming its recorder (137/35 on its own branch);
         # merged 2026-09-26, 141/35.
-        "min_declarations": 141,
-        "min_checks": 35,
+        # Raised 2026-09-26 to 139/36 on its own branch: the struct surface re-counted after the
+        # queue's held kinds took the retired garden message's field (two declarations and one
+        # test); merged 2026-09-26 on the integration branch, 144/36.
+        "min_declarations": 144,
+        "min_checks": 36,
     },
     "specs/turbobaby/loyalty_ledger.t27": {
         "module": "turbobaby-loyalty-ledger",
@@ -210,8 +215,9 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/notification_queue.t27": {
         "module": "turbobaby-notification-queue",
         "id": "turbobaby/notification-queue",
-        "min_declarations": 270,
-        "min_checks": 52,
+        # Raised 2026-09-26 from 270/52 to the measured count when the held kinds were recorded.
+        "min_declarations": 306,
+        "min_checks": 54,
     },
     "specs/turbobaby/observability.t27": {
         "module": "turbobaby-observability",
