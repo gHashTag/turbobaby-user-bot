@@ -1970,7 +1970,7 @@ async fn get_order_details(
         })?
         .map(|tx| tx.amount);
 
-    let mut order_json = serde_json::to_value(Order::from(model)).map_err(|e| {
+    let mut order_json = serde_json::to_value(Order::for_customer(model)).map_err(|e| {
         tracing::error!("get_order_details serialize: {e:?}");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
@@ -2506,7 +2506,7 @@ async fn get_user_orders(
             tracing::error!("get_user_orders SeaORM error: {:?}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
-    let orders: Vec<Order> = models.into_iter().map(Order::from).collect();
+    let orders: Vec<Order> = models.into_iter().map(Order::for_customer).collect();
     Ok(Json(json!({ "orders": orders })))
 }
 
