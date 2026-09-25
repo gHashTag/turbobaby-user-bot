@@ -127,7 +127,19 @@ impl Cart {
         }
     }
 
+    /// Add a line, or add to the line with its id.
+    ///
+    /// A line of a kind a cart does not serve never enters (2026-09-26), the
+    /// same predicate the two other ways in ask (`without_retired_lines` for a
+    /// saved cart, `from_server` for a server one). So no path puts a line of
+    /// the previous shop's catalogue into this cart: not a reorder, not a
+    /// screen nothing mounts. That is why no cart screen needs a neutral name
+    /// for such a line (specs/turbobaby/cart_persistence.t27, the section
+    /// reconciled with the owner's answer 3).
     pub fn add_item(&mut self, item: CartItem) {
+        if !item.is_served() {
+            return;
+        }
         if let Some(existing) = self.items.iter_mut().find(|i| i.id == item.id) {
             existing.quantity = existing.quantity.saturating_add(item.quantity);
         } else {

@@ -1158,16 +1158,16 @@ pub fn CheckoutScreen() -> Element {
                         } else {
                             for item in cart_items.iter() {
                                 div { style: "display:flex; gap:10px; align-items:center; margin-bottom:10px;",
-                                    if let Some(url) = crate::trios::legacy_view::cart_line_image(crate::ui::api::http::cart_item_type_to_kind(&item.item_type), &item.image_url) {
+                                    if let Some(url) = item.image_url.as_ref() {
                                         img {
                                             src: "{url}",
-                                            alt: "{crate::trios::legacy_view::shown_cart_line_name(lang, crate::ui::api::http::cart_item_type_to_kind(&item.item_type), &item.name)}",
+                                            alt: "{item.name}",
                                             style: "width:44px; height:44px; object-fit:cover; border:2px solid #2a2a4a; flex-shrink:0;",
                                             loading: "lazy",
                                         }
                                     }
                                     div { style: "flex:1; min-width:0;",
-                                        div { style: "font-size:13px; color:#e8e8e8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;", "{crate::trios::legacy_view::shown_cart_line_name(lang, crate::ui::api::http::cart_item_type_to_kind(&item.item_type), &item.name)}" }
+                                        div { style: "font-size:13px; color:#e8e8e8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;", "{item.name}" }
                                         div { style: "font-size:12px; color:#8b8b9e;", "x{item.quantity}" }
                                     }
                                     div { style: "font-size:13px; font-weight:700; color:#e8e8e8;",
