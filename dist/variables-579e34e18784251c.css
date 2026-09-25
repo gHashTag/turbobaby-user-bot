@@ -5,8 +5,12 @@
  * `main.css` (156 обращений `var(--…)`) и `admin.css` (157), и оба
  * подключаются в `index.html` строго после этого файла.
  * Заголовок правится отдельно от значений намеренно — имя в комментарии
- * пережило «полный woody sweep» (72487cc) ровно потому, что ни один гейт
- * не смотрит на комментарии, а человек, открывший файл, смотрит.
+ * пережило полную чистку старого имени (72487cc) ровно потому, что ни один
+ * гейт не смотрел на комментарии, а человек, открывший файл, смотрит; а
+ * файл отдаётся браузеру целиком, вместе с комментариями.
+ *
+ * Решение владельца 2026-09-25 (#12): три градиента старого меню сняты —
+ * их не читало ни одно правило ни в main.css, ни в admin.css.
  */
 :root {
   /* Палитра */
@@ -55,9 +59,6 @@
   --gradient-primary: linear-gradient(135deg, var(--green), var(--cyan));
   --gradient-secondary: linear-gradient(135deg, var(--bg2), var(--bg2));
   --gradient-success: linear-gradient(135deg, var(--green), var(--cyan));
-  --gradient-sativa: linear-gradient(135deg, rgba(255, 230, 0, 0.2), transparent);
-  --gradient-indica: linear-gradient(135deg, rgba(179, 136, 255, 0.2), transparent);
-  --gradient-hybrid: linear-gradient(135deg, rgba(57, 255, 20, 0.2), transparent);
   --gradient-disabled: linear-gradient(135deg, rgba(255, 255, 255, 0.1), transparent);
 
   /* Typography */
