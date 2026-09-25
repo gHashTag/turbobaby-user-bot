@@ -25,6 +25,8 @@ AGENT_CARD = "specs/agents/turbobaby.t27"
 
 # To add a contract: add one entry after measuring its parse declaration floor and its
 # test/invariant/bench floor with the pinned compiler. Discovery supplies the tripwire. All 45 floors equal the measured counts as of 2026-09-24.
+# Re-measured 2026-09-25 for the two contracts the owner's CLICK 125 redirect decision changed:
+# availability 114 -> 120 declarations and 32 -> 34 checks, order_money 114 -> 115 declarations.
 SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     AGENT_CARD: {
         "module": "turbobaby-agent",
@@ -47,8 +49,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/availability.t27": {
         "module": "availability",
         "id": "turbobaby/availability",
-        "min_declarations": 114,
-        "min_checks": 32,
+        "min_declarations": 120,
+        "min_checks": 34,
     },
     "specs/turbobaby/bike_catalog.t27": {
         "module": "bike-catalog",
@@ -187,7 +189,7 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/order_money.t27": {
         "module": "turbobaby-order-money",
         "id": "turbobaby/order-money",
-        "min_declarations": 114,
+        "min_declarations": 115,
         "min_checks": 37,
     },
     "specs/turbobaby/order_presentation.t27": {
