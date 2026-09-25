@@ -102,7 +102,7 @@ pushed and nothing is deployed**: a customer sees none of it until the branch re
 | 8, «Нет» | none | Nothing to change: the rental-term discount percentages stay on the bike card | — |
 | 9, undecided | none | `T_BIKE_UNITS_EMPTY` was not touched | Still undecided; question I stays open for it |
 | 10, NMAX 155 «пока» | `t27/offer-nmax` | The seed's `offer_instead` for CLICK 125 is `["nmax-155"]`, marked provisional with a dated source. `availability.t27` holds `CLICK_125_REDIRECTS` and `CLICK_125_REDIRECTS_ARE_PROVISIONAL`, and gate 3 binds both to the seed (the 2 new bindings). The seed gate refuses a redirect to a family with no available unit. DECISIONS.md has a D12 amendment | No customer sentence changed: the screen already offered NMAX 155 alone. The brain's `knowledge_base` still names PCX 150 / ADV 150, and that text is the operator's to change |
-| 11, delegated | `t27/cancel-refused-copy` | A refused cancellation (409, the order has left pending) shows `T_ORDER_DETAIL_CANCEL_REFUSED` in ru and en instead of "try again later". Recorded as `CONFLICTED_CANCELLATION_DECISION` in `client_errors.t27`. Every `i18n.rs` line citation below the new key was re-pinned | Two limits are named in the contract, and the owner changes them together with the words: the sentence describes the order, so its first clause is false when the shop rejected the order or an earlier attempt with an unknown outcome cancelled it; and the order card has no link to the manager |
+| 11, delegated | `t27/cancel-refused-copy` | A refused cancellation (409, the order has left pending) shows `T_ORDER_DETAIL_CANCEL_REFUSED` in ru and en instead of "try again later". Recorded as `CONFLICTED_CANCELLATION_DECISION` in `client_errors.t27`. Every `i18n.rs` line citation below the new key was re-pinned. Later the same day the operator reworded it under the same delegation, same key and same lines: «Отменить этот заказ в приложении уже нельзя. Напишите менеджеру.» / "This order can no longer be cancelled in the app. Please message the manager." (`CONFLICTED_CANCELLATION_REWORDED_AT`) | One limit is named in the contract and is the owner's to change with the words: the order card has no link to the manager. The other limit named that day was CLOSED by the rewording on 2026-09-25: the first wording said the order was already being handled, which is false when the shop rejected the order or an earlier attempt with an unknown outcome cancelled it |
 | 12, client half | `t27/no-cannabis-ui` | 14 cannabis-era keys deleted from `src/trios/i18n.rs`, each line replaced by a comment so that no line citation moved. 5 arms cut to their non-cannabis half and 2 aligned with their other-language twin. 128 files of the old shop's media left `assets/` (13 stay). Served comments in `index.html` and `styles/` cleaned. Guarded by `tests/no_cannabis_client_wiring.rs` | The 20+ age gate stays, because item 12 did not answer that question. The `woody_*` storage keys keep their prefix, because renaming one discards saved drafts |
 | 12, server half | `t27/no-cannabis-server` | The strain-of-day buttons answer with the rental menu. `GET /api/loyalty/tiers` serves no perks and omits the old shop's tier. The public tech-tree reads answer empty. Share cards are built only from rows the catalog shows. The promo sales report withholds names from the dropped table. The docs describe TurboBaby only. Guarded by `tests/server_text_vocabulary_wiring.rs` | A loyalty profile that still stores the old tier key is served that key; re-keying it is a data change for the owner. Old migrations, `docs/reports/` and git history are kept (D2) |
 | 13 onwards, delegated | `t27/event-drafts-guard` | Publish refuses every stored promo draft: the two event kinds, the retired shop's kinds and any kind nobody classified. Nothing is deleted, and a refused row stays an unstamped draft. Recorded as `PUBLISH_REFUSAL_*` in `promo_broadcast.t27`; guarded by `tests/promo_publish_wiring.rs` | By the same delegation, the admin archive tabs and the statuses stay and were not changed. The admin HTTP broadcast sends admin-typed text, not a draft, and is unchanged |
@@ -587,14 +587,21 @@ None of these is unblocked by more `.t27`:
   delegation.* The owner answered item 11 of that day's list with "I don't understand what this
   is, think it over" (translated), which hands the wording over and approves no text. Since then a
   409 (the order has already left pending) shows its own key, `T_ORDER_DETAIL_CANCEL_REFUSED`, in
-  ru and en: the order is already being handled, it can't be cancelled in the app, message the
-  manager. From 2026-09-22 until then it showed the generic `T_API_ERR_UNKNOWN`, whose "try again
-  later" was false here. `client_errors.t27` records the decision (`CONFLICTED_CANCELLATION_DECISION`)
-  and the two limits it leaves open, both the owner's to change with the words. The sentence
-  describes the order, not the attempt, so its first clause is false when the order left pending
-  because the shop rejected it, or because an earlier attempt of the customer's own, whose outcome
-  was unknown, did cancel it; the re-read status label beside it then reads Cancelled. And the
-  order card has no link to the manager; `T_BIKE_ASK_MANAGER` is still the one existing candidate.
+  ru and en. The first wording said the order was already being handled; later the same day the
+  operator reworded it under the same delegation to «Отменить этот заказ в приложении уже нельзя.
+  Напишите менеджеру.» / "This order can no longer be cancelled in the app. Please message the
+  manager." From 2026-09-22 until then it showed the generic `T_API_ERR_UNKNOWN`, whose "try again
+  later" was false here. `client_errors.t27` records the decision (`CONFLICTED_CANCELLATION_DECISION`,
+  `CONFLICTED_CANCELLATION_REWORDED_AT`). The first wording left two limits open; the first of them
+  was CLOSED by the rewording on 2026-09-25. That wording described the order, not the attempt, so
+  its first clause was false when the order left pending because the shop rejected it, or because
+  an earlier attempt of the customer's own, whose outcome was unknown, did cancel it. The new
+  sentence says only what the app can no longer do, which holds for every 409
+  (`CONFLICTED_CANCELLATION_SENTENCE_IS_TRUE_OF_EVERY_CONFLICT`), and the host tests in
+  `src/trios/api_errors.rs` now refuse any claim about what the shop is doing with the order. The
+  second limit stays open and is the owner's to change with the words: the order card has no link
+  to the manager; `T_BIKE_ASK_MANAGER` is still the one existing candidate. The rewording replaced
+  the two `i18n.rs` rows on their own lines, so no citation moved.
   The key moved every `i18n.rs` line citation below it, and all of them were re-pinned on the
   same branch. The first pass missed one, in `legacy_retirement.t27`, because its path wrapped
   across two comment lines and a same-line search for `src/trios/i18n.rs:NNN` cannot see it; a
