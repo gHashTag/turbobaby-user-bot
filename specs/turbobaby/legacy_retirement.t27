@@ -772,7 +772,8 @@ pub fn report_prints_stored_name(kind_written_by_a_live_subject: bool, link_stor
 ;      old checkout stored did -- the same section there;
 ;   3. the server cart (GET and POST /api/cart, POST /api/cart/merge): a line of a retired kind --
 ;      every kind the cart API accepts -- keeps its id and figures and is served the neutral name
-;      and no picture;
+;      and no picture. RECONCILED 2026-09-26, see below: such a line is not served at all, under
+;      turbobaby/cart-persistence's rule, and nothing on a cart's path renames a line;
 ;   4. the bonus history (GET /api/loyalty/:telegram_id/bonus-history): a stored description is
 ;      served only when it is one of the four sentences this repository writes, word for word
 ;      apart from its figures (OWNER_ANSWER_3_DESCRIBED_TX_TYPE_COUNT). A garden row's, the
@@ -785,7 +786,8 @@ pub fn report_prints_stored_name(kind_written_by_a_live_subject: bool, link_stor
 ;      garden's label is the one it would print for the stored type. This is what reaches a bundle
 ;      cached before answer 3, which withholding the description alone would not have reached;
 ;      the client guard below covers the bundles built after it.
-; Guarded on the client, where it builds the text itself, four (OWNER_ANSWER_3_CLIENT_GUARDS):
+; Guarded on the client, where it builds the text itself, four on this answer's branch; two since
+; the reconciliation below removed the device-cart pair (OWNER_ANSWER_3_CLIENT_GUARDS):
 ;   the order screens print the neutral name in the reader's language; a garden-era bonus row
 ;   carries the generic label T_PROFILE_BONUS_OTHER instead of the garden's, whatever type a server
 ;   serves it, and the garden's key stays declared and translated and is printed by no screen; and
@@ -798,7 +800,8 @@ pub fn report_prints_stored_name(kind_written_by_a_live_subject: bool, link_stor
 ;   beside the neutral name. The one other reader of a device cart line, CartItemComponent, is
 ;   mounted by no screen; it reads the line through the same two rules, so mounting it cannot
 ;   bring the stored name or picture back.
-; Analysed and left, six, each with its reason (OWNER_ANSWER_3_LEFT_READS):
+; Analysed and left, six on this answer's branch, each with its reason; four since the
+; reconciliation below, which names the two its neighbours closed (OWNER_ANSWER_3_LEFT_READS):
 ;   * the loyalty profile's stored tier key: the profile screen maps the old shop's key to a card
 ;     and prints the card's label, never the key; the leaderboard that serves it raw is read by
 ;     the admin screen alone;
@@ -810,7 +813,8 @@ pub fn report_prints_stored_name(kind_written_by_a_live_subject: bool, link_stor
 ;     answer of 2026-09-25 (#7) left open (LEGACY_PATHS_REPOINTED_ON_2026_09_25 above);
 ;   * the abandoned-cart reminder, a bot send: it reminds a cart at most twice (its count never
 ;     resets), and since 085 hid the last kind the cart API accepts no cart line can be written, so
-;     no reminder is left that could carry a stored name;
+;     no reminder is left that could carry a stored name (CLOSED 2026-09-26 by
+;     turbobaby/cart-persistence: the reason missed a cart kept from before 085);
 ;   * the referral, quest-scan and game reads: the referral and game reads are numbers, the
 ;     customers' own names and compiled-in text. The quest scan's reply does carry a stored name,
 ;     the scanned location's -- admin-typed and seeded by no migration -- but the kept quest prints
@@ -821,9 +825,31 @@ pub fn report_prints_stored_name(kind_written_by_a_live_subject: bool, link_stor
 ;     the kind since D5 removed the garden, and the worker ends every row it hands out after three
 ;     passes, sent or not, so the arm can fire only for a row queued before D5 that was never
 ;     handed out. Not changed: no neutral sentence was given for it, and the one row it could
-;     still reach is one nobody has shown to exist.
+;     still reach is one nobody has shown to exist. CLOSED 2026-09-26 by
+;     turbobaby/notification-queue, which holds such a row unsent.
 ; Nothing here retires a surface: every surface stays reachable and every row stays, so no state
 ; above moves (OWNER_ANSWER_3_CHANGES_A_STATE) and COMPLETED_RETIREMENT_COUNT stays as it is.
+; RECONCILED 2026-09-26, when this answer's branch was merged with two changes of that day that
+; reach further, so that the contracts say one thing:
+;   * THE CART. The kept-cart change (turbobaby/cart-persistence, SERVED_CART_KINDS) serves no
+;     line of a retired kind at all: the cart API neither lists nor sums one, the abandoned-cart
+;     reminder neither sums nor names one, and the Mini App drops one from a saved cart and from a
+;     server cart. Its rule was kept and this answer's cart path removed: the server cart's
+;     neutral name and missing picture (read 3 above) and the two device-cart guards (the neutral
+;     name and the stored picture on the cart, the checkout and CartItemComponent). A line that
+;     never reaches a customer needs no name, and a served line is a rental line whose name and
+;     picture are its own. The one place a line could still have entered the Mini App's cart
+;     without that predicate, Cart::add_item (a reorder, or a screen nothing mounts), asks it too
+;     since the same day, so no cart screen is handed such a line. OWNER_ANSWER_3_SERVER_READS
+;     keeps read 3, which the neighbour now takes out of sight; the client guards are two.
+;   * THE REMINDER. The fourth read left above said no reminder could carry a stored name, since
+;     no cart line of a retired kind can be written. A cart kept from before 083 and 085 still
+;     holds such lines, so the reminder could; the kept-cart change closed it (its reads join
+;     only served lines, and a cart of hidden lines is never due).
+;   * THE GARDEN'S NOTIFICATION ARM. The sixth read left above is closed by
+;     turbobaby/notification-queue (HELD_KINDS_DECIDED_AT): a queued friend_watered row, and a row of
+;     any kind nobody classified, is held unsent, and the garden's message left src/locales.rs.
+; So four reads stay analysed and left, and the two the neighbours closed are named below.
 pub const OWNER_ANSWER_3_AT : str = "2026-09-25";
 pub const OWNER_ANSWER_3_READ_BY : str = "operator";
 pub const OWNER_ANSWER_3_READ_AS : str = "Analyse all the cannabis-era content a customer could still see from stored data and take it out of sight, without deleting or rewriting stored data.";
@@ -834,16 +860,25 @@ pub const OWNER_ANSWER_3_SERVER_READ_COUNT : u8 = 5;
 pub const OWNER_ANSWER_3_SERVER_READS : [5]str = [
     "order_lines", "order_shop", "server_cart_lines", "bonus_descriptions", "bonus_garden_types",
 ];
-pub const OWNER_ANSWER_3_CLIENT_GUARD_COUNT : u8 = 4;
-pub const OWNER_ANSWER_3_CLIENT_GUARDS : [4]str = [
-    "order_line_name_in_the_readers_language", "garden_bonus_label", "device_cart_line_names",
-    "device_cart_line_pictures",
+pub const OWNER_ANSWER_3_CLIENT_GUARD_COUNT : u8 = 2;
+pub const OWNER_ANSWER_3_CLIENT_GUARDS : [2]str = [
+    "order_line_name_in_the_readers_language", "garden_bonus_label",
 ];
-pub const OWNER_ANSWER_3_LEFT_READ_COUNT : u8 = 6;
-pub const OWNER_ANSWER_3_LEFT_READS : [6]str = [
-    "loyalty_tier_key", "star_history", "retired_surface_reads", "abandoned_cart_reminder",
-    "referral_quest_game_reads", "garden_notification_arm",
+pub const OWNER_ANSWER_3_LEFT_READ_COUNT : u8 = 4;
+pub const OWNER_ANSWER_3_LEFT_READS : [4]str = [
+    "loyalty_tier_key", "star_history", "retired_surface_reads", "referral_quest_game_reads",
 ];
+; What the reconciliation of 2026-09-26 changed here, above: the counts on this answer's own branch,
+; the cart path removed in favour of the neighbour's rule, and the two left reads the neighbours
+; closed, each with the contract that closed it.
+pub const OWNER_ANSWER_3_RECONCILED_AT : str = "2026-09-26";
+pub const OWNER_ANSWER_3_CLIENT_GUARD_COUNT_ON_ITS_BRANCH : u8 = 4;
+pub const OWNER_ANSWER_3_LEFT_READ_COUNT_ON_ITS_BRANCH : u8 = 6;
+pub const OWNER_ANSWER_3_CART_RULE_OWNER_ID : str = "turbobaby/cart-persistence";
+pub const OWNER_ANSWER_3_RENAMES_A_CART_LINE : bool = false;
+pub const OWNER_ANSWER_3_CART_GUARDS_REMOVED : [2]str = ["device_cart_line_names", "device_cart_line_pictures"];
+pub const OWNER_ANSWER_3_LEFT_READS_CLOSED : [2]str = ["abandoned_cart_reminder", "garden_notification_arm"];
+pub const OWNER_ANSWER_3_LEFT_READS_CLOSED_BY_IDS : [2]str = ["turbobaby/cart-persistence", "turbobaby/notification-queue"];
 pub const OWNER_ANSWER_3_DESCRIBED_TX_TYPE_COUNT : u8 = 4;
 ; How many bonus types a customer is served without their type (GARDEN_ERA_TX_TYPES in the rules'
 ; module), and that the type they are served instead is the empty one (WITHHELD_TX_TYPE there).
@@ -1305,12 +1340,10 @@ test the_answer_3_masks_reads_and_writes_no_row {
     assert OWNER_ANSWER_3_SERVER_READ_COUNT == 5;
     assert OWNER_ANSWER_3_WITHHELD_TX_TYPE_COUNT == 2;
     assert OWNER_ANSWER_3_WITHHELD_TX_TYPE_IS_EMPTY == true;
-    assert OWNER_ANSWER_3_LEFT_READS[5] == "garden_notification_arm";
-    assert OWNER_ANSWER_3_LEFT_READ_COUNT == 6;
+    assert OWNER_ANSWER_3_LEFT_READS[3] == "referral_quest_game_reads";
+    assert OWNER_ANSWER_3_LEFT_READ_COUNT == 4;
     assert OWNER_ANSWER_3_CLIENT_GUARDS[1] == "garden_bonus_label";
-    // The device cart hides the stored picture as well as the stored name.
-    assert OWNER_ANSWER_3_CLIENT_GUARDS[3] == "device_cart_line_pictures";
-    assert OWNER_ANSWER_3_CLIENT_GUARD_COUNT == 4;
+    assert OWNER_ANSWER_3_CLIENT_GUARD_COUNT == 2;
     assert OWNER_ANSWER_3_DESCRIBED_TX_TYPE_COUNT == 4;
     // Nothing stored moves, and the archive reads it whole.
     assert OWNER_ANSWER_3_WRITES_ROWS == false;
@@ -1323,6 +1356,28 @@ test the_answer_3_masks_reads_and_writes_no_row {
     // One key declared for the neutral name; the garden label's key stays.
     assert OWNER_ANSWER_3_KEYS_ADDED == 1;
     assert OWNER_ANSWER_3_KEYS_DELETED == 0;
+}
+
+test the_answer_3_cart_path_gave_way_to_the_kept_cart_rule {
+    // Reconciled 2026-09-26: a cart line of a retired kind is not served at all, under the
+    // neighbour's rule, so this answer renames no cart line and guards no device cart.
+    assert OWNER_ANSWER_3_RECONCILED_AT == "2026-09-26";
+    assert OWNER_ANSWER_3_CART_RULE_OWNER_ID == "turbobaby/cart-persistence";
+    assert OWNER_ANSWER_3_CART_RULE_OWNER_ID != ID;
+    assert OWNER_ANSWER_3_RENAMES_A_CART_LINE == false;
+    assert OWNER_ANSWER_3_SERVER_READS[2] == "server_cart_lines";
+    assert OWNER_ANSWER_3_CART_GUARDS_REMOVED[0] == "device_cart_line_names";
+    assert OWNER_ANSWER_3_CART_GUARDS_REMOVED[1] == "device_cart_line_pictures";
+    assert OWNER_ANSWER_3_CLIENT_GUARD_COUNT + OWNER_ANSWER_3_CART_GUARDS_REMOVED.len == OWNER_ANSWER_3_CLIENT_GUARD_COUNT_ON_ITS_BRANCH;
+    // The two reads left on the branch that the neighbours closed, each with its closer.
+    assert OWNER_ANSWER_3_LEFT_READS_CLOSED[0] == "abandoned_cart_reminder";
+    assert OWNER_ANSWER_3_LEFT_READS_CLOSED_BY_IDS[0] == "turbobaby/cart-persistence";
+    assert OWNER_ANSWER_3_LEFT_READS_CLOSED[1] == "garden_notification_arm";
+    assert OWNER_ANSWER_3_LEFT_READS_CLOSED_BY_IDS[1] == "turbobaby/notification-queue";
+    assert OWNER_ANSWER_3_LEFT_READS_CLOSED.len == OWNER_ANSWER_3_LEFT_READS_CLOSED_BY_IDS.len;
+    assert OWNER_ANSWER_3_LEFT_READ_COUNT + OWNER_ANSWER_3_LEFT_READS_CLOSED.len == OWNER_ANSWER_3_LEFT_READ_COUNT_ON_ITS_BRANCH;
+    // Hiding is still not deleting.
+    assert OWNER_ANSWER_3_WRITES_ROWS == false;
 }
 
 test the_identity_of_this_contract_is_fixed {
@@ -1415,3 +1470,6 @@ invariant the_age_gate_answer_moves_no_stored_data_and_retires_no_surface
 
 invariant the_answer_3_hides_what_it_reads_and_writes_nothing
     assert OWNER_ANSWER_3_WRITES_ROWS == false and OWNER_ANSWER_3_ADDS_A_MIGRATION == false and OWNER_ANSWER_3_CHANGES_A_STATE == false and OWNER_ANSWER_3_CHANGES_AN_ADMIN_READ == false
+
+invariant the_answer_3_renames_no_cart_line
+    assert OWNER_ANSWER_3_RENAMES_A_CART_LINE == false and OWNER_ANSWER_3_CLIENT_GUARD_COUNT + OWNER_ANSWER_3_CART_GUARDS_REMOVED.len == OWNER_ANSWER_3_CLIENT_GUARD_COUNT_ON_ITS_BRANCH

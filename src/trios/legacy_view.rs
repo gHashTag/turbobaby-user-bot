@@ -12,7 +12,7 @@
 //! cannot classify all of it. Every rule therefore fails closed: a customer is
 //! served what this code can vouch for, and the rest is replaced or withheld.
 //!
-//! Four reads, and the rules they get:
+//! Three reads, and the rules they get:
 //!
 //! * An ORDER LINE of a retired kind -- any line that is not a bike line -- is
 //!   served as the neutral name plus its stored quantity and unit price, and
@@ -24,27 +24,28 @@
 //!   it too. `specs/turbobaby/order_presentation.t27` records the rule.
 //! * The SHOP an order names is withheld when it names the previous shop
 //!   ([`customer_shop_id`]).
-//! * A SERVER CART line of a retired kind keeps its identity and its figures and
-//!   loses its stored name and picture ([`cart_line_name`], [`cart_line_image`]).
 //! * A BONUS HISTORY row's stored description is served only when it is one of
 //!   the sentences this repository writes, word for word apart from its figures
 //!   ([`customer_bonus_description`]), and a garden-era row's type is served
 //!   empty ([`customer_bonus_tx_type`]), so every bundle -- an old cached one
 //!   too -- labels it with its generic bonus label instead of the garden's.
 //!
+//! A CART is not this module's. Answer 3 first masked a cart line of a retired
+//! kind here too, under the neutral name and with no picture, on the server and
+//! on a cart kept on the device. The kept-cart change of 2026-09-26 went
+//! further: such a line is not served at all -- not by the cart API, not by the
+//! abandoned-cart reminder, and not into the Mini App's cart, whose every way
+//! in asks the same predicate (`trios::pricing::cart_kind_is_served`;
+//! `specs/turbobaby/cart_persistence.t27`, `SERVED_CART_KINDS`). When the two
+//! were merged on 2026-09-26 that rule was kept and the neutral-name cart path
+//! was removed: a line that never reaches a customer needs no name.
+//!
 //! The client's half is where the client builds the text itself:
 //! [`shown_line_name`] prints the neutral name in the reader's language on the
-//! order screens; [`shown_cart_line_name`] prints it for every cart line of a
-//! retired kind, because a cart kept on the device was written by an older
-//! bundle with the old item's name, and the cart and the checkout draw such a
-//! line's picture only through [`cart_line_image`], the server's own rule, so
-//! the stored picture stays hidden there too (the unmounted
-//! `CartItemComponent` in `src/ui/components/cart_item.rs` reads the line the
-//! same way, so mounting it cannot bring either back); and a garden-era bonus
-//! row carries the generic label since answer 3 (`bonus_tx_label` in
-//! `src/ui/screens/profile_screen.rs`), whatever type a server serves it.
-//! `specs/turbobaby/legacy_retirement.t27` records the answer and classifies
-//! the reads.
+//! order screens, and a garden-era bonus row carries the generic label since
+//! answer 3 (`bonus_tx_label` in `src/ui/screens/profile_screen.rs`), whatever
+//! type a server serves it. `specs/turbobaby/legacy_retirement.t27` records the
+//! answer and classifies the reads.
 //!
 //! Nothing in this file names the old goods: the fixtures below are neutral on
 //! purpose (`tests/legacy_vocabulary_wiring.rs` reads every literal under
@@ -84,11 +85,6 @@ pub const KEPT_LINE_KEYS: [&str; 2] = ["quantity", "unit_price"];
 
 /// The language the server writes the neutral name in.
 pub const SERVED_NAME_LANG: Lang = Lang::Russian;
-
-/// The one cart kind that is not the old catalogue's: the bike rental line
-/// migration 081 admitted. Every other kind the cart table admits is one of the
-/// four the old catalogue sold.
-pub const LIVE_CART_KIND: &str = "bike_rental";
 
 /// The previous shop's name, as every shop value its checkout ever stored
 /// spells it (each carries it, up to the brand sweep of 2026-09-14). Read from
@@ -192,33 +188,6 @@ pub fn customer_shop_id(stored: Option<String>) -> Option<String> {
     stored.filter(|shop| !names_the_old_shop(shop))
 }
 
-/// Whether a server cart line is of a retired kind.
-pub fn cart_line_is_retired(kind: &str) -> bool {
-    kind != LIVE_CART_KIND
-}
-
-/// A server cart line's name, as its customer is served it.
-pub fn cart_line_name(kind: &str, stored: &str) -> String {
-    if cart_line_is_retired(kind) {
-        previous_catalogue_name(SERVED_NAME_LANG).to_string()
-    } else {
-        stored.to_string()
-    }
-}
-
-/// A cart line's picture, as its customer is served it: none for a retired
-/// kind, whose stored path names the old item (and whose file left `assets/`
-/// on 2026-09-25). The server's cart answers through it, and so do the cart
-/// and the checkout screens for a cart kept on the device, whose stored path
-/// may be an absolute storage address that still resolves.
-pub fn cart_line_image(kind: &str, stored: &Option<String>) -> Option<String> {
-    if cart_line_is_retired(kind) {
-        None
-    } else {
-        stored.clone()
-    }
-}
-
 /// Whether a bonus row is of a garden-era type.
 pub fn is_garden_era_tx(tx_type: &str) -> bool {
     GARDEN_ERA_TX_TYPES.contains(&tx_type)
@@ -296,21 +265,6 @@ pub fn shown_line_name(lang: Lang, name: &str) -> String {
     if name == previous_catalogue_name(SERVED_NAME_LANG)
         || name == previous_catalogue_name(Lang::English)
     {
-        previous_catalogue_name(lang).to_string()
-    } else {
-        name.to_string()
-    }
-}
-
-/// The name a customer screen prints for a CART line of `kind` (the kind names
-/// `cart_item_type_to_kind` in `src/ui/api/http.rs` sends): the neutral name in
-/// the reader's language for a retired kind, whatever name the line carries,
-/// and the line's own name otherwise. The client's guard, because a cart kept
-/// on the device was written by an older bundle and still carries the old
-/// item's name; the server's copy of the cart is masked by [`cart_line_name`].
-/// The same screens draw the line's picture through [`cart_line_image`].
-pub fn shown_cart_line_name(lang: Lang, kind: &str, name: &str) -> String {
-    if cart_line_is_retired(kind) {
         previous_catalogue_name(lang).to_string()
     } else {
         name.to_string()
@@ -505,22 +459,6 @@ mod tests {
     }
 
     #[test]
-    fn a_retired_cart_line_loses_its_name_and_picture_and_a_rental_keeps_them() {
-        let image = Some("/assets/stored.webp".to_string());
-        for kind in ["set", "tea", "accessory", "", "anything"] {
-            assert!(cart_line_is_retired(kind), "{kind}");
-            assert_eq!(
-                cart_line_name(kind, STORED_NAME),
-                previous_catalogue_name(Lang::Russian)
-            );
-            assert_eq!(cart_line_image(kind, &image), None);
-        }
-        assert!(!cart_line_is_retired(LIVE_CART_KIND));
-        assert_eq!(cart_line_name(LIVE_CART_KIND, "NMAX 155"), "NMAX 155");
-        assert_eq!(cart_line_image(LIVE_CART_KIND, &image), image);
-    }
-
-    #[test]
     fn the_sentences_this_code_writes_are_served() {
         let served = |tx: &str, text: &str| customer_bonus_description(tx, Some(text.to_string()));
         for text in [
@@ -631,23 +569,5 @@ mod tests {
         // Any other name is the line's own.
         assert_eq!(shown_line_name(Lang::English, "NMAX 155"), "NMAX 155");
         assert_eq!(shown_line_name(Lang::Russian, ""), "");
-    }
-
-    #[test]
-    fn a_cart_line_of_a_retired_kind_prints_the_neutral_name_whatever_it_carries() {
-        for kind in ["set", "tea", "accessory", "anything"] {
-            assert_eq!(
-                shown_cart_line_name(Lang::English, kind, STORED_NAME),
-                "Item from the previous catalogue"
-            );
-            assert_eq!(
-                shown_cart_line_name(Lang::Russian, kind, STORED_NAME),
-                "Позиция прежнего каталога"
-            );
-        }
-        assert_eq!(
-            shown_cart_line_name(Lang::English, LIVE_CART_KIND, "NMAX 155"),
-            "NMAX 155"
-        );
     }
 }

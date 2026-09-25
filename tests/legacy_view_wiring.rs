@@ -44,11 +44,10 @@ use std::fs;
 use std::path::PathBuf;
 use turbobaby_bot::trios::core::Lang;
 use turbobaby_bot::trios::legacy_view::{
-    cart_line_image, cart_line_name, customer_bonus_description, customer_bonus_tx_type,
-    customer_order_items, customer_shop_id, previous_catalogue_name, shown_cart_line_name,
-    shown_line_name, ADMIN_DEDUCTION_SENTENCE, DESCRIBED_TX_TYPES, GARDEN_ERA_TX_TYPES,
-    KEPT_LINE_KEYS, MASKED_LINE_NAME_KEY, REFERRAL_BONUS_SENTENCE, RETIRED_KIND_KEYS,
-    WITHHELD_TX_TYPE,
+    customer_bonus_description, customer_bonus_tx_type, customer_order_items, customer_shop_id,
+    previous_catalogue_name, shown_line_name, ADMIN_DEDUCTION_SENTENCE, DESCRIBED_TX_TYPES,
+    GARDEN_ERA_TX_TYPES, KEPT_LINE_KEYS, MASKED_LINE_NAME_KEY, REFERRAL_BONUS_SENTENCE,
+    RETIRED_KIND_KEYS, WITHHELD_TX_TYPE,
 };
 
 const ORDERS_API: &str = "src/api/orders.rs";
@@ -63,6 +62,7 @@ const PROFILE_SCREEN: &str = "src/ui/screens/profile_screen.rs";
 const CART_SCREEN: &str = "src/ui/screens/cart_screen.rs";
 const CHECKOUT_SCREEN: &str = "src/ui/screens/checkout_screen.rs";
 const CART_ITEM_COMPONENT: &str = "src/ui/components/cart_item.rs";
+const CART_STATE: &str = "src/ui/state.rs";
 const PRESENTATION_SPEC: &str = "specs/turbobaby/order_presentation.t27";
 const RETIREMENT_SPEC: &str = "specs/turbobaby/legacy_retirement.t27";
 /// This file, as the contracts name it.
@@ -274,19 +274,6 @@ fn every_shop_the_old_checkout_stored_is_withheld_and_this_one_is_kept() {
 }
 
 #[test]
-fn a_server_cart_line_of_the_old_catalogue_loses_its_name_and_picture() {
-    let picture = Some("/assets/accessories/stored-item-4p.webp".to_string());
-    for kind in ["strain", "accessory", "tea", "set"] {
-        assert_eq!(cart_line_name(kind, STORED_NAMES[1]), neutral(), "{kind}");
-        assert_eq!(cart_line_image(kind, &picture), None, "{kind}");
-        assert_eq!(
-            shown_cart_line_name(Lang::English, kind, STORED_NAMES[1]),
-            "Item from the previous catalogue"
-        );
-    }
-}
-
-#[test]
 fn the_sentences_the_writers_compose_are_the_ones_the_rule_serves() {
     let orders = code_of(&source(ORDERS_DB));
     assert!(
@@ -411,19 +398,79 @@ fn the_bonus_history_serves_no_description_the_rule_did_not_pass() {
     assert_eq!(body.matches("(&m.tx_type").count(), 2);
 }
 
+/// Answer 3 first masked a cart line of a retired kind too, under the neutral
+/// name and with no picture. Merged on 2026-09-26 with the kept-cart change, a
+/// line of a retired kind is not served at all, and that rule is
+/// `specs/turbobaby/cart_persistence.t27`'s (`SERVED_CART_KINDS`;
+/// `tests/legacy_cart_hidden_wiring.rs` holds its three readers). This holds the
+/// two changes to ONE rule: nothing on a cart's path renames a line, and every
+/// way into the Mini App's cart asks the served-kind predicate first, so no
+/// cart screen is ever handed a line that would need a neutral name.
 #[test]
-fn every_server_cart_response_goes_through_the_rule() {
+fn a_cart_line_is_held_to_the_kept_cart_rule_and_never_renamed() {
+    // The server answers only served rows, each as stored: a served row is a
+    // rental row, whose stored name and picture are its own.
     let cart = code_of(&source(CART_API));
     let body = body_of(&cart, "fn cart_model_to_resp(");
-    assert!(body.contains("cart_line_name(&i.kind, &i.name)"));
-    assert!(body.contains("cart_line_image(&i.kind, &i.image_url)"));
-    // The three handlers that answer with a cart all answer through it.
-    let production = &cart[..cart.find("#[cfg(test)]").expect("a test module")];
-    assert_eq!(production.matches("Ok(Json(cart_model_to_resp(").count(), 3);
+    assert!(body.contains("= served_rows(items)"), "{body}");
+    assert!(body.contains("name: i.name.clone(),"), "{body}");
+    assert!(body.contains("image_url: i.image_url.clone(),"), "{body}");
+    // No reader of a cart line calls a renaming rule, and the rules' module
+    // declares none.
+    for file in [CART_API, CART_SCREEN, CHECKOUT_SCREEN, CART_ITEM_COMPONENT] {
+        let code = code_of(&source(file));
+        for gone in ["shown_cart_line_name", "cart_line_image", "cart_line_name"] {
+            assert!(!code.contains(gone), "{file} still calls {gone}");
+        }
+    }
+    let rules = code_of(&source(RULES));
+    for gone in ["fn cart_line", "fn shown_cart_line_name", "LIVE_CART_KIND"] {
+        assert!(!rules.contains(gone), "{RULES} declares {gone}");
+    }
+    // The three ways into the Mini App's cart: a line added, a saved cart
+    // loaded, a server cart read. Each asks the one predicate first.
+    let state = code_of(&source(CART_STATE));
+    let add = body_of(&state, "pub fn add_item(");
+    let gate = add
+        .find("if !item.is_served() {")
+        .unwrap_or_else(|| panic!("{CART_STATE}: add_item does not ask is_served:\n{add}"));
+    let push = add
+        .find("self.items.push(item);")
+        .unwrap_or_else(|| panic!("{CART_STATE}: add_item no longer pushes:\n{add}"));
+    assert!(gate < push, "{add}");
+    assert!(
+        body_of(&state, "pub fn without_retired_lines(").contains("retain(CartItem::is_served)"),
+        "{CART_STATE}"
+    );
+    assert!(
+        body_of(&state, "pub fn from_server(").contains("match served_kind(&item.kind)? {"),
+        "{CART_STATE}"
+    );
+    // Nothing else writes a line into a cart.
+    let mut writers = 0usize;
+    let mut stack = vec![PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/ui")];
+    while let Some(dir) = stack.pop() {
+        for entry in fs::read_dir(&dir).expect("src/ui is readable").flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().is_some_and(|e| e == "rs") {
+                let text = code_of(&fs::read_to_string(&path).expect("readable"));
+                writers += text.matches(".items.push(").count()
+                    + text.matches(".items.extend(").count()
+                    + text.matches(".items.insert(").count();
+            }
+        }
+    }
+    assert_eq!(writers, 1, "the one push is add_item's");
+    // And the contract says the same thing.
     assert_eq!(
-        production.matches("CartItemResp {").count(),
-        2,
-        "{CART_API}"
+        spec_value(RETIREMENT_SPEC, "OWNER_ANSWER_3_CART_RULE_OWNER_ID"),
+        "turbobaby/cart-persistence"
+    );
+    assert_eq!(
+        spec_value(RETIREMENT_SPEC, "OWNER_ANSWER_3_RENAMES_A_CART_LINE"),
+        "false"
     );
 }
 
@@ -469,84 +516,6 @@ fn the_order_screens_print_the_neutral_name_in_the_readers_language() {
         );
         assert_eq!(shown_line_name(Lang::Russian, &sent), neutral());
     }
-}
-
-#[test]
-fn the_cart_screens_print_no_stored_name() {
-    let cart = code_of(&source(CART_SCREEN));
-    assert!(cart.contains("shown_cart_line_name(lang, kind, &item.name)"));
-    assert!(!cart.contains("\"{item.name}\""), "{CART_SCREEN}");
-    assert!(!cart.contains("from_ref(&item.name)"), "{CART_SCREEN}");
-    let checkout = code_of(&source(CHECKOUT_SCREEN));
-    assert_eq!(
-        checkout
-            .matches("shown_cart_line_name(lang, crate::ui::api::http::cart_item_type_to_kind(&item.item_type), &item.name)")
-            .count(),
-        2
-    );
-    assert!(!checkout.contains("\"{item.name}\""), "{CHECKOUT_SCREEN}");
-    // The component nothing mounts today reads the line the same way, so
-    // mounting it cannot bring the stored name back.
-    let component = code_of(&source(CART_ITEM_COMPONENT));
-    assert!(component.contains("shown_cart_line_name(lang, kind, &item.name)"));
-    assert_eq!(
-        component.matches("item.name").count(),
-        1,
-        "{CART_ITEM_COMPONENT}"
-    );
-}
-
-#[test]
-fn the_cart_screens_draw_no_stored_picture() {
-    // A device cart line is of a retired kind (the client's cart type knows no
-    // other), and its stored picture may be an absolute storage address that
-    // still resolves. Both screens read it through the server's own rule, and
-    // that rule's call is the only read of the stored picture in each file.
-    let cart = code_of(&source(CART_SCREEN));
-    assert_eq!(
-        cart.matches("cart_line_image(kind, &item.image_url)")
-            .count(),
-        1,
-        "{CART_SCREEN}"
-    );
-    assert!(
-        cart.contains("if let Some(ref url) = shown_image {"),
-        "{CART_SCREEN}"
-    );
-    let checkout = code_of(&source(CHECKOUT_SCREEN));
-    assert_eq!(
-        checkout
-            .matches("cart_line_image(crate::ui::api::http::cart_item_type_to_kind(&item.item_type), &item.image_url)")
-            .count(),
-        1,
-        "{CHECKOUT_SCREEN}"
-    );
-    let component = code_of(&source(CART_ITEM_COMPONENT));
-    assert!(
-        component.contains("cart_line_image(kind, &item.image_url)"),
-        "{CART_ITEM_COMPONENT}"
-    );
-    for (screen, code) in [
-        (CART_SCREEN, &cart),
-        (CHECKOUT_SCREEN, &checkout),
-        (CART_ITEM_COMPONENT, &component),
-    ] {
-        assert_eq!(
-            code.matches("item.image_url").count(),
-            1,
-            "{screen} reads a line's stored picture outside the rule"
-        );
-    }
-    // The rule itself: a retired kind has no picture, whatever it stored.
-    let stored = Some("https://storage.example/old-catalogue/item.webp".to_string());
-    for kind in ["strain", "accessory", "tea", "set"] {
-        assert_eq!(cart_line_image(kind, &stored), None, "{kind}");
-    }
-    // The contract records the guard beside the other three.
-    assert!(
-        source(RETIREMENT_SPEC).contains("\"device_cart_line_pictures\""),
-        "{RETIREMENT_SPEC}"
-    );
 }
 
 #[test]

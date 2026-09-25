@@ -1114,3 +1114,51 @@ invariant a_cart_of_hidden_rows_is_never_due
 
 invariant hiding_is_not_deleting
   assert ROWS_DELETED_ON_2026_09_26 == 0 and ROWS_REWRITTEN_ON_2026_09_26 == 0 and MIGRATIONS_ADDED_ON_2026_09_26 == 0 and CLEAR_DELETES_A_HIDDEN_ROW == false
+
+; --- Reconciled with the owner's answer 3, 2026-09-26 -----------------------------------------------
+; Appended at the end of the file so that no line citation into it moves.
+; The owner's answer 3 of the second list of 2026-09-25 (turbobaby/legacy-retirement,
+; OWNER_ANSWER_3_*) reached the same cart by another rule on its own branch: a line of a retired
+; kind was served UNDER A NEUTRAL NAME and with no picture, by the cart API, and a cart kept on the
+; device printed the same neutral name on the cart and the checkout. When the two branches were
+; merged on 2026-09-26 the two rules could not both stand, and the one kept is this file's: a line
+; of a retired kind is not served at all. The neutral-name path was removed from the cart API
+; (cart_model_to_resp serves each served row's own name and picture: a served row is a rental row),
+; from src/trios/legacy_view.rs (it declares no cart function) and from the three client readers
+; (the cart screen, the checkout and the unmounted CartItemComponent print a line as it is).
+; WHY NO SCREEN CAN NEED IT. Every way a line enters the Mini App's cart asks the one predicate:
+; a saved cart through Cart::without_retired_lines, a server cart through CartItem::from_server,
+; and, since this reconciliation, a single line through Cart::add_item, which drops a line
+; CartItem::is_served refuses before it touches the list. add_item was the one way in that did not
+; ask: the reorder buttons and the screens nothing mounts add lines through it. It holds the only
+; push onto a cart's lines in src/ui (tests/legacy_view_wiring.rs counts them). Since no
+; CartItemType variant is a rental line, today no line enters at all, which is what the screens
+; already render as an empty cart. No sentence was written and no row was touched.
+pub const RECONCILED_WITH_ANSWER_3_AT : str = "2026-09-26";
+pub const ANSWER_3_CART_RULE_KEPT : bool = false;
+pub const CART_LINES_SERVED_UNDER_A_NEUTRAL_NAME : u8 = 0;
+pub const CLIENT_CART_WAYS_IN : u8 = 3;
+pub const CLIENT_CART_WAYS_IN_ASKING_THE_PREDICATE : u8 = 3;
+pub const CLIENT_CART_WAYS_IN_ASKING_THE_PREDICATE_BEFORE_THE_RECONCILIATION : u8 = 2;
+pub const CLIENT_CART_ADD_ASKS_THE_PREDICATE : bool = true;
+pub const RECONCILIATION_WITNESS : str = "tests/legacy_view_wiring.rs";
+
+test one_rule_for_a_kept_cart_after_the_merge_with_answer_3 {
+  assert RECONCILED_WITH_ANSWER_3_AT == RETIRED_KINDS_HIDDEN_AT;
+  assert ANSWER_3_CART_RULE_KEPT == false;
+  assert CART_LINES_SERVED_UNDER_A_NEUTRAL_NAME == 0;
+  assert row_reaches_the_cart_answer("set") == false;
+  assert row_reaches_the_cart_answer(BIKE_KIND) == true;
+  assert CLIENT_CART_WAYS_IN == 3;
+  assert CLIENT_CART_WAYS_IN_ASKING_THE_PREDICATE == CLIENT_CART_WAYS_IN;
+  assert CLIENT_CART_WAYS_IN_ASKING_THE_PREDICATE_BEFORE_THE_RECONCILIATION + 1 == CLIENT_CART_WAYS_IN;
+  assert CLIENT_CART_ADD_ASKS_THE_PREDICATE == true;
+  assert CLIENT_SAVED_CART_READS_FILTERED == CLIENT_SAVED_CART_READS;
+  assert CLIENT_CART_VARIANTS_THAT_ARE_A_RENTAL_LINE == 0;
+  assert saved_line_survives_a_load("tea") == false;
+  assert CUSTOMER_SENTENCES_WRITTEN_ON_2026_09_26 == 0;
+  assert ROWS_DELETED_ON_2026_09_26 == 0;
+}
+
+invariant every_way_into_the_mini_app_cart_asks_the_served_kind
+  assert CLIENT_CART_WAYS_IN_ASKING_THE_PREDICATE == CLIENT_CART_WAYS_IN and CART_LINES_SERVED_UNDER_A_NEUTRAL_NAME == 0 and ANSWER_3_CART_RULE_KEPT == false

@@ -727,3 +727,27 @@ would not abort migration 081; the rows stay, and are now not served.
 `specs/turbobaby/cart_persistence.t27` records the rule (`SERVED_CART_KINDS` and the section dated
 2026-09-26); gate 3 binds its list to the code and counts the reminder's filtered reads;
 `tests/legacy_cart_hidden_wiring.rs` guards the three readers.
+
+## D19 addendum — answer 3 and the kept-cart and held-notification changes reconciled, 2026-09-26
+
+Kept at the end of this file, like the entries above, so that no line citation into it moves.
+Four branches of 2026-09-25 and 2026-09-26 were merged on 2026-09-26 into `t27/owner-answers-2509`:
+answer 3's (stored content out of customers' sight), the kept-cart change and the held
+notification kinds above them. Answer 3's entry above says three things the other two changed.
+The contracts now say one thing:
+
+* **The cart.** Answer 3 served a cart line of a retired kind under the neutral name with no
+  picture, and a cart kept on the device printed the same name. The kept-cart change serves no
+  such line at all. Its rule was kept, and the neutral-name cart path was removed from the cart API,
+  from `src/trios/legacy_view.rs` and from the cart, checkout and `CartItemComponent`. The Mini App's
+  `Cart::add_item` now asks the same `cart_kind_is_served` as the two other ways into its cart, so
+  a reorder or an unmounted screen cannot put such a line there either, and no screen is handed
+  one. `specs/turbobaby/cart_persistence.t27` records it (`RECONCILED_WITH_ANSWER_3_AT`), and
+  `legacy_retirement.t27` points to it (`OWNER_ANSWER_3_CART_RULE_OWNER_ID`).
+* **The reminder.** Answer 3 left it, reasoning that no cart line of a retired kind can be
+  written. A cart kept from before 083 and 085 still holds such lines. The kept-cart change closed
+  it: the reminder reads served lines only.
+* **The garden's notification arm.** Answer 3 left it. The held-kinds change closed it: such a
+  queued row is held unsent (`notification_queue.t27`, `HELD_KINDS_DECIDED_AT`).
+
+No row was written or deleted, no migration was added and no sentence was written.

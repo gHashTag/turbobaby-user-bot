@@ -78,8 +78,10 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/cart_persistence.t27": {
         "module": "turbobaby-cart-persistence",
         "id": "turbobaby/cart-persistence",
-        "min_declarations": 266,
-        "min_checks": 52,
+        # 266/52 with the kept-cart change of 2026-09-26; 276/54 once that change was
+        # reconciled the same day with the owner's answer 3 (one rule for a kept cart).
+        "min_declarations": 276,
+        "min_checks": 54,
     },
     "specs/turbobaby/catalog_api.t27": {
         "module": "catalog-api",
@@ -180,8 +182,10 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         # 266/59 the same day, with the owner's answer on the 20+ age gate (second list, answer 1).
         # Raised the same day to 277/59 on its own branch when the owner's answer 3 (stored
         # content out of customers' sight) was recorded; merged 2026-09-26, the measured 289/61.
-        "min_declarations": 289,
-        "min_checks": 61,
+        # 299/63 once answer 3 was reconciled the same day with the kept-cart and held-kind
+        # changes (its cart path gave way to the kept-cart rule; two left reads closed).
+        "min_declarations": 299,
+        "min_checks": 63,
     },
     "specs/turbobaby/locale_policy.t27": {
         "module": "turbobaby-locale-policy",

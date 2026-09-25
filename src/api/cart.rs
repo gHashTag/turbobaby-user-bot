@@ -421,8 +421,8 @@ fn cart_model_to_resp(
                 catalog_id: i.catalog_id.clone(),
                 quantity: q,
                 unit_price: price,
-                name: crate::trios::legacy_view::cart_line_name(&i.kind, &i.name),
-                image_url: crate::trios::legacy_view::cart_line_image(&i.kind, &i.image_url),
+                name: i.name.clone(),
+                image_url: i.image_url.clone(),
             }
         })
         .collect();
@@ -678,6 +678,12 @@ async fn merge_cart(
 // predicate shared with the reminder and the Mini App,
 // `trios::pricing::cart_kind_is_served`; specs/turbobaby/cart_persistence.t27
 // records the rule as SERVED_CART_KINDS.
+//
+// The owner's answer 3 of 2026-09-25 (second list) first masked such a row
+// here instead: served under a neutral name and with no picture. When the two
+// changes were merged on 2026-09-26 this rule was kept and that path removed:
+// a row that is never served needs no name, and a served row is a rental row,
+// whose stored name and picture are its own.
 //
 // The write gate is left as it was: `parse_kind` still names the old kinds,
 // and none of them can write a row today (the census in cart_persistence.t27,
