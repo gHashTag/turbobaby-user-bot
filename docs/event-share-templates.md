@@ -17,13 +17,29 @@ native Telegram forwarding.
 
 ## Event links
 
-`p_event_{EVENT_ID}`. Since 2026-09-24 such a link opens the bike catalog: `/events` is one of the
-compatibility paths (`LEGACY_ROUTE_ALIASES` in `specs/turbobaby/deeplink.t27`).
+`p_event_{EVENT_ID}`. The event is one of the kinds `Kind::prefix` in `src/trios/deeplink.rs`
+names, so such a link is read and lands like a product link, below.
 
 ## Product links
 
 `{PREFIX}_{PRODUCT_ID}`, where `{PREFIX}` is one of the prefixes `Kind::prefix` in
 `src/trios/deeplink.rs` returns. Every kind there belongs to the previous shop, its catalogue or its
-events, and every one opens the bike catalog today: `destination` in the same file sends each kind
-to `/menu`, which is the catalog under its historical route name, or to a compatibility path. There
-is no deep link to a single bike yet.
+events. There is no deep link to a single bike yet.
+
+## Where an old link lands
+
+A `?start=` link opens the bot chat, where the `/start` arm of `handle_command`
+(`src/bot/commands.rs`) answers a payload `is_miniapp_start_payload` (`src/bot/mod.rs`) accepts with
+a Mini App button that carries it; the app gets the payload when the customer taps that button. An
+old `?startapp=` link reaches the app only when the bot has a Main Mini App configured; otherwise it
+opens the bot chat and nothing more.
+
+When the app has the payload, `HomeScreen` (`src/ui/screens/home_screen.rs`) sends the customer
+where `ProductKind::route` in `src/ui/share.rs` says. That sends every kind, events included, to
+`/menu`, the bike catalog under its historical route name, and has done so since 2026-09-16, the
+date the function's own comment gives. `SHIPPED_LANDING_SITE` in `specs/turbobaby/deeplink.t27`
+names it.
+
+`destination` in `src/trios/deeplink.rs` is a different table, with a screen per kind, and it does
+not decide where a link lands: only its own test module calls it
+(`DESTINATION_TABLE_HAS_A_PRODUCTION_CALLER = false` in the same contract).
