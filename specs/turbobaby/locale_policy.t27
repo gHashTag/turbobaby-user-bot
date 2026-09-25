@@ -294,6 +294,13 @@ pub const STRUCT_SURFACE_FIELD_COUNT : u16 = 82;
 ; missing, which is what made the removal safe.
 pub const STRUCT_SURFACE_FIELD_COUNT_2026_09_25 : u16 = 78;
 pub const STRUCT_SURFACE_FIELDS_REMOVED_2026_09_25 : u16 = 4;
+; RE-MEASURED 2026-09-26: 77. One more field left on the same ruling: the retired garden's message
+; for queued friend_watered rows, when turbobaby/notification-queue started holding rows of that
+; kind unsent (HELD_KINDS_DECIDED_AT there). It was replaced in the struct and in both
+; constructors the same way, by comment lines of the same count, so no citation into
+; src/locales.rs moved.
+pub const STRUCT_SURFACE_FIELD_COUNT_2026_09_26 : u16 = 77;
+pub const STRUCT_SURFACE_FIELDS_REMOVED_2026_09_26 : u16 = 1;
 pub const STRUCT_SURFACE_CONSTRUCTOR_COUNT : u8 = 2;
 pub const STRUCT_SURFACE_PARITY_IS_COMPILER_ENFORCED : bool = true;
 
@@ -622,6 +629,12 @@ test the_struct_surface_lost_four_fields_on_2026_09_25 {
   assert STRUCT_SURFACE_FIELD_COUNT_2026_09_25 == 78;
   assert STRUCT_SURFACE_FIELD_COUNT_2026_09_25 + STRUCT_SURFACE_FIELDS_REMOVED_2026_09_25 == STRUCT_SURFACE_FIELD_COUNT;
   assert STRUCT_SURFACE_PARITY_IS_COMPILER_ENFORCED == true;
+}
+
+test the_struct_surface_lost_one_more_field_on_2026_09_26 {
+  assert STRUCT_SURFACE_FIELD_COUNT_2026_09_26 == 77;
+  assert STRUCT_SURFACE_FIELD_COUNT_2026_09_26 + STRUCT_SURFACE_FIELDS_REMOVED_2026_09_26 == STRUCT_SURFACE_FIELD_COUNT_2026_09_25;
+  assert STRUCT_SURFACE_FIELD_COUNT_2026_09_26 < STRUCT_SURFACE_FIELD_COUNT_2026_09_25;
 }
 
 test the_refusals_are_structural_and_not_prose {

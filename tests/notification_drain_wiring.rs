@@ -565,3 +565,23 @@ fn an_unknown_kind_has_no_way_into_a_message() {
         calls[0].1
     );
 }
+
+/// The retired garden's message left the bot's locale file with its arm: the
+/// field is gone from the struct and from both constructors, and nothing is
+/// left for a held row to be rendered with.
+#[test]
+fn the_retired_garden_message_is_gone_from_the_locale_file() {
+    let locales = source("src/locales.rs");
+    for needle in ["garden_friend_watered_legacy", "{streak}"] {
+        let hits: Vec<(usize, &str)> = locales
+            .lines()
+            .enumerate()
+            .filter(|(_, l)| code_of(l).contains(needle))
+            .map(|(n, l)| (n + 1, l))
+            .collect();
+        assert!(
+            hits.is_empty(),
+            "src/locales.rs still ships `{needle}` outside a comment: {hits:?}"
+        );
+    }
+}

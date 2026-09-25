@@ -2652,7 +2652,7 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "why": "the store takes no row claim (0 FOR UPDATE / SKIP LOCKED), so a second call "
                "site would put two drainers on the same pending rows, either free to send a "
                "row the other is sending; this row keeps 'exactly one is spawned' "
-               "(notification_queue.t27:519, :684; re-pinned 2026-09-26 -- the base's :392 and "
+               "(notification_queue.t27:522, :687; re-pinned 2026-09-26 -- the base's :392 and "
                ":556-557 sat three and four lines above the sentence) true of the code, per "
                "process and not per deployment",
     },
