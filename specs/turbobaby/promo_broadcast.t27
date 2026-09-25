@@ -25,8 +25,8 @@ module turbobaby-promo-broadcast;
 ; WHY (measured 2026-09-21, the two send paths). There are two ways a message reaches every
 ; customer and they do not have the same guards. The Publish button (src/promo.rs:667)
 ; subtracts the opt-out, the fraud block and the owners from its recipient query
-; (:751-757), paces itself at 500 ms per send (:789) and records an outcome row per person
-; (:869). The admin HTTP route (src/api/admin.rs:718) has a cooldown of 1 attempt per 600
+; (:833-839), paces itself at 500 ms per send (:871) and records an outcome row per person
+; (:951). The admin HTTP route (src/api/admin.rs:718) has a cooldown of 1 attempt per 600
 ; seconds (:36-37) and reads its recipients as user_languages UNION loyalty_profiles
 ; (:795-798) with no opt-out term, no block term, no owner term and no pacing: promo_muted
 ; occurs 0 times in src/api/admin.rs and the send loop at :815-861 contains 0 sleeps. So the
@@ -245,16 +245,16 @@ pub fn draft_reaches_owner(row_claimed: bool, owner_opted_out: bool) bool {
 
 ; Three gates, all of them checked before any customer is addressed: an admin pressed it
 ; (src/promo.rs:674-677), a human pressed it rather than a timer, and the post is not already
-; published (:665-669). Since 2026-09-25 the button asks a fourth, the draft's kind; that gate
+; published (:694-698). Since 2026-09-25 the button asks a fourth, the draft's kind; that gate
 ; and the decision behind it are publish_is_authorized in the next section, and this function is
 ; kept as the three it always was.
 pub fn send_is_authorized(human_pressed: bool, presser_is_admin: bool, already_published: bool) bool {
   return human_pressed and presser_is_admin and !already_published;
 }
 
-; src/promo.rs:703-714 stamps published_at BEFORE the fan-out starts, because a broadcast
+; src/promo.rs:711-722 stamps published_at BEFORE the fan-out starts, because a broadcast
 ; takes minutes and must not be launchable twice off one button. The fan-out itself is handed
-; to a background task at :725-727 and the button returns immediately, which is why the stamp
+; to a background task at :762-764 and the button returns immediately, which is why the stamp
 ; has to be the thing that bounds a second press: at the moment the second press arrives the
 ; first send may not have written a single row. The summary reports what actually went out, so
 ; a total failure never reads as success.
@@ -307,6 +307,18 @@ pub const FANOUT_RUNS_DETACHED : bool = true;
 ; reads publish as text and holds that it selects the row's kind, asks the decision and returns
 ; its answer before the stamp and before any send; that the decision, the stamp and the caller of
 ; publish each exist once under src/; and that the lists below equal the code's.
+;
+; LINE CITATIONS RE-MEASURED 2026-09-25. The refusal adds 8 lines inside publish and the decision
+; 45 more after it, so every src/promo.rs line this file cites from the published_at stamp down
+; moved: by 8 inside publish, by 53 below it. Each was re-read against the file and rewritten in
+; place. Nine of them -- the send-path WHY at the head of this file (:833-839, :871, :951), the
+; fan-out (:762-764), the already-published answer (:694-698), the customer's mute button
+; (:858-861), the unwrap_or (:1032), the NOT EXISTS term (:834-835) and the failed recipient read
+; (:741-747) -- were ALREADY 29 lines short on the base commit, where every other citation from
+; publish down was current; each landed on its code at +29 there, and was corrected in the same
+; pass. Lines above publish's stamp did not move; of those, only publish's own head (:667,
+; :674-677) and the already-published answer were re-read. New text in this file cites
+; src/promo.rs by name.
 pub const PUBLISH_REFUSAL_DECIDED_AT : str = "2026-09-25";
 pub const PUBLISH_REFUSAL_DECIDED_BY : str = "operator decision under the owner's delegation";
 pub const PUBLISH_REFUSAL_SITE : str = "src/promo.rs publish";
@@ -355,29 +367,29 @@ pub fn send_path_is_known(path: u8) bool {
   return path == PATH_BUTTON or path == PATH_ADMIN_API;
 }
 
-; src/promo.rs:781-782 subtracts promo_muted; src/api/admin.rs mentions promo_muted 0 times.
+; src/promo.rs:834-835 subtracts promo_muted; src/api/admin.rs mentions promo_muted 0 times.
 pub fn path_honours_optout(path: u8) bool {
   return path == PATH_BUTTON;
 }
 
-; src/promo.rs:783-784 subtracts a blocked loyalty profile; the UNION at
+; src/promo.rs:836-837 subtracts a blocked loyalty profile; the UNION at
 ; src/api/admin.rs:795-798 has no such term.
 pub fn path_excludes_blocked(path: u8) bool {
   return path == PATH_BUTTON;
 }
 
-; src/promo.rs:785 excludes the owners, who already hold the draft; the admin route does not.
+; src/promo.rs:838 excludes the owners, who already hold the draft; the admin route does not.
 pub fn path_excludes_owners(path: u8) bool {
   return path == PATH_BUTTON;
 }
 
-; src/promo.rs:818 waits 500 ms between customers; the loop at src/api/admin.rs:815-861
+; src/promo.rs:871 waits 500 ms between customers; the loop at src/api/admin.rs:815-861
 ; contains 0 sleeps.
 pub fn path_paces_sends(path: u8) bool {
   return path == PATH_BUTTON;
 }
 
-; src/promo.rs:898 writes one promo_deliveries row per customer; the admin route writes none.
+; src/promo.rs:951 writes one promo_deliveries row per customer; the admin route writes none.
 pub fn path_records_delivery(path: u8) bool {
   return path == PATH_BUTTON;
 }
@@ -400,7 +412,7 @@ pub fn path_is_fully_guarded(path: u8) bool {
 }
 
 ; --- Reach --------------------------------------------------------------------------------
-; src/promo.rs:780-786, read as a rule rather than as SQL.
+; src/promo.rs:833-839, read as a rule rather than as SQL.
 pub fn button_path_may_reach(seen_by_bot: bool, opted_out: bool, blocked_for_fraud: bool, is_owner: bool) bool {
   return seen_by_bot and !opted_out and !blocked_for_fraud and !is_owner;
 }
@@ -452,17 +464,17 @@ pub fn opt_out_changes_the_answer_on_the_button_path() bool {
 ; The unsubscribe itself. migrations/075_promo_muted.sql:9-12 stores a row per silenced
 ; person rather than a flag on the agent, so one owner muting it does not silence the others.
 ; The button rides in both messages a promotion travels in -- the owner's draft
-; (src/promo.rs:623-626) and the customer's broadcast (:776-779) -- because an opt-out a reader
+; (src/promo.rs:623-626) and the customer's broadcast (:858-861) -- because an opt-out a reader
 ; has to go looking for is not an opt-out. The reverse command is deliberately not admin-gated
 ; (src/bot/commands.rs:665-677).
 ;
 ; CORRECTED BY REVIEW 2026-09-21. The two reads of that one table fail in OPPOSITE directions,
 ; and a single "fails open" constant hid it behind the more alarming of the two. The owner's
-; draft read is a function that swallows its error (src/promo.rs:970-980, the unwrap_or at
-; :950): a database hiccup SENDS the draft, deliberately, because silence caused by an error is
+; draft read is a function that swallows its error (src/promo.rs:1023-1033, the unwrap_or at
+; :1032): a database hiccup SENDS the draft, deliberately, because silence caused by an error is
 ; indistinguishable from a dead agent and an owner who muted it can mute it again. The
-; customer's read is a NOT EXISTS term inside the recipient query (:752-753), and a failure of
-; that query returns before the fan-out ever starts (:704-710): nothing is sent to anybody. So
+; customer's read is a NOT EXISTS term inside the recipient query (:834-835), and a failure of
+; that query returns before the fan-out ever starts (:741-747): nothing is sent to anybody. So
 ; no hiccup has ever put a message in front of a customer who muted it. What reaches that
 ; customer anyway is the other send path, and that is a routing fact, not a failure mode.
 pub const OPTOUT_IS_PER_PERSON : bool = true;
@@ -477,7 +489,7 @@ pub fn per_customer_sends_are_bounded(cap_shipped: bool) bool {
   return cap_shipped;
 }
 
-pub const PER_CUSTOMER_REACH_CAP_NOTE : str = "Nothing bounds how often one customer is written to. promo_deliveries (migrations/076_promo_broadcast.sql:25-36) records one row per customer per published post, and src/promo.rs:898 is its only occurrence anywhere in src/ -- an INSERT, never a SELECT -- so the ledger reports and does not gate. The only per-customer gate that exists is the opt-out row of migrations/075_promo_muted.sql:9-12, which is all-or-nothing and honoured on one send path of the two. Greps over src/ and migrations/ on 2026-09-21 return 0 for last_sent, per_user_cap, max_per_day and promo_frequency. The count for cooldown or frequency depends on the flag, so the flag is named: case-INSENSITIVELY the pair returns 9 hits over src/ and 0 over migrations/, and not one of the 9 bounds a customer -- six are the per-user AI-request limiter (src/bot/mod.rs:13, :17, :24, :28, :33, :65), two are an operator alert throttle (src/api/client_errors.rs:47, :439) and one is a prose line about the sweep interval (src/main.rs:491). Case-SENSITIVELY the same pair returns 3, and they are src/bot/mod.rs:28, :65 and src/main.rs:491 -- the uppercase constants drop out, which is exactly how a reader talks himself into a smaller number than the one he measured. src/api/admin.rs contains neither word: the 600-second bound this file pins on that route is spelled as a rate-limit, so a grep for cooldown misses the one real interval in a send path. Closing this needs the owner's decision about how often one customer may be written to, and a read of promo_deliveries at the recipient query. No interval is invented here in its place, and the 600-second bound of the admin route is not one: it limits an admin's attempts, not a customer's exposure.";
+pub const PER_CUSTOMER_REACH_CAP_NOTE : str = "Nothing bounds how often one customer is written to. promo_deliveries (migrations/076_promo_broadcast.sql:25-36) records one row per customer per published post, and src/promo.rs:951 is its only occurrence anywhere in src/ -- an INSERT, never a SELECT -- so the ledger reports and does not gate. The only per-customer gate that exists is the opt-out row of migrations/075_promo_muted.sql:9-12, which is all-or-nothing and honoured on one send path of the two. Greps over src/ and migrations/ on 2026-09-21 return 0 for last_sent, per_user_cap, max_per_day and promo_frequency. The count for cooldown or frequency depends on the flag, so the flag is named: case-INSENSITIVELY the pair returns 9 hits over src/ and 0 over migrations/, and not one of the 9 bounds a customer -- six are the per-user AI-request limiter (src/bot/mod.rs:13, :17, :24, :28, :33, :65), two are an operator alert throttle (src/api/client_errors.rs:47, :439) and one is a prose line about the sweep interval (src/main.rs:491). Case-SENSITIVELY the same pair returns 3, and they are src/bot/mod.rs:28, :65 and src/main.rs:491 -- the uppercase constants drop out, which is exactly how a reader talks himself into a smaller number than the one he measured. src/api/admin.rs contains neither word: the 600-second bound this file pins on that route is spelled as a rate-limit, so a grep for cooldown misses the one real interval in a send path. Closing this needs the owner's decision about how often one customer may be written to, and a read of promo_deliveries at the recipient query. No interval is invented here in its place, and the 600-second bound of the admin route is not one: it limits an admin's attempts, not a customer's exposure.";
 
 ; --- What a promotion may say -----------------------------------------------------------------
 ; src/promo.rs:504-505 reads the facts from the database rather than leaving them to a model
@@ -584,7 +596,7 @@ pub fn source_is_the_model(answered: bool, answer_is_the_sentinel: bool, copy_is
 
 ; A broadcast is localized. This one is not.
 ; src/promo.rs:454 passes the literal "ru" into the prompt, and src/api/admin.rs:46-51 takes
-; one text field for every recipient. The recipient query at src/promo.rs:780 selects
+; one text field for every recipient. The recipient query at src/promo.rs:833 selects
 ; telegram_id FROM user_languages -- the very table whose language column is declared at
 ; migrations/001_initial.sql:4 -- and does not select that column. The published locale set
 ; and its fallback belong to turbobaby/locale-policy and are not restated here; what is
@@ -597,7 +609,7 @@ pub fn broadcast_respects_recipient_locale(locale_taken_from_recipient: bool) bo
   return locale_taken_from_recipient;
 }
 
-pub const LOCALE_NOTE : str = "The broadcast is single-locale by construction on both paths, and the missing input is already in hand on one of them. src/promo.rs:780 reads the recipient list out of user_languages and asks it for telegram_id only, while the language column it declines to read sits on the same row (migrations/001_initial.sql:4, NOT NULL with a default). src/promo.rs:454 supplies the copy locale as a literal, so a recipient's own language cannot reach the prompt even if it were selected. Closing this needs the language in the recipient query and a copy variant per published locale, with the locale set and the fallback taken from turbobaby/locale-policy rather than restated. No locale list and no per-locale text is written here.";
+pub const LOCALE_NOTE : str = "The broadcast is single-locale by construction on both paths, and the missing input is already in hand on one of them. src/promo.rs:833 reads the recipient list out of user_languages and asks it for telegram_id only, while the language column it declines to read sits on the same row (migrations/001_initial.sql:4, NOT NULL with a default). src/promo.rs:454 supplies the copy locale as a literal, so a recipient's own language cannot reach the prompt even if it were selected. Closing this needs the language in the recipient query and a copy variant per published locale, with the locale set and the fallback taken from turbobaby/locale-policy rather than restated. No locale list and no per-locale text is written here.";
 
 ; --- The retirement: data hidden, logic intact ----------------------------------------------
 ; MARKED COPY, added by review 2026-09-21. The shape of migration 085 is
