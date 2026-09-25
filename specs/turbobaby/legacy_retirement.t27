@@ -722,6 +722,110 @@ pub fn report_prints_stored_name(kind_written_by_a_live_subject: bool, link_stor
     return !kind_spans_two_tables;
 }
 
+; --- The owner's answer of 2026-09-25 (#3): stored content out of customers' sight -------------
+; Answer 3 of the second numbered list put to the owner on 2026-09-25 is quoted verbatim in the
+; header of the rules' module (OWNER_ANSWER_3_RULES; this file stays ASCII). The operator read it
+; as OWNER_ANSWER_3_READ_AS: analyse all the cannabis-era content a customer could still see from
+; stored data, and take it out of sight without deleting or rewriting stored data. So every change
+; stops SERVING or PRINTING something, in code; no row is written, deleted or hidden and no
+; migration is added. The database was forked from the previous shop's bot (DECISIONS.md D19), so
+; what it stores was not all written by this repository, and each rule fails closed: a customer
+; is served what this code can vouch for. The admin views are the archive and read every row whole.
+;
+; THE ANALYSIS: every customer-facing read of stored legacy content in src/api and src/ui, and
+; the bot sends that read it. Masked on the server, five (OWNER_ANSWER_3_SERVER_READS):
+;   1. order lines of a retired kind on the customer's own list and detail
+;      (GET /api/orders/user/:telegram_id and /api/orders/:id/details): the neutral name and the
+;      stored quantity and unit price only. turbobaby/order-presentation owns the rule and its
+;      name (RETIRED_LINE_*), which is why it is not restated here;
+;   2. the shop those two reads name, withheld when it names the previous shop, as every value the
+;      old checkout stored did -- the same section there;
+;   3. the server cart (GET and POST /api/cart, POST /api/cart/merge): a line of a retired kind --
+;      every kind the cart API accepts -- keeps its id and figures and is served the neutral name
+;      and no picture;
+;   4. the bonus history (GET /api/loyalty/:telegram_id/bonus-history): a stored description is
+;      served only when it is one of the four sentences this repository writes, word for word
+;      apart from its figures (OWNER_ANSWER_3_DESCRIBED_TX_TYPE_COUNT). A garden row's, the
+;      welcome credit's (its sentence names the garden; confirm_referral still writes it, and it
+;      is withheld on read), an admin-typed one and anything the previous shop's bot wrote are
+;      withheld. The row's amount and date are served, and its type as read 5 says;
+;   5. the same read serves a garden-era row's TYPE empty (customer_bonus_tx_type), so the row
+;      reaches every bundle as a generic bonus: the profile's label function has labelled a type
+;      it does not name with T_PROFILE_BONUS_OTHER since it first shipped on 2026-08-07, and the
+;      garden's label is the one it would print for the stored type. This is what reaches a bundle
+;      cached before answer 3, which withholding the description alone would not have reached;
+;      the client guard below covers the bundles built after it.
+; Guarded on the client, where it builds the text itself, four (OWNER_ANSWER_3_CLIENT_GUARDS):
+;   the order screens print the neutral name in the reader's language; a garden-era bonus row
+;   carries the generic label T_PROFILE_BONUS_OTHER instead of the garden's, whatever type a server
+;   serves it, and the garden's key stays declared and translated and is printed by no screen; and
+;   a cart kept on the device, written by an older bundle with the old item's name, prints the
+;   neutral name on the cart and the checkout and draws no stored picture there either: both
+;   screens read the line's picture through the server's own rule (cart_line_image), so the cart
+;   row shows its placeholder and the checkout no image. A device cart outranks the server's masked
+;   copy while it holds a line, and every kind the client's cart type knows is retired, so without
+;   the fourth guard a stored picture -- an absolute storage address still resolves -- would sit
+;   beside the neutral name. The one other reader of a device cart line, CartItemComponent, is
+;   mounted by no screen; it reads the line through the same two rules, so mounting it cannot
+;   bring the stored name or picture back.
+; Analysed and left, six, each with its reason (OWNER_ANSWER_3_LEFT_READS):
+;   * the loyalty profile's stored tier key: the profile screen maps the old shop's key to a card
+;     and prints the card's label, never the key; the leaderboard that serves it raw is read by
+;     the admin screen alone;
+;   * the star history (GET /api/stars/history/:telegram_id): no screen reads it, and none ever
+;     did (no client file this repository has held calls it);
+;   * the reads behind retired surfaces -- the bookings read, the quest locations, the legacy
+;     catalog routes: no mounted screen renders them since 2026-09-24 and 2026-09-25, the catalog
+;     reads answer only rows 085 left published, and whether those routes go is the question the
+;     answer of 2026-09-25 (#7) left open (LEGACY_PATHS_REPOINTED_ON_2026_09_25 above);
+;   * the abandoned-cart reminder, a bot send: it reminds a cart at most twice (its count never
+;     resets), and since 085 hid the last kind the cart API accepts no cart line can be written, so
+;     no reminder is left that could carry a stored name;
+;   * the referral, quest-scan and game reads: the referral and game reads are numbers, the
+;     customers' own names and compiled-in text. The quest scan's reply does carry a stored name,
+;     the scanned location's -- admin-typed and seeded by no migration -- but the kept quest prints
+;     only whether the scan succeeded, beside checkpoint titles compiled into the bundle, never
+;     that name;
+;   * the referral notification worker's friend_watered arm, a bot send outside src/api and
+;     src/ui: it prints the garden's sentence for a queued row of that kind. No code has written
+;     the kind since D5 removed the garden, and the worker ends every row it hands out after three
+;     passes, sent or not, so the arm can fire only for a row queued before D5 that was never
+;     handed out. Not changed: no neutral sentence was given for it, and the one row it could
+;     still reach is one nobody has shown to exist.
+; Nothing here retires a surface: every surface stays reachable and every row stays, so no state
+; above moves (OWNER_ANSWER_3_CHANGES_A_STATE) and COMPLETED_RETIREMENT_COUNT stays as it is.
+pub const OWNER_ANSWER_3_AT : str = "2026-09-25";
+pub const OWNER_ANSWER_3_READ_BY : str = "operator";
+pub const OWNER_ANSWER_3_READ_AS : str = "Analyse all the cannabis-era content a customer could still see from stored data and take it out of sight, without deleting or rewriting stored data.";
+pub const OWNER_ANSWER_3_RULES : str = "src/trios/legacy_view.rs";
+pub const OWNER_ANSWER_3_WITNESS : str = "tests/legacy_view_wiring.rs";
+pub const OWNER_ANSWER_3_LINE_RULE_OWNER_ID : str = "turbobaby/order-presentation";
+pub const OWNER_ANSWER_3_SERVER_READ_COUNT : u8 = 5;
+pub const OWNER_ANSWER_3_SERVER_READS : [5]str = [
+    "order_lines", "order_shop", "server_cart_lines", "bonus_descriptions", "bonus_garden_types",
+];
+pub const OWNER_ANSWER_3_CLIENT_GUARD_COUNT : u8 = 4;
+pub const OWNER_ANSWER_3_CLIENT_GUARDS : [4]str = [
+    "order_line_name_in_the_readers_language", "garden_bonus_label", "device_cart_line_names",
+    "device_cart_line_pictures",
+];
+pub const OWNER_ANSWER_3_LEFT_READ_COUNT : u8 = 6;
+pub const OWNER_ANSWER_3_LEFT_READS : [6]str = [
+    "loyalty_tier_key", "star_history", "retired_surface_reads", "abandoned_cart_reminder",
+    "referral_quest_game_reads", "garden_notification_arm",
+];
+pub const OWNER_ANSWER_3_DESCRIBED_TX_TYPE_COUNT : u8 = 4;
+; How many bonus types a customer is served without their type (GARDEN_ERA_TX_TYPES in the rules'
+; module), and that the type they are served instead is the empty one (WITHHELD_TX_TYPE there).
+pub const OWNER_ANSWER_3_WITHHELD_TX_TYPE_COUNT : u8 = 2;
+pub const OWNER_ANSWER_3_WITHHELD_TX_TYPE_IS_EMPTY : bool = true;
+pub const OWNER_ANSWER_3_WRITES_ROWS : bool = false;
+pub const OWNER_ANSWER_3_ADDS_A_MIGRATION : bool = false;
+pub const OWNER_ANSWER_3_CHANGES_A_STATE : bool = false;
+pub const OWNER_ANSWER_3_CHANGES_AN_ADMIN_READ : bool = false;
+pub const OWNER_ANSWER_3_KEYS_ADDED : u8 = 1;
+pub const OWNER_ANSWER_3_KEYS_DELETED : u8 = 0;
+
 ; --- Tests -----------------------------------------------------------------------------------------
 
 test the_three_partial_states_are_named_and_the_value_set_is_closed {
@@ -1137,6 +1241,42 @@ test the_promo_report_withholds_the_dropped_tables_names_and_keeps_every_row {
     assert PROMO_PUBLISH_REFUSAL_OWNER_ID != ID;
 }
 
+test the_answer_3_masks_reads_and_writes_no_row {
+    assert OWNER_ANSWER_3_AT == OWNER_RULING_2026_09_25_AT;
+    assert OWNER_ANSWER_3_READ_BY == "operator";
+    assert OWNER_ANSWER_3_RULES == "src/trios/legacy_view.rs";
+    assert OWNER_ANSWER_3_WITNESS == "tests/legacy_view_wiring.rs";
+    assert OWNER_ANSWER_3_LINE_RULE_OWNER_ID != ID;
+    assert OWNER_ANSWER_3_SERVER_READS.len == OWNER_ANSWER_3_SERVER_READ_COUNT;
+    assert OWNER_ANSWER_3_CLIENT_GUARDS.len == OWNER_ANSWER_3_CLIENT_GUARD_COUNT;
+    assert OWNER_ANSWER_3_LEFT_READS.len == OWNER_ANSWER_3_LEFT_READ_COUNT;
+    assert OWNER_ANSWER_3_SERVER_READS[0] == "order_lines";
+    assert OWNER_ANSWER_3_SERVER_READS[3] == "bonus_descriptions";
+    // A garden row reaches an old cached bundle as a generic bonus too: its type is withheld.
+    assert OWNER_ANSWER_3_SERVER_READS[4] == "bonus_garden_types";
+    assert OWNER_ANSWER_3_SERVER_READ_COUNT == 5;
+    assert OWNER_ANSWER_3_WITHHELD_TX_TYPE_COUNT == 2;
+    assert OWNER_ANSWER_3_WITHHELD_TX_TYPE_IS_EMPTY == true;
+    assert OWNER_ANSWER_3_LEFT_READS[5] == "garden_notification_arm";
+    assert OWNER_ANSWER_3_LEFT_READ_COUNT == 6;
+    assert OWNER_ANSWER_3_CLIENT_GUARDS[1] == "garden_bonus_label";
+    // The device cart hides the stored picture as well as the stored name.
+    assert OWNER_ANSWER_3_CLIENT_GUARDS[3] == "device_cart_line_pictures";
+    assert OWNER_ANSWER_3_CLIENT_GUARD_COUNT == 4;
+    assert OWNER_ANSWER_3_DESCRIBED_TX_TYPE_COUNT == 4;
+    // Nothing stored moves, and the archive reads it whole.
+    assert OWNER_ANSWER_3_WRITES_ROWS == false;
+    assert OWNER_ANSWER_3_WRITES_ROWS == OWNER_RULING_2026_09_25_DELETES_ROWS;
+    assert OWNER_ANSWER_3_ADDS_A_MIGRATION == false;
+    assert OWNER_ANSWER_3_CHANGES_AN_ADMIN_READ == false;
+    // A masked read is not a retirement: no state moves.
+    assert OWNER_ANSWER_3_CHANGES_A_STATE == false;
+    assert COMPLETED_RETIREMENT_COUNT == 1;
+    // One key declared for the neutral name; the garden label's key stays.
+    assert OWNER_ANSWER_3_KEYS_ADDED == 1;
+    assert OWNER_ANSWER_3_KEYS_DELETED == 0;
+}
+
 test the_identity_of_this_contract_is_fixed {
     assert ID == "turbobaby/legacy-retirement";
     assert KIND == "retirement-contract";
@@ -1221,3 +1361,6 @@ invariant the_answer_of_2026_09_25_never_counts_as_a_completed_retirement
 
 invariant the_kept_quest_never_states_the_previous_shops_purchase_rule
     assert OWNER_ANSWER_KEEPS_THE_QUEST == true and QUEST_PURCHASE_LINE_RENDERED == false and QUEST_COPY_WRITTEN_NEW == false
+
+invariant the_answer_3_hides_what_it_reads_and_writes_nothing
+    assert OWNER_ANSWER_3_WRITES_ROWS == false and OWNER_ANSWER_3_ADDS_A_MIGRATION == false and OWNER_ANSWER_3_CHANGES_A_STATE == false and OWNER_ANSWER_3_CHANGES_AN_ADMIN_READ == false

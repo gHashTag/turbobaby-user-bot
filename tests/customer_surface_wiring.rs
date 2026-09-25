@@ -177,11 +177,11 @@ fn no_live_customer_surface_navigates_to_a_retired_screen() {
 /// Identifiers that only existed to serve the garden. Each was live in
 /// `src/ui` before D5; none may come back.
 ///
-/// `T_PROFILE_BONUS_GARDEN` is deliberately absent from this list: it labels
-/// `garden_harvest` and `garden_reward` rows that are *already in the live
-/// bonus ledger*, and a customer opening their history has a right to read
-/// what they were credited for. Removing the mechanic does not license
-/// rewriting the receipts it issued.
+/// `T_PROFILE_BONUS_GARDEN` is deliberately absent from this list: the
+/// `garden_harvest` and `garden_reward` rows it labelled are *still in the live
+/// bonus ledger*, and no receipt was rewritten. Since answer 3 of 2026-09-25 a
+/// customer reads them under the generic label, amount and date intact; the key
+/// stays declared and no screen prints it (`tests/legacy_view_wiring.rs`).
 const RETIRED_GARDEN_IDENTIFIERS: [&str; 10] = [
     "Route::Garden",
     "Target::Garden",

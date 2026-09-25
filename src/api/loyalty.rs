@@ -629,8 +629,8 @@ async fn get_bonus_history(
             json!({
                 "id": m.id,
                 "amount": m.amount,
-                "tx_type": m.tx_type,
-                "description": m.description,
+                "tx_type": crate::trios::legacy_view::customer_bonus_tx_type(&m.tx_type),
+                "description": crate::trios::legacy_view::customer_bonus_description(&m.tx_type, m.description),
                 "related_order_id": m.related_order_id,
                 "created_at": m.created_at,
             })
