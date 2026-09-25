@@ -3,10 +3,15 @@
 //! This tree is a standalone derivative of a cannabis shop bot. The rebrand
 //! (DECISIONS.md D2-D5, D19) retired the catalogue, hid what it could not
 //! delete, and left a residue that is there on purpose: enums that still read
-//! cart lines and share links minted before migration 083, a strain-of-day
-//! carousel whose retirement is the owner's call, i18n keys of a retired screen
-//! whose replacement copy nobody has approved, and a migration history that is
-//! never edited (D2). What nothing guarded was the other direction -- a NEW
+//! cart lines and share links minted before migration 083, i18n keys of a
+//! retired screen whose replacement copy nobody has approved, and a migration
+//! history that is never edited (D2). (Until 2026-09-25 the list also held a
+//! strain-of-day carousel whose retirement was the owner's call; he ruled that
+//! day that nothing cannabis-related may appear anywhere, the carousel's
+//! buttons answer with the rental menu, and its two entries left the list. The
+//! server's sendable text has a guard of its own since then, with a wider
+//! vocabulary: `tests/server_text_vocabulary_wiring.rs`.) What nothing guarded
+//! was the other direction -- a NEW
 //! occurrence. A pasted fixture, a copied match arm or a fresh label saying
 //! "strain" or "THC" would have shipped with every test green.
 //!
@@ -296,8 +301,9 @@ const SURVIVORS: &[Survivor] = &[
     Survivor {
         path: "src/db/mod.rs",
         hits: 6,
-        reason: "`mod strains` and its re-export, and `get_strains_of_day`, the query behind \
-                 the strain-of-day carousel (see `src/bot/callbacks.rs`).",
+        reason: "`mod strains` and its re-export, and `get_strains_of_day`, the query the \
+                 retired carousel read. No production caller since 2026-09-25; the ignored \
+                 integration test still calls it (tests/retired_table_wiring.rs).",
     },
     Survivor {
         path: "src/ui/api/types.rs",
@@ -311,20 +317,6 @@ const SURVIVORS: &[Survivor] = &[
         hits: 1,
         reason: "`invalidate_strains` clears the `strains` ETag key, named for the retired \
                  `/api/strains` route; the admin marketing-display toggle still calls it.",
-    },
-    // --- the strain-of-day callback survivor, pending the owner's retirement ---------
-    Survivor {
-        path: "src/bot/callbacks.rs",
-        hits: 5,
-        reason: "The strain-of-day carousel's pagination callback, which still prints a THC \
-                 line. Retiring the carousel is a product decision recorded for the owner \
-                 (`tests/retired_table_wiring.rs`, the `src/db/mod.rs` survivor), not a tidy-up.",
-    },
-    Survivor {
-        path: "src/locales.rs",
-        hits: 2,
-        reason: "The carousel's heading, `strain_of_day`, in ru and en. It goes with the \
-                 callback above.",
     },
     // --- dead i18n keys, pending the owner's copy decision ---------------------------
     Survivor {

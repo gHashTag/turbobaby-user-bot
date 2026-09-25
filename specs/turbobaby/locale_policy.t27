@@ -265,6 +265,15 @@ pub const UNDECLARED_LITERAL_WITNESS : str = "src/trios/i18n.rs:2217-2221 test_t
 ; drift silently, the key surface can, and only the key surface needed a test written for it.
 pub const STRUCT_SURFACE : str = "src/locales.rs:4-103 Locale";
 pub const STRUCT_SURFACE_FIELD_COUNT : u16 = 82;
+; RE-MEASURED 2026-09-25: 78. Four fields left the struct that day -- the retired carousel's
+; heading and its two arrows, and the old shop's unit of sale -- on the owner's ruling that nothing
+; cannabis-related may appear anywhere (turbobaby/legacy-retirement, OWNER_RULING_2026_09_25_AT).
+; The 82 above is kept as the reading it was. Each removed field was replaced in the struct and in
+; both constructors by a comment of the same number of lines, so every src/locales.rs line this
+; corpus cites still points where it did; the compiler still refuses a constructor with a field
+; missing, which is what made the removal safe.
+pub const STRUCT_SURFACE_FIELD_COUNT_2026_09_25 : u16 = 78;
+pub const STRUCT_SURFACE_FIELDS_REMOVED_2026_09_25 : u16 = 4;
 pub const STRUCT_SURFACE_CONSTRUCTOR_COUNT : u8 = 2;
 pub const STRUCT_SURFACE_PARITY_IS_COMPILER_ENFORCED : bool = true;
 
@@ -576,6 +585,12 @@ test the_struct_surface_is_gated_by_the_compiler_and_the_key_surface_is_not {
   assert STRUCT_SURFACE_PARITY_IS_COMPILER_ENFORCED == true;
   assert PARITY_GATE_IS_A_TEST_NOT_A_COMPILER_CHECK == true;
   assert STRUCT_SURFACE_FIELD_COUNT < TRANSLATION_KEY_COUNT;
+}
+
+test the_struct_surface_lost_four_fields_on_2026_09_25 {
+  assert STRUCT_SURFACE_FIELD_COUNT_2026_09_25 == 78;
+  assert STRUCT_SURFACE_FIELD_COUNT_2026_09_25 + STRUCT_SURFACE_FIELDS_REMOVED_2026_09_25 == STRUCT_SURFACE_FIELD_COUNT;
+  assert STRUCT_SURFACE_PARITY_IS_COMPILER_ENFORCED == true;
 }
 
 test the_refusals_are_structural_and_not_prose {
