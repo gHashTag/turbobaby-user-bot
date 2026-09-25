@@ -27,6 +27,8 @@ AGENT_CARD = "specs/agents/turbobaby.t27"
 # test/invariant/bench floor with the pinned compiler. Discovery supplies the tripwire. All 45 floors equal the measured counts as of 2026-09-25.
 # Re-measured 2026-09-25 for the two contracts the owner's CLICK 125 redirect decision changed:
 # availability 114 -> 120 declarations and 32 -> 34 checks, order_money 114 -> 115 declarations.
+# Re-measured 2026-09-26 for the contract the notification queue's held kinds changed:
+# notification_queue 270 -> 306 declarations and 52 -> 54 checks.
 SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     AGENT_CARD: {
         "module": "turbobaby-agent",
@@ -187,8 +189,9 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/notification_queue.t27": {
         "module": "turbobaby-notification-queue",
         "id": "turbobaby/notification-queue",
-        "min_declarations": 270,
-        "min_checks": 52,
+        # Raised 2026-09-26 from 270/52 to the measured count when the held kinds were recorded.
+        "min_declarations": 306,
+        "min_checks": 54,
     },
     "specs/turbobaby/observability.t27": {
         "module": "turbobaby-observability",

@@ -30,8 +30,8 @@
 ; src/ui/screens/home_screen.rs:177-204. The fifth, `Referrals`, has none. `parse_start_param`
 ; answers None for every non-product target (src/ui/share.rs:105-121, the `_` arm at :119) and no
 ; other reader exists: `grep -rn "Target::Referrals" src/` returns eleven hits, ten inside
-; `src/trios/deeplink.rs` itself and one comment at src/notification_queue.rs:157 (was :113; the 2026-09-21 drain rewrite moved it, the comment is unchanged). So the payload a
-; live notification button sends (src/notification_queue.rs:161-164, was :116-119, one per friend-joined,
+; `src/trios/deeplink.rs` itself and one comment at src/notification_queue.rs:174 (was :113; the 2026-09-21 drain rewrite moved it, the comment is unchanged; re-pinned 2026-09-26, when the held-kinds guard moved it 16 lines and the base's :157 was found one line short of it). So the payload a
+; live notification button sends (src/notification_queue.rs:177-180, was :116-119 and then :161-164, one per friend-joined,
 ; friend-ordered and milestone message) is classified as answerable, the bot renders a Mini App
 ; button for it (src/bot/commands.rs:232-252), the app sets no signal, and the customer lands on
 ; the application root. That is precisely the shape the file itself condemns at

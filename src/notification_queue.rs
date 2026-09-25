@@ -1,7 +1,7 @@
 //! Background worker that drains `notification_queue` and sends referrer-facing
 //! Telegram messages.
 //!
-//! Loop #21: referral lifecycle pushes (friend joined, watered, ordered, milestone)
+//! Loop #21: referral lifecycle pushes (friend joined, friend ordered, milestone)
 //! are decoupled from the request path. The worker polls every 30 seconds, sends
 //! up to 50 queued messages per tick, and marks rows `processed_at` on success.
 //! Each pass counts an attempt before the send, so three end a row either way.
@@ -57,10 +57,26 @@ async fn process_batch(
     limit: usize,
     uncounted: &mut UncountedAttempts,
 ) -> Result<usize, anyhow::Error> {
-    let rows = crate::db::notifications::pending_notifications(orm, limit, MAX_ATTEMPTS).await?;
+    let kinds = DeliverableKind::names();
+    let rows =
+        crate::db::notifications::pending_notifications(orm, limit, MAX_ATTEMPTS, &kinds).await?;
     let mut delivered = 0usize;
 
     for row in rows {
+        // A row of a kind this worker does not deliver is HELD: the retired
+        // garden's `friend_watered`, or any kind nothing here writes (owner
+        // rulings of 2026-09-24 and 2026-09-25, see `DeliverableKind`). The
+        // scan above already leaves such rows out; this is the second lock,
+        // and it stands above every write, so a held row leaves the loop
+        // exactly as it is stored -- no attempt, no `processed_at`, no send.
+        let Some(deliverable) = DeliverableKind::of(&row.kind) else {
+            tracing::warn!(
+                "notification worker: {} kind={} is held and not sent (owner rulings of 2026-09-24/25), yet the scan handed it out",
+                row.id,
+                row.kind
+            );
+            continue;
+        };
         let telegram_id = row.telegram_id;
         let kind = row.kind.clone();
         let payload = row.payload.clone();
@@ -150,7 +166,7 @@ async fn process_batch(
                 .unwrap_or_else(|| "en".to_string());
             let locale = get_locale(&lang);
 
-            let text = build_message(&kind, &payload, &locale, &config.bot_username);
+            let text = build_message(deliverable, &payload, &locale, &config.bot_username);
             // This button carried `startapp=garden` until D5 removed the screen.
             // Every notification this worker sends is about a friend — joined,
             // ordered — so `referrals` is not a substitute destination, it is the
@@ -334,7 +350,7 @@ fn budget_is_spent(attempts: i32) -> bool {
 }
 
 fn build_message(
-    kind: &str,
+    kind: DeliverableKind,
     payload: &serde_json::Value,
     locale: &crate::locales::Locale,
     bot_username: &str,
@@ -345,24 +361,12 @@ fn build_message(
         .unwrap_or("Friend");
 
     match kind {
-        "friend_joined" => format!(
+        DeliverableKind::FriendJoined => format!(
             "{}\n\n{}",
             locale.referral_friend_joined.replace("{name}", name),
             locale.referral_invite_progress_hint
         ),
-        // No code writes this kind any more — `enqueue_friend_watered` was
-        // deleted with the garden mechanic (D5). The arm stays because rows
-        // queued before that removal may still be unsent in a deployed
-        // database, and this worker is the only thing that can deliver them.
-        "friend_watered" => {
-            let streak = payload.get("streak").and_then(|v| v.as_i64()).unwrap_or(0);
-            let body = locale
-                .garden_friend_watered_legacy
-                .replace("{name}", name)
-                .replace("{streak}", &streak.to_string());
-            format!("{}\n\n{}", body, locale.referral_invite_progress_hint)
-        }
-        "friend_ordered" => {
+        DeliverableKind::FriendOrdered => {
             let bonus = payload.get("bonus").and_then(|v| v.as_f64()).unwrap_or(0.0);
             let body = locale
                 .referral_friend_ordered
@@ -370,7 +374,7 @@ fn build_message(
                 .replace("{bonus}", &format!("{:.0}", bonus));
             format!("{}\n\n{}", body, locale.referral_invite_progress_hint)
         }
-        "milestone" => {
+        DeliverableKind::Milestone => {
             let milestone = payload
                 .get("milestone")
                 .and_then(|v| v.as_i64())
@@ -385,13 +389,79 @@ fn build_message(
                 .replace("{bonus}", &format!("{:.0}", bonus))
                 .replace("{bot}", bot_username)
         }
-        _ => format!("{}: {}", locale.referral_bonus, kind),
+    }
+}
+
+/// The kinds this worker delivers, and the only ones it can render.
+///
+/// Exactly the kinds a producer writes today: `enqueue_friend_joined`,
+/// `enqueue_friend_ordered` and `enqueue_milestone` in
+/// src/db/notifications.rs. A row of any other kind is HELD -- not sent, not
+/// counted, not marked -- and two sorts of row fall there.
+///
+/// * `friend_watered`, the retired garden's report that a friend watered
+///   their plant. Its writer went with the garden (D5) and its message went
+///   with the owner's ruling of 2026-09-25 that nothing cannabis-related may
+///   appear anywhere (answer 12, and the second list's answer 3, read by the
+///   operator as: analyse all of it and take it out of customers' sight,
+///   deleting nothing). Until then this worker still rendered it for rows
+///   queued before D5.
+/// * A kind nothing here has ever written: this database forked from another
+///   shop's bot (DECISIONS.md D19). Until 2026-09-26 such a row went out
+///   through a catch-all arm that showed the customer the raw kind column.
+///
+/// Held, not terminated. The queue has no status or reason column, and its one
+/// terminal write, `processed_at`, is the very write a delivery makes
+/// (`mark_delivered`): writing it would record a message nobody received as
+/// delivered, and rewrite a stored row, which the owner's ruling of
+/// 2026-09-24 (nothing deleted) and the rulings above do not allow. So the row
+/// stays as it was stored, and `names()` is handed to the scan
+/// (`pending_notifications`), which never hands such a row out -- no retry,
+/// and no head-of-queue slot spent on it. The contract is
+/// specs/turbobaby/notification_queue.t27, `HELD_KINDS_DECIDED_AT`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DeliverableKind {
+    FriendJoined,
+    FriendOrdered,
+    Milestone,
+}
+
+impl DeliverableKind {
+    /// Every variant, in the order their names are handed to the scan.
+    const ALL: [DeliverableKind; 3] = [Self::FriendJoined, Self::FriendOrdered, Self::Milestone];
+
+    /// The kind a row carries, when it is one this worker delivers. The
+    /// default arm refuses: an unknown kind is held, never rendered.
+    fn of(kind: &str) -> Option<Self> {
+        match kind {
+            "friend_joined" => Some(Self::FriendJoined),
+            "friend_ordered" => Some(Self::FriendOrdered),
+            "milestone" => Some(Self::Milestone),
+            _ => None,
+        }
+    }
+
+    /// The `kind` column value this variant is written under.
+    fn name(self) -> &'static str {
+        match self {
+            Self::FriendJoined => "friend_joined",
+            Self::FriendOrdered => "friend_ordered",
+            Self::Milestone => "milestone",
+        }
+    }
+
+    /// What the scan may hand out: the names of every variant.
+    fn names() -> [&'static str; 3] {
+        Self::ALL.map(Self::name)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{attempts_after_pass, attempts_spent, budget_is_spent, MAX_ATTEMPTS};
+    use super::{
+        attempts_after_pass, attempts_spent, budget_is_spent, build_message, DeliverableKind,
+        MAX_ATTEMPTS,
+    };
 
     /// What one row cost the drain, walked over as many ticks as it takes.
     #[derive(Debug, PartialEq, Eq)]
@@ -612,5 +682,112 @@ mod tests {
         assert!(!budget_is_spent(MAX_ATTEMPTS - 1));
         assert!(budget_is_spent(MAX_ATTEMPTS));
         assert!(budget_is_spent(attempts_after_pass(MAX_ATTEMPTS - 1)));
+    }
+
+    // --- Held kinds (owner rulings of 2026-09-24 and 2026-09-25) -----------
+
+    /// The retired garden's kind cannot become a message: the renderer takes
+    /// a `DeliverableKind` and there is none for it, and the scan is never
+    /// handed its name, so its rows are not read at all.
+    #[test]
+    fn the_retired_garden_kind_is_held_and_never_rendered() {
+        assert_eq!(DeliverableKind::of("friend_watered"), None);
+        assert!(!DeliverableKind::names().contains(&"friend_watered"));
+    }
+
+    /// A kind nothing here writes is held too. Until 2026-09-26 it went out
+    /// through a catch-all arm that showed the customer the raw kind column;
+    /// the refusing default arm of `DeliverableKind::of` is what replaced it.
+    /// The match is exact: a near miss is a different kind, and is held.
+    #[test]
+    fn a_kind_nothing_here_writes_is_held_too() {
+        for kind in [
+            "",
+            "garden_water_reminder",
+            "garden_harvest_ready",
+            "garden_reward_expiry",
+            "Friend_Joined",
+            "friend_joined ",
+            "milestones",
+            "referral_bonus",
+        ] {
+            assert_eq!(
+                DeliverableKind::of(kind),
+                None,
+                "{kind:?} would be delivered"
+            );
+            assert!(
+                !DeliverableKind::names().contains(&kind),
+                "{kind:?} would be handed out by the scan"
+            );
+        }
+    }
+
+    /// What the scan is handed and what the loop accepts are one list, so a
+    /// row the scan hands out is never refused by the loop, and a row the
+    /// loop would refuse is never handed out.
+    #[test]
+    fn the_scan_and_the_loop_accept_the_same_kinds() {
+        let names = DeliverableKind::names();
+        assert_eq!(names, ["friend_joined", "friend_ordered", "milestone"]);
+        for kind in DeliverableKind::ALL {
+            assert_eq!(DeliverableKind::of(kind.name()), Some(kind));
+        }
+        for name in names {
+            assert_eq!(
+                DeliverableKind::of(name).map(DeliverableKind::name),
+                Some(name)
+            );
+        }
+    }
+
+    /// Each kind still delivered renders its own shipped template in both
+    /// published languages, with every placeholder filled -- the held kinds
+    /// took nothing with them that a live kind used.
+    #[test]
+    fn every_deliverable_kind_renders_its_own_message() {
+        let payload = serde_json::json!({
+            "referred_name": "Ann",
+            "bonus": 50.0,
+            "milestone": 5,
+            "bonus_amount": 100.0,
+        });
+        for lang in ["ru", "en"] {
+            let locale = crate::locales::get_locale(lang);
+            let mut rendered = Vec::new();
+            for kind in DeliverableKind::ALL {
+                let text = build_message(kind, &payload, &locale, "turbobaby_bot");
+                let head = match kind {
+                    DeliverableKind::FriendJoined => {
+                        locale.referral_friend_joined.replace("{name}", "Ann")
+                    }
+                    DeliverableKind::FriendOrdered => locale
+                        .referral_friend_ordered
+                        .replace("{name}", "Ann")
+                        .replace("{bonus}", "50"),
+                    DeliverableKind::Milestone => locale
+                        .referral_milestone_bonus
+                        .replace("{milestone}", "5")
+                        .replace("{bonus}", "100")
+                        .replace("{bot}", "turbobaby_bot"),
+                };
+                assert!(
+                    text.starts_with(&head),
+                    "{lang} {kind:?} rendered {text:?}, not its own template"
+                );
+                assert!(
+                    !text.contains('{'),
+                    "{lang} {kind:?} left a placeholder: {text:?}"
+                );
+                rendered.push(text);
+            }
+            rendered.sort();
+            rendered.dedup();
+            assert_eq!(
+                rendered.len(),
+                DeliverableKind::ALL.len(),
+                "two kinds share one message in {lang}"
+            );
+        }
     }
 }
