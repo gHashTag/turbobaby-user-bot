@@ -590,3 +590,39 @@ The contracts carry the details: `specs/turbobaby/legacy_retirement.t27` records
 (`PROMO_REPORT_NAME_*`, held to the code by `tests/promo_report_names_wiring.rs`),
 `bot_surface.t27` the carousel (`CAROUSEL_RETIRED_AT`), `locale_policy.t27` the locale struct's
 four removed fields.
+
+## D19 addendum — stored content out of customers' sight, decided 2026-09-25
+
+The owner answered a second numbered list in chat on 2026-09-25; answer 3, verbatim: «Все
+канабисное аналировать». The operator read it as: analyse all of it and take it out of customers'
+sight, without deleting or rewriting stored data. Kept at the end of this file, like the entries
+above, so that no line citation into it moves. Every change stops SERVING or PRINTING something,
+in code; no row is written and no migration is added.
+
+* **Masked on the server**, so a bundle cached before the change is served the neutral text too.
+  A customer's own order list and detail (`get_user_orders` and `get_order_details`, through
+  `Order::for_customer`) serve a line of the old catalogue — any line that is not a bike line — as
+  «Позиция прежнего каталога» ("Item from the previous catalogue" for an English reader, the
+  operator's wording under the answer) with its quantity and unit price exactly as stored, and
+  nothing else: no id, so no reorder can rebuild the old item. The same two reads withhold an
+  order's shop when it names the previous shop. The server cart serves a line of a retired kind
+  under the neutral name and with no picture. The bonus history serves a stored description only
+  when it is one of the four sentences this repository writes, and a garden-era row with an empty
+  type, so every bundle labels it with the existing generic label («Бонус» / "Bonus").
+* **Guarded on the client**, where it builds the text itself: the order screens print the neutral
+  name in the reader's language, the profile labels a garden row with the generic label, and a
+  cart kept on the device prints the neutral name and draws no stored picture on the cart and the
+  checkout.
+* **Open.** A withheld shop reaches the screens' fallback for an absent shop, which names
+  TurboBaby, so an order the previous shop took reads as placed with this one. No neutral shop
+  wording was given; that line is the owner's to reword.
+* **Analysed and left**, each with its reason in the contract: the stored loyalty tier key, the star
+  history, the reads behind retired surfaces, the abandoned-cart reminder, the referral, quest-scan
+  and game reads, and the referral worker's garden arm.
+* **Unchanged.** The admin reads, which are the archive; every row; every migration. One key was
+  declared (`T_ORDER_LINE_PREVIOUS_CATALOGUE`) and none deleted.
+
+`specs/turbobaby/order_presentation.t27` (`RETIRED_LINE_*`) owns the order line's name and the
+shop, `legacy_retirement.t27` (`OWNER_ANSWER_3_*`) records the answer and the analysis,
+`src/trios/legacy_view.rs` holds the rules and `tests/legacy_view_wiring.rs` holds the handlers and
+screens to them.
