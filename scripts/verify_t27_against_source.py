@@ -3755,7 +3755,10 @@ ONE_GROUP_EXTRACTORS = (
 # Then the owner's decision of 2026-09-25 on CLICK 125's redirect (NMAX 155 alone, for now)
 # bound availability.CLICK_125_REDIRECTS and CLICK_125_REDIRECTS_ARE_PROVISIONAL to the seed,
 # each planted RED once by hand: 239 rows over the same 41 contracts, floor 239.
-MIN_BINDINGS = 239
+# Then the owner's answer 1 of the second list on 2026-09-25 (the 20+ box removed, for now)
+# bound checkout_contact.BLOCKER_COUNT and AGE_FIELD_COMPARISONS_IN_THE_ORDERS_MODULE,
+# each planted RED once by hand: 241 rows over the same 41 contracts, floor 241.
+MIN_BINDINGS = 241
 
 
 # ---------------------------------------------------------------------------------
