@@ -35,8 +35,9 @@ python3 scripts/verify_fleet_seed.py -v
 # OK — 14 families (13 offered), 37 units (11 rented, 26 available); ...
 ```
 
-Gate 2 with a compiler configured, the form "The four gates" shows, is red on `f5e6b4f` for two
-stale allowances and no false assertion. See "Gate 2's cross-check after #64" below.
+Gate 2 with a compiler configured, the form "The four gates" shows, was red on `f5e6b4f` for two
+stale allowances and no false assertion; the change that removed them made it green again. See
+"Gate 2's cross-check after #64" below.
 
 The last two rows are the ones to keep apart. *Named* means a contract cites the file. *Bound* means
 a gate fails when the two disagree. 91.4 % is a floor on attention; 237 (after #63 on 2026-09-24,
@@ -93,7 +94,7 @@ T27C=<path>/t27c python3 scripts/verify_t27_specs.py --require-compiler -v
 
 # 2. behaviour: parses and EXECUTES every assertion in the corpus. Stdlib only, ~1 s.
 python3 scripts/execute_t27_assertions.py -v            # add --no-crosscheck without a compiler
-#    With a compiler it exits 1 on f5e6b4f: two stale pins ("Gate 2's cross-check after #64").
+#    With a compiler it prints 2 pinned disagreements and exits 0 ("Gate 2's cross-check after #64").
 
 # 3. drift: contract constants against the Rust and SQL they constrain.
 python3 scripts/verify_t27_against_source.py --require-git-tracked -v
@@ -136,10 +137,13 @@ execute_t27_assertions: FAIL - 2 structural problem(s):
   with the same counts and the same 4 pins printed.
 * **Two pins are still real:** `families_on_tier` and `published_rows_at_amount` in
   `deposit_tiers.t27`, the `while (c) : (step)` class.
-* **Not fixed here, and not a deploy blocker.** Remove the two stale entries and the script
-  header's "four functions" in one change. Nothing in it reaches the Docker image. Until then,
-  read the assertions with `--no-crosscheck` and treat any cross-check line besides those two as
-  new.
+* **Fixed on 2026-09-25, in the change after this measurement.** The two stale entries left
+  `KNOWN_FRONTEND_DISAGREEMENTS`, with a dated note in their place, and the script header no
+  longer says "four". The same command then printed the two real pins and
+  `OK - 45 spec(s), 9996 assert line(s) scanned, 9996 executed, 9996 passed, 0 failed; 9667
+  declaration name(s) and function bodies agreed with t27c; 2 pinned front-end disagreement(s)`,
+  exit 0. Nothing in it reaches the Docker image. The t27c defect behind the `;` class is not
+  fixed; no function body in the corpus carries a `;` comment any more, so nothing reaches it.
 
 ### Negative controls, 2026-09-25
 
@@ -605,8 +609,8 @@ citations** — unlike a `src/` citation, which gate 3 can check.
 > `docs/t27-handover.md` and `docs/t27-contract-map.md` first; they carry the measurements and the
 > traps. Build the pinned compiler as the handover describes, then run all four gates and quote the
 > numbers before changing anything — if they do not reproduce, say so instead of proceeding.
-> Gate 2 with a compiler configured exits 1 on `f5e6b4f` for two stale pins, and that is known
-> (see "Gate 2's cross-check after #64"); any other cross-check line is new.
+> Gate 2 with a compiler configured prints two pinned disagreements and exits 0 (see "Gate 2's
+> cross-check after #64"); any other cross-check line is new.
 >
 > The work, in order: fix the seven defects listed under "What is actually left", each with a test
 > that is red before the fix and with the contract that records the defect corrected in the same
