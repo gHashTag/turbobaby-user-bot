@@ -1275,7 +1275,7 @@ const CLEAN_RENDERS: &[Render] = &[
     },
     Render {
         path: "screenshots/07-cart/screenshot.png",
-        shows: "two cart lines: the seed's models and base day tariffs",
+        shows: "two cart lines: the seed's models and base day tariffs; no delivery price",
     },
     Render {
         path: "screenshots/08-member-cards/screenshot.png",
@@ -1327,7 +1327,7 @@ const CLEAN_RENDERS: &[Render] = &[
     },
     Render {
         path: "screenshots/20-success/screenshot.png",
-        shows: "an order receipt with the seed's tariff and deposit",
+        shows: "an order receipt with the seed's tariff and deposit; no delivery time",
     },
     Render {
         path: "screenshots/00-hello-world.png",
@@ -1357,6 +1357,16 @@ const CLEAN_RENDERS: &[Render] = &[
 /// Each was looked at before it was committed. Two moved with their page (git
 /// mv, nothing deleted): `05-strain-cards/` to `05-bike-cards/` and
 /// `10-plants/` to `10-order-steps/`. Git history keeps what each showed.
+///
+/// Two were taken a second time the same day, the same way, after review found
+/// two delivery claims of the old shop still on their pages, which
+/// `data/fleet_seed.json` contradicts: `07-cart` said delivery was free (the
+/// seed publishes one area's delivery price and says every other shows a dash)
+/// and `20-success` gave a 30-45 minute estimate (the seed's same-day delivery
+/// is a window, and the owner ruled on 2026-09-24 that no travel time in
+/// minutes is shown; `tests/delivery_eta_wiring.rs`). A trial render of the
+/// unchanged `06-order-cards` page, waiting for its web fonts, matched its
+/// committed render pixel for pixel.
 const RERENDERED_2026_09_26: &[&str] = &[
     "screenshots/00-hello-world/screenshot.png",
     "screenshots/04-badges/screenshot.png",
