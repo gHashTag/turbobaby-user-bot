@@ -425,7 +425,8 @@ pub const AGE_BLOCKER_RETIREMENT_OWNER : str = "turbobaby/legacy-retirement";
 ; the five were rendered: the box's label, the notice under it (which the handler also showed as
 ; its refusal), the trust line and the blocker sentence. The fifth, the sentence for a body code
 ; "age_not_confirmed", was never reachable: the server's refusal was a bare 422 with no body, and
-; that literal occurs nowhere in the server's source. No sentence was written in their place.
+; before the change the literal occurred only in the client's mapper (src/trios/checkout_errors.rs)
+; and inside the key's own name -- no server path wrote it. No sentence was written in their place.
 ;   What stayed. POST /api/orders still ACCEPTS the field, because a bundle cached before the
 ; change still sends it true: serde reads it, validation no longer looks at it, and the orders
 ; column (migration 057, NOT NULL DEFAULT FALSE) stores it as sent, absent as false. No migration
