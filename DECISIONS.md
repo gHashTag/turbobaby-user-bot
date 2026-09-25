@@ -482,3 +482,27 @@ bike sales: no row hidden, the offer masked on read — neither a completed reti
 `catalog_api.t27`, `commerce.t27` and `deeplink.t27` correct the facts the ruling changed,
 `schema_provenance.t27` carries the migration census 088 moved, and `tests/rental_only_wiring.rs`
 guards the source.
+
+## D19 addendum — the legacy paths, decided 2026-09-25
+
+The owner answered a numbered list of questions in chat on 2026-09-25; answer 7, verbatim: «да».
+It settles the question the entry above left open. Kept at the end of this file, like the entries
+above, so that no line citation into it moves.
+
+* **Repointed.** The previous shop's client paths that are not a rental — its goods
+  (`/accessories`, `/tea`), its game (`/game`) and its hunts (`/treasure-hunt`, `/ar-hunt`,
+  `/location-quest`) — stay declared and render the catalog, as `/sets` and the events paths do.
+  `/tech-tree`, a development tech tree, is repointed with them: the answer does not name it, and
+  counting it among the old non-rental addresses is this repository's reading, recorded as such in
+  `legacy_retirement.t27` so the owner can overrule it. Their screens stay compiled and unmounted;
+  no row is touched and no table dropped.
+* **Kept.** The ride game (`/ride`), the referral programme and loyalty. The quest a customer opens
+  from the profile (`/quest/:id`) stays, without the line «Минимальная покупка: 300 бат» — the
+  previous shop's minimum purchase. The key stays translated and no screen renders it. No sentence
+  was written new; a line was removed.
+* **Not decided.** The HTTP routes behind the repointed paths — the legacy catalog, quest and
+  tech-tree routers — still answer; the quest router is also what the kept quest scans through.
+
+`specs/turbobaby/legacy_retirement.t27` records the answer path by path, `deeplink.t27` the
+compatibility set it grew (six paths to thirteen), and `tests/rental_only_wiring.rs` guards the
+source.

@@ -1,8 +1,8 @@
 // Quest screen — location-quest UI wired up to backend `/api/quest/scan`.
 use crate::trios::i18n::{
-    t, tf, T_CHECKIN_SUCCESS, T_PURCHASE_MIN, T_QUEST_BAD_RESPONSE, T_QUEST_COMPLETE,
-    T_QUEST_ERROR_PREFIX, T_QUEST_INVALID_QR, T_REWARD, T_REWARD_CLAIM, T_SCAN_QR, T_SCAN_QR_DESC,
-    T_SCAN_QR_PROMPT, T_STATUS_ACTIVE, T_STATUS_COMPLETED, T_STATUS_LOCKED, T_SUBTITLE, T_TITLE,
+    t, tf, T_CHECKIN_SUCCESS, T_QUEST_BAD_RESPONSE, T_QUEST_COMPLETE, T_QUEST_ERROR_PREFIX,
+    T_QUEST_INVALID_QR, T_REWARD, T_REWARD_CLAIM, T_SCAN_QR, T_SCAN_QR_DESC, T_SCAN_QR_PROMPT,
+    T_STATUS_ACTIVE, T_STATUS_COMPLETED, T_STATUS_LOCKED, T_SUBTITLE, T_TITLE,
 };
 use crate::trios::quest::get_checkpoints;
 use crate::ui::api::context::api_base_url;
@@ -285,9 +285,10 @@ pub fn Quest() -> Element {
                         onclick: scan_qr,
                         if is_scanning { "⏳ Scanning..." } else { "📷 {scan_qr_text}" }
                     }
-                    div { style: "font-size: 18px; color: #555; text-align: center; margin-top: 8px;",
-                        "{t(lang, T_PURCHASE_MIN)}"
-                    }
+                    // A line under this button read `T_PURCHASE_MIN`, the previous
+                    // shop's minimum purchase. The owner had it removed on 2026-09-25
+                    // (rental only); the key stays translated, as the retired buy-out
+                    // keys do.
                 }
             }
         }

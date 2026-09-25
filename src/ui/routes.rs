@@ -2,13 +2,13 @@
 //
 // Routes wired to pure UI screens (no business logic)
 // All screens are wrapped in LazyScreen for deferred rendering.
+// Screens whose kept paths now render the catalog are not imported (see each handler).
 
 use crate::ui::components::lazy_screen::LazyScreen;
 use crate::ui::screens::{
-    ARHuntScreen, AccessoriesScreen, AdminScreen, CartScreen, CatalogScreen, CheckoutScreen,
-    GameScreen, HomeScreen, LocationQuestScreen, MenuScreen, OrderDetailScreen, OrdersScreen,
-    ProfileScreen, QuestScreen, ReferralsScreen, RideScreen, SuccessScreen, TeaScreen,
-    TechTreeScreen, TreasureHuntScreen,
+    AdminScreen, CartScreen, CatalogScreen, CheckoutScreen, HomeScreen, MenuScreen,
+    OrderDetailScreen, OrdersScreen, ProfileScreen, QuestScreen, ReferralsScreen, RideScreen,
+    SuccessScreen,
 };
 use crate::ui::share::{PendingOrder, PendingReorder, SharedProduct};
 use dioxus::prelude::*;
@@ -154,21 +154,21 @@ fn Sommelier() -> Element {
     }
 }
 
+/// `/accessories` and `/tea` sold the previous shop's goods, which is not a
+/// rental. On the owner's answer of 2026-09-25 both survive as compatibility
+/// aliases, exactly as `/sets` does: the screens stay compiled and unmounted,
+/// their rows stay hidden by 085, and an old link lands on the catalog.
 #[component]
 fn Accessories() -> Element {
     rsx! {
-        LazyScreen {
-            AccessoriesScreen {}
-        }
+        CatalogScreen {}
     }
 }
 
 #[component]
 fn Tea() -> Element {
     rsx! {
-        LazyScreen {
-            TeaScreen {}
-        }
+        CatalogScreen {}
     }
 }
 
@@ -281,12 +281,12 @@ fn Skate() -> Element {
     }
 }
 
+/// `/game` is the previous shop's game and lands on the catalog (owner, 2026-09-25).
+/// The game the owner kept is the ride at `/ride`, above.
 #[component]
 fn Game() -> Element {
     rsx! {
-        LazyScreen { heavy: true,
-            GameScreen {}
-        }
+        CatalogScreen {}
     }
 }
 
@@ -299,39 +299,39 @@ fn Referrals() -> Element {
     }
 }
 
+/// `/treasure-hunt`, `/ar-hunt` and `/location-quest` are the previous shop's
+/// hunts, and `/tech-tree` a development tech tree. On the owner's answer of
+/// 2026-09-25 (it names the hunts; the tech tree is counted with them as an old
+/// non-rental address, and legacy_retirement.t27 says so) each survives as a
+/// compatibility alias, as `/sets` does: screens compiled and unmounted, rows
+/// kept, an old link lands on the catalog. `/quest/:id` is not one of them: the
+/// owner kept the quest the profile opens, and it keeps its handler above; the
+/// hunt screens that also opened it no longer mount.
 #[component]
 fn TreasureHunt() -> Element {
     rsx! {
-        LazyScreen { heavy: true,
-            TreasureHuntScreen {}
-        }
+        CatalogScreen {}
     }
 }
 
 #[component]
 fn ArHunt() -> Element {
     rsx! {
-        LazyScreen { heavy: true,
-            ARHuntScreen {}
-        }
+        CatalogScreen {}
     }
 }
 
 #[component]
 fn LocationQuest() -> Element {
     rsx! {
-        LazyScreen { heavy: true,
-            LocationQuestScreen {}
-        }
+        CatalogScreen {}
     }
 }
 
 #[component]
 fn TechTree() -> Element {
     rsx! {
-        LazyScreen { heavy: true,
-            TechTreeScreen {}
-        }
+        CatalogScreen {}
     }
 }
 
