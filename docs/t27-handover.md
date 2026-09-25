@@ -505,7 +505,11 @@ None of these is unblocked by more `.t27`:
   because the shop rejected it, or because an earlier attempt of the customer's own, whose outcome
   was unknown, did cancel it; the re-read status label beside it then reads Cancelled. And the
   order card has no link to the manager; `T_BIKE_ASK_MANAGER` is still the one existing candidate.
-  The key moved every `i18n.rs` citation below it; they were re-pinned in the same change.
+  The key moved every `i18n.rs` line citation below it, and all of them were re-pinned on the
+  same branch. The first pass missed one, in `legacy_retirement.t27`, because its path wrapped
+  across two comment lines and a same-line search for `src/trios/i18n.rs:NNN` cannot see it; a
+  follow-up commit re-pinned it and unwrapped the path. Search for every `i18n.rs` mention, not
+  only the path with its line number, when a key moves the file.
 * **E. Which sentence, if any, stands beside a dashed order figure?** Since 2026-09-22 an absent
   total, subtotal or discount on the order screens is a bare dash. D9 asks for the dash and
   nothing more. The one published sentence for a missing price, `T_BIKE_PRICE_ON_REQUEST`, is
