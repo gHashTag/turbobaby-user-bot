@@ -3,12 +3,18 @@
 //! This tree is a standalone derivative of a cannabis shop bot. The rebrand
 //! (DECISIONS.md D2-D5, D19) retired the catalogue, hid what it could not
 //! delete, and left a residue that is there on purpose: enums that still read
-//! cart lines and share links minted before migration 083, a strain-of-day
-//! carousel whose retirement is the owner's call, and a migration history that
-//! is never edited (D2). (The i18n keys of the retired strain menu were part of
-//! that residue until the owner's ruling of 2026-09-25 deleted them.) What nothing guarded was the other direction -- a NEW
-//! occurrence. A pasted fixture, a copied match arm or a fresh label saying
-//! "strain" or "THC" would have shipped with every test green.
+//! cart lines and share links minted before migration 083, and a migration
+//! history that is never edited (D2). (Until 2026-09-25 the list also held a
+//! strain-of-day carousel whose retirement was the owner's call, and i18n keys
+//! of a retired screen whose replacement copy nobody had approved; he ruled that
+//! day that nothing cannabis-related may appear anywhere. The carousel's
+//! buttons answer with the rental menu, the keys were deleted rather than
+//! reworded, and their entries left the list. The server's sendable text has a
+//! guard of its own since then, with a wider vocabulary:
+//! `tests/server_text_vocabulary_wiring.rs`.) What nothing guarded was the other
+//! direction -- a NEW occurrence. A pasted fixture, a copied match arm or a
+//! fresh label saying "strain" or "THC" would have shipped with every test
+//! green.
 //!
 //! So this walks `src/`, `migrations/`, `styles/`, `assets/` and the served
 //! `dist/index.html` as text (what is left out, and why, is at the end of this
@@ -273,14 +279,6 @@ const SURVIVORS: &[Survivor] = &[
                  wire as `src/trios/deeplink.rs` for a product kind a stored broadcast row can \
                  still carry.",
     },
-    Survivor {
-        path: "src/trios/promo.rs",
-        hits: 5,
-        reason: "The digest icon for a legacy \"strain\" row and the ranking tests that use \
-                 legacy rows as fixtures (one of them a Russian sentence about a set of \
-                 strains). The producer stopped reading `strains` with 083; the kind stays \
-                 readable for rows already stored.",
-    },
     // --- the strains table's readers, kept by tests/retired_table_wiring.rs ----------
     Survivor {
         path: "src/db/strains.rs",
@@ -301,8 +299,9 @@ const SURVIVORS: &[Survivor] = &[
     Survivor {
         path: "src/db/mod.rs",
         hits: 6,
-        reason: "`mod strains` and its re-export, and `get_strains_of_day`, the query behind \
-                 the strain-of-day carousel (see `src/bot/callbacks.rs`).",
+        reason: "`mod strains` and its re-export, and `get_strains_of_day`, the query the \
+                 retired carousel read. No production caller since 2026-09-25; the ignored \
+                 integration test still calls it (tests/retired_table_wiring.rs).",
     },
     Survivor {
         path: "src/ui/api/types.rs",
@@ -317,20 +316,9 @@ const SURVIVORS: &[Survivor] = &[
         reason: "`invalidate_strains` clears the `strains` ETag key, named for the retired \
                  `/api/strains` route; the admin marketing-display toggle still calls it.",
     },
-    // --- the strain-of-day callback survivor, pending the owner's retirement ---------
-    Survivor {
-        path: "src/bot/callbacks.rs",
-        hits: 5,
-        reason: "The strain-of-day carousel's pagination callback, which still prints a THC \
-                 line. Retiring the carousel is a product decision recorded for the owner \
-                 (`tests/retired_table_wiring.rs`, the `src/db/mod.rs` survivor), not a tidy-up.",
-    },
-    Survivor {
-        path: "src/locales.rs",
-        hits: 2,
-        reason: "The carousel's heading, `strain_of_day`, in ru and en. It goes with the \
-                 callback above.",
-    },
+    // `src/bot/callbacks.rs` (5 hits) and `src/locales.rs` (2 hits) stood here
+    // for the strain-of-day carousel, pending the owner's retirement; the
+    // ruling of 2026-09-25 retired it, and neither file holds a hit now.
     // `src/trios/i18n.rs` stood here with 3 hits: `T_MENU_DESC` and
     // `T_MENU_NO_RESULTS`, keys of the retired strain menu, kept until the owner
     // decided their copy. The owner's ruling of 2026-09-25 (#12, nothing
@@ -362,11 +350,6 @@ const SURVIVORS: &[Survivor] = &[
         hits: 8,
         reason: "Unit tests of the legacy pack weight line (\"N strains\", ru \"N сортов\"). \
                  The `sets` screens stay per D19; what they become is issue #2's decision.",
-    },
-    Survivor {
-        path: "src/api/catalog.rs",
-        hits: 1,
-        reason: "A test fixture name (\"Strain Set\") for the legacy set validator D19 keeps.",
     },
 ];
 

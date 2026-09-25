@@ -2214,7 +2214,7 @@ mod tests {
             .expect("valid timestamp")
             .with_timezone(&chrono::Utc);
         let body = build_event_reminder_body(
-            "CANNABIS SOMMELIER NIGHT",
+            "SUNSET RIDE NIGHT",
             starts_at,
             Some("TurboBaby, Kamala Phuket"),
         );

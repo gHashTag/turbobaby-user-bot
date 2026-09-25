@@ -559,8 +559,9 @@ The questions that ruling left open are listed in #63.
   bring in line.
 * **J. Vocabulary and ownership (#62).** Should the nmax-155 rate be owned by pricing-honesty (as
   landed) or by rental-terms? Is a named copy bound by gate 3 accepted in place of an import the
-  compiler lacks? New copy is needed for `T_MENU_DESC` / `T_MENU_NO_RESULTS`, and the strain-of-day
-  carousel is waiting to be retired.
+  compiler lacks? New copy is needed for `T_MENU_DESC` / `T_MENU_NO_RESULTS`. The strain-of-day
+  carousel was retired on 2026-09-25 (owner: nothing cannabis-related anywhere; DECISIONS.md, the
+  D19 addendum of that date).
 * **Outside the contracts, and blocking what customers see:**
   * the price door's source and Bridge access. The door is still a stub, so every rate is quoted
     by a human;

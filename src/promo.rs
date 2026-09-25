@@ -1038,13 +1038,21 @@ pub async fn unmute(db: &Database, who: i64) -> bool {
 /// same customer. It cannot prove the post caused the order — somebody who was
 /// going to buy anyway also taps links — so this is an upper bound on the
 /// effect, and it is reported as "orders after" rather than "orders caused".
+///
+/// **Not every stored name is printed.** Since 2026-09-25 (owner: nothing
+/// cannabis-related anywhere) each row's kind and name go through
+/// `crate::trios::promo::report_kind_and_name`, with the link the row was
+/// stored with: a post about the product table migration 083 dropped keeps its
+/// row and its numbers and prints `REPORT_WITHHELD_NAME` instead of its name.
+/// Both readers — the bot's `/promo` and `GET /api/admin/promo-report` — get
+/// the rows from here.
 pub async fn report(db: &Database, days: i64) -> Result<Vec<PromoResult>, sea_orm::DbErr> {
     let rows = db
         .orm
         .query_all(Statement::from_sql_and_values(
             DbBackend::Postgres,
             "WITH published AS ( \
-                 SELECT dedup_key, kind, subject_id, subject_name, published_at \
+                 SELECT dedup_key, kind, subject_id, subject_name, link_payload, published_at \
                  FROM promo_posts \
                  WHERE published_at IS NOT NULL AND published_at > NOW() - ($1 || ' days')::interval \
              ), opens AS ( \
@@ -1056,7 +1064,7 @@ pub async fn report(db: &Database, days: i64) -> Result<Vec<PromoResult>, sea_or
                   AND e.occurred_at >= p.published_at \
                  WHERE e.telegram_id IS NOT NULL \
              ) \
-             SELECT p.dedup_key, p.kind, p.subject_name, \
+             SELECT p.dedup_key, p.kind, p.subject_name, p.link_payload, \
                     COUNT(DISTINCT o.telegram_id)::int4          AS openers, \
                     COUNT(DISTINCT ord.id)::int4                 AS orders, \
                     COALESCE(SUM(DISTINCT ord.total), 0)::float8 AS revenue \
@@ -1065,7 +1073,7 @@ pub async fn report(db: &Database, days: i64) -> Result<Vec<PromoResult>, sea_or
              LEFT JOIN orders ord \
                     ON ord.telegram_id = o.telegram_id \
                    AND ord.created_at BETWEEN o.occurred_at AND o.occurred_at + INTERVAL '24 hours' \
-             GROUP BY p.dedup_key, p.kind, p.subject_name, p.published_at \
+             GROUP BY p.dedup_key, p.kind, p.subject_name, p.link_payload, p.published_at \
              ORDER BY revenue DESC, orders DESC",
             [days.to_string().into()],
         ))
@@ -1073,12 +1081,20 @@ pub async fn report(db: &Database, days: i64) -> Result<Vec<PromoResult>, sea_or
 
     Ok(rows
         .into_iter()
-        .map(|r| PromoResult {
-            kind: r.try_get("", "kind").unwrap_or_default(),
-            subject_name: r.try_get("", "subject_name").unwrap_or_default(),
-            openers: r.try_get("", "openers").unwrap_or(0),
-            orders: r.try_get("", "orders").unwrap_or(0),
-            revenue: r.try_get("", "revenue").unwrap_or(0.0),
+        .map(|r| {
+            let link: Option<String> = r.try_get("", "link_payload").ok().flatten();
+            let (kind, subject_name) = crate::trios::promo::report_kind_and_name(
+                r.try_get("", "kind").unwrap_or_default(),
+                link.as_deref(),
+                r.try_get("", "subject_name").unwrap_or_default(),
+            );
+            PromoResult {
+                kind,
+                subject_name,
+                openers: r.try_get("", "openers").unwrap_or(0),
+                orders: r.try_get("", "orders").unwrap_or(0),
+                revenue: r.try_get("", "revenue").unwrap_or(0.0),
+            }
         })
         .collect())
 }
@@ -1086,7 +1102,10 @@ pub async fn report(db: &Database, days: i64) -> Result<Vec<PromoResult>, sea_or
 /// One published post and what followed it.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct PromoResult {
+    /// The stored kind, or empty when no live subject writes that word
+    /// (`crate::trios::promo::report_kind_and_name`).
     pub kind: String,
+    /// The stored name, or `REPORT_WITHHELD_NAME` where it is withheld.
     pub subject_name: String,
     /// Distinct people who opened the link.
     pub openers: i32,

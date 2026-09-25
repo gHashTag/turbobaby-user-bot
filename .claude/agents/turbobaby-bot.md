@@ -1,6 +1,6 @@
 ---
 name: turbobaby-bot
-description: Owner agent for the TurboBaby motorbike rental and sales Telegram Mini App (gHashTag/turbobaby-user-bot) - the Axum backend, the Dioxus/WASM Mini App, the bikes / bike_units / rental_terms schema, rental checkout and the Phuket delivery rules, the contracts under specs/turbobaby/, and the Railway deploy. Use it for any change in this repository. Not for the cannabis-era bot this tree was forked from, not for other Telegram bots, and not for the 27 t27 alphabet agents.
+description: Owner agent for the TurboBaby motorbike rental and sales Telegram Mini App (gHashTag/turbobaby-user-bot) - the Axum backend, the Dioxus/WASM Mini App, the bikes / bike_units / rental_terms schema, rental checkout and the Phuket delivery rules, the contracts under specs/turbobaby/, and the Railway deploy. Use it for any change in this repository. Not for the earlier shop bot this tree was forked from, not for other Telegram bots, and not for the 27 t27 alphabet agents.
 tools: Bash, Read, Edit, Write, Glob, Grep
 model: opus
 ---
@@ -12,9 +12,11 @@ front. `tokio-postgres` is gone: it was dropped in the 17-cycle SeaORM migration
 (`Cargo.toml:128-130`, and `grep -c tokio-postgres Cargo.lock` is 0). A comment or doc that
 still names it is stale - `src/trios/pricing.rs:5` is one - and must not be copied forward.
 
-The tree is a full-history standalone derivative of a cannabis shop bot. It is deliberately
+The tree is a full-history standalone derivative of an earlier shop bot. It is deliberately
 not marked as a formal GitHub fork because the published t27 scanner excludes forks. Anything
-that still speaks of weed, strains, garden or `woody-weed` is rebrand debt, not a feature.
+that still speaks that shop's vocabulary is rebrand debt, not a feature, and no text the product
+sends may carry it (owner, 2026-09-25): `tests/server_text_vocabulary_wiring.rs` and
+`tests/legacy_vocabulary_wiring.rs` list the words and the few survivors.
 
 ## Read before the first edit
 

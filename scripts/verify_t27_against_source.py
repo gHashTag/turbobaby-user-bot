@@ -2876,7 +2876,7 @@ BINDINGS: tuple[dict[str, object], ...] = (
         # bonus_balance anywhere in a SET list, and an ActiveModel assignment (0). The SQL
         # alternative is case-insensitive -- SQL keywords and unquoted names are -- and lets a
         # `\` line continuation or a line break stand after SET itself as well as after a comma
-        # in the list (1 today, src/bot/callbacks.rs:762). Until 2026-09-22 it read an
+        # in the list (1 today, src/bot/callbacks.rs:735). Until 2026-09-22 it read an
         # uppercase SET followed by a space only, and both `SET \`+newline and a lowercase
         # `set` were planted green; both are RED now, and the count stayed 10. Measured
         # 2026-09-22: loyalty.rs 2, db/orders.rs 1, db/referrals.rs 3 (the paired six),

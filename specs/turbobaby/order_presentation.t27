@@ -324,7 +324,7 @@ pub const NO_REJECTED_LABEL_KEY_EXISTS : bool = true;
 ; two pairs apart (BOT_PUSH_SITE), but its sentences are notifications and not labels, and the
 ; rejected one adds a refund claim this screen cannot verify, so neither can be copied onto a
 ; label verbatim. src/locales.rs:184 and :273, the nearest short strings, are the ADMIN'S callback
-; toast (sent at src/bot/callbacks.rs:707) and not customer copy at all.
+; toast (sent at src/bot/callbacks.rs:680) and not customer copy at all.
 pub const COMPLETED_KEY_AWAITS_THE_OWNER : bool = true;
 pub const REJECTED_KEY_AWAITS_THE_OWNER : bool = true;
 pub const COMPLETED_KEY_NOTE : str = "Owner question A. A key for completed decides the customer-visible half of the alias the order-status contract owns, and the write path persists completed for both names, so a separate label would relabel every finished order. What is missing is the owner's ruling and an owner-approved ru and en pair; no source in this repository publishes one.";

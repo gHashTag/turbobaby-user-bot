@@ -125,7 +125,7 @@ pub(crate) async fn get_managers_doc() {}
     get,
     path = "/api/loyalty/tiers",
     responses(
-        (status = 200, description = "List of loyalty tiers with thresholds and perks", body = serde_json::Value),
+        (status = 200, description = "List of loyalty tiers with thresholds (perks: always an empty list)", body = serde_json::Value),
         (status = 500, description = "Internal server error"),
     ),
     tag = "loyalty"
@@ -203,7 +203,28 @@ mod published_document_tests {
     /// point is to catch the *category* of leak, not to enumerate a banned
     /// dictionary. `gram` is absent on purpose — it is a substring of
     /// "telegram" and "program", and a check that cries wolf gets deleted.
-    const RETIRED: [&str; 6] = ["woody", "weed", "cannabis", "dispensary", "strain", "thc"];
+    ///
+    /// Widened 2026-09-25, when the owner ruled that nothing cannabis-related
+    /// may appear anywhere: the Russian spellings, the other English names
+    /// and the certification the old shop advertised. Each is a substring no
+    /// honest description of a motorbike rental contains (measured: the
+    /// document holds none of them). `indica` is absent for the reason `gram`
+    /// is: it is a substring of "indicates".
+    const RETIRED: [&str; 13] = [
+        "woody",
+        "weed",
+        "cannabis",
+        "dispensary",
+        "strain",
+        "thc",
+        "marijuana",
+        "sativa",
+        "gacp",
+        "каннабис",
+        "конопл",
+        "марихуан",
+        "вуди",
+    ];
 
     fn published_text() -> String {
         serde_json::to_string(&ApiDoc::openapi())

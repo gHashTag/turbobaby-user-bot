@@ -138,13 +138,13 @@ fn build_admin_url(base_url: &str) -> String {
     }
 }
 
-/// Pure price calculator: apply a percentage discount and round to the nearest integer.
-/// Result is never negative.
-pub(crate) fn calculate_discounted_price(price_per_gram: f64, discount_percent: f64) -> f64 {
-    (price_per_gram * (1.0 - discount_percent / 100.0))
-        .max(0.0)
-        .round()
-}
+// `calculate_discounted_price` stood here (seven lines, and this comment keeps
+// them). Its one caller was the strain-of-day carousel page, which printed a
+// per-gram price and a THC line. The owner ruled on 2026-09-25 that nothing
+// cannabis-related may appear anywhere; the page answers with `rental_menu`
+// (after `handle_command`) instead, and the calculator had no other reader.
+// Every line below this one therefore stays where the contracts under specs/
+// cite it.
 
 pub(crate) async fn handle_command(
     bot: Bot,
@@ -322,26 +322,26 @@ pub(crate) async fn handle_command(
             // table, which 083_drop_cannabis_catalog removed. Every /menu was a
             // query that could only error into the default, so the catalog menu
             // below is no longer an else-branch — it is the whole command.
-            bot.send_message(
-                msg.chat.id,
-                format!("🏍 <b>{}</b>\n━━━━━━━━━━━━━━━━", locale.menu),
-            )
-            .parse_mode(teloxide::types::ParseMode::Html)
-            .reply_markup(InlineKeyboardMarkup::new(vec![
-                vec![web_app_btn(
-                    &format!("🏍 {}", locale.open_menu),
-                    &build_app_url(base, &lang, None),
-                )],
-                vec![web_app_btn(
-                    &format!("📦 {}", locale.my_orders),
-                    &build_app_url(base, &lang, Some("orders")),
-                )],
-                vec![web_app_btn(
-                    &format!("👤 {}", locale.profile),
-                    &build_app_url(base, &lang, Some("profile")),
-                )],
-            ]))
-            .await?;
+            //
+            // The heading and the three buttons are built by `rental_menu`, at
+            // the end of this file's non-test code. Since 2026-09-25 a second
+            // surface sends the same menu: the retired strain-of-day buttons
+            // (`callbacks.rs`, `CallbackAction::RetiredCarouselPage`), which
+            // answer with it instead of a strain card, on the owner's ruling
+            // that nothing cannabis-related may appear anywhere. One builder, so
+            // the command and the fallback cannot drift apart; the unit test
+            // `the_rental_menu_is_a_heading_and_three_mini_app_buttons` pins it.
+            //
+            // The heading goes out in the HTML parse mode and interpolates only
+            // the locale's own label, so nothing here needs escaping.
+            // This arm is kept at the length the inline menu had (26 lines):
+            // contracts under specs/ cite lines further down this file by
+            // number, and a shorter arm would move every one of them.
+            let (text, markup) = rental_menu(&locale, base, &lang);
+            bot.send_message(msg.chat.id, text)
+                .parse_mode(teloxide::types::ParseMode::Html)
+                .reply_markup(markup)
+                .await?;
         }
 
         Command::Joke => {
@@ -513,7 +513,7 @@ pub(crate) async fn handle_command(
             }
             bot.send_message(
                 msg.chat.id,
-                "🌿 Posting fact to group... feature not yet implemented",
+                "🧠 Posting fact to group... feature not yet implemented",
             )
             .await?;
         }
@@ -584,16 +584,16 @@ pub(crate) async fn handle_command(
             // not on Telegram initData / admin_ids.  The bot button is just a
             // convenient entry point; showing it to everyone is safe because the
             // WebApp still requires the shared admin password.
-            bot.send_message(
-                msg.chat.id,
-                "🔧 <b>Admin Panel</b>\n━━━━━━━━━━━━━━━━\nУправление товарами:\nStrains • Gear • Tea • Sets • Acc.Sets • Tea Sets",
-            )
-            .parse_mode(teloxide::types::ParseMode::Html)
-            .reply_markup(InlineKeyboardMarkup::new(vec![vec![web_app_btn(
-                "🔧 Открыть админку",
-                &build_admin_url(base),
-            )]]))
-            .await?;
+            // The heading only (2026-09-25): the line listing the old shop's
+            // catalogue tabs is gone, none of them a tab of this screen (owner:
+            // nothing cannabis-related anywhere).
+            bot.send_message(msg.chat.id, "🔧 <b>Admin Panel</b>\n━━━━━━━━━━━━━━━━")
+                .parse_mode(teloxide::types::ParseMode::Html)
+                .reply_markup(InlineKeyboardMarkup::new(vec![vec![web_app_btn(
+                    "🔧 Открыть админку",
+                    &build_admin_url(base),
+                )]]))
+                .await?;
         }
 
         Command::Blocks => {
@@ -752,11 +752,42 @@ pub(crate) async fn handle_command(
     Ok(())
 }
 
+/// The rental menu: a heading and the three Mini App buttons `/menu` answers
+/// with.
+///
+/// One builder because two surfaces send it: the `/menu` command, and the
+/// retired strain-of-day buttons (`CallbackAction::RetiredCarouselPage` in
+/// `callbacks.rs`), which answer with the rental menu instead of a strain card
+/// (owner, 2026-09-25: nothing cannabis-related anywhere). Both senders use the
+/// HTML parse mode; nothing interpolated into the heading comes from a
+/// customer, so it needs no escape.
+pub(crate) fn rental_menu(
+    locale: &Locale,
+    base: &str,
+    lang: &str,
+) -> (String, InlineKeyboardMarkup) {
+    (
+        format!("🏍 <b>{}</b>\n━━━━━━━━━━━━━━━━", locale.menu),
+        InlineKeyboardMarkup::new(vec![
+            vec![web_app_btn(
+                &format!("🏍 {}", locale.open_menu),
+                &build_app_url(base, lang, None),
+            )],
+            vec![web_app_btn(
+                &format!("📦 {}", locale.my_orders),
+                &build_app_url(base, lang, Some("orders")),
+            )],
+            vec![web_app_btn(
+                &format!("👤 {}", locale.profile),
+                &build_app_url(base, lang, Some("profile")),
+            )],
+        ]),
+    )
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{
-        build_admin_url, build_app_url, build_app_url_with_start, calculate_discounted_price,
-    };
+    use super::{build_admin_url, build_app_url, build_app_url_with_start, rental_menu};
 
     #[test]
     fn test_build_app_url_basic() {
@@ -854,7 +885,7 @@ mod tests {
         for bad in [
             "",
             "channel",
-            "ref_WOODY123",
+            "ref_TURBO123",
             // Was in the `good` list until D5 removed the screen it opened.
             "garden",
             "garden__1234",
@@ -915,29 +946,39 @@ mod tests {
         );
     }
 
+    /// The rental menu `/menu` sends, and the retired strain-of-day buttons
+    /// answer with since 2026-09-25: a heading and three Mini App buttons, in
+    /// both published locales, pointing at the catalog, the orders and the
+    /// profile.
     #[test]
-    fn test_calculate_discounted_price_basic() {
-        assert_eq!(calculate_discounted_price(100.0, 10.0), 90.0);
-    }
-
-    #[test]
-    fn test_calculate_discounted_price_no_discount() {
-        assert_eq!(calculate_discounted_price(350.0, 0.0), 350.0);
-    }
-
-    #[test]
-    fn test_calculate_discounted_price_full_discount() {
-        assert_eq!(calculate_discounted_price(100.0, 100.0), 0.0);
-    }
-
-    #[test]
-    fn test_calculate_discounted_price_over_discount() {
-        assert_eq!(calculate_discounted_price(100.0, 150.0), 0.0);
-    }
-
-    #[test]
-    fn test_calculate_discounted_price_rounds() {
-        assert_eq!(calculate_discounted_price(99.0, 33.33), 66.0);
+    fn the_rental_menu_is_a_heading_and_three_mini_app_buttons() {
+        use teloxide::types::InlineKeyboardButtonKind;
+        for lang in crate::locales::supported_langs() {
+            let locale = crate::locales::get_locale(lang);
+            let (text, markup) = rental_menu(&locale, "https://app.com", lang);
+            assert!(text.contains(&locale.menu), "{lang}: {text}");
+            let rows = &markup.inline_keyboard;
+            assert_eq!(rows.len(), 3, "{lang}: three rows");
+            let urls: Vec<String> = rows
+                .iter()
+                .map(|row| match row.as_slice() {
+                    [button] => match &button.kind {
+                        InlineKeyboardButtonKind::WebApp(info) => info.url.to_string(),
+                        _ => String::from("not a Mini App button"),
+                    },
+                    _ => String::from("not one button"),
+                })
+                .collect();
+            assert_eq!(
+                urls,
+                [
+                    format!("https://app.com/?lang={lang}&v=4"),
+                    format!("https://app.com/orders?lang={lang}&v=4"),
+                    format!("https://app.com/profile?lang={lang}&v=4"),
+                ],
+                "{lang}"
+            );
+        }
     }
 }
 

@@ -17,48 +17,18 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/tech-tree/achievements", get(get_achievements))
 }
 
-async fn get_tech_nodes(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
-    // Cycle #93: SeaORM via Statement (pattern #15). No tech_node entity —
-    // 13-column wide row read into ad-hoc JSON.
-    use sea_orm::{ConnectionTrait, DbBackend, Statement};
-    let rows = state
-        .db
-        .orm
-        .query_all(Statement::from_string(
-            DbBackend::Postgres,
-            "SELECT id, name, description, category, icon, status, xp_required, xp_reward, \
-                dependencies, unlocks, features, estimated_hours, priority \
-         FROM tech_nodes ORDER BY priority ASC, xp_required ASC LIMIT 2000"
-                .to_string(),
-        ))
-        .await
-        .map_err(|e| {
-            tracing::error!("get_tech_nodes: {e}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
-    let nodes: Vec<Value> = rows
-        .iter()
-        .map(|r| {
-            json!({
-                "id":              r.try_get::<String>("", "id").unwrap_or_default(),
-                "name":            r.try_get::<String>("", "name").unwrap_or_default(),
-                "description":     r.try_get::<String>("", "description").unwrap_or_default(),
-                "category":        r.try_get::<String>("", "category").unwrap_or_default(),
-                "icon":            r.try_get::<String>("", "icon").unwrap_or_default(),
-                "status":          r.try_get::<String>("", "status").unwrap_or_default(),
-                "xp_required":     r.try_get::<i32>("", "xp_required").unwrap_or(0),
-                "xp_reward":       r.try_get::<i32>("", "xp_reward").unwrap_or(0),
-                "dependencies":    r.try_get::<Vec<String>>("", "dependencies").unwrap_or_default(),
-                "unlocks":         r.try_get::<Vec<String>>("", "unlocks").unwrap_or_default(),
-                "features":        r.try_get::<Vec<String>>("", "features").unwrap_or_default(),
-                "estimated_hours": r.try_get::<i32>("", "estimated_hours").unwrap_or(0),
-                "priority":        r.try_get::<i32>("", "priority").unwrap_or(0),
-            })
-        })
-        .collect();
-
-    Ok(Json(json!({ "nodes": nodes, "total": nodes.len() })))
+/// `GET /api/tech-tree/nodes`: an empty roadmap, always.
+///
+/// The `tech_nodes` rows are the old shop's product roadmap (migration 010
+/// seeded them: its strain catalogue, its sommelier, a dosing guide, a session
+/// journal), and the owner ruled on 2026-09-25 that nothing cannabis-related
+/// may appear anywhere. No TurboBaby node has ever been written, so the read
+/// stops here, in code: the route stays declared and answers the shape it
+/// always did, a client that still fetches it gets an empty tree rather than
+/// an error, and no row is read, written or deleted. The admin `complete`
+/// route below still flips a stored row's status.
+async fn get_tech_nodes() -> Json<Value> {
+    Json(json!({ "nodes": [], "total": 0 }))
 }
 
 fn validate_id(id: &str) -> Result<(), StatusCode> {
@@ -68,48 +38,11 @@ fn validate_id(id: &str) -> Result<(), StatusCode> {
     Ok(())
 }
 
-async fn get_tech_node(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> Result<Json<Value>, StatusCode> {
+/// `GET /api/tech-tree/nodes/:id`: not found, for every id, for the reason
+/// `get_tech_nodes` gives. An over-long id is still refused first, as before.
+async fn get_tech_node(Path(id): Path<String>) -> Result<Json<Value>, StatusCode> {
     validate_id(&id)?;
-    use sea_orm::{ConnectionTrait, DbBackend, Statement};
-    let row = state
-        .db
-        .orm
-        .query_one(Statement::from_sql_and_values(
-            DbBackend::Postgres,
-            "SELECT id, name, description, category, icon, status, xp_required, xp_reward, \
-                dependencies, unlocks, features, estimated_hours, priority \
-         FROM tech_nodes WHERE id = $1",
-            [id.clone().into()],
-        ))
-        .await
-        .map_err(|e| {
-            tracing::error!("get_tech_node: {e}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
-    match row {
-        Some(r) => Ok(Json(json!({
-            "node": {
-                "id":              r.try_get::<String>("", "id").unwrap_or_default(),
-                "name":            r.try_get::<String>("", "name").unwrap_or_default(),
-                "description":     r.try_get::<String>("", "description").unwrap_or_default(),
-                "category":        r.try_get::<String>("", "category").unwrap_or_default(),
-                "icon":            r.try_get::<String>("", "icon").unwrap_or_default(),
-                "status":          r.try_get::<String>("", "status").unwrap_or_default(),
-                "xp_required":     r.try_get::<i32>("", "xp_required").unwrap_or(0),
-                "xp_reward":       r.try_get::<i32>("", "xp_reward").unwrap_or(0),
-                "dependencies":    r.try_get::<Vec<String>>("", "dependencies").unwrap_or_default(),
-                "unlocks":         r.try_get::<Vec<String>>("", "unlocks").unwrap_or_default(),
-                "features":        r.try_get::<Vec<String>>("", "features").unwrap_or_default(),
-                "estimated_hours": r.try_get::<i32>("", "estimated_hours").unwrap_or(0),
-                "priority":        r.try_get::<i32>("", "priority").unwrap_or(0),
-            }
-        }))),
-        None => Err(StatusCode::NOT_FOUND),
-    }
+    Err(StatusCode::NOT_FOUND)
 }
 
 /// Mark a tech-tree node as completed (admin-only).
@@ -207,47 +140,23 @@ async fn complete_tech_node(
     Ok(Json(json!({ "success": true, "unlocked": unlocked })))
 }
 
-async fn get_achievements(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
-    use sea_orm::{ConnectionTrait, DbBackend, Statement};
-    let rows = state
-        .db
-        .orm
-        .query_all(Statement::from_string(
-            DbBackend::Postgres,
-            "SELECT id, name, description, icon, xp_reward, requirement, category \
-         FROM achievements ORDER BY xp_reward ASC LIMIT 2000"
-                .to_string(),
-        ))
-        .await
-        .map_err(|e| {
-            tracing::error!("get_achievements: {e}");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
-
-    let achievements: Vec<Value> = rows
-        .iter()
-        .map(|r| {
-            json!({
-                "id":          r.try_get::<String>("", "id").unwrap_or_default(),
-                "name":        r.try_get::<String>("", "name").unwrap_or_default(),
-                "description": r.try_get::<String>("", "description").unwrap_or_default(),
-                "icon":        r.try_get::<String>("", "icon").unwrap_or_default(),
-                "xp_reward":   r.try_get::<i32>("", "xp_reward").unwrap_or(0),
-                "requirement": r.try_get::<String>("", "requirement").unwrap_or_default(),
-                "category":    r.try_get::<String>("", "category").unwrap_or_default(),
-            })
-        })
-        .collect();
-
-    Ok(Json(
-        json!({ "achievements": achievements, "total": achievements.len() }),
-    ))
+/// `GET /api/tech-tree/achievements`: an empty list, always.
+///
+/// The `achievements` rows belong to the same retired roadmap (migrations 010
+/// and 066: badges for trying every strain, for the sommelier, for watering the
+/// garden), nothing in TurboBaby awards one, and the owner's ruling of
+/// 2026-09-25 is the same. The route stays and answers its old shape; no row is
+/// read, written or deleted.
+async fn get_achievements() -> Json<Value> {
+    Json(json!({ "achievements": [], "total": 0 }))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::validate_id;
+    use super::{get_achievements, get_tech_node, get_tech_nodes, validate_id};
+    use axum::extract::Path;
     use axum::http::StatusCode;
+    use serde_json::json;
 
     #[test]
     fn test_validate_id_ok() {
@@ -273,6 +182,28 @@ mod tests {
     // unlock if it were locked. The seed leaves no-dep nodes as 'available'
     // already so this never actually fires in practice, but documenting the
     // invariant here so future schema changes notice if it shifts.
+    /// Owner, 2026-09-25: the old shop's roadmap and its badges are not
+    /// served. The routes answer their old shape, empty, with no database.
+    #[tokio::test]
+    async fn the_retired_roadmap_answers_empty_and_not_found() {
+        assert_eq!(get_tech_nodes().await.0, json!({ "nodes": [], "total": 0 }));
+        assert_eq!(
+            get_achievements().await.0,
+            json!({ "achievements": [], "total": 0 })
+        );
+        for id in ["core-menu", "wasm-calculator", "experience-dosage", "x"] {
+            assert_eq!(
+                get_tech_node(Path(id.to_string())).await.err(),
+                Some(StatusCode::NOT_FOUND),
+                "{id}"
+            );
+        }
+        assert_eq!(
+            get_tech_node(Path("a".repeat(201))).await.err(),
+            Some(StatusCode::BAD_REQUEST)
+        );
+    }
+
     #[test]
     fn cascade_invariant_documented() {
         // No-dep locked node → unnest({}) yields 0 rows → outer NOT EXISTS
