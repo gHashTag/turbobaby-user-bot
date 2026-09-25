@@ -394,6 +394,50 @@ pub fn asset_is_orphaned(mounted_by_code: bool, code_references: u16, comment_re
     return code_references == 0 and comment_references > 0;
 }
 
+; --- The owner's ruling of 2026-09-25 (#12): nothing cannabis-related anywhere, client half ------
+; The owner answered a numbered list on 2026-09-25, and item 12 reads, in translation: everything
+; that concerns cannabis must be nowhere. Cannabis heritage is this file's subject (D19, issue #2),
+; so the half of the ruling the Mini App carries is recorded here; the server, bot and document
+; halves are recorded by the change that makes them. It is a COPY ruling and not a surface ruling:
+; it moves no route -- which legacy paths open the catalog instead is item 7 of the same list and is
+; not restated here -- and it drops no table and deletes no row. What it changed, measured on the
+; tree it was applied to (0526429):
+;   * src/trios/i18n.rs lost fourteen keys, deleted outright as the 46 of #2 were. Nine belonged to
+;     the retired strain menu and no screen rendered them; five were rendered by the accessories
+;     screen -- its smoking-gear subtitle and four paraphernalia filter chips. No replacement
+;     sentence was written for any of them. Each deleted line became a comment line, so no line of
+;     that file that a contract cites has moved. The declared-key count is owned by
+;     turbobaby/locale-policy (TRANSLATION_KEY_COUNT) and moved there, not here.
+;   * five rendered arms lost their cannabis half and gained nothing: the checkout age notice in both
+;     languages lost its medical-use clause, the success screen's back-to-menu button lost its herb
+;     emoji in Russian, and the shop game's herb-delivery event lost its first half in both.
+;   * two arms were brought into line with the other language's arm of the same key: the shop game's
+;     move log named the old shop's mascot in Russian where the English already named TurboBaby, and
+;     the checkout trust heading promised discretion in English where the Russian already asked why
+;     people trust the shop. Both now say what their twin says.
+;   * nothing that is only an identifier moved. The checkout's saved-draft storage keys keep their
+;     old prefix, because renaming a storage key silently discards every customer's saved draft,
+;     which D19 already records; key names such as the trust block's are not copy, as
+;     turbobaby/customer-surface already says of them.
+; The 20+ age gate itself is untouched. The server enforces it, turbobaby/checkout-contact records it
+; as inherited heritage whose retirement is this file's question, and item 12 did not answer that
+; question: it removed the cannabis claim printed beside the gate, not the gate.
+pub const CANNABIS_RULING_AT : str = "2026-09-25";
+pub const CANNABIS_RULING_ITEM : str = "#12";
+pub const CANNABIS_RULING_NOTE : str = "Nothing cannabis-related anywhere. Client copy: fourteen i18n keys deleted (nine never rendered, five rendered by the accessories screen), five rendered arms cut to their non-cannabis half, two arms aligned with their other-language twin, no sentence invented, no identifier renamed, no route moved, no table dropped.";
+pub const CANNABIS_RULING_I18N_KEYS_DELETED : u8 = 14;
+pub const CANNABIS_RULING_I18N_KEYS_DELETED_UNRENDERED : u8 = 9;
+pub const CANNABIS_RULING_I18N_KEYS_DELETED_RENDERED : u8 = 5;
+pub const CANNABIS_RULING_ARMS_CUT : u8 = 5;
+pub const CANNABIS_RULING_ARMS_ALIGNED_TO_THEIR_TWIN : u8 = 2;
+pub const CANNABIS_RULING_SENTENCES_INVENTED : u8 = 0;
+pub const CANNABIS_RULING_KEY_COUNT_OWNER_ID : str = "turbobaby/locale-policy";
+pub const CANNABIS_RULING_KEY_COUNT_OWNER_DECL : str = "TRANSLATION_KEY_COUNT";
+pub const CANNABIS_RULING_MOVES_A_ROUTE : bool = false;
+pub const CANNABIS_RULING_DROPS_A_TABLE : bool = false;
+pub const CANNABIS_RULING_RENAMES_A_STORAGE_KEY : bool = false;
+pub const CANNABIS_RULING_RETIRES_THE_AGE_GATE : bool = false;
+
 ; --- The refusal ----------------------------------------------------------------------------------
 ; This contract classifies. It does not choose. Which of the eight live legacy paths goes next,
 ; and in what order, is the owner's call and issue #2's scope; epic #26 keeps that issue open and
@@ -655,6 +699,25 @@ test an_orphaned_asset_is_none_of_the_three_states {
     assert ORPHAN_ASSET_TEXT_REFERENCES == 1;
 }
 
+test the_cannabis_ruling_deletes_and_cuts_copy_and_invents_none {
+    assert CANNABIS_RULING_AT == "2026-09-25";
+    assert CANNABIS_RULING_ITEM == "#12";
+    assert CANNABIS_RULING_I18N_KEYS_DELETED == 14;
+    assert CANNABIS_RULING_I18N_KEYS_DELETED_UNRENDERED + CANNABIS_RULING_I18N_KEYS_DELETED_RENDERED == CANNABIS_RULING_I18N_KEYS_DELETED;
+    assert CANNABIS_RULING_ARMS_CUT == 5;
+    assert CANNABIS_RULING_ARMS_ALIGNED_TO_THEIR_TWIN == 2;
+    assert CANNABIS_RULING_SENTENCES_INVENTED == 0;
+    assert CANNABIS_RULING_KEY_COUNT_OWNER_ID == "turbobaby/locale-policy";
+    assert CANNABIS_RULING_KEY_COUNT_OWNER_ID != ID;
+    assert CANNABIS_RULING_KEY_COUNT_OWNER_DECL == "TRANSLATION_KEY_COUNT";
+    // A copy ruling: no route, no table, no storage key, and the age gate beside the cut clause stays.
+    assert CANNABIS_RULING_MOVES_A_ROUTE == false;
+    assert CANNABIS_RULING_DROPS_A_TABLE == false;
+    assert CANNABIS_RULING_RENAMES_A_STORAGE_KEY == false;
+    assert CANNABIS_RULING_RETIRES_THE_AGE_GATE == false;
+    assert COMPLETED_RETIREMENT_COUNT == 1;
+}
+
 test the_reuse_edges_are_named_and_no_sibling_decision_is_restated {
     assert REUSES_BOT_SURFACE_ID == "turbobaby/bot-surface";
     assert REUSES_CATALOG_API_ID == "turbobaby/catalog-api";
@@ -767,6 +830,9 @@ invariant no_surface_is_claimed_gone_while_any_declaration_survives
 
 invariant a_word_count_is_never_absence_evidence
     assert GARDEN_WORD_HITS_IN_CLIENT_ROUTER > 0 and may_claim_surface_is_gone(GARDEN_ROUTE_DECLARATIONS, 0, 0) == true
+
+invariant the_cannabis_ruling_invents_no_sentence_and_drops_no_table
+    assert CANNABIS_RULING_SENTENCES_INVENTED == 0 and CANNABIS_RULING_DROPS_A_TABLE == false and CANNABIS_RULING_I18N_KEYS_DELETED_UNRENDERED + CANNABIS_RULING_I18N_KEYS_DELETED_RENDERED == CANNABIS_RULING_I18N_KEYS_DELETED
 
 invariant an_unreproducible_footprint_figure_is_never_adopted
     assert SURVEY_LOC_CLAIM_REPRODUCED == false and LEGACY_SOURCE_FILE_COUNT < TOTAL_SOURCE_FILE_COUNT
