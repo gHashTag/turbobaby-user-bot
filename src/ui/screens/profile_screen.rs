@@ -3,7 +3,7 @@ use crate::trios::i18n::{
     t, tf, T_ORDERS_ORDER, T_ORDERS_STATUS_CANCELLED, T_ORDERS_STATUS_CONFIRMED,
     T_ORDERS_STATUS_DELIVERED, T_ORDERS_STATUS_OUT_FOR_DELIVERY, T_ORDERS_STATUS_PENDING,
     T_ORDERS_STATUS_PREPARING, T_ORDERS_STATUS_READY, T_ORDERS_STATUS_UNKNOWN, T_PROFILE_BONUS,
-    T_PROFILE_BONUS_ADMIN, T_PROFILE_BONUS_CASHBACK, T_PROFILE_BONUS_DEBIT, T_PROFILE_BONUS_GARDEN,
+    T_PROFILE_BONUS_ADMIN, T_PROFILE_BONUS_CASHBACK, T_PROFILE_BONUS_DEBIT,
     T_PROFILE_BONUS_HISTORY, T_PROFILE_BONUS_HISTORY_EMPTY, T_PROFILE_BONUS_OTHER,
     T_PROFILE_BONUS_REFERRAL, T_PROFILE_CASHBACK_LABEL, T_PROFILE_CONTACTS, T_PROFILE_COPY,
     T_PROFILE_COPY_LINK, T_PROFILE_EARN_PER_REF, T_PROFILE_FRIENDS_INVITED, T_PROFILE_INVITED,
@@ -404,7 +404,7 @@ fn profile_status_label_key(status: &str) -> crate::trios::i18n::Key {
 fn bonus_tx_label(lang: Lang, tx_type: &str) -> String {
     match tx_type {
         "referral_bonus" => t(lang, T_PROFILE_BONUS_REFERRAL).to_string(),
-        "garden_harvest" | "garden_reward" => t(lang, T_PROFILE_BONUS_GARDEN).to_string(),
+        "garden_harvest" | "garden_reward" => t(lang, T_PROFILE_BONUS_OTHER).to_string(),
         "order_cashback" | "cashback" => t(lang, T_PROFILE_BONUS_CASHBACK).to_string(),
         "admin_grant" | "manual_grant" => t(lang, T_PROFILE_BONUS_ADMIN).to_string(),
         "admin_deduction" => t(lang, T_PROFILE_BONUS_DEBIT).to_string(),
@@ -998,7 +998,7 @@ pub fn ProfileScreen() -> Element {
                                 let status_label = t(lang, profile_status_label_key(&o.status));
                                 let total_str = crate::trios::pricing::order_total_text(o.total, crate::ui::components::bike_card::DASH);
                                 let date_str = o.created_at.split('T').next().unwrap_or(&o.created_at).to_string();
-                                let item_summary = o.items.first().map(profile_item_name).unwrap_or_else(|| "—".to_string());
+                                let item_summary = o.items.first().map(|i| crate::trios::legacy_view::shown_line_name(lang, &profile_item_name(i))).unwrap_or_else(|| "—".to_string());
                                 let more_count = o.items.len().saturating_sub(1);
                                 let init_for_reorder = init_data.clone();
                                 let cart_for_reorder = cart;

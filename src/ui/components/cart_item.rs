@@ -13,7 +13,14 @@ pub fn CartItemComponent(props: CartItemProps) -> Element {
     let item = props.item.clone();
     let lang = crate::ui::lang::current_lang();
 
-    let img_url = item.image_url.as_deref().unwrap_or("");
+    // Owner, 2026-09-25, answer 3: a device cart line of the old catalogue
+    // shows the neutral name and no stored picture. Nothing mounts this
+    // component today; it reads the line the way the cart screen does, so
+    // mounting it cannot bring the stored name or picture back.
+    let kind = crate::ui::api::http::cart_item_type_to_kind(&item.item_type);
+    let shown_name = crate::trios::legacy_view::shown_cart_line_name(lang, kind, &item.name);
+    let shown_image = crate::trios::legacy_view::cart_line_image(kind, &item.image_url);
+    let img_url = shown_image.as_deref().unwrap_or("");
     let has_image = !img_url.is_empty()
         && (img_url.starts_with("http://")
             || img_url.starts_with("https://")
@@ -32,11 +39,11 @@ pub fn CartItemComponent(props: CartItemProps) -> Element {
                 img {
                     class: "cart-item-image",
                     src: "{img_url}?v=2",
-                    alt: "{item.name}"
+                    alt: "{shown_name}"
                 }
             }
             div { class: "cart-item-details",
-                h4 { class: "cart-item-name", "{item.name}" }
+                h4 { class: "cart-item-name", "{shown_name}" }
                 p { class: "cart-item-price", "{price_str}" }
                 if let Some(note) = price_note {
                     // Styled by `.cart-item-price-note` in styles/main.css, not

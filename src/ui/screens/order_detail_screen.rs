@@ -257,7 +257,7 @@ fn OrderDetailCard(
                 }
                 for item in order.items.iter() {
                     div { style: "display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 4px;",
-                        span { style: "color: #e8e8e8;", "{item_name(item)} x{item.quantity as i32}" }
+                        span { style: "color: #e8e8e8;", "{crate::trios::legacy_view::shown_line_name(lang, &item_name(item))} x{item.quantity as i32}" }
                         span { style: "color: #8b8b9e;",
                             // An absent line price renders as a dash, not as an
                             // empty cell. `unwrap_or_default()` here produced

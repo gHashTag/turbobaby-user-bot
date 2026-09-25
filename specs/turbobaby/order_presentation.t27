@@ -97,6 +97,13 @@
 ; should show as its total. The commerce contract, whose ledger the second touches, is the ninth
 ; neighbour since the same day (REUSES_COMMERCE_ID), so "the seven contracts named by ID below" now
 ; reads nine.
+; ADDED 2026-09-25, the owner's answer 3: a fourth question, which NAME a customer is shown for a
+; line of the old catalogue on an order of theirs, and which SHOP. The answer is the operator's
+; neutral name, cited by its key like every other string here, and a withheld shop; the section
+; "The name of a line of the old catalogue" says where both are decided and what they cost. The
+; rule lives in src/trios/legacy_view.rs, a fifth file this boundary names without owning, and
+; turbobaby/legacy-retirement, which records the answer, is named there (RETIRED_LINE_OWNER_ID) and
+; is not counted among the nine neighbours: nothing of its is consumed but the date.
 ; phi^2 + 1/phi^2 = 3 | TRINITY
 
 module turbobaby-order-presentation;
@@ -930,6 +937,9 @@ pub const WIRE_STAR_CLAMP_SITE_BEFORE_THE_WIRE_FIX : str = "src/db/orders.rs:79"
 pub const MONEY_WITHHELD_FIELD : str = "money_withheld";
 pub const MONEY_WITHHELD_REASON : str = "stored_value_not_finite_non_negative";
 pub const MONEY_WITHHELD_REASON_SITE : str = "src/db/orders.rs:46";
+; Since the owner's answer 3 of 2026-09-25 the two customer sites call Order::for_customer, which
+; runs this same conversion first and then masks only the lines and the shop (the section "The
+; name of a line of the old catalogue"); no figure passes anything else, and the sites did not move.
 pub const ORDER_ENDPOINTS_SERIALISE_THROUGH_ONE_CONVERSION : [2]str = [
   "src/api/orders.rs:1973",
   "src/api/orders.rs:2509",
@@ -1227,6 +1237,86 @@ pub const KEYLESS_SITE_REMOVED_BY_THE_REPAIR : str = "src/ui/components/status_s
 pub const TRANSPORT_ERROR_TEXT_REACHES_THE_CUSTOMER : bool = true;
 pub const LIST_ERROR_STATE_HAS_NO_KEY : bool = true;
 pub const DETAIL_ERROR_STATE_HAS_A_KEY_AND_ALSO_LEAKS_THE_TEXT : bool = true;
+
+; --- The name of a line of the old catalogue (owner, 2026-09-25, answer 3) ----------------------
+; DECIDED 2026-09-25. The owner's answer 3 of that day's second numbered list rules that what the
+; previous shop left in storage leaves customers' sight, and that no stored row is deleted or
+; rewritten for it; turbobaby/legacy-retirement records the answer (OWNER_ANSWER_3_AT) and the
+; other reads it moved. On these screens that content is the order LINE. An order placed before
+; migration 083 stores the old catalogue's lines -- a strain, an accessory, a tea or a set, each
+; by id and by name -- and the list, the detail and the profile's recent orders printed each
+; line's stored name as it was stored. The operator chose the neutral name those lines are shown
+; under; like every string on this surface it is cited by its key, RETIRED_LINE_NAME_KEY, and its
+; two rows are pinned by a host test beside the rule (RETIRED_LINE_UNIT_TESTS_LIVE_IN).
+;
+; THE RULE is the server's, so a bundle that predates it is served the neutral name too
+; (customer_order_line in RETIRED_LINE_RULE). A line whose bike is not an object is of a retired
+; kind, and it is served as at most three fields: the neutral name, under the one name field every
+; owned screen reads first (RETIRED_LINE_NAME_FIELD), and its quantity and unit price exactly as
+; stored (RETIRED_LINE_KEPT_FIELDS) -- a figure is copied, never judged or filled in, and D9 stays
+; the screens' as above. Its ids, kind flags and service choice are not served, and neither is a
+; key this repository never declared, so no reorder can rebuild the old item in a cart: all five
+; reorder conversions (the three owned screens, home and success) drop a line with no id, which is
+; what they already did, and home and success print no line name. A bike line is served
+; as stored. The server writes the name in the language the stored names were written in
+; (Russian), and each owned screen prints it through the same table in the reader's language
+; (shown_line_name, RETIRED_LINE_PRINT_SITES), so a customer reading English reads the English row.
+; Only the two customer reads apply the rule, through Order::for_customer; the admin reads keep
+; the stored row, which is the archive.
+;
+; THE SHOP. The same two reads withhold the shop an order names when it names the previous shop
+; (customer_shop_id); every shop value the old checkout stored did. A withheld shop reaches the
+; keyless shop fallback both owned screens print for an absent shop (two of
+; KEYLESS_CUSTOMER_STRING_SITES), and that fallback names THIS shop, so an order the previous shop
+; took now reads as placed with this one, on the detail's labelled delivery row too. No neutral
+; shop wording was given and none is supplied here (RETIRED_SHOP_FALLBACK_NOTE).
+;
+; WHAT DID NOT MOVE. No status, no figure, no owner question above and no cited line: each of the
+; three print sites was replaced in place, so LIST_LINE_COUNT and DETAIL_LINE_COUNT hold.
+pub const RETIRED_LINE_DECIDED_AT : str = "2026-09-25";
+pub const RETIRED_LINE_DECIDED_BY : str = "operator, applying the owner's answer 3 of 2026-09-25";
+pub const RETIRED_LINE_OWNER_ID : str = "turbobaby/legacy-retirement";
+pub const RETIRED_LINE_NAME_KEY : str = "T_ORDER_LINE_PREVIOUS_CATALOGUE";
+pub const RETIRED_LINE_NAME_FIELD : str = "strain_name";
+pub const RETIRED_LINE_KEPT_FIELD_COUNT : u8 = 2;
+pub const RETIRED_LINE_KEPT_FIELDS : [2]str = ["quantity", "unit_price"];
+pub const RETIRED_LINE_RULE : str = "src/trios/legacy_view.rs";
+pub const RETIRED_LINE_SERVER_SITE : str = "Order::for_customer, src/db/orders.rs";
+pub const RETIRED_LINE_CUSTOMER_READS : [2]str = ["get_user_orders", "get_order_details"];
+pub const RETIRED_LINE_ADMIN_READS : [2]str = ["get_orders", "get_order"];
+pub const RETIRED_LINE_PRINT_SITES : [3]str = [
+  "src/ui/screens/orders_screen.rs:306",
+  "src/ui/screens/order_detail_screen.rs:260",
+  "src/ui/screens/profile_screen.rs:1001",
+];
+pub const RETIRED_LINE_WITNESS : str = "tests/legacy_view_wiring.rs";
+pub const RETIRED_LINE_UNIT_TESTS_LIVE_IN : str = "src/trios/legacy_view.rs";
+pub const RETIRED_LINE_SERVES_AN_ID : bool = false;
+pub const RETIRED_LINE_SERVES_AN_UNDECLARED_KEY : bool = false;
+pub const RETIRED_LINE_WRITES_A_ROW : bool = false;
+pub const RETIRED_LINE_ADMIN_READS_KEEP_THE_ROW : bool = true;
+pub const RETIRED_LINE_PRINTED_IN_THE_READERS_LANGUAGE : bool = true;
+pub const RETIRED_LINE_MOVED_A_CITED_LINE : bool = false;
+pub const RETIRED_SHOP_IS_WITHHELD : bool = true;
+pub const RETIRED_SHOP_READS_AS_THIS_SHOP : bool = true;
+pub const RETIRED_SHOP_FALLBACK_NOTE : str = "A withheld shop is served as null, and both owned screens print their keyless shop fallback for null, which names this shop, so an order the previous shop took now reads as placed with this one. No neutral shop wording was given with answer 3; the owner decides whether that line should say something else.";
+
+; A line is of a retired kind unless its bike is an object.
+pub fn order_presentation_line_is_retired(bike_is_an_object: bool) bool {
+  return !bike_is_an_object;
+}
+
+; How many fields a line of a retired kind is served with: the neutral name, and each kept figure
+; the stored line holds. Never more, whatever else it stored.
+pub fn order_presentation_retired_line_field_count(quantity_stored: bool, price_stored: bool) u8 {
+  if (quantity_stored and price_stored) {
+    return 3;
+  }
+  if (quantity_stored or price_stored) {
+    return 2;
+  }
+  return 1;
+}
 
 ; --- The live view, and what it promises --------------------------------------------------------
 ; The detail screen polls the status endpoint on a bounded schedule: 360 ticks, ten seconds apart
@@ -2343,7 +2433,46 @@ test the_live_view_is_read_again_after_a_cancel_answer_and_nowhere_else {
   assert order_presentation_poll_horizon_ms(POLL_INTERVAL_MS, POLL_TICK_LIMIT) == POLL_HORIZON_MS;
 }
 
+test a_line_of_the_old_catalogue_is_served_by_the_neutral_name_and_its_stored_figures {
+  assert RETIRED_LINE_DECIDED_AT == "2026-09-25";
+  assert RETIRED_LINE_DECIDED_BY == "operator, applying the owner's answer 3 of 2026-09-25";
+  assert RETIRED_LINE_OWNER_ID == "turbobaby/legacy-retirement";
+  assert RETIRED_LINE_OWNER_ID != ID;
+  assert RETIRED_LINE_NAME_KEY == "T_ORDER_LINE_PREVIOUS_CATALOGUE";
+  assert RETIRED_LINE_NAME_FIELD == "strain_name";
+  assert RETIRED_LINE_KEPT_FIELDS.len == RETIRED_LINE_KEPT_FIELD_COUNT;
+  assert RETIRED_LINE_KEPT_FIELDS[0] == "quantity";
+  assert RETIRED_LINE_KEPT_FIELDS[1] == "unit_price";
+  assert order_presentation_line_is_retired(false) == true;
+  assert order_presentation_line_is_retired(true) == false;
+  assert order_presentation_retired_line_field_count(true, true) == RETIRED_LINE_KEPT_FIELD_COUNT + 1;
+  assert order_presentation_retired_line_field_count(true, false) == 2;
+  assert order_presentation_retired_line_field_count(false, false) == 1;
+  assert RETIRED_LINE_SERVES_AN_ID == false;
+  assert RETIRED_LINE_SERVES_AN_UNDECLARED_KEY == false;
+  assert RETIRED_LINE_WRITES_A_ROW == false;
+  assert RETIRED_LINE_CUSTOMER_READS.len == 2;
+  assert RETIRED_LINE_ADMIN_READS.len == 2;
+  assert RETIRED_LINE_ADMIN_READS_KEEP_THE_ROW == true;
+  assert RETIRED_LINE_PRINT_SITES.len == 3;
+  assert RETIRED_LINE_PRINTED_IN_THE_READERS_LANGUAGE == true;
+  assert RETIRED_LINE_MOVED_A_CITED_LINE == false;
+  assert RETIRED_LINE_RULE == RETIRED_LINE_UNIT_TESTS_LIVE_IN;
+  assert RETIRED_LINE_WITNESS == "tests/legacy_view_wiring.rs";
+}
+
+test a_withheld_shop_reads_as_this_one_and_the_owner_is_asked_about_it {
+  assert RETIRED_SHOP_IS_WITHHELD == true;
+  assert RETIRED_SHOP_READS_AS_THIS_SHOP == true;
+  assert RETIRED_SHOP_FALLBACK_NOTE != "";
+  assert LABELLED_DELIVERY_ROW_VALUE_IS_A_SHOP_NAME == true;
+  assert KEYLESS_CUSTOMER_STRING_SITE_COUNT == 6;
+}
+
 ; --- Invariants -----------------------------------------------------------------------------------
+
+invariant a_line_of_the_old_catalogue_is_never_served_more_than_its_name_and_stored_figures
+  assert order_presentation_retired_line_field_count(true, true) == 3 and RETIRED_LINE_SERVES_AN_ID == false and RETIRED_LINE_SERVES_AN_UNDECLARED_KEY == false and RETIRED_LINE_WRITES_A_ROW == false
 
 invariant only_a_confirmed_success_closes_the_cancel_dialog
   assert order_presentation_cancel_dialog_closes(CANCEL_ANSWER_CANCELLED) == true and order_presentation_cancel_dialog_closes(CANCEL_ANSWER_REFUSED) == false and order_presentation_cancel_dialog_closes(CANCEL_ANSWER_NO_ANSWER) == false and order_presentation_cancel_dialog_closes(CANCEL_ANSWER_SERVER_FAILED) == false

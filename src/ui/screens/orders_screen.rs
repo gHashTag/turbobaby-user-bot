@@ -303,7 +303,7 @@ pub fn OrdersScreen() -> Element {
                                                 div { style: "margin-bottom: 8px;",
                                                     for item in o.items.iter() {
                                                         div { style: "display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 3px;",
-                                                            span { style: "color: #8b8b9e;", "{item_name(item)} x{item.quantity as i32}" }
+                                                            span { style: "color: #8b8b9e;", "{crate::trios::legacy_view::shown_line_name(lang, &item_name(item))} x{item.quantity as i32}" }
                                                         }
                                                     }
                                                 }

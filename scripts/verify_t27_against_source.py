@@ -1420,6 +1420,53 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "why": "the reading's sites in the contract, and in order-status's DISPLAY_PIPELINE_"
                "MODEL_A, were measured against a file of this length",
     },
+    # The owner's answer 3 of 2026-09-25: a line of the old catalogue is served under the
+    # neutral name with its stored figures only. The rule is src/trios/legacy_view.rs; the
+    # contract names the name field it writes, the figures it keeps and how many bonus types
+    # keep their description. Measured by hand 2026-09-25: strain_name, [quantity,
+    # unit_price] and 4. (The key the name is looked up by is an identifier, which this reader
+    # does not evaluate; tests/legacy_view_wiring.rs holds it to the contract.)
+    {
+        "name": "order_presentation.RETIRED_LINE_NAME_FIELD ~ legacy_view.rs MASKED_LINE_NAME_KEY",
+        "spec": "specs/turbobaby/order_presentation.t27",
+        "const": "RETIRED_LINE_NAME_FIELD",
+        "source": "src/trios/legacy_view.rs",
+        "extract": ("regex", r'pub const MASKED_LINE_NAME_KEY: &str = ("[a-z_]+");'),
+        "relation": "equal",
+        "why": "the field is the one every owned screen reads first; another field would leave "
+               "a bundle that predates the rule printing its own fallback",
+    },
+    {
+        "name": "order_presentation.RETIRED_LINE_KEPT_FIELDS ~ legacy_view.rs KEPT_LINE_KEYS",
+        "spec": "specs/turbobaby/order_presentation.t27",
+        "const": "RETIRED_LINE_KEPT_FIELDS",
+        "source": "src/trios/legacy_view.rs",
+        "extract": ("regex_list", r"pub const KEPT_LINE_KEYS: \[&str; \d+\] = \[([^\]]*)\];"),
+        "relation": "list_equal",
+        "why": "only the quantity and the unit price may pass as stored; a key added here would "
+               "serve a stored id or name of the old catalogue to its customer again",
+    },
+    {
+        "name": "legacy_retirement.OWNER_ANSWER_3_DESCRIBED_TX_TYPE_COUNT ~ legacy_view.rs",
+        "spec": "specs/turbobaby/legacy_retirement.t27",
+        "const": "OWNER_ANSWER_3_DESCRIBED_TX_TYPE_COUNT",
+        "source": "src/trios/legacy_view.rs",
+        "extract": ("regex", r"pub const DESCRIBED_TX_TYPES: \[&str; (\d+)\]"),
+        "relation": "equal",
+        "why": "a bonus type added to the served list serves its stored descriptions, which "
+               "nothing here can tell from the previous shop's",
+    },
+    # Measured by hand 2026-09-25 (UTC): 2 (garden_harvest, garden_reward).
+    {
+        "name": "legacy_retirement.OWNER_ANSWER_3_WITHHELD_TX_TYPE_COUNT ~ legacy_view.rs",
+        "spec": "specs/turbobaby/legacy_retirement.t27",
+        "const": "OWNER_ANSWER_3_WITHHELD_TX_TYPE_COUNT",
+        "source": "src/trios/legacy_view.rs",
+        "extract": ("regex", r"pub const GARDEN_ERA_TX_TYPES: \[&str; (\d+)\]"),
+        "relation": "equal",
+        "why": "a garden-era type dropped from the list is served as stored, and every bundle "
+               "cached before answer 3 labels it with the garden's label again",
+    },
     # cancel family. The order detail screen sent POST /api/orders/:id/cancel, bound the
     # answer to `let _resp` and closed its dialog right after the await, on every path.
     # Measured by hand 2026-09-22 with these exact patterns: at 14b01ac (git show) 1 and 1,
@@ -3758,7 +3805,13 @@ ONE_GROUP_EXTRACTORS = (
 # Then the owner's answer 1 of the second list on 2026-09-25 (the 20+ box removed, for now)
 # bound checkout_contact.BLOCKER_COUNT and AGE_FIELD_COMPARISONS_IN_THE_ORDERS_MODULE,
 # each planted RED once by hand: 241 rows over the same 41 contracts, floor 241.
-MIN_BINDINGS = 241
+# Then the owner's answer 3 of 2026-09-25 (the previous shop's stored content out of
+# customers' sight) bound order-presentation's RETIRED_LINE_NAME_FIELD and
+# RETIRED_LINE_KEPT_FIELDS and legacy-retirement's OWNER_ANSWER_3_DESCRIBED_TX_TYPE_COUNT and
+# OWNER_ANSWER_3_WITHHELD_TX_TYPE_COUNT to src/trios/legacy_view.rs, each planted RED once by
+# hand: 243 rows over the same 41 contracts and 81 source files on its own branch, floor 243.
+# Merged 2026-09-26 on the integration branch: 245 rows, floor 245 (the measured table size).
+MIN_BINDINGS = 245
 
 
 # ---------------------------------------------------------------------------------

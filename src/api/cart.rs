@@ -421,8 +421,8 @@ fn cart_model_to_resp(
                 catalog_id: i.catalog_id.clone(),
                 quantity: q,
                 unit_price: price,
-                name: i.name.clone(),
-                image_url: i.image_url.clone(),
+                name: crate::trios::legacy_view::cart_line_name(&i.kind, &i.name),
+                image_url: crate::trios::legacy_view::cart_line_image(&i.kind, &i.image_url),
             }
         })
         .collect();

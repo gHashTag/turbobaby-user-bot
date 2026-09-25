@@ -2215,3 +2215,85 @@ mod tests {
         assert_eq!(order_money_text(&money, dash).total, format_baht(0.0));
     }
 }
+
+// Owner, 2026-09-25, answer 3: stored content of the previous shop is kept out
+// of customers' sight, and nothing stored is rewritten. Kept at the end of the
+// file so that no line the contracts cite above moves.
+impl Order {
+    /// The order as the customer who placed it is served it: every stored line
+    /// through `crate::trios::legacy_view::customer_order_items` and the shop
+    /// through `customer_shop_id`, beside the same money conversion as
+    /// [`From`]. Only the two customer reads use it -- `get_user_orders` and
+    /// `get_order_details` in `src/api/orders.rs`; the admin reads keep
+    /// [`From`] and see the row whole.
+    pub(crate) fn for_customer(m: crate::db::entities::order::Model) -> Self {
+        let mut order = Self::from(m);
+        order.items = crate::trios::legacy_view::customer_order_items(&order.items);
+        order.shop_id = crate::trios::legacy_view::customer_shop_id(order.shop_id.take());
+        order
+    }
+}
+
+#[cfg(test)]
+mod customer_view_tests {
+    use super::Order;
+
+    fn stored(
+        items: serde_json::Value,
+        shop_id: Option<&str>,
+    ) -> crate::db::entities::order::Model {
+        crate::db::entities::order::Model {
+            id: "ord-answer-3".into(),
+            telegram_id: Some(1),
+            customer_name: None,
+            customer_phone: None,
+            customer_telegram: None,
+            items,
+            subtotal: 700.0,
+            bonus_used: 0.0,
+            stars_used: 0,
+            total: 700.0,
+            status: "delivered".into(),
+            shop_id: shop_id.map(str::to_string),
+            delivery_address: None,
+            delivery_notes: None,
+            age_confirmed: true,
+            delivery_zone_id: None,
+            created_at: chrono::DateTime::parse_from_rfc3339("2026-06-01T00:00:00+07:00")
+                .expect("fixed timestamp parses"),
+        }
+    }
+
+    /// The customer's two reads mask what the admin reads keep: the stored
+    /// line's name and id and the previous shop's name. Figures are untouched.
+    #[test]
+    fn the_customer_is_served_the_neutral_line_and_the_admin_the_row() {
+        let items = serde_json::json!([
+            { "accessory_id": "stored-id", "accessory_name": "Stored name", "quantity": 2.0, "unit_price": 350.0 },
+        ]);
+        let row = stored(items.clone(), Some("\u{1f3e0} Woody Phangan"));
+
+        let customer = Order::for_customer(row.clone());
+        let neutral = crate::trios::legacy_view::previous_catalogue_name(
+            crate::trios::legacy_view::SERVED_NAME_LANG,
+        );
+        assert_eq!(
+            customer.items,
+            serde_json::json!([{ "strain_name": neutral, "quantity": 2.0, "unit_price": 350.0 }])
+        );
+        assert_eq!(customer.shop_id, None);
+        assert_eq!(customer.total, Some(700.0));
+        assert_eq!(customer.subtotal, Some(700.0));
+
+        let admin = Order::from(row);
+        assert_eq!(admin.items, items);
+        assert_eq!(admin.shop_id.as_deref(), Some("\u{1f3e0} Woody Phangan"));
+    }
+
+    #[test]
+    fn this_shops_orders_keep_their_shop() {
+        let customer = Order::for_customer(stored(serde_json::json!([]), Some("TurboBaby")));
+        assert_eq!(customer.shop_id.as_deref(), Some("TurboBaby"));
+        assert_eq!(customer.items, serde_json::json!([]));
+    }
+}
