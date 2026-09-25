@@ -3379,20 +3379,23 @@ BINDINGS: tuple[dict[str, object], ...] = (
                "or HTTP -- must turn this red",
     },
     {
-        "name": "legacy_retirement.LEGACY_LIVE_ROUTES ~ routes.rs legacy paths",
+        "name": "legacy_retirement.LEGACY_PATHS_DECLARED ~ routes.rs legacy paths",
         "spec": "specs/turbobaby/legacy_retirement.t27",
-        "const": "LEGACY_LIVE_ROUTES",
+        "const": "LEGACY_PATHS_DECLARED",
         "source": "src/ui/routes.rs",
         # The pattern spells the eight paths, so this is a presence-and-order check on
         # the route ATTRIBUTES. Which screen a path mounts is decided in its handler far
         # below, and a one-capture pattern cannot tie the two: a path kept and repointed
-        # at CatalogScreen, as /sets and /sommelier are (:136-155), stays green here.
+        # at CatalogScreen, as /sets and /sommelier are, stays green here. Until 2026-09-25
+        # this row read LEGACY_LIVE_ROUTES, which held the same eight; on the owner's answer
+        # of that day seven of them render the catalog (the REPOINTED row counts them), and
+        # LEGACY_LIVE_ROUTES now names the one that still mounts a legacy screen.
         "extract": ("regex_all", r'^\s*#\[route\("(/accessories|/tea|/quest/:id|/game|/treasure-hunt|/ar-hunt|/location-quest|/tech-tree)"\)\]'),
         "relation": "list_equal",
-        "why": "the eight client paths the contract calls live must still be declared, in "
-               "this order; deleting or renaming one (the /garden mode) turns this red. It "
-               "does NOT see a path kept and repointed to the live catalog (the /sets and "
-               "/sommelier mode, the likelier one for a deep-linked path), nor a NEW legacy path",
+        "why": "the eight legacy client paths must still be declared, in this order, because "
+               "a link already sent never expires; deleting or renaming one (the /garden mode) "
+               "turns this red. It does NOT see which surface a path lands on -- the REPOINTED "
+               "row does -- nor a NEW legacy path",
     },
     {
         "name": "observability.REQUEST_ID_HEADER ~ observability.rs REQUEST_ID_HEADER",
@@ -3504,14 +3507,15 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "const": "REPOINTED_ROUTE_COUNT",
         "source": "src/ui/routes.rs",
         # A handler whose WHOLE body renders the catalog: /sets and /sommelier since their
-        # screens were deleted, and the three events paths since 2026-09-24. Home renders the
+        # screens were deleted, the three events paths since 2026-09-24, and seven of the eight
+        # legacy paths since the owner's answer of 2026-09-25 (5 -> 12). Home renders the
         # catalog too, but behind a branch, and Menu mounts MenuScreen, so neither matches. An
         # EventDetail keeps its `id` prop (`let _ = id;`) so an old /events/<id> still parses.
         "extract": ("regex_count", r"fn \w+\([^)]*\) -> Element \{\s*(?:let _ = \w+;\s*)?rsx! \{\s*CatalogScreen \{\}\s*\}\s*\}"),
         "relation": "equal",
-        "why": "the count LEGACY_LIVE_ROUTES cannot see: a kept path repointed to the live catalog; "
-               "a handler put back onto a retired screen, or a sixth path repointed without the "
-               "contract, turns this red",
+        "why": "the count LEGACY_PATHS_DECLARED cannot see: a kept path repointed to the live "
+               "catalog; a handler put back onto a retired screen, or a thirteenth path repointed "
+               "without the contract, turns this red",
     },
     {
         "name": "events_booking.EVENT_SCREENS_MOUNTED_BY_THE_CLIENT_ROUTER ~ routes.rs absence",
@@ -3570,7 +3574,8 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "source": "src/ui/routes.rs",
         # Presence only, in any order (the contract lists /skate first, the router declares it
         # last). What each path renders is the REPOINTED row's and the ride contracts' business.
-        "extract": ("regex_all", r'^\s*#\[route\("(/skate|/sets|/sommelier|/events|/events/:id|/my-bookings)"\)\]'),
+        # Seven legacy paths joined on 2026-09-25 (the owner's answer; 6 -> 13 members).
+        "extract": ("regex_all", r'^\s*#\[route\("(/skate|/sets|/sommelier|/events|/events/:id|/my-bookings|/accessories|/tea|/game|/treasure-hunt|/ar-hunt|/location-quest|/tech-tree)"\)\]'),
         "relation": "set_equal",
         "why": "LEGACY_LINKS_DO_NOT_EXPIRE: every path in the compatibility set must stay "
                "declared, or links already in customers' Telegram histories become router misses",
