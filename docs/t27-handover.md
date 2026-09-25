@@ -12,7 +12,7 @@ what to do next.
 | | measured 2026-09-21 |
 | --- | --- |
 | canonical contracts | **45** (44 under `specs/turbobaby/` + `specs/agents/turbobaby.t27`) |
-| assertions executed, all passing | **10 246** on the integration branch `t27/owner-answers-2509` (2026-09-25, the owner's answers of that day; not pushed, not merged) — **9 996** re-measured 2026-09-25 on `f5e6b4f`, after #64, which changed comments only (9 996 after #63 on 2026-09-24, 9 859 after #62, 9 535 earlier that day, 9 514 on 2026-09-23 before that day's money family, 9 038 on 2026-09-22, 8 911 on 2026-09-21) |
+| assertions executed, all passing | **10 273** on the integration branch `t27/owner-answers-2509` after the three fixes on top of `69fd4fa` (2026-09-25; see "Three fixes on top of `69fd4fa`" below), **10 246** at `69fd4fa` (the owner's answers of that day; not pushed, not merged) — **9 996** re-measured 2026-09-25 on `f5e6b4f`, after #64, which changed comments only (9 996 after #63 on 2026-09-24, 9 859 after #62, 9 535 earlier that day, 9 514 on 2026-09-23 before that day's money family, 9 038 on 2026-09-22, 8 911 on 2026-09-21) |
 | contract-to-contract ownership edges | 203+, **zero dangling** |
 | source lines named by some contract | **73 407 of 80 308 (91.4 %)** |
 | enforced contract-to-source bindings | **239** on the integration branch `t27/owner-answers-2509` (2026-09-25; the two new rows bind the CLICK 125 redirect to the seed), across the same 41 of 45 contracts and 80 source files — **237**, across 41 of 45 contracts and 80 source files, re-measured 2026-09-25 on `f5e6b4f`, after #64 (237 after #63 on 2026-09-24, 227 after #62, 198 earlier that day, 197 on 2026-09-23, 168 across 40 on 2026-09-22, 66 across 16 on 2026-09-21) |
@@ -128,6 +128,8 @@ pushed and nothing is deployed**: a customer sees none of it until the branch re
 **`dist/`.** It was rebuilt once with `scripts/build-frontend.sh` (trunk 0.21.14, wasm-bindgen
 0.2.122): bundle `17f356526a369bb9` → `c7cbc40d63a3b4f0`. The new wasm holds the refused-cancellation
 sentence in both languages, 0 × "PCX 150", 2 × "NMAX 155", and 0 × the strain menu's title.
+That sentence is the FIRST wording; `cafe215` reworded it, and this bundle has not been rebuilt
+since (see "Three fixes on top of `69fd4fa`" below).
 `scripts/predeploy-smoke.sh --no-build` on the committed `dist/` printed `SMOKE PASS` (app
 mounted, console clean), and `git status --porcelain` stayed empty afterwards.
 
@@ -174,6 +176,94 @@ trust -U postgres`), with `DATABASE_URL=postgres://postgres@127.0.0.1:55433/<fre
 * **Run in parallel**, which is the default, integration_events, events_same_day, client_errors
   and invitee_names fail differently from run to run on base and on this branch alike. Their tests
   share rows. All four pass on both trees when run serially on a fresh database.
+
+### Three fixes on top of `69fd4fa`, 2026-09-25, and what they still owe
+
+Three commits on `t27/owner-answers-2509`, not pushed. Dates are UTC; the commits carry the
+working machine's +07:00 clock, which had already turned to 2026-09-26.
+
+* **`cafe215`, item 11 reworded (operator, under the owner's delegation).** The 409 sentence is
+  now «Отменить этот заказ в приложении уже нельзя. Напишите менеджеру.» / "This order can no
+  longer be cancelled in the app. Please message the manager." It is true of every 409:
+  `cancel_order` answers 409 for any stored status that is not pending, including an order the
+  shop rejected and one already cancelled. The first named limit is CLOSED; the missing link to
+  the manager on the order card stays open (bullet D below). The key keeps its name, and both
+  `i18n.rs` rows were replaced on their own lines (1157 and 1757), so no citation moved.
+  client_errors floor 248 → 253.
+* **`cead405`, the bot's /start line.** `welcome_feature1` read «Каталог: от Click 125 до X-ADV
+  750», but CLICK 125 is offered to nobody. Measured from `data/fleet_seed.json`: 13 offered
+  families (the 7 `price_list_only` ones are a separate block). The smallest is 155 cc, a tie
+  between `nmax-155` (449 THB) and `xsr-155` (590 THB); `nmax-155` wins on the lower rate. The
+  largest is `xadv-750`, alone at 750 cc. The line is now «Каталог: от NMAX 155 до X-ADV 750» /
+  "Catalog: from NMAX 155 to X-ADV 750". It is recorded in `availability.t27`
+  (`START_CATALOG_RANGE_*`, floor 120/34 → 129/35) and guarded by
+  `tests/catalog_honesty_wiring.rs`, which derives both ends from the seed.
+* **`99b6716`, no cannabis branding in the dev and ops files (owner ruling #12).** Changed: the
+  `run.sh`/`dev.sh` banners, the `.env.template` header, the alert names `WoodyWeedBot*` →
+  `TurboBaby*`, the dashboard title, the `export-assets.sh` archive prefix (`turbobaby-assets-`),
+  the four design pages at the root, the lefthook example, and the stale e2e suite. The e2e tab
+  list now matches `AdminPanel`, and both spec files are skipped with a dated reason (the admin
+  gate is password-only). `tests/legacy_vocabulary_wiring.rs` guards the 13 files
+  (`DEV_OPS_FILES`). `observability.t27` gained a CORRECTED note, because that test now reads the
+  three unguarded monitoring files (for words, not metric names). Left in place on purpose, none
+  of them seen by a customer: the `wwb:` recording-rule prefix, the HMAC key literal in
+  `src/api/auth.rs`, the storage keys `woody_last_*` and `wwb_admin_token`, the DOM event
+  `woody:telegram-ready`, the warnings that name the other shop's service `woody-weed-bot` and the
+  Railway project `woody`, `buildWoody` in `assets/game`, the strain-of-day comment in
+  `lefthook.yml` (it names a test file), and all historical records. **Still carrying cannabis
+  content, outside that task's list and not changed:** `screenshots/` (the generated UI-kit
+  pages, `generate-pages.sh`, `e2e-pipeline.sh` and `e2e-report.md`) and `docs/DESIGN_SYSTEM.md`
+  (a Chip example with Sativa/Indica and "OG Kush — Legendary"). Under the ruling they are the next
+  cleanup.
+
+**Readings on `99b6716`**, pinned compiler 40003ed:
+
+```sh
+T27C=<path>/t27c python3 scripts/verify_t27_specs.py --require-compiler
+# OK - 45 manifested specs, 5 generators each (floors equal the measurement: availability 129/35,
+#      client_errors 253/58, observability 164/40, order_presentation 570/73)
+python3 scripts/execute_t27_assertions.py            # WITH the compiler cross-check
+# OK - 45 spec(s), 10273 assert line(s) scanned, 10273 executed, 10273 passed, 0 failed;
+#      9859 declaration name(s) and function bodies agreed with t27c; 2 pinned front-end disagreement(s)
+python3 scripts/verify_t27_against_source.py --require-git-tracked
+# OK - 239 bindings hold across 41 contracts and 80 source files
+python3 scripts/verify_fleet_seed.py -v
+# OK — 14 families (13 offered), 37 units (11 rented, 26 available); ...
+```
+
+`cargo fmt --check` was clean. All 27 changed files are `i/lf w/lf`.
+
+**Not done: drive D: is full.** On 2026-09-25, `df -h /d` read 222G in size with 17M available
+at 18:37 UTC and 13M at 18:50 UTC, still falling; a review about an hour earlier had read 22M.
+The shared target (`D:/turbobaby-bike-bot/target`) and this worktree are both on D:. That
+review's run of `cargo test --features backend -j 2` failed with os error 112 (not enough space
+on the disk) before the lib compiled. Agents may not delete anything outside their worktree, so
+freeing space is for the operator or the owner. Until that happens:
+
+* **`dist/` was not rebuilt.** The committed bundle is still `c7cbc40d63a3b4f0`, and its wasm
+  still carries the FIRST wording of the 409 sentence. `grep -c -a -F` on
+  `dist/turbobaby-bot-c7cbc40d63a3b4f0_bg.wasm` found «Этот заказ уже в работе» once, "already
+  being handled and can't be cancelled" once, and each new sentence zero times. **A deploy of this
+  branch as it stands would ship the old sentence.** The /start line is server code, and the
+  dev/ops files are not in the bundle.
+* **No clippy and no full `cargo test --features backend` ran on the three commits.** One reading
+  was taken. `tests/catalog_honesty_wiring.rs` and `tests/legacy_vocabulary_wiring.rs` use only
+  `std` and `serde_json`, so each was compiled on its own with `rustc 1.98.1 --edition 2021 --test`,
+  linked read-only against the shared target's `serde_json` rlib, written to a scratch directory
+  on C:, and run: 8 passed and 8 passed, 0 failed, the two new tests included. The extended host
+  test in `src/trios/api_errors.rs` has **not** run.
+* **What is owed, in order, once D: has room.** The PDB note above still applies.
+  1. `cargo fmt --check`.
+  2. Both clippy forms with `-D warnings`: backend (`--bin turbobaby-bot-server`) and
+     `--target wasm32-unknown-unknown --lib`.
+  3. `cargo test --features backend -j 2`, expecting 0 failed.
+  4. `scripts/build-frontend.sh`, run once. Check that `dist/version.txt.br` is absent and that
+     `dist/assets` is not staged.
+  5. Grep the new wasm: both new sentences present, both old ones absent.
+  6. Commit as `build(dist): … (bundle c7cbc40d63a3b4f0 -> <new>)`.
+  7. `scripts/predeploy-smoke.sh --no-build` must print SMOKE PASS, with `git status` empty
+     afterwards.
+  8. Record the readings here.
 
 ## The four gates, and how to run them
 
@@ -725,6 +815,10 @@ citations** — unlike a `src/` citation, which gate 3 can check.
 > numbers before changing anything — if they do not reproduce, say so instead of proceeding.
 > Gate 2 with a compiler configured prints two pinned disagreements and exits 0 (see "Gate 2's
 > cross-check after #64"); any other cross-check line is new.
+>
+> Before `t27/owner-answers-2509` is deployed or merged, work through the owed list under "Three
+> fixes on top of `69fd4fa`". Its `dist/` still ships the first wording of the 409 sentence, and
+> no clippy or full `cargo test` has run on its last three commits.
 >
 > The work, in order: fix the seven defects listed under "What is actually left", each with a test
 > that is red before the fix and with the contract that records the defect corrected in the same
