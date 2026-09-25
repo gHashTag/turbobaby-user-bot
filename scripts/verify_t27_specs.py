@@ -27,6 +27,9 @@ AGENT_CARD = "specs/agents/turbobaby.t27"
 # test/invariant/bench floor with the pinned compiler. Discovery supplies the tripwire. All 45 floors equal the measured counts as of 2026-09-25.
 # Re-measured 2026-09-25 for the two contracts the owner's CLICK 125 redirect decision changed:
 # availability 114 -> 120 declarations and 32 -> 34 checks, order_money 114 -> 115 declarations.
+# Re-measured 2026-09-25 again for the two contracts answer 5 of the owner's second list changed
+# (the detail's all-taken line and its key removed): availability 120 -> 132 declarations and
+# 34 -> 36 checks, locale_policy 136 -> 138 declarations.
 SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     AGENT_CARD: {
         "module": "turbobaby-agent",
@@ -49,8 +52,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/availability.t27": {
         "module": "availability",
         "id": "turbobaby/availability",
-        "min_declarations": 120,
-        "min_checks": 34,
+        "min_declarations": 132,
+        "min_checks": 36,
     },
     "specs/turbobaby/bike_catalog.t27": {
         "module": "bike-catalog",
@@ -168,8 +171,9 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         "id": "turbobaby/locale-policy",
         # 131 on the client half of ruling #12 alone and 130/35 on its server half alone; the
         # same day's cancel key (+1) and the deletion (-14) were reconciled in one count, with
-        # two declarations naming the +1; the three together measure 136/35.
-        "min_declarations": 136,
+        # two declarations naming the +1; the three together measure 136/35. Answer 5 of the
+        # owner's second list that day deleted one more key, named by two declarations: 138/35.
+        "min_declarations": 138,
         "min_checks": 35,
     },
     "specs/turbobaby/loyalty_ledger.t27": {

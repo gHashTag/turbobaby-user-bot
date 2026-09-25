@@ -29,10 +29,19 @@
 //!    confirms availability (`T_BIKE_AVAILABILITY_UNKNOWN`), which is copy the
 //!    repository already publishes; the admin screen keeps its count.
 //!
-//! What stays, on purpose: a zero count may still RULE a family out (the
-//! detail's «all taken» line and the Book control's reason), because the
-//! contract allows the file to rule out (`FILE_MAY_RULE_OUT = true`) and forbids
-//! it only to confirm.
+//! 3. **A seeded zero was printed as occupancy.** Under a zero count the detail
+//!    screen added «Сейчас все байки этой модели заняты.» / "Every bike of this
+//!    model is out right now." (`T_BIKE_UNITS_EMPTY`) below the manager line:
+//!    the same seeded count, read as a fact about right now. Asked on
+//!    2026-09-25 whether to remove it (the owner's second list of that day,
+//!    answer 5), the owner answered «Наверное» ("probably"). The line and its
+//!    key are gone, and nothing was written in their place.
+//!
+//! What stays, on purpose: a zero count may still RULE a family out, through
+//! the Book control's reason (`BookBlock::NoUnitsFree`), because the contract
+//! allows the file to rule out (`FILE_MAY_RULE_OUT = true`) and forbids it only
+//! to confirm. Answer 5 named the line, not that reason, so the reason stays;
+//! `availability.t27` records it as open (`NO_UNITS_BOOK_REASON_WAS_ANSWERED`).
 //!
 //! This file imports nothing from the crate on purpose: it compiles against any
 //! tree, so on a tree where a screen still prints the count it fails by CONTENT.
@@ -45,6 +54,16 @@ const DETAIL: &str = "src/ui/screens/bike_detail.rs";
 const ADMIN: &str = "src/ui/screens/admin_screen.rs";
 const SEED: &str = "data/fleet_seed.json";
 const AVAILABILITY_SPEC: &str = "specs/turbobaby/availability.t27";
+const I18N: &str = "src/trios/i18n.rs";
+
+/// The key of the detail's «all taken» line, deleted 2026-09-25, and the two
+/// sentences it carried. None of the three may come back without the owner.
+const RETIRED_UNITS_EMPTY_KEY: &str = "T_BIKE_UNITS_EMPTY";
+const RETIRED_UNITS_EMPTY_LITERAL: &str = "\"bike.units.empty\"";
+const RETIRED_UNITS_EMPTY_SENTENCES: [&str; 2] = [
+    "Сейчас все байки этой модели заняты.",
+    "Every bike of this model is out right now.",
+];
 
 /// i18n keys that state, in one wording or another, that a unit is free right
 /// now. Every one of them reads the seeded count as a confirmation.
@@ -377,5 +396,101 @@ fn the_admin_screen_keeps_its_count() {
     assert!(
         admin.contains("count_or_dash(s.units_available)"),
         "the admin stat card no longer shows the free-unit count"
+    );
+}
+
+// -- A seeded zero is not occupancy either (2026-09-25) -----------------------
+
+/// A top-level `pub const NAME : bool = true|false;` of `availability.t27`.
+fn spec_bool(spec: &str, name: &str) -> bool {
+    let head = format!("pub const {name} : bool = ");
+    let line = spec
+        .lines()
+        .find(|l| l.starts_with(&head))
+        .unwrap_or_else(|| panic!("availability.t27 must declare `{name}` as a bool"));
+    match line[head.len()..].trim().trim_end_matches(';').trim() {
+        "true" => true,
+        "false" => false,
+        other => panic!("availability.t27 `{name}` holds `{other}`, not a bool"),
+    }
+}
+
+#[test]
+fn the_detail_prints_no_all_taken_line_and_its_key_is_gone() {
+    // The owner's second list of 2026-09-25, answer 5 («Наверное»).
+    let detail = code(&source(DETAIL));
+    assert!(
+        !has_identifier(&detail, RETIRED_UNITS_EMPTY_KEY),
+        "{DETAIL} renders {RETIRED_UNITS_EMPTY_KEY} again; the owner removed that line on \
+         2026-09-25 (availability.t27 UNITS_EMPTY_LINE_IS_SHOWN = false)"
+    );
+    assert!(
+        !detail.contains("units_available == Some(0)"),
+        "{DETAIL} branches on a seeded zero again; the one zero branch left is \
+         book_block's, whose reason sits beside the disabled Book control"
+    );
+    let i18n = code(&source(I18N));
+    assert!(
+        !has_identifier(&i18n, RETIRED_UNITS_EMPTY_KEY)
+            && !i18n.contains(RETIRED_UNITS_EMPTY_LITERAL),
+        "{I18N} declares the retired key again; locale_policy.t27 counts it as deleted"
+    );
+    for path in [I18N, DETAIL, CATALOG] {
+        let text = code(&source(path));
+        for sentence in RETIRED_UNITS_EMPTY_SENTENCES {
+            assert!(
+                !text.contains(sentence),
+                "{path} carries the retired sentence {sentence:?} again"
+            );
+        }
+    }
+    // D16: the block the line stood in still renders its heading and the
+    // manager line, or "no all-taken line" would be true of a block nobody
+    // renders.
+    assert!(
+        has_identifier(&detail, "T_BIKE_UNITS_TITLE") && detail.contains("\"{availability}\""),
+        "{DETAIL} no longer renders its availability block; this check is blind"
+    );
+    // The contract records the same state; a flag flipped back without the
+    // code (or the reverse) is a drift this test sees.
+    let spec = source(AVAILABILITY_SPEC);
+    assert!(
+        !spec_bool(&spec, "UNITS_EMPTY_LINE_IS_SHOWN"),
+        "availability.t27 says the all-taken line is shown, and the screen does not show it"
+    );
+    assert!(
+        !spec_bool(&spec, "UNITS_EMPTY_KEY_IS_DECLARED"),
+        "availability.t27 says the retired key is declared, and {I18N} does not declare it"
+    );
+}
+
+#[test]
+fn a_seeded_zero_still_rules_booking_out_with_its_reason_named() {
+    // What answer 5 did not name stays: the file may rule a family out.
+    let catalog = code(&source(CATALOG));
+    let body = fn_body(&catalog, "pub fn book_block(");
+    assert!(
+        body.contains("Some(_) => return Some(BookBlock::NoUnitsFree)"),
+        "book_block no longer blocks a seeded zero:\n{body}"
+    );
+    assert!(
+        catalog.contains("Self::NoUnitsFree => T_BIKE_BOOK_BLOCKED_NO_UNITS"),
+        "the no-units block lost its named reason (issue #9)"
+    );
+    let detail = code(&source(DETAIL));
+    assert!(
+        detail.contains("book_block(&bike, on_book.is_some())")
+            && detail.contains("reason.reason_key()"),
+        "{DETAIL} no longer renders the Book control's reason; this check is blind"
+    );
+    let spec = source(AVAILABILITY_SPEC);
+    assert!(
+        spec_bool(&spec, "NO_UNITS_BOOK_REASON_IS_SHOWN") && spec_bool(&spec, "FILE_MAY_RULE_OUT"),
+        "availability.t27 no longer records the Book control's no-units reason as shown"
+    );
+    assert!(
+        !spec_bool(&spec, "NO_UNITS_BOOK_REASON_WAS_ANSWERED"),
+        "availability.t27 says the owner answered for the Book reason; record that answer \
+         where it is dated before flipping this flag"
     );
 }
