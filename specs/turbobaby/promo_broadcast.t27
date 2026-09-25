@@ -301,12 +301,16 @@ pub const FANOUT_RUNS_DETACHED : bool = true;
 ; and still accepts a retired call-to-action kind (ADMIN_CTA_ACCEPTS_RETIRED_STRAIN_KIND); this
 ; decision is about drafts and leaves it as it was.
 ;
-; WHERE THIS IS TIED TO THE CODE. Unit tests beside publish_refusal execute the decision for every
-; kind ever written, for unrecognised kinds, and for one of each Subject variant through a match
-; with no wildcard, so a new variant cannot compile unclassified. tests/promo_publish_wiring.rs
-; reads publish as text and holds that it selects the row's kind, asks the decision and returns
-; its answer before the stamp and before any send; that the decision, the stamp and the caller of
-; publish each exist once under src/; and that the lists below equal the code's.
+; WHERE THIS IS TIED TO THE CODE. Unit tests beside publish_refusal execute the decision for the
+; six kinds written today, for unrecognised kinds, and for one of each Subject variant through a
+; match with no wildcard, so a new variant cannot compile unclassified. The seventh kind, the one
+; that left with 083, is not run there: nothing outside a comment under src/ may name it
+; (tests/legacy_vocabulary_wiring.rs; the owner's ruling of 2026-09-25, item 12), and no list
+; classifies it, so it takes the same last branch as an unrecognised kind.
+; tests/promo_publish_wiring.rs reads publish as text and holds that it selects the row's kind,
+; asks the decision and returns its answer before the stamp and before any send; that the
+; decision, the stamp and the caller of publish each exist once under src/; that the lists below
+; equal the code's; and that no retired shop kind sits in a list that answers otherwise.
 ;
 ; LINE CITATIONS RE-MEASURED 2026-09-25. The refusal adds 8 lines inside publish and the decision
 ; 45 more after it, so every src/promo.rs line this file cites from the published_at stamp down

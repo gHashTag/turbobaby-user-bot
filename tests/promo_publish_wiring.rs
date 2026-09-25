@@ -332,6 +332,18 @@ fn the_contract_and_the_code_list_the_same_kinds() {
         spec_shop.iter().any(|k| k == "strain"),
         "the strain kind left with 083, but its drafts did not"
     );
+    // A retired shop kind is refused by publish_refusal's last branch, the one
+    // no list feeds, so none of them may sit in a list that answers otherwise.
+    // The unit tests under src/ run four of these kinds; the one that left
+    // with 083 may not be named outside a comment there
+    // (tests/legacy_vocabulary_wiring.rs; owner ruling 2026-09-25, item 12),
+    // so this is where its refusal is held.
+    for kind in &spec_shop {
+        assert!(
+            !code_publishable.contains(kind) && !code_events.contains(kind),
+            "the retired shop kind {kind:?} sits in a list publish_refusal answers otherwise for"
+        );
+    }
 }
 
 /// The decision is recorded where the repository's rules say, dated, and
