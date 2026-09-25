@@ -1,4 +1,4 @@
-# Woody Weed Bot — Design System
+# TurboBaby — Design System
 
 > Dioxus 0.6 + WASM · Telegram WebApp · Dark Mode First
 
@@ -36,7 +36,7 @@ All tokens are defined in `styles/variables.css` under `:root`.
 
 | Token | Value | Description |
 |---|---|---|
-| `--color-primary` | `#22c55e` | Weed green — primary CTA |
+| `--color-primary` | `#22c55e` | Green — primary CTA |
 | `--color-primary-light` | `#4ade80` | Lighter green hover |
 | `--color-primary-dark` | `#16a34a` | Darker green active |
 | `--color-accent-purple` | `#a855f7` | Purple accent |
