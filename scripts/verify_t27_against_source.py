@@ -741,6 +741,35 @@ BINDINGS: tuple[dict[str, object], ...] = (
                "contract does not record is a model the owner's rules forbid naming even as a "
                "replacement, and tests/catalog_honesty_wiring.rs ties each label to the seed",
     },
+    # The owner's decision of 2026-09-25 ("for now", NMAX 155 alone) is recorded twice: in the
+    # contract as CLICK_125_REDIRECTS / CLICK_125_REDIRECTS_ARE_PROVISIONAL and in the seed as
+    # pricing_policy.not_offered.click-125 offer_instead / offer_instead_provisional. Measured by
+    # hand on both sides first: ["nmax-155"] and true in each; until that date the two lists read
+    # ["pcx-150", "adv-150", "nmax-155"] in both files and nothing tied them. The anchors are keyed
+    # on the quoted field name with its closing quote, so the seed's offer_instead_before_2026_09_25
+    # and offer_instead_source are not read (each anchor must match exactly once).
+    {
+        "name": "availability.CLICK_125_REDIRECTS ~ seed click-125 offer_instead",
+        "spec": "specs/turbobaby/availability.t27",
+        "const": "CLICK_125_REDIRECTS",
+        "source": "data/fleet_seed.json",
+        "extract": ("regex_list", r'"offer_instead":\s*\[(.*?)\]'),
+        "relation": "list_equal",
+        "why": "the seed and the contract each record what the owner decided to offer instead of "
+               "CLICK 125; a list re-decided in one and not the other leaves the repository "
+               "offering two things, and the screen's label is tied to the contract, not the seed",
+    },
+    {
+        "name": "availability.CLICK_125_REDIRECTS_ARE_PROVISIONAL ~ seed offer_instead_provisional",
+        "spec": "specs/turbobaby/availability.t27",
+        "const": "CLICK_125_REDIRECTS_ARE_PROVISIONAL",
+        "source": "data/fleet_seed.json",
+        "extract": ("regex", r'"offer_instead_provisional":\s*(true|false)\s*[,}]'),
+        "relation": "equal",
+        "why": "the owner said \"for now\"; a decision made final (or re-opened) in the seed "
+               "under a contract that still calls it provisional, or the reverse, misstates "
+               "how settled the redirect is",
+    },
     {
         "name": "availability.CONFIRMING_KEY_LINES_IN_UI ~ src/ui/ absence",
         "spec": "specs/turbobaby/availability.t27",
@@ -3688,7 +3717,10 @@ ONE_GROUP_EXTRACTORS = (
 # compatibility set, commerce's sale refusal and catalog-api's two sale-offer facts. 236
 # rows, floor 236. Review of that change added events-booking's hide of the rows already
 # public (migration 088): 237 rows, floor 237.
-MIN_BINDINGS = 237
+# Then the owner's decision of 2026-09-25 on CLICK 125's redirect (NMAX 155 alone, for now)
+# bound availability.CLICK_125_REDIRECTS and CLICK_125_REDIRECTS_ARE_PROVISIONAL to the seed,
+# each planted RED once by hand: 239 rows over the same 41 contracts, floor 239.
+MIN_BINDINGS = 239
 
 
 # ---------------------------------------------------------------------------------

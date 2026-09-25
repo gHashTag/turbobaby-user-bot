@@ -68,13 +68,14 @@ is silent.
 ### 2. CLICK 125 is not offered (D12)
 
 Owner, 2026-09-12: not rented for now. `KB_faq` says the same independently. The family is
-closed to **new** rentals. The seed's `offer_instead` lists `pcx-150`, `adv-150` and
-`nmax-155`, and only the last of those can actually be rented: `nmax-155` is in the
-in-stock `families`, while `pcx-150` and `adv-150` sit in `price_list_only` -
-**a published tariff with zero units**. Offer `nmax-155`. The other two may be named as a
-model to enquire about, and must never be rendered as available or seeded into `bike_units`;
-the seed's own `price_list_only.$comment` says exactly that. Offering them as substitutes
-without the caveat replaces one honest refusal with a false availability claim. Read the
+closed to **new** rentals. What is offered instead is `nmax-155` alone: the owner decided so
+on 2026-09-25, provisionally ("for now"), and the seed's `offer_instead` says exactly that,
+with its dated source (`offer_instead_source`) and `offer_instead_provisional: true`. Until
+that date the list also named `pcx-150` and `adv-150`, which sit in `price_list_only` -
+**a published tariff with zero units**. Do not offer them as a substitute, render them as
+available or seed them into `bike_units`: the owner's rules forbid naming a model outside the
+fleet even as a replacement (DECISIONS.md, the D12 amendments of 2026-09-24 and 2026-09-25),
+and `scripts/verify_fleet_seed.py` refuses a redirect to either. Read the
 stock figures from the seed at the time you need them - do not copy them into code or prose,
 because `units_available` moves with every contract. One CLICK unit is still
 out on a contract that predates the decision - that rental is not cancelled, so code that

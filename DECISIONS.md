@@ -506,3 +506,36 @@ above, so that no line citation into it moves.
 `specs/turbobaby/legacy_retirement.t27` records the answer path by path, `deeplink.t27` the
 compatibility set it grew (six paths to thirteen), and `tests/rental_only_wiring.rs` guards the
 source.
+
+## D12 amendment (2026-09-25) — NMAX 155 is offered instead of CLICK 125, for now
+
+Kept at the end of this file, like the amendment of 2026-09-24, so that no line citation into it
+moves.
+
+The owner answered the redirect question on 2026-09-25, in answer 10 of a numbered list, verbatim:
+«Пока предлагаем нмакс 155 пока» — for now, NMAX 155 is what is offered instead of CLICK 125, and
+not PCX 150 or ADV 150. The answer says «пока» twice, so the decision is recorded as provisional:
+a later answer may change it, and the repository says so wherever it records the list.
+
+* **The seed.** `data/fleet_seed.json`, `pricing_policy.not_offered.click-125.offer_instead`, held
+  `["pcx-150", "adv-150", "nmax-155"]`, the KB_faq redirect D12 quotes, and holds `["nmax-155"]`.
+  Beside it: `offer_instead_source` names the dated source `sources.owner_decision_2026_09_25`,
+  `offer_instead_provisional` is `true`, and the old list is kept as
+  `offer_instead_before_2026_09_25`. The file kept its 350 lines, so no line citation into it
+  moved; `order_money.t27` re-measures its size (20161 bytes).
+* **The contract.** `specs/turbobaby/availability.t27` `CLICK_125_REDIRECTS` holds the decision,
+  with `CLICK_125_REDIRECTS_ARE_PROVISIONAL` and `CLICK_125_REDIRECTS_DECIDED_ON`; the three-name
+  list is kept as `CLICK_125_REDIRECTS_BEFORE_2026_09_25`, so the correction of 2026-09-24 still
+  executes against it. Gate 3 binds the list and the provisional flag to the seed.
+* **What a customer sees does not change.** The screens' source has named NMAX 155 alone since the
+  amendment of 2026-09-24 (`CLICK_125_ALTERNATIVES` in `src/ui/screens/catalog_screen.rs`); the
+  decision confirms that list. `tests/catalog_honesty_wiring.rs` now also checks the screen's
+  label against the seed's `offer_instead`. No customer sentence was written or changed.
+* **The seed gate.** `scripts/verify_fleet_seed.py` now reads `pricing_policy.not_offered`: every
+  key a closed family offers must be an offered family with a unit the SQL seeds as available,
+  never a price-list-only one, and the list must name a `sources` entry with a date.
+  `tests/fleet_seed_negative_control.rs` plants the pre-2026-09-25 list and a missing source,
+  and sees the gate go red on each.
+
+The brain's `knowledge_base` still carries the three-name redirect in the places the amendment of
+2026-09-24 names; that text is the operator's to change, not this repository's.
