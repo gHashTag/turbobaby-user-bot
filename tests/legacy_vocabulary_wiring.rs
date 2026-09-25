@@ -273,14 +273,6 @@ const SURVIVORS: &[Survivor] = &[
                  wire as `src/trios/deeplink.rs` for a product kind a stored broadcast row can \
                  still carry.",
     },
-    Survivor {
-        path: "src/trios/promo.rs",
-        hits: 5,
-        reason: "The digest icon for a legacy \"strain\" row and the ranking tests that use \
-                 legacy rows as fixtures (one of them a Russian sentence about a set of \
-                 strains). The producer stopped reading `strains` with 083; the kind stays \
-                 readable for rows already stored.",
-    },
     // --- the strains table's readers, kept by tests/retired_table_wiring.rs ----------
     Survivor {
         path: "src/db/strains.rs",
@@ -352,11 +344,6 @@ const SURVIVORS: &[Survivor] = &[
         hits: 8,
         reason: "Unit tests of the legacy pack weight line (\"N strains\", ru \"N сортов\"). \
                  The `sets` screens stay per D19; what they become is issue #2's decision.",
-    },
-    Survivor {
-        path: "src/api/catalog.rs",
-        hits: 1,
-        reason: "A test fixture name (\"Strain Set\") for the legacy set validator D19 keeps.",
     },
 ];
 

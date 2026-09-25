@@ -184,10 +184,10 @@ pub const MAX_POST_LEN: usize = 900;
 /// The instruction given to the model.
 ///
 /// Written as rules rather than a vibe, because the output goes out under the
-/// shop's name: no invented facts (the model does not know the THC figure, the
-/// price or the schedule unless it is in the prompt), no invented discounts,
-/// and no claims about effects that would be a legal problem for a cannabis
-/// shop to publish.
+/// shop's name: no invented facts (the model does not know the price or the
+/// schedule unless it is in the prompt), no invented discounts, and no claims
+/// about effects the shop could not stand behind. (Reworded 2026-09-25: this
+/// comment used to name the old shop's trade.)
 pub fn prompt_for(subject: &Subject, lang: &str, facts: &str) -> String {
     let what = match subject {
         Subject::Accessory { name, .. } => format!("новый аксессуар «{name}»"),
@@ -394,7 +394,9 @@ pub const DIGEST_MAX_NAME_CHARS: usize = 32;
 fn digest_icon(kind: &str) -> &'static str {
     match kind {
         "set" => "🎁",
-        "strain" => "🌿",
+        // A row of the retired catalogue kind (promo_posts rows stored before
+        // 083) gets the generic icon: its leaf left on 2026-09-25 (owner:
+        // nothing cannabis-related anywhere).
         "event" => "📅",
         "event_soon" => "⏰",
         "bestseller" => "🔥",
@@ -513,7 +515,7 @@ mod tests {
         vec![
             Subject::Accessory {
                 id: "a1".into(),
-                name: "Asia 420".into(),
+                name: "Phone mount".into(),
             },
             Subject::Tea {
                 id: "t1".into(),
@@ -693,7 +695,7 @@ mod tests {
             "   ",
             "ok",
             "Не могу помочь с этим запросом.",
-            "I'm sorry, but I cannot write promotional content for cannabis.",
+            "I'm sorry, but I cannot write promotional content for this product.",
             "As an AI language model, I must decline.",
         ] {
             assert_eq!(
@@ -846,11 +848,11 @@ mod tests {
     fn one_expensive_item_does_not_dwarf_the_whole_shop() {
         let cheap = Subject::Accessory {
             id: "a1".into(),
-            name: "papers".into(),
+            name: "sticker".into(),
         };
         let dear = Subject::Accessory {
             id: "a2".into(),
-            name: "gold grinder".into(),
+            name: "gold helmet".into(),
         };
         let (lo, hi) = (score(&cheap, Some(150.0)), score(&dear, Some(50_000.0)));
         assert!(hi > lo, "the expensive one should still rank higher");
@@ -903,7 +905,7 @@ mod tests {
             id: "k1".into(),
             name: "Snickers Cake".into(),
         };
-        let p = prompt_for(&s, "ru", "Цена: 950 ฿. В наборе: 5 сортов.");
+        let p = prompt_for(&s, "ru", "Цена: 950 ฿. В наборе: 5 позиций.");
         assert!(p.contains("Snickers Cake"));
         assert!(p.contains("950"), "the facts were not passed to the model");
         assert!(
@@ -912,7 +914,7 @@ mod tests {
         );
         assert!(
             p.contains("медицинского"),
-            "no rule against health claims, which a cannabis shop cannot publish"
+            "no rule against health claims, which the shop cannot publish"
         );
     }
 
@@ -955,13 +957,15 @@ mod tests {
     fn rows_render_with_icons_and_the_causality_caveat() {
         let rows = [
             row("set", "Party Pack", 12, 3, 3600.0),
-            row("strain", "DA FUNK", 8, 1, 300.0),
+            row("legacy_kind", "Old Row", 8, 1, 300.0),
             row("event_soon", "UFC NIGHT", 21, 0, 0.0),
         ];
         let d = format_promo_digest(30, &rows);
         assert!(d.starts_with("📊 Промо за 30 дней"));
         assert!(d.contains("🎁 Party Pack — 12 откр · 3 зак · 3600 ฿"));
-        assert!(d.contains("🌿 DA FUNK — 8 откр · 1 зак · 300 ฿"));
+        // A kind with no icon of its own (a stored row of a retired kind)
+        // gets the generic one.
+        assert!(d.contains("📣 Old Row — 8 откр · 1 зак · 300 ฿"));
         assert!(d.contains("Итого: 3 поста · 4 заказа · 3900 ฿"));
         assert!(d.contains("24 ч после открытия ссылки"));
     }
@@ -985,8 +989,8 @@ mod tests {
         let rows: Vec<DigestRow> = (0..40)
             .map(|i| {
                 row(
-                    "strain",
-                    &format!("Very Long Strain Name Number {i}"),
+                    "set",
+                    &format!("Very Long Pack Name Number {i}"),
                     3,
                     1,
                     100.0,
@@ -1008,7 +1012,7 @@ mod tests {
     #[test]
     fn the_total_counts_capped_rows_too() {
         let rows: Vec<DigestRow> = (0..30)
-            .map(|_| row("accessory", "Grinder", 1, 1, 50.0))
+            .map(|_| row("accessory", "Phone mount", 1, 1, 50.0))
             .collect();
         let d = format_promo_digest(30, &rows);
         assert!(d.contains("1500 ฿"), "total ignored capped rows: {d}");

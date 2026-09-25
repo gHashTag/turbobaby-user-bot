@@ -1865,7 +1865,7 @@ mod tests {
     fn test_order_item_serde_roundtrip() {
         let item = OrderItem {
             strain_id: Some("s1".into()),
-            strain_name: Some("Indica".into()),
+            strain_name: Some("Legacy line".into()),
             accessory_id: None,
             accessory_name: None,
             tea_id: None,
@@ -2081,7 +2081,7 @@ mod tests {
         // None, not a parse error.
         let legacy = serde_json::json!({
             "strain_id": "s1",
-            "strain_name": "Indica",
+            "strain_name": "Legacy line",
             "quantity": 2.5,
             "is_set": false
         });
