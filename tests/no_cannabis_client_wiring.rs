@@ -774,6 +774,11 @@ fn the_accessories_screen_offers_no_paraphernalia() {
 /// that went too far, a clause that grew back, or a cut that quietly gained
 /// something (an emoji, an exclamation mark) is seen: the ruling removed copy
 /// and wrote none.
+///
+/// One of the five is pinned absent instead. The checkout age notice kept its
+/// age half after the cut, and later the same day the owner removed the 20+
+/// box it belonged to, for now (answer 1 of the second list, 2026-09-25;
+/// `specs/turbobaby/checkout_contact.t27`), so its key was deleted whole.
 #[test]
 fn the_cut_sentences_keep_their_rental_half() {
     let i18n = read("src/trios/i18n.rs");
@@ -787,15 +792,14 @@ fn the_cut_sentences_keep_their_rental_half() {
             })
             .collect()
     };
+    // Cut on 2026-09-25 to its age half, then deleted whole the same day with
+    // the 20+ box: no arm may come back in either table.
+    assert_eq!(
+        arms("T_CHECKOUT_AGE_NOTICE"),
+        Vec::<String>::new(),
+        "T_CHECKOUT_AGE_NOTICE has an arm again; the 20+ box it belonged to was removed"
+    );
     let pinned: &[(&str, [&str; 2], &str)] = &[
-        (
-            "T_CHECKOUT_AGE_NOTICE",
-            [
-                "Оформляя заказ, вы подтверждаете, что вам 20+.",
-                "By placing this order, you confirm you are 20+.",
-            ],
-            "cut: both lost the medical-use clause and keep the age",
-        ),
         (
             "T_SUCCESS_BACK_MENU",
             ["В меню", "Back to Menu"],

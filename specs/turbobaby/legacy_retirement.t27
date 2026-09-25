@@ -467,6 +467,10 @@ pub fn asset_is_orphaned(mounted_by_code: bool, code_references: u16, comment_re
 ; The 20+ age gate itself is untouched. The server enforces it, turbobaby/checkout-contact records it
 ; as inherited heritage whose retirement is this file's question, and item 12 did not answer that
 ; question: it removed the cannabis claim printed beside the gate, not the gate.
+; ANSWERED LATER THE SAME DAY, and not by item 12: the owner removed the gate for now in answer 1 of
+; a second numbered list (AGE_GATE_ANSWER_* below). The sentence above is kept as the reading of
+; ruling #12, which is why CANNABIS_RULING_RETIRES_THE_AGE_GATE stays false; the notice whose
+; clause #12 cut went with the rest of the box under the later answer, key and all.
 pub const CANNABIS_RULING_AT : str = "2026-09-25";
 pub const CANNABIS_RULING_ITEM : str = "#12";
 pub const CANNABIS_RULING_NOTE : str = "Nothing cannabis-related anywhere. Client copy: fourteen i18n keys deleted (nine never rendered, five rendered by the accessories screen), five rendered arms cut to their non-cannabis half, two arms aligned with their other-language twin, no sentence invented, no identifier renamed, no route moved, no table dropped. Client media: 128 files of the old shop removed from assets/, none of them loaded by a rental code path.";
@@ -621,6 +625,32 @@ pub const QUEST_COPY_WRITTEN_NEW : bool = false;
 pub fn owner_answer_covers_the_eight(repointed: u8, kept: u8) bool {
     return repointed + kept == LEGACY_PATH_DECLARED_COUNT;
 }
+
+; --- The owner's answer of 2026-09-25 on the 20+ age gate (second list, answer 1) ----------------
+; turbobaby/checkout-contact named this file the owner of one question (AGE_BLOCKER_RETIREMENT_OWNER):
+; whether a bike-rental checkout keeps the age gate it inherited from the previous shop's bot. The
+; owner answered it on 2026-09-25, in answer 1 of a second numbered list put to him that day, the
+; numbering 1 to 5 confirmed by him: for now, we remove it. The Russian original is in DECISIONS.md,
+; the D19 addendum of that date. The answer says "for now", so it is recorded as provisional.
+; The decision is recorded where the gate lived, in turbobaby/checkout-contact (AGE_BLOCKER_REMOVED_AT
+; and the counts beside it), and not restated here: the checkout's box, its notice, its trust line,
+; its blocker, the submit handler's refusal and the server's refusal left the code, and five keys
+; left the translation tables. What this file adds is the classification. The gate was not a
+; surface this file's machine runs -- no route, no screen of its own, no table -- so it is none of
+; the partial states and no completed retirement: COMPLETED_RETIREMENT_COUNT stays 1. And nothing
+; stored moved: no migration, no row written or deleted, no storage key renamed or cleared; the
+; orders column keeps what each order recorded, and the server still accepts the field from a
+; bundle cached before the change.
+pub const AGE_GATE_ANSWER_AT : str = "2026-09-25";
+pub const AGE_GATE_ANSWER_LIST : u8 = 2;
+pub const AGE_GATE_ANSWER_NUMBER : u8 = 1;
+pub const AGE_GATE_ANSWER_IS_PROVISIONAL : bool = true;
+pub const AGE_GATE_ANSWER_NOTE : str = "For now, we remove it: answer 1 of the second numbered list the owner answered on 2026-09-25, to the question turbobaby/checkout-contact left with this file. The checkout's 20+ box, its notice, its trust line, its blocker and both refusals left the code; the orders column, every stored order and every saved draft stay as they are.";
+pub const AGE_GATE_DECISION_RECORDED_BY_ID : str = "turbobaby/checkout-contact";
+pub const AGE_GATE_ANSWER_IS_A_SURFACE_RETIREMENT : bool = false;
+pub const AGE_GATE_ANSWER_ADDS_A_MIGRATION : bool = false;
+pub const AGE_GATE_ANSWER_WRITES_A_ROW : bool = false;
+pub const AGE_GATE_ANSWER_RENAMES_A_STORAGE_KEY : bool = false;
 
 ; --- The owner's ruling of 2026-09-25: nothing cannabis-related anywhere -------------------------
 ; Answer 12 of the numbered list put to the owner on 2026-09-25 rules that nothing cannabis-related
@@ -955,10 +985,28 @@ test the_cannabis_ruling_deletes_and_cuts_copy_and_invents_none {
     assert CANNABIS_RULING_KEY_COUNT_OWNER_ID == "turbobaby/locale-policy";
     assert CANNABIS_RULING_KEY_COUNT_OWNER_ID != ID;
     assert CANNABIS_RULING_KEY_COUNT_OWNER_DECL == "TRANSLATION_KEY_COUNT";
-    // A copy ruling: no route, no table, no storage key, and the age gate beside the cut clause stays.
+    // A copy ruling: no route, no table, no storage key, and the age gate beside the cut clause
+    // stayed under it. A later answer the same day removed the gate; see the next test.
     assert CANNABIS_RULING_MOVES_A_ROUTE == false;
     assert CANNABIS_RULING_DROPS_A_TABLE == false;
     assert CANNABIS_RULING_RENAMES_A_STORAGE_KEY == false;
+    assert CANNABIS_RULING_RETIRES_THE_AGE_GATE == false;
+    assert COMPLETED_RETIREMENT_COUNT == 1;
+}
+
+test the_age_gate_question_is_answered_and_recorded_where_the_gate_lived {
+    assert AGE_GATE_ANSWER_AT == "2026-09-25";
+    assert AGE_GATE_ANSWER_AT == CANNABIS_RULING_AT;
+    assert AGE_GATE_ANSWER_LIST == 2;
+    assert AGE_GATE_ANSWER_NUMBER == 1;
+    assert AGE_GATE_ANSWER_IS_PROVISIONAL == true;
+    assert AGE_GATE_DECISION_RECORDED_BY_ID == "turbobaby/checkout-contact";
+    assert AGE_GATE_DECISION_RECORDED_BY_ID != ID;
+    // Not a surface this file's machine runs, and nothing stored moved.
+    assert AGE_GATE_ANSWER_IS_A_SURFACE_RETIREMENT == false;
+    assert AGE_GATE_ANSWER_ADDS_A_MIGRATION == false;
+    assert AGE_GATE_ANSWER_WRITES_A_ROW == false;
+    assert AGE_GATE_ANSWER_RENAMES_A_STORAGE_KEY == false;
     assert CANNABIS_RULING_RETIRES_THE_AGE_GATE == false;
     assert COMPLETED_RETIREMENT_COUNT == 1;
 }
@@ -1221,3 +1269,6 @@ invariant the_answer_of_2026_09_25_never_counts_as_a_completed_retirement
 
 invariant the_kept_quest_never_states_the_previous_shops_purchase_rule
     assert OWNER_ANSWER_KEEPS_THE_QUEST == true and QUEST_PURCHASE_LINE_RENDERED == false and QUEST_COPY_WRITTEN_NEW == false
+
+invariant the_age_gate_answer_moves_no_stored_data_and_retires_no_surface
+    assert AGE_GATE_ANSWER_ADDS_A_MIGRATION == false and AGE_GATE_ANSWER_WRITES_A_ROW == false and AGE_GATE_ANSWER_RENAMES_A_STORAGE_KEY == false and AGE_GATE_ANSWER_IS_A_SURFACE_RETIREMENT == false and COMPLETED_RETIREMENT_COUNT == 1

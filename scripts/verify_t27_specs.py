@@ -85,15 +85,18 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/checkout_contact.t27": {
         "module": "turbobaby-checkout-contact",
         "id": "turbobaby/checkout-contact",
-        "min_declarations": 210,
-        "min_checks": 62,
+        # Raised 2026-09-25 from 210/62 to the measured count when the owner removed the 20+ box
+        # for now (second list, answer 1): the age blocker's record and the counts before that day.
+        "min_declarations": 243,
+        "min_checks": 68,
     },
     "specs/turbobaby/client_errors.t27": {
         "module": "turbobaby-client-errors",
         "id": "turbobaby/client-errors",
         # Raised 2026-09-25 from 239 to the measured count when owner question D's sentence
-        # landed by delegation (9 declarations; the checks were renamed, not added).
-        "min_declarations": 248,
+        # landed by delegation (9 declarations; the checks were renamed, not added). 249 the
+        # same day: the retired age body code's count before that day (the 20+ box, removed).
+        "min_declarations": 249,
         "min_checks": 58,
     },
     "specs/turbobaby/commerce.t27": {
@@ -160,16 +163,18 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         # Raised 2026-09-25 from 165/44 to the measured count when the owner's answer 7 on the
         # eight legacy paths was recorded (200/49) and, with it, both halves of ruling #12
         # (client 190/48 and server 194/48 on their own); the three together measure 254/57.
-        "min_declarations": 254,
-        "min_checks": 57,
+        # 266/59 the same day, with the owner's answer on the 20+ age gate (second list, answer 1).
+        "min_declarations": 266,
+        "min_checks": 59,
     },
     "specs/turbobaby/locale_policy.t27": {
         "module": "turbobaby-locale-policy",
         "id": "turbobaby/locale-policy",
         # 131 on the client half of ruling #12 alone and 130/35 on its server half alone; the
         # same day's cancel key (+1) and the deletion (-14) were reconciled in one count, with
-        # two declarations naming the +1; the three together measure 136/35.
-        "min_declarations": 136,
+        # two declarations naming the +1; the three together measure 136/35. 138/35 the same
+        # day, with the five keys the removed 20+ box used (-5, two declarations naming them).
+        "min_declarations": 138,
         "min_checks": 35,
     },
     "specs/turbobaby/loyalty_ledger.t27": {

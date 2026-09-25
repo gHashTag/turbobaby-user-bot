@@ -409,8 +409,8 @@ pub fn normalize_phone(raw: &str) -> Option<String> {
 /// A single reason an order cannot be placed right now.
 ///
 /// The checkout screen used to express this as a bare `disabled` attribute: if
-/// any one of six conditions failed the button greyed out and said nothing, so
-/// a customer with — say — an unticked age box had no way to find out why
+/// any one of its conditions failed the button greyed out and said nothing, so
+/// a customer with — say — a refused phone number had no way to find out why
 /// nothing happened. Naming each reason lets the UI list them all.
 ///
 /// Lives in `trios` rather than in the screen so it compiles (and is tested)
@@ -422,14 +422,14 @@ pub enum CheckoutBlocker {
     Name,
     Phone,
     Address,
-    Age,
+    // `Age`, the unticked 20+ box, was a sixth reason until 2026-09-25.
 }
 
 impl CheckoutBlocker {
     /// Translation key describing how to clear this blocker.
     pub fn message_key(self) -> crate::trios::i18n::Key {
         use crate::trios::i18n::{
-            T_CHECKOUT_ERR_ADDRESS, T_CHECKOUT_ERR_AGE, T_CHECKOUT_ERR_ITEMS, T_CHECKOUT_ERR_NAME,
+            T_CHECKOUT_ERR_ADDRESS, T_CHECKOUT_ERR_ITEMS, T_CHECKOUT_ERR_NAME,
             T_CHECKOUT_ERR_NO_TELEGRAM, T_CHECKOUT_ERR_PHONE_INVALID,
         };
         match self {
@@ -438,7 +438,7 @@ impl CheckoutBlocker {
             Self::Name => T_CHECKOUT_ERR_NAME,
             Self::Phone => T_CHECKOUT_ERR_PHONE_INVALID,
             Self::Address => T_CHECKOUT_ERR_ADDRESS,
-            Self::Age => T_CHECKOUT_ERR_AGE,
+            // `Self::Age` and its sentence left with the 20+ box (2026-09-25).
         }
     }
 }
@@ -455,7 +455,7 @@ pub fn checkout_blockers(
     address: &str,
     fulfillment: Fulfillment,
     item_count: usize,
-    age_confirmed: bool,
+    // `age_confirmed: bool` was the seventh argument until 2026-09-25.
 ) -> Vec<CheckoutBlocker> {
     let mut out = Vec::new();
     if !has_telegram_id {
@@ -473,9 +473,9 @@ pub fn checkout_blockers(
     if (fulfillment.requires_address() && address.trim().is_empty()) || address.len() > 500 {
         out.push(CheckoutBlocker::Address);
     }
-    if !age_confirmed {
-        out.push(CheckoutBlocker::Age);
-    }
+    // No age reason: the owner removed the 20+ box for now (2026-09-25, «Пока
+    // убираем»); specs/turbobaby/checkout_contact.t27 records it beside
+    // AGE_BLOCKER_IS_INHERITED_HERITAGE, and POST /api/orders no longer asks.
     out
 }
 
@@ -951,7 +951,6 @@ mod tests {
             "Kamala Beach, Phuket",
             Fulfillment::Delivery,
             1,
-            true,
         );
         assert_eq!(blockers, Vec::new());
     }
@@ -959,15 +958,8 @@ mod tests {
     #[test]
     fn pickup_needs_no_address() {
         // Regression: ordering offline (collect in store) was impossible.
-        let blockers = checkout_blockers(
-            true,
-            "Дмитрий",
-            "+66812345678",
-            "",
-            Fulfillment::Pickup,
-            1,
-            true,
-        );
+        let blockers =
+            checkout_blockers(true, "Дмитрий", "+66812345678", "", Fulfillment::Pickup, 1);
         assert_eq!(blockers, Vec::new());
     }
 
@@ -980,14 +972,15 @@ mod tests {
             "",
             Fulfillment::Delivery,
             1,
-            true,
         );
         assert_eq!(blockers, vec![CheckoutBlocker::Address]);
     }
 
     #[test]
-    fn unticked_age_box_is_reported() {
-        // The one blocker that previously had no on-screen indicator at all.
+    fn a_form_the_age_box_alone_held_back_now_places_the_order() {
+        // Until 2026-09-25 this exact form was refused for one reason only,
+        // the unticked 20+ box. The owner removed the box for now («Пока
+        // убираем»), so nothing stands between this customer and the order.
         let blockers = checkout_blockers(
             true,
             "Дмитрий",
@@ -995,9 +988,8 @@ mod tests {
             "Baan Tai",
             Fulfillment::Delivery,
             1,
-            false,
         );
-        assert_eq!(blockers, vec![CheckoutBlocker::Age]);
+        assert_eq!(blockers, Vec::new());
     }
 
     #[test]
@@ -1009,7 +1001,6 @@ mod tests {
             "Baan Tai",
             Fulfillment::Delivery,
             0,
-            true,
         );
         assert_eq!(blockers, vec![CheckoutBlocker::EmptyCart]);
     }
@@ -1023,16 +1014,16 @@ mod tests {
             "Baan Tai",
             Fulfillment::Delivery,
             1,
-            true,
         );
         assert_eq!(blockers, vec![CheckoutBlocker::NoTelegram]);
     }
 
     #[test]
     fn every_blocker_is_listed_not_just_the_first() {
-        // An empty form must name all six problems at once; surfacing them
-        // one at a time is what made the screen feel broken.
-        let blockers = checkout_blockers(false, "", "", "", Fulfillment::Delivery, 0, false);
+        // An empty form must name all five problems at once (six until the
+        // 20+ box left on 2026-09-25); surfacing them one at a time is what
+        // made the screen feel broken.
+        let blockers = checkout_blockers(false, "", "", "", Fulfillment::Delivery, 0);
         assert_eq!(
             blockers,
             vec![
@@ -1041,7 +1032,6 @@ mod tests {
                 CheckoutBlocker::Name,
                 CheckoutBlocker::Phone,
                 CheckoutBlocker::Address,
-                CheckoutBlocker::Age,
             ]
         );
     }
@@ -1049,15 +1039,8 @@ mod tests {
     #[test]
     fn over_long_address_is_blocked_even_for_pickup() {
         let long = "x".repeat(501);
-        let blockers = checkout_blockers(
-            true,
-            "Дмитрий",
-            "0812345678",
-            &long,
-            Fulfillment::Pickup,
-            1,
-            true,
-        );
+        let blockers =
+            checkout_blockers(true, "Дмитрий", "0812345678", &long, Fulfillment::Pickup, 1);
         assert_eq!(blockers, vec![CheckoutBlocker::Address]);
     }
 
@@ -1075,7 +1058,7 @@ mod tests {
             ("Дмитрий", "0812345678", "", Fulfillment::Delivery),
         ] {
             let gate_ok =
-                checkout_blockers(true, name, phone, address, mode, items.len(), true).is_empty();
+                checkout_blockers(true, name, phone, address, mode, items.len()).is_empty();
             let validate_ok = validate_checkout_for(name, phone, address, &items, mode).is_ok();
             assert_eq!(
                 gate_ok, validate_ok,
@@ -1095,7 +1078,6 @@ mod tests {
             CheckoutBlocker::Name,
             CheckoutBlocker::Phone,
             CheckoutBlocker::Address,
-            CheckoutBlocker::Age,
         ] {
             for lang in [Lang::Russian, Lang::English] {
                 let msg = t(lang, b.message_key());
