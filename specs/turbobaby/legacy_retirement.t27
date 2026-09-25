@@ -52,8 +52,9 @@
 ;      shop_game.rs:1)" does not survive its own citation. Line 1 of that file is a SOURCE
 ;      COMMENT, which no customer can see. The component's rsx root at src/ui/game/
 ;      shop_game.rs:679 opens with a coin HUD and declares no title node at all, and the one
-;      title key the repository defines for this screen family, T_GAME_TITLE at src/trios/
-;      i18n.rs:345, resolves to a TurboBaby string in both locales (:1007 and :1606) and is
+;      title key the repository defines for this screen family, T_GAME_TITLE at
+;      src/trios/i18n.rs:345, resolves to a TurboBaby string in both locales (:1010 and :1610,
+;      re-pinned 2026-09-25 after a key declared above them moved both rows) and is
 ;      referenced by no screen -- a search for T_GAME_TITLE under src/ returns only i18n.rs
 ;      itself. A search of src/ui/game/shop_game.rs for a quoted string carrying the old shop's
 ;      name returns zero. What IS true, and is what this contract counts, is coarser and worse:
