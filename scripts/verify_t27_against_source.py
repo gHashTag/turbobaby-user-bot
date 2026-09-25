@@ -3747,7 +3747,10 @@ ONE_GROUP_EXTRACTORS = (
 # Then the owner's decision of 2026-09-25 on CLICK 125's redirect (NMAX 155 alone, for now)
 # bound availability.CLICK_125_REDIRECTS and CLICK_125_REDIRECTS_ARE_PROVISIONAL to the seed,
 # each planted RED once by hand: 239 rows over the same 41 contracts, floor 239.
-MIN_BINDINGS = 239
+# Then the held notification kinds of 2026-09-26 bound notification_queue.WRITTEN_KINDS to
+# the producers' insert_queue_row calls (and re-pointed RENDERABLE_KINDS at
+# DeliverableKind::of with a witness): 240 rows over the same 41 contracts, floor 240.
+MIN_BINDINGS = 240
 
 
 # ---------------------------------------------------------------------------------
