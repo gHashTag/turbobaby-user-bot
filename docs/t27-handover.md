@@ -57,10 +57,13 @@ deploys nothing (see the last section and `docs/ROLLBACK.md`).
   listed 5 zones, the set from before 087. The server's own commit cannot be read from outside
   (the `Dockerfile`'s `BUILD_VERSION` defaults to `docker`), so this rests on the served `dist/`
   and the zone list.
-* **The deploy of `main` (`f5e6b4f`) is prepared and waits on Railway access alone.** It is a clean
-  LF export of `f5e6b4f` (`docs/ROLLBACK.md` §3B). The Railway CLI on this PC (5.62.1) is logged in
-  to an account that cannot see project `woody` yet, so `railway up` cannot run until that account
-  is invited to the project.
+* **The deploy of `main` (`f5e6b4f`) is prepared and waits on Railway access alone.** A clean LF
+  export of `f5e6b4f` was made with the earlier, line-by-line form of `docs/ROLLBACK.md` §3B. §3B
+  is now one fail-closed run that makes its own clone, checks it and uploads it, so the runbook's
+  route is that block with `SHA=f5e6b4f7f7d725707d2112a72250a4bff22e50fa` and a new `DEP`. It does
+  not reuse the prepared export. The Railway CLI on this PC (5.62.1) is logged in to an
+  account that cannot see project `woody` yet, so `railway up` cannot run until that account is
+  invited to the project.
 * **That deploy crosses migration 087, and nothing built before `a18cdd9` can serve zones after
   it.** Read `docs/ROLLBACK.md` §4, "Rolling back after 087", before deploying: after 087 the way
   back is forward, or `4a5aa72` plus the owner's repair.

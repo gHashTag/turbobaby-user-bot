@@ -51,16 +51,30 @@ guessing (§7).
     cold or unauthenticated first run, and for `-y` when nothing is linked. So in a directory
     without a link, `up -y` makes a new project;
   * `-y` accepts all defaults: it skips the sign-in confirmation and the name prompt of the new
-    project, the two prompts that would have stopped exactly this.
+    project, the prompts that would otherwise stop this (the sign-in one is skipped anyway under an
+    agent harness, below).
 
-  So never pass `-y` and never pass `--new`. Sign in with `railway login` as a step of its own. If
-  `up` ever offers to create a project, the directory is not linked: cancel and link.
+  Under an agent harness, 5.62.1 skips the sign-in confirmation by itself, with or without `-y`. Its
+  binary holds the message "Agent harness detected … (skipping confirm)" next to that confirmation,
+  and a list of variable names that includes `CLAUDECODE`, `CLAUDE_CODE_ENTRYPOINT`,
+  `CURSOR_AGENT`, `GEMINI_CLI` and `OPENCODE`. A Claude Code shell sets `CLAUDECODE` and
+  `CLAUDE_CODE_ENTRYPOINT`. Read 2026-09-25 from the binary's strings, not from a run. So in such a
+  shell that prompt is no guard: it does not appear, whether `-y` is passed or not.
+
+  So never pass `-y` and never pass `--new`, and do not count on a prompt to stop `up`. Sign in with
+  `railway login` as a step of its own. In the export directory, run `railway status` before `up`;
+  if it does not name `woody` / `production` / `turbobaby-bot`, do not run `up`. If `up` ever offers
+  to create a project, the directory is not linked: cancel and link.
 * **The link belongs to a directory.** `railway link` links "the current directory" (its help
   text), so which project and service `up` targets depends on the directory it runs in. A link
   checked in your repository checkout proves nothing about the export directory. So, **in the
   export directory, immediately before the upload**:
   `railway link -p woody -e production -s turbobaby-bot`, then `railway status`, which must name
   project `woody`, environment `production` and service `turbobaby-bot`. Anything else: stop.
+* **Link plus status proves the target service, not the directory.** `railway link` links whatever
+  directory it runs in, so the pair still passes in the wrong one: say, your own checkout after a
+  failed `cd`. What proves the directory is the check right before `up`, in the same fail-closed
+  run as the export: `HEAD` is the full commit `$SHA` and `git status --porcelain` is empty (§3B).
 * **Name the target on `up` too:** `railway up --service turbobaby-bot --environment production`.
   That is a second guard, not the first. `--service` did not steer `railway variables --set`
   (above), and whether it steers `up` in a directory linked to another service is not measured
@@ -79,10 +93,10 @@ guessing (§7).
 * **Measured 2026-09-24 01:03 +07 with that script:** production served `dist/index.html` as
   committed in `4a5aa72` (2026-09-17, bundle `c3a91ae8dc97ab9e`). `main` at `f0640f8` carries a
   rebuilt `dist/` (bundle `37c3bcae3fd19d27`). `main` was ahead of production.
-* **Measured again 2026-09-25, about 09:40 +07:** production still served bundle
-  `c3a91ae8dc97ab9e` (`4a5aa72`), with the five zones from before 087, and `/health` was ok.
-  `main` is `f5e6b4f` (bundle `17f356526a369bb9`) and carries migrations 087 and 088, so the next
-  deploy crosses 087 (§4).
+* **Measured again 2026-09-25 08:36 +07 (01:36:54 UTC) with that script:** 5 passed, 0 failed.
+  Production served bundle `c3a91ae8dc97ab9e` (`4a5aa72`), `/api/delivery/zones` listed 5 zones
+  (the set from before 087), and `/health` answered with `db` ok. `main` is `f5e6b4f` (bundle
+  `17f356526a369bb9`) and carries migrations 087 and 088, so the next deploy crosses 087 (§4).
 
 ### What happens while an upload goes live
 
@@ -130,25 +144,62 @@ deploy is made the same way (AGENTS.md §10).
 
 ```sh
 DEP=<new empty directory, outside every repository and worktree>
-git clone -c core.autocrlf=false --no-checkout https://github.com/gHashTag/turbobaby-user-bot.git "$DEP"
-git -C "$DEP" checkout --detach <sha>
-git -C "$DEP" rev-parse HEAD                      # the full <sha>
-git -C "$DEP" status --porcelain                  # nothing
-git -C "$DEP" ls-files --eol | grep -c 'w/crlf'   # 0
-cat "$DEP/dist/version.txt"                       # the bundle hash committed at <sha>
-bash "$DEP/scripts/predeploy-smoke.sh" --no-build # SMOKE PASS
-git -C "$DEP" status --porcelain                  # still nothing
-test ! -e "$DEP/dist/assets" && echo absent       # dist/assets is absent (§1)
-cd "$DEP"
-railway link -p woody -e production -s turbobaby-bot
-railway status                                    # woody / production / turbobaby-bot, else stop
-railway up --service turbobaby-bot --environment production   # never -y, never --new (§1)
+SHA=<the full 40-character commit>
+(
+  set -euo pipefail
+  : "${DEP:?set DEP}" "${SHA:?set SHA}"
+  # The export and its checks.
+  git clone -c core.autocrlf=false --no-checkout https://github.com/gHashTag/turbobaby-user-bot.git "$DEP"
+  cd "$DEP"
+  git checkout --detach "$SHA"
+  test "$(git rev-parse HEAD)" = "$SHA"
+  test -z "$(git status --porcelain)"
+  test -z "$(git ls-files --eol | grep 'w/crlf' || true)"
+  cat dist/version.txt                          # the bundle hash committed at $SHA
+  bash scripts/predeploy-smoke.sh --no-build    # exits non-zero unless SMOKE PASS
+  test -z "$(git status --porcelain)"
+  test ! -e dist/assets                         # dist/assets is absent (§1)
+  # The target, linked and read in this directory.
+  railway link -p woody -e production -s turbobaby-bot
+  railway status
+  read -r -p 'Does railway status name woody / production / turbobaby-bot? Type yes: ' answer
+  test "$answer" = yes
+  # The directory, proved again right before the upload. Never -y, never --new (§1).
+  test "$(git rev-parse HEAD)" = "$SHA"
+  test -z "$(git status --porcelain)"
+  railway up --service turbobaby-bot --environment production
+)
 ```
 
+* **It fails closed, as one run.** Everything between the parentheses runs in a subshell with
+  `set -euo pipefail`, so the first failed command ends the run and nothing after it happens: an
+  unset `DEP` or `SHA`, a failed clone, a CRLF file, a failed smoke, or any answer but `yes`.
+  Without a terminal to answer from, `read` fails too, so an unattended run never reaches `up`.
+  The parentheses keep `set -e` out of your own shell, which it would close at the first failure.
+* **Why one run, and not line by line.** With `DEP` empty, `git -C "$DEP"` acts on the directory
+  you are in, and a failed `cd "$DEP"` leaves you there. Line by line, `railway link` then
+  re-links your own checkout, `railway status` still names `woody` / `production` /
+  `turbobaby-bot`, and `up` uploads that checkout, uncommitted `src/` included. Split into
+  separate steps, the checks stop nothing either: an export whose smoke failed is still at `$SHA`
+  and clean, and a later step would upload it. The check of `HEAD` and `status --porcelain` in the
+  same run as `up` is what proves the directory (§1).
+* **Tried 2026-09-25** on a local stand-in for the repository, with `railway` and the smoke
+  replaced by stubs, the `railway` one printing only its arguments. Of 14 runs, only the one where
+  every check passed and the answer was `yes` reached `up`. The other 13 were: `DEP` unset or empty,
+  `SHA` unset or a prefix, a clone that failed or hit a non-empty directory, a CRLF file, a failed
+  smoke, a smoke that dirtied the tree or left `dist/assets`, a file changed after
+  `railway status`, the answer `no`, and nothing to answer from. Every run started in a clean
+  checkout on a branch, and each left it that way.
+* `SHA` must be the full 40 characters: `rev-parse HEAD` prints the full SHA, and a prefix fails
+  the check.
+* The CLI keeps a link in the user's `~/.railway/config.json`, keyed by directory, not in the
+  export: read from its strings on 2026-09-25, not measured on an export. If the run ever stops on
+  the last `status --porcelain`, read what `git status` lists. Do not drop the check.
 * `git clone -c` writes `core.autocrlf=false` into the new clone's own config, so the checkout
   after it keeps LF. A `git -c core.autocrlf=false clone` would not: that flag lasts one command.
-* The clone form keeps a `.git/`, which `.railwayignore` leaves out of the upload and which the
-  post-deploy smoke needs (§6). The `archive` form of §1 makes an export with no history.
+* The clone form keeps a `.git/`, which `.railwayignore` leaves out of the upload. The post-deploy
+  smoke needs it (§6), and so do the run's checks of `HEAD` and `status`. The `archive` form of §1
+  makes an export with no history, which none of those can check: use the clone.
 * **`scripts/predeploy-smoke.sh` only with `--no-build`.** Without it, the script rebuilds `dist/`
   with a bare `trunk build --release`. That bundle has none of `scripts/build-frontend.sh`'s
   post-processing: the `?v=` on snippet imports, the `await window.__telegramReady` wait and the
@@ -218,8 +269,9 @@ that commit's `Dockerfile`, `src/`, `migrations/` and committed `dist/`. Wait fo
   first one to boot applies 087, and on 2026-09-25 `4a5aa72` still served its zone list, which it
   cannot do once 087 has run.
 * **No commit between `4a5aa72` and `f5e6b4f` is a way back either.**
-  * `a18cdd9` is half a release, and so are the two docs-only commits after it (`e412ecc`,
-    `225af5f`). Its server sends the ETA as `null`, but its committed `dist/` is still bundle
+  * `a18cdd9` is half a release, and so are the two wording-only commits after it (`e412ecc`,
+    docs; `225af5f`, comments, a spec string and a test name). Neither rebuilds `dist/`. At all
+    three the server sends the ETA as `null`, but the committed `dist/` is still bundle
     `ea3aedd8e89a916e` (`dist/version.txt`), built at `ff1741f`. That client's `DeliveryZone`
     (`src/ui/api/types.rs`) reads `min_eta_minutes` and `max_eta_minutes` as `u32` and cannot read
     a `null`. §5 forbids exactly this pairing.
@@ -230,7 +282,8 @@ that commit's `Dockerfile`, `src/`, `migrations/` and committed `dist/`. Wait fo
   1. **Forward only (preferred: it changes no data).** Upload `f5e6b4f` again, or a commit that
      fixes the fault, from a fresh clean export (§3B).
   2. **`4a5aa72` plus the owner's repair.** Run the repair below first. Then do §3A (redeploy the
-     `4a5aa72` deployment) or §3B with `<sha>` = `4a5aa72`, and §6 with `SMOKE_DIST_REF=4a5aa72`.
+     `4a5aa72` deployment) or §3B with `SHA=4a5aa72cfa06cc8273245808fe89b97e4ab54ea7`, and §6
+     with `SMOKE_DIST_REF=4a5aa72`.
      A customer whose Mini App saved a Koh Phangan zone id still gets 422 from `create_order` until
      they pick a zone again.
 
@@ -253,21 +306,36 @@ that commit's `Dockerfile`, `src/`, `migrations/` and committed `dist/`. Wait fo
   container's zone reads queue behind that `ALTER`.
 
 **The owner's emergency repair.** SQL, not a migration: nothing goes into `migrations/` or
-`_schema_migrations`. The owner runs it against `woody` and nowhere else (§1). It makes every row
-readable by an `i32` build again. It must cover every row, active or not, because the admin list
-reads them all:
+`_schema_migrations`. The owner runs it against `woody` and nowhere else (§1), and its guard
+refuses any other database. It makes every row readable by an `i32` build again. It must cover
+every row, active or not, because the admin list reads them all:
 
 ```sql
+-- In psql, first: \set ON_ERROR_STOP on
+BEGIN;
+DO $$ BEGIN
+  IF current_database() <> 'woody' THEN
+    RAISE EXCEPTION 'wrong database %: this runs against woody only', current_database();
+  END IF;
+END $$;
 -- One statement per row. <id>: the row's id. <min>, <max>: whole minutes, <max> >= <min>, never 0.
 UPDATE delivery_zones
    SET eta_min = COALESCE(eta_min, <min>),
        eta_max = COALESCE(eta_max, <max>)
  WHERE id = '<id>';
+COMMIT;
 
 -- Done when this says 0:
 SELECT count(*) FROM delivery_zones WHERE eta_min IS NULL OR eta_max IS NULL;
 ```
 
+* **The guard.** The `DO` block raises an error on any database whose name is not exactly
+  `woody`, `woody_client` included. Inside `BEGIN … COMMIT`, that error aborts the transaction:
+  PostgreSQL refuses every statement after it, and the `COMMIT` rolls back. So nothing is written,
+  even in a client that carries on after an error. In psql, `ON_ERROR_STOP` also stops the script
+  there. Leave psql's `ON_ERROR_ROLLBACK` at its default, off: it would roll back only the failed
+  statement and let the rest commit. The guard is a standard PL/pgSQL `DO` block. None of the
+  write blocks in this section has been run against a database here.
 * Rows that existed before the deploy take `<min>` and `<max>` from the capture above.
 * The 18 zones 087 inserted get minutes the owner chooses. Never 0: the older build would promise
   every customer a delivery in zero minutes.
@@ -275,23 +343,61 @@ SELECT count(*) FROM delivery_zones WHERE eta_min IS NULL OR eta_max IS NULL;
   2026-09-24 that no delivery time is published (087's header, point 2). It is an emergency measure
   the owner chooses, not a default.
 
-**Undo it before rolling forward again.** 087 and 088 are recorded and never run again. The newer
-build would serve whatever the repair wrote: `served_eta` (`src/delivery.rs`) publishes any stored
-pair as real minutes. It would also serve whatever `4a5aa72` published meanwhile. `4a5aa72` stores
-30 and 60 minutes on a zone an admin creates without them (`create_delivery_zone`), and makes public
-an event created without `is_public` (`validate_event_request`, `src/api/events.rs`). So the owner
-runs this just before the upload:
+**Undo it when rolling forward again, in two parts.** 087 and 088 are recorded and never run again.
+The newer build would serve whatever the repair wrote: `served_eta` (`src/delivery.rs`) publishes
+any stored pair as real minutes. It would also serve whatever `4a5aa72` published meanwhile.
+`4a5aa72` stores 30 and 60 minutes on a zone an admin creates without them
+(`create_delivery_zone`), and makes public an event created without `is_public`
+(`validate_event_request`, `src/api/events.rs`). The owner runs both parts against `woody` and
+nowhere else (§1), each behind the same guard as the repair.
+
+*Before the upload*, hide the events. `4a5aa72` runs with every event hidden ("088 needs no undo",
+below), so this breaks nothing while it still serves:
 
 ```sql
-UPDATE delivery_zones SET eta_min = NULL, eta_max = NULL
- WHERE eta_min IS NOT NULL OR eta_max IS NOT NULL;
+-- In psql, first: \set ON_ERROR_STOP on
+BEGIN;
+DO $$ BEGIN
+  IF current_database() <> 'woody' THEN
+    RAISE EXCEPTION 'wrong database %: this runs against woody only', current_database();
+  END IF;
+END $$;
 SELECT id, title FROM events WHERE is_public;     -- anything listed was published meanwhile
 UPDATE events SET is_public = FALSE WHERE is_public = TRUE;
+COMMIT;
+```
+
+*Once `railway deployment list` shows the new deployment `SUCCESS`*, clear the minutes:
+
+```sql
+-- In psql, first: \set ON_ERROR_STOP on
+BEGIN;
+DO $$ BEGIN
+  IF current_database() <> 'woody' THEN
+    RAISE EXCEPTION 'wrong database %: this runs against woody only', current_database();
+  END IF;
+END $$;
+UPDATE delivery_zones SET eta_min = NULL, eta_max = NULL
+ WHERE eta_min IS NOT NULL OR eta_max IS NOT NULL;
+UPDATE events SET is_public = FALSE WHERE is_public = TRUE;  -- published during the upload
+COMMIT;
 SELECT id, name, name_en, fee, is_active, sort_order FROM delivery_zones ORDER BY sort_order, name;
 ```
 
-The two `UPDATE`s repeat what 087 and 088 did. The last `SELECT` shows the zones an admin created
-or edited in the meantime, for the owner to review.
+* **Why the zones wait for `SUCCESS`.** Until traffic moves, `4a5aa72` serves, and it is an `i32`
+  build: a NULL ETA makes the zone paths listed above answer 500. Cleared before the upload, they
+  would answer 500 for the whole upload: the release build of the server in the `Dockerfile`
+  (`cargo build --release --target x86_64-unknown-linux-musl`), then the boot, then the health
+  check, which `railway.toml` allows 300 s. The newer build reads a NULL and a stored ETA alike
+  (`Option<i32>` in `src/db/entities/delivery_zone.rs`), so clearing them after `SUCCESS` causes no
+  500 there. What is left: the newer build shows the repair's minutes (`served_eta`) until the owner
+  runs this, and if the old container still answers after `SUCCESS`, its zone paths answer 500
+  from then until it stops. How long the two overlap is UNKNOWN (§7).
+* If the upload never reaches `SUCCESS`, skip the second part: `4a5aa72` keeps serving the
+  repaired zones. The first part needs no undo.
+* The `UPDATE`s repeat what 087 and 088 did. The second `UPDATE events` catches an event an admin
+  published on `4a5aa72` during the upload. The last `SELECT` shows the zones an admin created or
+  edited in the meantime, for the owner to review.
 
 **088 needs no undo for a rollback.** `4a5aa72` runs with every event hidden, which is the state
 085 already left (`migrations/085_unpublish_woody_catalog.sql`). 088 only hides again whatever was
