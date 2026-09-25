@@ -503,8 +503,11 @@ mod tests {
     /// one, or the screens' own fallback when it names none.
     #[test]
     fn a_withheld_shop_prints_no_label_and_every_other_order_its_label_as_before() {
+        // What both order screens do with the served shop, fallback included.
+        fn label(served: Option<&str>) -> Option<&str> {
+            shown_shop(served).map(|shop| shop.unwrap_or("TurboBaby"))
+        }
         let fallback = "TurboBaby";
-        let label = |served: Option<&str>| shown_shop(served).map(|shop| shop.unwrap_or(fallback));
 
         let withheld = customer_shop_id(Some("\u{1f3e0} Woody Phangan".to_string()));
         assert_eq!(label(withheld.as_deref()), None);
