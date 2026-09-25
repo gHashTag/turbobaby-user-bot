@@ -306,9 +306,22 @@ pub fn retired_set_is_trustworthy(derived_from_migrations: bool, honours_recreat
 ; paths, /sets at :31 and /sommelier at :33, are REPOINTED to the live catalog at :136-154 and
 ; are counted apart: a kept path with a deleted screen is a different animal from a kept screen,
 ; and what a live catalog is belongs to turbobaby/catalog-api and turbobaby/availability.
-pub const LEGACY_LIVE_ROUTE_COUNT : u8 = 8;
-pub const LEGACY_LIVE_ROUTES : [8]str = ["/accessories", "/tea", "/quest/:id", "/game", "/treasure-hunt", "/ar-hunt", "/location-quest", "/tech-tree"];
-pub const REPOINTED_ROUTE_COUNT : u8 = 5;
+; CORRECTED 2026-09-25: LEGACY_LIVE_ROUTE_COUNT was 8 and LEGACY_LIVE_ROUTES held all eight paths;
+; the eight stay below under *_BEFORE_2026_09_25 as the reading they were. On the owner's answer of
+; that day (recorded near the end of this file) seven of the eight render the live catalog, so the
+; one path that still mounts a legacy screen is /quest/:id, which the owner kept. All eight are
+; still DECLARED -- a link already sent never expires -- and that set is LEGACY_PATHS_DECLARED, the
+; constant the route-attribute check now reads; which surface each path lands on is counted apart
+; (REPOINTED_ROUTE_COUNT below). The paragraph above is kept as the tree it measured: its handler
+; lines are 2026-09-21's, and the seven handlers that moved are named, not cited, in the 2026-09-25
+; section.
+pub const LEGACY_LIVE_ROUTE_COUNT : u8 = 1;
+pub const LEGACY_LIVE_ROUTES : [1]str = ["/quest/:id"];
+pub const LEGACY_LIVE_ROUTE_COUNT_BEFORE_2026_09_25 : u8 = 8;
+pub const LEGACY_LIVE_ROUTES_BEFORE_2026_09_25 : [8]str = ["/accessories", "/tea", "/quest/:id", "/game", "/treasure-hunt", "/ar-hunt", "/location-quest", "/tech-tree"];
+pub const LEGACY_PATH_DECLARED_COUNT : u8 = 8;
+pub const LEGACY_PATHS_DECLARED : [8]str = ["/accessories", "/tea", "/quest/:id", "/game", "/treasure-hunt", "/ar-hunt", "/location-quest", "/tech-tree"];
+pub const REPOINTED_ROUTE_COUNT : u8 = 12;
 ; CORRECTED 2026-09-24: REPOINTED_ROUTE_COUNT was 2, and 2 stays below as the reading it was. On the
 ; owner's ruling of that day (recorded near the end of this file) three more client paths --
 ; /events at src/ui/routes.rs:39, /events/:id at :41 and /my-bookings at :43 -- render the live
@@ -325,12 +338,27 @@ pub const REPOINTED_ROUTE_COUNT_BEFORE_2026_09_24 : u8 = 2;
 pub const REPOINTED_WITH_THE_SCREEN_DELETED : u8 = 2;
 pub const REPOINTED_KEPT_SCREEN_COUNT_OWNER_ID : str = "turbobaby/events-booking";
 pub const REPOINTED_KEPT_SCREEN_COUNT_OWNER_DECL : str = "EVENT_SCREENS_UNROUTED_BY_THE_RULING";
+; CORRECTED 2026-09-25: REPOINTED_ROUTE_COUNT was 5, and 5 stays as the reading of 2026-09-24. On the
+; owner's answer of 2026-09-25 seven of the eight legacy paths -- LEGACY_PATHS_REPOINTED_ON_2026_09_25
+; below -- render the live catalog from their handlers, as /sets and the events paths do, so
+; 5 + 7 = 12. They are counted in the kept-screen half: their screens stay compiled and exported
+; and are mounted by no handler, like the events screens. Unlike those, the seven are THIS file's
+; subject, so their count is declared here and the events count still arrives from its owner.
+pub const REPOINTED_ROUTE_COUNT_BEFORE_2026_09_25 : u8 = 5;
+pub const REPOINTED_LEGACY_SCREENS_KEPT_UNMOUNTED : u8 = 7;
+pub const LEGACY_PATHS_REPOINTED_ON_2026_09_25 : [7]str = ["/accessories", "/tea", "/game", "/treasure-hunt", "/ar-hunt", "/location-quest", "/tech-tree"];
 
 ; The split, with the kept half as a parameter: the paths whose screen was deleted are this file's
 ; count, and the paths whose screen was kept are the owner's above. The set is split when the two
 ; halves are the whole of REPOINTED_ROUTE_COUNT.
 pub fn repointed_set_splits(screens_deleted: u8, screens_kept_unmounted: u8) bool {
     return screens_deleted + screens_kept_unmounted == REPOINTED_ROUTE_COUNT;
+}
+
+; The kept half, split again since 2026-09-25: the events screens (their owner's count, a parameter)
+; and the seven legacy screens (this file's). The whole set is three parts and nothing else.
+pub fn repointed_kept_half_splits(event_screens_kept: u8, legacy_screens_kept: u8) bool {
+    return REPOINTED_WITH_THE_SCREEN_DELETED + event_screens_kept + legacy_screens_kept == REPOINTED_ROUTE_COUNT;
 }
 
 ; HTTP routes, merged into the public router at src/api/mod.rs:89, :91 and :97.
@@ -398,6 +426,9 @@ pub fn asset_is_orphaned(mounted_by_code: bool, code_references: u16, comment_re
 ; This contract classifies. It does not choose. Which of the eight live legacy paths goes next,
 ; and in what order, is the owner's call and issue #2's scope; epic #26 keeps that issue open and
 ; ties it to no date. A ranking invented here would read as a plan and would be obeyed.
+; (2026-09-25: the owner answered for seven of the eight at once -- recorded near the end of this
+; file -- so no ranking was needed and none was invented. This file still picks nothing, and
+; NEXT_SURFACE_NOTE below is the reading of the tree before that answer.)
 pub const THIS_FILE_PICKS_THE_NEXT_SURFACE : bool = false;
 pub const THIS_FILE_CARRIES_A_DELETION_DATE : bool = false;
 pub const RETIREMENT_ORDER_IS_PUBLISHED : bool = false;
@@ -451,10 +482,79 @@ pub const OWNER_RULED_BIKE_SALE_STATE : u8 = 0;
 pub const A_MASK_ON_READ_HAS_A_STATE_HERE : bool = false;
 pub const OWNER_RULING_COMPLETES_A_RETIREMENT : bool = false;
 pub const OWNER_RULING_BRIEFED_SURFACES_ARE_AMONG_THE_EIGHT : bool = false;
-pub const OWNER_RULING_SCOPE_OVER_THE_EIGHT_IS_OPEN : bool = true;
+; CORRECTED 2026-09-25: the scope over the eight was open, and true stays below as that reading. The
+; owner settled it the next day; the answer is the section that follows.
+pub const OWNER_RULING_SCOPE_OVER_THE_EIGHT_IS_OPEN : bool = false;
+pub const OWNER_RULING_SCOPE_OVER_THE_EIGHT_IS_OPEN_BEFORE_2026_09_25 : bool = true;
 
 pub fn ruled_surface_state(customer_reachable: bool, rows_hidden: bool) u8 {
     return retirement_state(customer_reachable, OWNER_RULING_DROPS_A_TABLE, false, rows_hidden);
+}
+
+; --- The owner's answer of 2026-09-25: the eight legacy paths -------------------------------------
+; The owner answered a numbered list of questions in chat on 2026-09-25. Answer 7 was a yes to this
+; proposal: the old non-rental client addresses -- the previous shop's goods, its game and its hunts
+; -- open the catalog; the ride game, referrals and loyalty stay; and the quest a customer opens from
+; the profile loses its minimum-purchase line. Seven of the eight LEGACY_PATHS_DECLARED fall under
+; it: /accessories and /tea (goods), /game (the previous shop's game; the kept ride is /ride, which
+; is none of the eight), /treasure-hunt, /ar-hunt and /location-quest (the hunts), and /tech-tree.
+; The answer's words name the goods, the game and the hunts, not the tech tree: /tech-tree -- a
+; development tech tree, no rental and none of the three things the answer kept -- is counted among
+; the old non-rental addresses on THIS FILE'S READING of the answer, and OWNER_ANSWER_NAMES_THE_TECH_TREE
+; says so, so that the owner can overrule it. Each stays declared and its handler in
+; src/ui/routes.rs -- fn Accessories, fn Tea, fn Game, fn TreasureHunt, fn ArHunt, fn LocationQuest,
+; fn TechTree -- renders the live catalog; the seven screens stay compiled and exported and no
+; handler mounts them (tests/rental_only_wiring.rs pins both ends, the unmount and the export).
+; --
+; The eighth is kept. /quest/:id is where the profile's quests row goes (the Link to Route::Quest
+; with the id "daily" in src/ui/screens/profile_screen.rs), and the answer kept that row and removed
+; one line from the screen behind it: T_PURCHASE_MIN, the previous shop's minimum purchase. The
+; screen is kept as the answer asked and is not re-decided or described here. The key stays
+; translated, as the retired buy-out keys do; no screen renders it, nor T_PURCHASE_REQUIRED and
+; T_ERROR_PURCHASE beside it, which no screen rendered before either. No sentence was written new:
+; a line was removed, which is the whole of the copy change, and this paragraph is its record.
+; --
+; Each path is run through this file's machine on its OWN inputs, as the ruling of 2026-09-24 was.
+; No customer reaches any of the seven screens now. /accessories and /tea read tables 085 hid
+; (HIDDEN_TABLES), so they are ruled_surface_state(false, true), STATE_DATA_HIDDEN; the other five
+; read no table 085 hid, so they are ruled_surface_state(false, false), STATE_LIVE, which here says
+; only that no data was hidden and no table dropped, as it did of bike sales. The kept quest is
+; reachable, so it is STATE_SURFACE_LIVE by this file's precedence, kept on purpose and named with
+; its reason, which is what D19 asks of anything kept. None is a completed retirement: no table was
+; dropped and COMPLETED_RETIREMENT_COUNT stays 1.
+; --
+; WHAT THE ANSWER DID NOT MOVE. The HTTP routes behind the seven paths stay merged: the legacy
+; catalog, quest and tech-tree routers still answer LEGACY_HTTP_ROUTE_COUNT routes, and the quest
+; router is also what the kept quest scans through. Whether any of them should stop answering is not
+; in the answer and is not decided here. The deep-link compatibility set grew by the seven paths;
+; that set is turbobaby/deeplink's (LEGACY_ROUTE_ALIASES) and is not restated here. The previous
+; shop's game credited Stars under a source of its own (src/ui/game/shop_game.rs, the credit_stars
+; closure); with its screen unmounted the ride is the one mounted screen that posts a Star credit,
+; and whether that source stays capped is turbobaby/star-award's CAPPED_SOURCES, untouched here.
+pub const OWNER_ANSWER_AT : str = "2026-09-25";
+pub const OWNER_ANSWER_NUMBER : u8 = 7;
+pub const OWNER_ANSWER_NOTE : str = "Yes to answer 7 of 2026-09-25: the previous shop's goods, its game and its hunts open the catalog, the ride game, referrals and loyalty stay, and the profile's quest loses its minimum-purchase line.";
+pub const OWNER_ANSWER_REPOINTED_COUNT : u8 = 7;
+pub const OWNER_ANSWER_KEPT_LEGACY_PATH_COUNT : u8 = 1;
+pub const OWNER_ANSWER_KEEPS_THE_QUEST : bool = true;
+pub const OWNER_ANSWER_NAMES_THE_TECH_TREE : bool = false;
+pub const OWNER_ANSWER_DROPS_A_TABLE : bool = false;
+pub const OWNER_ANSWER_CHANGES_AN_HTTP_ROUTE : bool = false;
+pub const OWNER_ANSWER_COMPLETES_A_RETIREMENT : bool = false;
+pub const OWNER_ANSWER_GOODS_ROWS_HIDDEN : bool = true;
+pub const OWNER_ANSWER_GOODS_STATE : u8 = 1;
+pub const OWNER_ANSWER_OTHER_ROWS_HIDDEN : bool = false;
+pub const OWNER_ANSWER_OTHER_STATE : u8 = 0;
+pub const OWNER_ANSWER_KEPT_QUEST_STATE : u8 = 2;
+pub const QUEST_PURCHASE_KEY : str = "T_PURCHASE_MIN";
+pub const QUEST_PURCHASE_LINE_RENDERED : bool = false;
+pub const QUEST_PURCHASE_LINE_RENDERED_BEFORE_2026_09_25 : bool = true;
+pub const QUEST_PURCHASE_KEY_STAYS_TRANSLATED : bool = true;
+pub const QUEST_COPY_WRITTEN_NEW : bool = false;
+
+; The answer splits the eight with nothing left over: the repointed seven and the kept one.
+pub fn owner_answer_covers_the_eight(repointed: u8, kept: u8) bool {
+    return repointed + kept == LEGACY_PATH_DECLARED_COUNT;
 }
 
 ; --- Tests -----------------------------------------------------------------------------------------
@@ -603,14 +703,27 @@ test the_retired_set_is_derived_rather_than_listed {
 }
 
 test the_live_legacy_surface_is_counted_and_repointed_paths_are_counted_apart {
+    // 8 until 2026-09-25, when seven of the eight began to render the catalog.
     assert LEGACY_LIVE_ROUTES.len == LEGACY_LIVE_ROUTE_COUNT;
-    assert LEGACY_LIVE_ROUTE_COUNT == 8;
-    assert LEGACY_LIVE_ROUTES[0] == "/accessories";
-    assert LEGACY_LIVE_ROUTES[3] == "/game";
-    assert LEGACY_LIVE_ROUTES[7] == "/tech-tree";
-    // 2 until 2026-09-24, when the three event paths joined /sets and /sommelier.
-    assert REPOINTED_ROUTE_COUNT == 5;
+    assert LEGACY_LIVE_ROUTE_COUNT == 1;
+    assert LEGACY_LIVE_ROUTES[0] == "/quest/:id";
+    assert LEGACY_LIVE_ROUTES_BEFORE_2026_09_25.len == LEGACY_LIVE_ROUTE_COUNT_BEFORE_2026_09_25;
+    assert LEGACY_LIVE_ROUTE_COUNT_BEFORE_2026_09_25 == 8;
+    assert LEGACY_LIVE_ROUTES_BEFORE_2026_09_25[0] == "/accessories";
+    assert LEGACY_LIVE_ROUTES_BEFORE_2026_09_25[3] == "/game";
+    assert LEGACY_LIVE_ROUTES_BEFORE_2026_09_25[7] == "/tech-tree";
+    // Every one of the eight is still declared: a link already sent never expires.
+    assert LEGACY_PATHS_DECLARED.len == LEGACY_PATH_DECLARED_COUNT;
+    assert LEGACY_PATH_DECLARED_COUNT == LEGACY_LIVE_ROUTE_COUNT_BEFORE_2026_09_25;
+    assert LEGACY_PATHS_DECLARED[0] == "/accessories";
+    assert LEGACY_PATHS_DECLARED[2] == LEGACY_LIVE_ROUTES[0];
+    assert LEGACY_PATHS_DECLARED[7] == "/tech-tree";
+    // 2 until 2026-09-24, when the three event paths joined /sets and /sommelier; 5 until
+    // 2026-09-25, when seven of the eight legacy paths joined them.
+    assert REPOINTED_ROUTE_COUNT == 12;
+    assert REPOINTED_ROUTE_COUNT_BEFORE_2026_09_25 == 5;
     assert REPOINTED_ROUTE_COUNT_BEFORE_2026_09_24 == 2;
+    assert REPOINTED_ROUTE_COUNT == REPOINTED_ROUTE_COUNT_BEFORE_2026_09_25 + LEGACY_PATHS_REPOINTED_ON_2026_09_25.len;
 }
 
 test the_legacy_http_route_total_is_the_sum_of_its_three_modules {
@@ -702,11 +815,60 @@ test the_owners_ruling_is_classified_per_surface_and_claims_no_completed_retirem
     assert surface_is_retired(false, OWNER_RULING_DROPS_A_TABLE, false, OWNER_RULED_BIKE_SALE_ROWS_HIDDEN) == false;
     assert OWNER_RULING_COMPLETES_A_RETIREMENT == false;
     assert COMPLETED_RETIREMENT_COUNT == 1;
-    // The two briefed surfaces are not among the eight; whether the ruling reaches the eight is open.
+    // The two briefed surfaces are not among the eight; whether the ruling reached the eight was
+    // open on 2026-09-24 and was answered on 2026-09-25.
     assert OWNER_RULING_BRIEFED_SURFACES_ARE_AMONG_THE_EIGHT == false;
-    assert OWNER_RULING_SCOPE_OVER_THE_EIGHT_IS_OPEN == true;
+    assert OWNER_RULING_SCOPE_OVER_THE_EIGHT_IS_OPEN_BEFORE_2026_09_25 == true;
+    assert OWNER_RULING_SCOPE_OVER_THE_EIGHT_IS_OPEN == false;
     assert next_surface_is_decided_here(false) == false;
     assert RETIREMENT_ORDER_IS_PUBLISHED == false;
+}
+
+test the_owners_answer_of_2026_09_25_is_classified_path_by_path {
+    assert OWNER_ANSWER_AT == "2026-09-25";
+    assert OWNER_ANSWER_AT != OWNER_RULING_AT;
+    assert OWNER_ANSWER_NUMBER == 7;
+    // Seven repointed, one kept, and that is all eight.
+    assert LEGACY_PATHS_REPOINTED_ON_2026_09_25.len == OWNER_ANSWER_REPOINTED_COUNT;
+    assert OWNER_ANSWER_REPOINTED_COUNT == 7;
+    assert OWNER_ANSWER_KEPT_LEGACY_PATH_COUNT == LEGACY_LIVE_ROUTE_COUNT;
+    assert owner_answer_covers_the_eight(OWNER_ANSWER_REPOINTED_COUNT, OWNER_ANSWER_KEPT_LEGACY_PATH_COUNT) == true;
+    assert owner_answer_covers_the_eight(OWNER_ANSWER_REPOINTED_COUNT, 0) == false;
+    assert owner_answer_covers_the_eight(LEGACY_PATH_DECLARED_COUNT, OWNER_ANSWER_KEPT_LEGACY_PATH_COUNT) == false;
+    assert LEGACY_PATHS_REPOINTED_ON_2026_09_25[0] == "/accessories";
+    assert LEGACY_PATHS_REPOINTED_ON_2026_09_25[2] == "/game";
+    assert LEGACY_PATHS_REPOINTED_ON_2026_09_25[6] == "/tech-tree";
+    // The seventh is this file's reading of the answer, not the answer's word.
+    assert OWNER_ANSWER_NAMES_THE_TECH_TREE == false;
+    assert OWNER_ANSWER_KEEPS_THE_QUEST == true;
+    assert LEGACY_LIVE_ROUTES[0] == "/quest/:id";
+    // Each path on its own inputs: the goods over tables 085 hid, the rest over none, and the kept
+    // quest still reachable.
+    assert OWNER_ANSWER_GOODS_STATE == STATE_DATA_HIDDEN;
+    assert ruled_surface_state(false, OWNER_ANSWER_GOODS_ROWS_HIDDEN) == OWNER_ANSWER_GOODS_STATE;
+    assert OWNER_ANSWER_OTHER_STATE == STATE_LIVE;
+    assert ruled_surface_state(false, OWNER_ANSWER_OTHER_ROWS_HIDDEN) == OWNER_ANSWER_OTHER_STATE;
+    assert OWNER_ANSWER_KEPT_QUEST_STATE == STATE_SURFACE_LIVE;
+    assert ruled_surface_state(OWNER_ANSWER_KEEPS_THE_QUEST, false) == OWNER_ANSWER_KEPT_QUEST_STATE;
+    assert HIDDEN_TABLES[1] == "accessories";
+    assert HIDDEN_TABLES[3] == "tea_products";
+    // Not a completed retirement, and nothing the answer did not name was moved.
+    assert OWNER_ANSWER_DROPS_A_TABLE == false;
+    assert surface_is_retired(false, OWNER_ANSWER_DROPS_A_TABLE, false, OWNER_ANSWER_GOODS_ROWS_HIDDEN) == false;
+    assert surface_is_retired(false, OWNER_ANSWER_DROPS_A_TABLE, false, OWNER_ANSWER_OTHER_ROWS_HIDDEN) == false;
+    assert OWNER_ANSWER_COMPLETES_A_RETIREMENT == false;
+    assert COMPLETED_RETIREMENT_COUNT == 1;
+    assert OWNER_ANSWER_CHANGES_AN_HTTP_ROUTE == false;
+    assert LEGACY_HTTP_ROUTE_COUNT == 43;
+    assert THIS_FILE_PICKS_THE_NEXT_SURFACE == false;
+}
+
+test the_quests_purchase_line_is_removed_and_no_sentence_was_written {
+    assert QUEST_PURCHASE_KEY == "T_PURCHASE_MIN";
+    assert QUEST_PURCHASE_LINE_RENDERED_BEFORE_2026_09_25 == true;
+    assert QUEST_PURCHASE_LINE_RENDERED == false;
+    assert QUEST_PURCHASE_KEY_STAYS_TRANSLATED == true;
+    assert QUEST_COPY_WRITTEN_NEW == false;
 }
 
 test the_repointed_set_is_split_by_what_each_path_lost {
@@ -718,6 +880,12 @@ test the_repointed_set_is_split_by_what_each_path_lost {
     assert repointed_set_splits(REPOINTED_WITH_THE_SCREEN_DELETED, REPOINTED_ROUTE_COUNT - REPOINTED_WITH_THE_SCREEN_DELETED) == true;
     assert repointed_set_splits(REPOINTED_WITH_THE_SCREEN_DELETED, 0) == false;
     assert repointed_set_splits(REPOINTED_WITH_THE_SCREEN_DELETED, REPOINTED_ROUTE_COUNT) == false;
+    // Since 2026-09-25 the kept half is the events screens (their owner's count, passed in) and
+    // the seven legacy screens (this file's).
+    assert REPOINTED_LEGACY_SCREENS_KEPT_UNMOUNTED == LEGACY_PATHS_REPOINTED_ON_2026_09_25.len;
+    assert repointed_kept_half_splits(REPOINTED_ROUTE_COUNT_BEFORE_2026_09_25 - REPOINTED_WITH_THE_SCREEN_DELETED, REPOINTED_LEGACY_SCREENS_KEPT_UNMOUNTED) == true;
+    assert repointed_kept_half_splits(REPOINTED_ROUTE_COUNT_BEFORE_2026_09_25 - REPOINTED_WITH_THE_SCREEN_DELETED, 0) == false;
+    assert repointed_kept_half_splits(0, REPOINTED_LEGACY_SCREENS_KEPT_UNMOUNTED) == false;
     // A kept path over a kept screen file is never a gone surface, however dark it is.
     assert may_claim_surface_is_gone(1, 1, 1) == false;
 }
@@ -784,4 +952,13 @@ invariant the_repointed_set_is_always_split_by_what_each_path_lost
     assert repointed_set_splits(REPOINTED_WITH_THE_SCREEN_DELETED, REPOINTED_ROUTE_COUNT - REPOINTED_WITH_THE_SCREEN_DELETED) == true and REPOINTED_WITH_THE_SCREEN_DELETED < REPOINTED_ROUTE_COUNT
 
 invariant a_bike_sale_row_is_never_called_hidden_to_reach_a_state
-    assert OWNER_RULED_BIKE_SALE_ROWS_HIDDEN == false and ruled_surface_state(false, OWNER_RULED_BIKE_SALE_ROWS_HIDDEN) == STATE_LIVE and OWNER_RULING_SCOPE_OVER_THE_EIGHT_IS_OPEN == true
+    assert OWNER_RULED_BIKE_SALE_ROWS_HIDDEN == false and ruled_surface_state(false, OWNER_RULED_BIKE_SALE_ROWS_HIDDEN) == STATE_LIVE and OWNER_RULING_SCOPE_OVER_THE_EIGHT_IS_OPEN_BEFORE_2026_09_25 == true
+
+invariant the_answer_of_2026_09_25_leaves_no_legacy_path_unaccounted_for
+    assert owner_answer_covers_the_eight(LEGACY_PATHS_REPOINTED_ON_2026_09_25.len, LEGACY_LIVE_ROUTES.len) == true and LEGACY_PATHS_DECLARED.len == LEGACY_PATH_DECLARED_COUNT and REPOINTED_ROUTE_COUNT == REPOINTED_ROUTE_COUNT_BEFORE_2026_09_25 + REPOINTED_LEGACY_SCREENS_KEPT_UNMOUNTED
+
+invariant the_answer_of_2026_09_25_never_counts_as_a_completed_retirement
+    assert surface_is_retired(false, OWNER_ANSWER_DROPS_A_TABLE, false, OWNER_ANSWER_GOODS_ROWS_HIDDEN) == false and surface_is_retired(false, OWNER_ANSWER_DROPS_A_TABLE, false, OWNER_ANSWER_OTHER_ROWS_HIDDEN) == false and OWNER_ANSWER_COMPLETES_A_RETIREMENT == false and COMPLETED_RETIREMENT_COUNT == 1
+
+invariant the_kept_quest_never_states_the_previous_shops_purchase_rule
+    assert OWNER_ANSWER_KEEPS_THE_QUEST == true and QUEST_PURCHASE_LINE_RENDERED == false and QUEST_COPY_WRITTEN_NEW == false
