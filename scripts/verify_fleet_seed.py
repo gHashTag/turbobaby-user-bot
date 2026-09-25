@@ -11,6 +11,15 @@ This script re-derives the comparison. It is not a formatter and not a linter: i
 parses both files and asserts field equality, unit counts, and two absences that are
 decisions rather than omissions (see DECISIONS.md D9, D12, D14).
 
+Since 2026-09-25 it also reads the one decision the seed records as a LIST of family
+keys: pricing_policy.not_offered, what a closed family's customer is offered instead.
+Each offered key must be an offered family with a unit the SQL seeds as available --
+never a price-list-only family, which is what the CLICK 125 list named until the
+owner's decision of that date (DECISIONS.md, the D12 amendments of 2026-09-24 and
+2026-09-25) -- and a non-empty list must name, in offer_instead_source, an entry of
+`sources` that carries a date. The seed is a dated measurement; a decision written
+into it without a dated source is a number whose provenance nobody can check.
+
     python3 scripts/verify_fleet_seed.py           # quiet unless something is wrong
     python3 scripts/verify_fleet_seed.py -v        # print what passed
     python3 scripts/verify_fleet_seed.py --seed /tmp/planted.json   # negative control
@@ -178,6 +187,62 @@ def check_market_profile(seed: dict, problems: list[str]) -> None:
         problems.append(f"market.utc_offset_hours: {offset} is outside -12..+14")
 
 
+ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def check_redirects(
+    seed: dict,
+    families: dict[str, dict],
+    price_list_only: set[str],
+    per_family_available: Counter[str],
+    problems: list[str],
+) -> list[str]:
+    """Validate pricing_policy.not_offered: what a closed family's customer is offered.
+
+    Returns one `closed -> offered, ...` label per entry for the verbose report. The
+    availability is the SQL seed's `available` status and not the JSON's
+    units_available, because the SQL is what reaches the database; the JSON's count is
+    already held equal to it above.
+    """
+    not_offered = seed.get("pricing_policy", {}).get("not_offered")
+    if not isinstance(not_offered, dict):
+        problems.append("pricing_policy.not_offered: block is missing - D12's redirect is undeclared")
+        return []
+    sources = seed.get("sources", {})
+    labels: list[str] = []
+    for closed, entry in sorted(not_offered.items()):
+        family = families.get(closed)
+        if family is None:
+            problems.append(f"{closed}: listed under pricing_policy.not_offered but not a seeded family")
+        elif family.get("offered", True):
+            problems.append(f"{closed}: listed under pricing_policy.not_offered but seeded as offered")
+        offers = entry.get("offer_instead", []) if isinstance(entry, dict) else []
+        if not isinstance(offers, list):
+            problems.append(f"{closed}.offer_instead: not a list of family keys")
+            continue
+        for alt in offers:
+            if alt in price_list_only:
+                problems.append(
+                    f"{closed}.offer_instead: {alt} is a price-list-only family - the fleet "
+                    "holds zero units of it"
+                )
+            elif alt not in families or not families[alt].get("offered", True):
+                problems.append(f"{closed}.offer_instead: {alt} is not an offered family of the seed")
+            elif per_family_available[alt] < 1:
+                problems.append(f"{closed}.offer_instead: {alt} has no unit seeded as available")
+        if offers:
+            named = entry.get("offer_instead_source")
+            source = sources.get(named) if isinstance(named, str) else None
+            date = source.get("date") if isinstance(source, dict) else None
+            if not isinstance(date, str) or not ISO_DATE.match(date):
+                problems.append(
+                    f"{closed}.offer_instead: offer_instead_source={named!r} names no entry of "
+                    "`sources` with a YYYY-MM-DD date - a decision in this file needs a dated source"
+                )
+        labels.append(f"{closed} -> {', '.join(offers) or 'nothing'}")
+    return labels
+
+
 def fail(msg: str) -> None:
     print(f"verify_fleet_seed: {msg}", file=sys.stderr)
     raise SystemExit(2)
@@ -278,6 +343,7 @@ def main() -> int:
     sql_units = [m.groupdict() for m in UNIT_ROW.finditer(units_block)]
     per_family_total: Counter[str] = Counter()
     per_family_rented: Counter[str] = Counter()
+    per_family_available: Counter[str] = Counter()
     seen_codes: set[str] = set()
 
     for row in sql_units:
@@ -285,6 +351,8 @@ def main() -> int:
         per_family_total[key] += 1
         if row["status"] == "rented":
             per_family_rented[key] += 1
+        if row["status"] == "available":
+            per_family_available[key] += 1
         if code in seen_codes:
             problems.append(f"duplicate unit_code {code}")
         seen_codes.add(code)
@@ -317,6 +385,9 @@ def main() -> int:
         if got != expected:
             problems.append(f"{label}: SQL={got} fleet_seed.json={expected}")
 
+    # ---- Redirects ----------------------------------------------------------
+    redirects = check_redirects(seed, families, price_list_only, per_family_available, problems)
+
     # ---- Market profile -----------------------------------------------------
     check_market_profile(seed, problems)
 
@@ -345,6 +416,8 @@ def main() -> int:
             f"({offered} offered), {len(sql_units)} units "
             f"({rented} rented, {available} available); "
             f"{len(price_list_only)} price-list-only families correctly absent; "
+            f"redirects {', '.join(redirects) or 'none'} name only offered families "
+            f"with a unit available, each from a dated source; "
             f"market profile {market.get('country_code')}/{market.get('currency_code')} "
             f"matches specs/turbobaby/market_profile.t27{whose}"
         )
