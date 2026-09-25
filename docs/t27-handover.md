@@ -12,10 +12,10 @@ what to do next.
 | | measured 2026-09-21 |
 | --- | --- |
 | canonical contracts | **45** (44 under `specs/turbobaby/` + `specs/agents/turbobaby.t27`) |
-| assertions executed, all passing | **10 273** on the integration branch `t27/owner-answers-2509` after the three fixes on top of `69fd4fa` (2026-09-25; see "Three fixes on top of `69fd4fa`" below), **10 246** at `69fd4fa` (the owner's answers of that day; not pushed, not merged) — **9 996** re-measured 2026-09-25 on `f5e6b4f`, after #64, which changed comments only (9 996 after #63 on 2026-09-24, 9 859 after #62, 9 535 earlier that day, 9 514 on 2026-09-23 before that day's money family, 9 038 on 2026-09-22, 8 911 on 2026-09-21) |
+| assertions executed, all passing | **10 581** on the integration branch `t27/owner-answers-2509` at `41315b2` after the owner's second list of 2026-09-25 and the operator's shop label (2026-09-26; see "The owner's second list of 2026-09-25 and the operator's shop label" below), **10 273** on the integration branch `t27/owner-answers-2509` after the three fixes on top of `69fd4fa` (2026-09-25; see "Three fixes on top of `69fd4fa`" below), **10 246** at `69fd4fa` (the owner's answers of that day; not pushed, not merged) — **9 996** re-measured 2026-09-25 on `f5e6b4f`, after #64, which changed comments only (9 996 after #63 on 2026-09-24, 9 859 after #62, 9 535 earlier that day, 9 514 on 2026-09-23 before that day's money family, 9 038 on 2026-09-22, 8 911 on 2026-09-21) |
 | contract-to-contract ownership edges | 203+, **zero dangling** |
 | source lines named by some contract | **73 407 of 80 308 (91.4 %)** |
-| enforced contract-to-source bindings | **239** on the integration branch `t27/owner-answers-2509` (2026-09-25; the two new rows bind the CLICK 125 redirect to the seed), across the same 41 of 45 contracts and 80 source files — **237**, across 41 of 45 contracts and 80 source files, re-measured 2026-09-25 on `f5e6b4f`, after #64 (237 after #63 on 2026-09-24, 227 after #62, 198 earlier that day, 197 on 2026-09-23, 168 across 40 on 2026-09-22, 66 across 16 on 2026-09-21) |
+| enforced contract-to-source bindings | **248** on the integration branch `t27/owner-answers-2509` at `41315b2` (2026-09-26; +2 answer 1, +4 answer 3, +2 the kept cart, +1 the held notification kinds), across 41 of 45 contracts and 83 source files — **239** on the same branch on 2026-09-25 (the two new rows bind the CLICK 125 redirect to the seed), across the same 41 of 45 contracts and 80 source files — **237**, across 41 of 45 contracts and 80 source files, re-measured 2026-09-25 on `f5e6b4f`, after #64 (237 after #63 on 2026-09-24, 227 after #62, 198 earlier that day, 197 on 2026-09-23, 168 across 40 on 2026-09-22, 66 across 16 on 2026-09-21) |
 
 The two re-measured rows come from gates 2 and 3, run on 2026-09-25 on `main` at `f5e6b4f` (#64
 on top of the rental-only change of #63). Both equal the 2026-09-24 readings on #63's tree to the
@@ -214,7 +214,8 @@ working machine's +07:00 clock, which had already turned to 2026-09-26.
   content, outside that task's list and not changed:** `screenshots/` (the generated UI-kit
   pages, `generate-pages.sh`, `e2e-pipeline.sh` and `e2e-report.md`) and `docs/DESIGN_SYSTEM.md`
   (a Chip example with Sativa/Indica and "OG Kush — Legendary"). Under the ruling they are the next
-  cleanup.
+  cleanup. *Cleaned on 2026-09-26* by `t27/no-cannabis-docs`, merged as `313c365` (see the next
+  section).
 
 **Readings on `99b6716`**, pinned compiler 40003ed:
 
@@ -232,6 +233,10 @@ python3 scripts/verify_fleet_seed.py -v
 ```
 
 `cargo fmt --check` was clean. All 27 changed files are `i/lf w/lf`.
+
+**CLEARED on 2026-09-26.** Every owed step below was done on the integration branch after the
+second list's merges, and bundle `f81e946a9d640a39` carries the reworded sentence. The readings
+are in the next section. What follows is kept as the record of 2026-09-25.
 
 **Not done: drive D: is full.** On 2026-09-25, `df -h /d` read 222G in size with 17M available
 at 18:37 UTC and 13M at 18:50 UTC, still falling; a review about an hour earlier had read 22M.
@@ -264,6 +269,144 @@ freeing space is for the operator or the owner. Until that happens:
   7. `scripts/predeploy-smoke.sh --no-build` must print SMOKE PASS, with `git status` empty
      afterwards.
   8. Record the readings here.
+
+### The owner's second list of 2026-09-25 and the operator's shop label, integrated 2026-09-26, and not yet live
+
+The owner answered a second numbered list in chat on 2026-09-25 and confirmed its numbering the
+same day. Six branches, each cut from `t27/owner-answers-2509` at `69fd4fa`, were merged on
+2026-09-26 into that branch at `efc2aae`, in this order. Each merge used
+`git -c core.autocrlf=false merge --no-ff` with diff3 conflict style. Two follow-up commits
+reconciled the branches and applied an operator decision, one fixed a unit test, and one rebuilt
+`dist/`. **Nothing is pushed and nothing is deployed.**
+
+| commit | what |
+| --- | --- |
+| `fbdd469` | merge `t27/no-units-empty` (`eaf4426`), answer 5 |
+| `77ac756` | merge `t27/no-age-gate` (`aa8d779`), answer 1 |
+| `0ef7717` | merge `t27/legacy-lines-hidden` (`12aaf00`), answer 3 |
+| `d064830` | merge `t27/legacy-cart-hidden` (`9c4a6eb`), the kept cart |
+| `1aca8c4` | merge `t27/legacy-notifications-held` (`a992251`), the held notification kinds |
+| `313c365` | merge `t27/no-cannabis-docs` (`a8872c9`), docs and demo pages |
+| `a612624` | one rule for a kept cart (the reconciliation of answer 3 with the kept cart) |
+| `6d8a2e3` | the operator's decision: an order of the previous shop shows no shop label |
+| `45792a7` | the shop-label unit test made to compile (a closure's lifetime; the lib test target only) |
+| `41315b2` | `dist/` rebuilt, bundle `c7cbc40d63a3b4f0` → `f81e946a9d640a39` |
+
+| answer | what landed | what was left, and why |
+| --- | --- | --- |
+| 1, «Пока убираем» | The 20+ gate is removed for now, on the client and on the server. The checkout loses the box «Мне исполнилось 20+», its notice, the trust line «🛡️ Проверка возраста (20+)», the order button's age blocker and the submit handler's refusal. The request no longer sends `age_confirmed`. `POST /api/orders` no longer answers 422 when the field is absent or false. It still accepts the field and stores it as sent. Five keys were deleted, each line replaced by a comment line. Recorded in `checkout_contact.t27` (`AGE_BLOCKER_REMOVED_AT`, `AGE_BLOCKER_REMOVAL_IS_PROVISIONAL`), `legacy_retirement.t27` (`AGE_GATE_ANSWER_*`) and `client_errors.t27`. Gate 3 gained 2 bindings | The answer is provisional («Пока»). The `woody_last_age_confirmed` key in customers' browsers is neither read nor cleared (D19). Stored orders keep what they recorded |
+| 2 | Nothing: the ride game's bird is undecided | Untouched |
+| 3, «Все канабисное аналировать» | Read by the operator as: analyse all the cannabis-era content and take it out of customers' sight without deleting stored data. **Server** (`src/trios/legacy_view.rs`): a customer's own order list and detail serve a line of the old catalogue as «Позиция прежнего каталога» / "Item from the previous catalogue", with its quantity and unit price exactly as stored, and serve no id. The two reads withhold the old shop's name. The bonus history serves only the four sentences this repository writes, and serves a garden-era row with an empty type. **Client**: the order screens print the neutral name in the reader's language, and a garden row carries «Бонус». **The kept cart** (`t27/legacy-cart-hidden`): the cart API, the abandoned-cart reminder and the Mini App serve no line of a retired kind; the rows stay stored. **Held notifications** (`t27/legacy-notifications-held`): the queue never delivers a row of a retired or unknown kind (`friend_watered` included), and the garden's message left `src/locales.rs`. **Docs** (`t27/no-cannabis-docs`): `docs/DESIGN_SYSTEM.md`, `docs/event-share-templates.md` and the `screenshots/` demo pages carry no cannabis content, and every demo render is re-taken and classified (`tests/legacy_vocabulary_wiring.rs`). Gate 3 gained 4 + 2 + 1 bindings | Analysed and left, each with its reason in `legacy_retirement.t27`: the loyalty profile's stored tier key, the star history, the reads behind retired surfaces, and the referral, quest-scan and game reads. The admin reads are the archive and are unchanged. No row, no migration |
+| 4 | Unavailable models were marked in the brain (done outside this repository) | — |
+| 5, «Наверное» | The detail's line «Сейчас все байки этой модели заняты.» is gone, and its key `bike.units.empty` is deleted. Recorded in `availability.t27` (`UNITS_EMPTY_LINE_*`) | The Book control's reason under the same zero, `T_BIKE_BOOK_BLOCKED_NO_UNITS` («Все байки этой модели заняты»), was not named by the answer and stays (question I) |
+| operator, 2026-09-26 | An order of the previous shop is never shown as TurboBaby's. A withheld shop is served as the empty shop (`WITHHELD_SHOP`), and both order screens read it through `shown_shop`. The list prints the date alone, and the detail leaves out its labelled delivery row. An order with TurboBaby's stored shop, and one naming no shop, print exactly what they printed before. Recorded in `order_presentation.t27` (`RETIRED_SHOP_DECIDED_AT`, `RETIRED_SHOP_LABEL_SHOWN`, `RETIRED_SHOP_SERVED_AS`; `RETIRED_SHOP_FALLBACK_NOTE` closed), guarded by `tests/legacy_view_wiring.rs` and a unit test in `legacy_view.rs` | A bundle cached from before prints an empty value for such an order. That is not TurboBaby's name either |
+
+**Conflicts, and how they were resolved.** Every side was kept.
+
+* **Floors (gate 1).** Every floor was re-measured with the pinned compiler after each merge and
+  each commit (`verify_t27_specs.py -v`, compared entry by entry with `SPEC_MANIFEST`). All 45
+  equal the measurement on `41315b2`. The ones that moved: `availability` 129/35 and 132/36 →
+  141/37; `client_errors` 253 and 249 → 254/58; `locale_policy` → 140/35, then 141/35, then 144/36;
+  `legacy_retirement` 266/59 and 277/59 → 289/61, then 299/63 after the reconciliation;
+  `cart_persistence` 266/52 → 276/54; `order_presentation` 598/76 → 606/77.
+* **Bindings (gate 3).** The table keeps every row from every branch, and `MIN_BINDINGS` equals
+  the measured table size after each merge: 241 → 245 → 247 → 248. That is 239 + 2 (answer 1)
+  + 4 (answer 3) + 2 (kept cart) + 1 (held kinds), over 41 contracts and 83 source files.
+* **Key count (`locale_policy.t27`).** Each branch measured without the others. On the merged
+  `src/trios/i18n.rs`, 565 + 2 − 14 − 1 − 5 = **547** declarations, and the naive grep reads 570
+  + 2 − 14 − 1 − 5 = **552**. The +2 are the cancel key and `T_ORDER_LINE_PREVIOUS_CATALOGUE`, the
+  −14 is ruling #12, the −1 is answer 5 and the −5 is answer 1. Every branch's CORRECTED
+  paragraph is kept. Two MERGED notes record the re-measurement, and the key-count test subtracts
+  every deletion. The five non-declaration lines did not move.
+* **DECISIONS.md.** The addenda are appended in merge order: answer 5, answer 1, answer 3, the
+  kept cart. Then come the reconciliation and the shop-label decision. The answer-1 entry says the
+  merged key count.
+* **`legacy_retirement.t27`** keeps the answer-1 and answer-3 sections and both closing
+  invariants. This file keeps question I as answer 5's branch wrote it, now marked merged.
+* **(a) The cart, `a612624`.** Answer 3 served a retired cart line under the neutral name with no
+  picture, and guarded a device cart the same way. The kept cart serves no such line at all.
+  Merged, both ran, and the second was a no-op on the rental rows the first let through. **One
+  rule, the kept cart's.** The neutral-name path is removed from `cart_model_to_resp`, from
+  `legacy_view.rs` (`LIVE_CART_KIND`, `cart_line_is_retired`, `cart_line_name`,
+  `cart_line_image`, `shown_cart_line_name`) and from the cart, checkout and `CartItemComponent`,
+  byte for byte back to before answer 3. The one way into the Mini App's cart that did not ask
+  `cart_kind_is_served`, `Cart::add_item` (reorders and unmounted screens), now asks it. So no
+  screen can be handed a line that would need a neutral name, and
+  `a_cart_line_is_held_to_the_kept_cart_rule_and_never_renamed` holds that. The contracts agree:
+  `cart_persistence.t27` has a section "Reconciled with the owner's answer 3", and
+  `legacy_retirement.t27` records answer 3's client guards as 4 → 2 and its left reads as 6 → 4.
+  The abandoned-cart reminder was closed by the kept cart; answer 3's reason had missed a cart
+  kept from before 085. The garden's notification arm was closed by the held kinds.
+
+**`dist/`.** It was rebuilt once with `scripts/build-frontend.sh` (trunk 0.21.14, wasm-bindgen
+0.2.122), bundle `c7cbc40d63a3b4f0` → `f81e946a9d640a39`, with no `dist/version.txt.br` and
+`dist/assets` not committed. Readings in the new wasm (`grep -c -a -F`):
+
+* the new 409 sentence «Отменить этот заказ в приложении уже нельзя. Напишите менеджеру.» 1, and
+  its English 1;
+* «Этот заказ уже в работе» 0, and "already being handled and can't be cancelled" 0;
+* «Мне исполнилось 20+» 0, and «Сейчас все байки этой модели заняты» 0;
+* «Позиция прежнего каталога» 1.
+
+The client vocabulary of `tests/no_cannabis_client_wiring.rs` finds nothing in the js. In the wasm
+and `index.html` it finds only internal identifiers, the same count as in the previous bundle: the
+DOM events `woody:mainbutton`, `woody:contact` and `woody:telegram-ready`, and the compatibility
+path `/sommelier`. `scripts/predeploy-smoke.sh --no-build` printed `SMOKE PASS` (app mounted,
+console clean), and `git status --porcelain` stayed empty afterwards.
+
+```sh
+# 2026-09-26, t27/owner-answers-2509 at 41315b2, pinned compiler 40003ed
+T27C=<path>/t27c python3 scripts/verify_t27_specs.py --require-compiler
+# OK - 45 manifested specs, 5 generators each (all 45 floors equal the measurement)
+python3 scripts/execute_t27_assertions.py            # WITH the compiler cross-check
+# OK - 45 spec(s), 10581 assert line(s) scanned, 10581 executed, 10581 passed, 0 failed;
+#      10109 declaration name(s) and function bodies agreed with t27c; 2 pinned front-end disagreement(s)
+python3 scripts/verify_t27_against_source.py --require-git-tracked
+# OK - 248 bindings hold across 41 contracts and 83 source files
+python3 scripts/verify_fleet_seed.py -v
+# OK — 14 families (13 offered), 37 units (11 rented, 26 available); ...; redirects click-125 -> nmax-155 ...
+```
+
+**Rust.** `cargo fmt -- --check` was clean. All three clippy forms passed with `-D warnings`:
+`--features backend --bin turbobaby-bot-server`, `--features backend`, and
+`--target wasm32-unknown-unknown --lib`. `cargo test --features backend -j 2` gave 75 result lines:
+2 498 passed, 0 failed and 135 ignored, doc tests included. No test PDB was rejected this time,
+because `D:/t27work/.cargo/config.toml` now builds dev and test with `debug = 0`. The shared target
+was `D:/turbobaby-bike-bot/target`, and every cargo and trunk run was the only one, with `-j 2`.
+Drive D: went from 41.3 GB free to 38.3 GB over the whole session, and C: read 8.0 to 8.1 GB throughout.
+
+**DB-backed tests.** These ran on a fresh private PostgreSQL 18.0: `initdb -A trust -U postgres -E
+UTF8 --locale=C`, data dir `D:/t27work/pgdata-final-2509`, listening on 127.0.0.1:55434 only, with
+one fresh database. `HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY` and `TELOXIDE_PROXY` were set to
+`http://127.0.0.1:9`, so nothing left the machine. The run was
+`cargo test --features backend -j 2 --no-fail-fast -- --include-ignored --test-threads=1`,
+skipping the two tests of `tests/https_reaches_telegram.rs`. It gave 75 result lines: 2 614
+passed, 17 failed and 0 ignored.
+
+The 17 are the known stale fixtures of the base, and nothing else failed:
+
+* `strains`, dropped by 083: create_order ×3, marketing ×1, strain_of_day ×5 and promo_agent ×4;
+* `garden_rewards`, dropped by 083: use_reward ×2;
+* an available accessory, hidden by 085: cart_merge ×2.
+
+That is the 13 of the serial run of 2026-09-25 plus promo_agent's 4, which that run took from a
+relinked executable. `create_order_does_not_require_age_confirmation` (answer 1) passed against
+the database. The server was stopped with `pg_ctl stop -m fast`, and the data dir is left in
+place.
+
+**What is left.**
+
+* Push, review and merge of `t27/owner-answers-2509`, then a deploy of `main`. Nothing here is
+  live. The deploy crosses 087 (`docs/ROLLBACK.md` §4).
+* Answer 1 is provisional. The owner may bring the box back; git history holds all of it.
+* Answer 2, the ride game's bird, is undecided and untouched.
+* Question I: the Book control's reason `T_BIKE_BOOK_BLOCKED_NO_UNITS` under a seeded zero.
+* Answer 3's four analysed-and-left reads, with their reasons in `legacy_retirement.t27`: the loyalty
+  tier key, the star history, the retired surfaces' reads, and the referral, quest-scan and game
+  reads. The legacy HTTP routers behind the seven repointed paths still answer.
+* The cart's write gate, `parse_kind`, still names the old kinds. None of them can write a row
+  today, and closing the gate is a separate change (`cart_persistence.t27`).
+* The order card still has no link to the manager (bullet D).
 
 ## The four gates, and how to run them
 
@@ -747,7 +890,7 @@ The questions that ruling left open are listed in #63.
   bring in line. *Still open after 2026-09-25:* the owner's answer 9 did not locate the "all bikes
   of this model are busy" line (`T_BIKE_UNITS_EMPTY`), so it was left untouched. Answer 8 kept the
   rental-term discount percentages on the bike card. *Decided later on 2026-09-25, on branch
-  `t27/no-units-empty` (not merged):* answer 5 of the owner's second list, «Наверное»
+  `t27/no-units-empty` (merged 2026-09-26 as `fbdd469`):* answer 5 of the owner's second list, «Наверное»
   ("probably"), removed that line and deleted its key (DECISIONS.md, the entry of that date;
   `availability.t27` `UNITS_EMPTY_LINE_*`). *Still open:* the Book control's reason under the same
   zero, `T_BIKE_BOOK_BLOCKED_NO_UNITS` ("Every bike of this model is taken"), which says nearly the
@@ -821,14 +964,17 @@ citations** — unlike a `src/` citation, which gate 3 can check.
 > Gate 2 with a compiler configured prints two pinned disagreements and exits 0 (see "Gate 2's
 > cross-check after #64"); any other cross-check line is new.
 >
-> Before `t27/owner-answers-2509` is deployed or merged, work through the owed list under "Three
-> fixes on top of `69fd4fa`". Its `dist/` still ships the first wording of the 409 sentence, and
-> no clippy or full `cargo test` has run on its last three commits.
+> `t27/owner-answers-2509` (at `41315b2` on 2026-09-26) carries both of the owner's lists of
+> 2026-09-25 and the operator's shop-label decision. It is verified end to end: four gates,
+> clippy, `cargo test`, the DB-backed run, `dist/` and the smoke (see "The owner's second list of
+> 2026-09-25 and the operator's shop label"). It is not pushed. Push it for review before
+> anything else builds on it.
 >
 > The work, in order: fix the seven defects listed under "What is actually left", each with a test
 > that is red before the fix and with the contract that records the defect corrected in the same
-> change; then grow `scripts/verify_t27_against_source.py` beyond its 237 bindings on `main` (239
-> on the unmerged integration branch `t27/owner-answers-2509` of 2026-09-25; 237 re-measured
+> change; then grow `scripts/verify_t27_against_source.py` beyond its 237 bindings on `main` (248
+> on the unmerged integration branch `t27/owner-answers-2509` at `41315b2` on 2026-09-26, 239 on
+> 2026-09-25; 237 re-measured
 > 2026-09-25 after #64, the same as after #63 on 2026-09-24; 227 after #62, 198 earlier that day,
 > 197 on 2026-09-23, 168 on 2026-09-22, 66 on 2026-09-21), because a contract nothing binds only
 > describes the code.
