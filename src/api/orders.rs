@@ -71,9 +71,9 @@ pub(crate) struct CreateOrderRequest {
     // fields, so a client still sending the key gets it ignored rather than a
     // 400 — which is what the old WASM checkout screen does until it is
     // rebuilt.
-    /// Loop #7: explicit per-order age confirmation (20+). The server
-    /// rejects the request unless `true` — client-only UI checks are not
-    /// enough for compliance.
+    /// The retired 20+ box (owner, 2026-09-25: «Пока убираем»). Accepted from a
+    /// cached old client and stored as sent, absent as `false`; it no longer
+    /// decides whether an order is created (`validate_create_order`).
     #[serde(default)]
     pub age_confirmed: Option<bool>,
     /// Loop #7: chosen delivery zone id from the public `/api/delivery/zones`
@@ -142,10 +142,10 @@ fn validate_create_order(req: &CreateOrderRequest) -> Result<ValidatedPayment, S
             return Err(StatusCode::BAD_REQUEST);
         }
     }
-    // Loop #7: explicit age confirmation is mandatory per order.
-    if req.age_confirmed != Some(true) {
-        return Err(StatusCode::UNPROCESSABLE_ENTITY);
-    }
+    // `age_confirmed` is not checked. The owner removed the 20+ gate for now
+    // (2026-09-25, «Пока убираем»): a cached old client still sends `true`, a
+    // current one sends nothing, and either goes on to the checks below. Until
+    // then an absent or `false` value was refused here with 422.
     if let Some(ref zid) = req.delivery_zone_id {
         if zid.len() > 200 {
             return Err(StatusCode::BAD_REQUEST);
@@ -3122,15 +3122,15 @@ mod tests {
     }
 
     #[test]
-    fn validate_requires_explicit_age_confirmation() {
-        // Compliance gate: never inferred, never defaulted.
-        for age in [None, Some(false)] {
+    fn validate_never_requires_age_confirmation() {
+        // The 20+ gate is removed for now (owner, 2026-09-25, «Пока убираем»):
+        // absent, false and a cached old client's true all pass validation.
+        for age in [None, Some(false), Some(true)] {
             let mut req = valid_req();
             req.age_confirmed = age;
-            assert_eq!(
-                validate_create_order(&req).unwrap_err(),
-                StatusCode::UNPROCESSABLE_ENTITY,
-                "age_confirmed={age:?} must not create an order"
+            assert!(
+                validate_create_order(&req).is_ok(),
+                "age_confirmed={age:?} must not decide whether an order is created"
             );
         }
     }

@@ -229,34 +229,47 @@ async fn create_order_accepts_local_phone_and_pickup_without_address() {
     );
 }
 
-/// An order must never be created without an explicit 20+ confirmation.
-/// This is a compliance gate, so it is asserted against the real endpoint
-/// rather than only against the pure validator.
+/// The 20+ box is removed for now (owner, 2026-09-25, «Пока убираем»), so the
+/// real endpoint must not refuse an order over `age_confirmed`: absent (what a
+/// current client sends), `false`, and `true` (what a cached old client still
+/// sends) all go on to the same checks. Each body carries an empty cart, which
+/// needs no database row, so the answer is the empty cart's 400 -- where until
+/// 2026-09-25 an absent or `false` value was refused first, with 422.
 #[tokio::test]
 #[ignore = "needs DATABASE_URL env var; run with --ignored"]
-async fn create_order_rejects_missing_age_confirmation() {
+async fn create_order_does_not_require_age_confirmation() {
     let Some((app, _db)) = common::make_app_with_db().await else {
         eprintln!("DATABASE_URL not set — skipping integration test");
         return;
     };
 
-    let body = json!({
-        "telegram_id": null,
-        "customer_name": format!("integration-age-customer-{}", rand_suffix()),
-        "customer_phone": "+66812345678",
-        "items": [{ "strain_id": uuid::Uuid::new_v4().to_string(), "quantity": 1.0 }],
-        "subtotal": 100.0,
-        "total": 100.0,
-        "age_confirmed": false,
-    });
-
-    let resp = post_order(app, &uuid::Uuid::new_v4().to_string(), &body, "127.0.0.3").await;
-    assert_eq!(
-        resp.status,
-        StatusCode::UNPROCESSABLE_ENTITY,
-        "an unconfirmed-age order must be refused, body: {}",
-        resp.body
-    );
+    // One client address per request: anonymous orders are rate-limited per IP.
+    for (age, client_ip) in [
+        (None, "127.0.0.3"),
+        (Some(false), "127.0.0.5"),
+        (Some(true), "127.0.0.6"),
+    ] {
+        let mut body = json!({
+            "telegram_id": null,
+            "customer_name": format!("integration-age-customer-{}", rand_suffix()),
+            "customer_phone": "+66812345678",
+            "items": [],
+            "subtotal": 100.0,
+            "total": 100.0,
+        });
+        if let Some(age) = age {
+            body["age_confirmed"] = json!(age);
+        }
+        let idem_key = uuid::Uuid::new_v4().to_string();
+        let resp = post_order(app.clone(), &idem_key, &body, client_ip).await;
+        assert_eq!(
+            resp.status,
+            StatusCode::BAD_REQUEST,
+            "age_confirmed={age:?}: the refusal must be the empty cart's, not an age refusal, \
+             body: {}",
+            resp.body
+        );
+    }
 }
 
 /// A client that under-reports the total must not get a cheap order: the

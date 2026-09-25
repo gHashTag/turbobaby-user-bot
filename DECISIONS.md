@@ -590,3 +590,33 @@ The contracts carry the details: `specs/turbobaby/legacy_retirement.t27` records
 (`PROMO_REPORT_NAME_*`, held to the code by `tests/promo_report_names_wiring.rs`),
 `bot_surface.t27` the carousel (`CAROUSEL_RETIRED_AT`), `locale_policy.t27` the locale struct's
 four removed fields.
+
+## D19 addendum — the 20+ age gate, removed for now, decided 2026-09-25
+
+The owner answered a second numbered list in chat on 2026-09-25, and confirmed its numbering
+the same day: «Тут набираться от 1 до 5 правильная. Просто двойка задвоилась.» Answer 1,
+verbatim: «Пока убираем». It answers whether the checkout keeps its 20+ age gate, which this
+repository records as heritage of the fork rather than a rental decision
+(`specs/turbobaby/checkout_contact.t27`, `AGE_BLOCKER_IS_INHERITED_HERITAGE`). «Пока» makes the
+decision provisional: a later answer may bring the box back, and git history holds all of it.
+Kept at the end of this file, like the entries above, so that no line citation into it moves.
+
+* **Client.** The checkbox «Мне исполнилось 20+» and the notice under it, the trust line
+  «🛡️ Проверка возраста (20+)», the order button's age blocker and the submit handler's age
+  refusal are gone from the checkout, and the order request no longer carries `age_confirmed`.
+  Five keys were deleted from `src/trios/i18n.rs` — those four and the sentence for a body code
+  (`age_not_confirmed`) the server never sent — each line replaced by a comment line, so that
+  no line citation moved. No sentence was written in their place.
+* **Server.** `POST /api/orders` no longer refuses an order whose `age_confirmed` is absent or
+  false; it answered 422. It still accepts the field, because a Mini App bundle cached before
+  the change sends it `true`, and stores it as sent in the orders column (migration 057,
+  default false). No migration was added and no row is written or deleted.
+* **Kept.** A saved checkout draft that carries the field still restores, and the
+  `woody_last_age_confirmed` key in customers' browsers is neither read nor cleared (D19).
+  Every stored order keeps what it recorded.
+
+`specs/turbobaby/checkout_contact.t27` records the decision beside
+`AGE_BLOCKER_IS_INHERITED_HERITAGE` (`AGE_BLOCKER_REMOVED_AT`, `AGE_BLOCKER_REMOVAL_IS_PROVISIONAL`),
+`legacy_retirement.t27` the answer to the question it owned (`AGE_GATE_ANSWER_*`),
+`locale_policy.t27` the key count (552 to 547) and `client_errors.t27` the unmapped body code;
+`tests/integration_create_order.rs` holds the endpoint to it.

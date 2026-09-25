@@ -654,12 +654,17 @@ pub fn renders_a_bare_code(surface: u8, status_is_mapped: bool) bool {
 ; Where the checkout sentence comes from. src/ui/screens/checkout_screen.rs:1111-1112 tries the
 ; body code first and falls back to the status, so an unrecognized code (checkout_errors.rs:46
 ; returns nothing for one) never reaches the customer as a code -- it becomes the status sentence
-; instead. Two codes are mapped, at :44 and :45.
+; instead. Two codes were mapped, at :44 and :45; one is now, at :45.
+; CHANGED 2026-09-25: the code at :44, "age_not_confirmed", lost its sentence when the owner
+; removed the checkout's 20+ box for now (turbobaby/checkout-contact, AGE_BLOCKER_REMOVED_AT), and
+; :44 is a comment line. The sentence was never reachable: the server's age refusal was a bare 422
+; with no body. An unmapped code takes the status sentence, which is the path pinned below.
 pub const MESSAGE_FROM_UNSET : u8 = 0;
 pub const MESSAGE_FROM_BODY_CODE : u8 = 1;
 pub const MESSAGE_FROM_STATUS : u8 = 2;
 pub const MESSAGE_FROM_BARE_CODE : u8 = 3;
-pub const MAPPED_BODY_CODE_COUNT : u8 = 2;
+pub const MAPPED_BODY_CODE_COUNT : u8 = 1;
+pub const MAPPED_BODY_CODE_COUNT_BEFORE_2026_09_25 : u8 = 2;
 pub const UNKNOWN_BODY_CODE_IS_EVER_RENDERED : bool = false;
 
 pub fn checkout_message_source(body_code_mapped: bool, status_is_mapped: bool) u8 {
@@ -905,7 +910,8 @@ test a_body_code_outranks_the_status_and_an_unknown_one_costs_nothing {
   assert checkout_message_source(true, false) == MESSAGE_FROM_BODY_CODE;
   assert checkout_message_source(false, true) == MESSAGE_FROM_STATUS;
   assert checkout_message_source(false, false) == MESSAGE_FROM_BARE_CODE;
-  assert MAPPED_BODY_CODE_COUNT == 2;
+  assert MAPPED_BODY_CODE_COUNT == 1;
+  assert MAPPED_BODY_CODE_COUNT_BEFORE_2026_09_25 == MAPPED_BODY_CODE_COUNT + 1;
   assert UNKNOWN_BODY_CODE_IS_EVER_RENDERED == false;
 }
 
