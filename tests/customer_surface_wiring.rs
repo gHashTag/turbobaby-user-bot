@@ -613,13 +613,16 @@ fn declared_asset_paths() -> Vec<String> {
             }
         }
     }
+    // Seven survived the 2026-09-16 sweep. Six of them were the member-card
+    // paths, whose artwork was a cannabis bud; the owner's ruling of
+    // 2026-09-25 (#12) removed the files and the constants with them, so one
+    // constant is the whole table and the floor follows it down.
     assert!(
-        out.len() >= 7,
-        "parsed only {} constants out of src/ui/assets.rs — either the file \
-         shrank below the seven that survived the 2026-09-16 sweep, or this \
-         parser stopped recognising the declarations and is now scanning an \
-         empty corpus",
-        out.len()
+        !out.is_empty(),
+        "parsed no constant out of src/ui/assets.rs — either the file lost \
+         `logo::MAIN`, the one constant the client loads, or this parser \
+         stopped recognising the declarations and is now scanning an empty \
+         corpus"
     );
     out
 }
@@ -629,23 +632,12 @@ fn declared_asset_paths() -> Vec<String> {
 /// Every entry is a decision somebody made, not a leftover: an unexplained
 /// exception here is indistinguishable from the thirty-eight corpses this gate
 /// exists to have caught.
-const UNREFERENCED_BY_DECISION: [(&str, &str); 6] = [
-    (
-        "member_cards::BRASS",
-        "artwork is a cannabis bud; kept until the owner signs off on vector art",
-    ),
-    ("member_cards::SILVER", "same set as member_cards::BRASS"),
-    ("member_cards::GOLD", "same set as member_cards::BRASS"),
-    (
-        "member_cards::BRONZE_WEBP",
-        "same set as member_cards::BRASS",
-    ),
-    (
-        "member_cards::SILVER_WEBP",
-        "same set as member_cards::BRASS",
-    ),
-    ("member_cards::GOLD_WEBP", "same set as member_cards::BRASS"),
-];
+///
+/// Empty since 2026-09-25. It held the six `member_cards::*` paths, kept "until
+/// the owner signs off on vector art" because their artwork was a cannabis
+/// bud; the owner's ruling of that day (#12, nothing cannabis-related
+/// anywhere) removed the files, and the constants went with them.
+const UNREFERENCED_BY_DECISION: [(&str, &str); 0] = [];
 
 #[test]
 fn every_asset_path_is_loaded_by_something_or_kept_on_purpose() {

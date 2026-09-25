@@ -319,7 +319,7 @@ pub fn RideGame() -> Element {
             if !running() {
                 div { style: "position:absolute;inset:0;z-index:6;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:0 24px;background:radial-gradient(circle at 50% 40%, rgba(12,20,26,0.35), rgba(8,12,18,0.82));",
 
-                    // The mascot, so the game reads as Woody's before a single
+                    // The logo, so the game reads as TurboBaby's before a single
                     // frame of it has been seen.
                     img {
                         src: "/assets/logo.jpg",
