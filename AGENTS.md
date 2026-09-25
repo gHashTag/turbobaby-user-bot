@@ -5,7 +5,7 @@
 ## Стек
 - **Backend**: Axum + tokio-postgres + SQLx migrations
 - **Frontend**: Dioxus 0.6 WASM, собирается Trunk
-- **Deploy**: Railway, сервис `turbobaby-bot`, вручную через `railway up` из репо (см. §10–12)
+- **Deploy**: Railway, сервис `turbobaby-bot`, вручную через `railway up` из чистой LF-выгрузки коммита, не из рабочего дерева (см. §10–13 и `docs/ROLLBACK.md` §1, §3B)
 - **Auth**: Telegram initData HMAC ИЛИ `X-Admin-Token` password fallback
 - **Storage**: MinIO-бакет `media` (bucket-production-0ae7), отдаётся как `/media/`
 
@@ -172,9 +172,29 @@ pkill cargo; rm -f target/.cargo-lock; rm -rf target/tmp
 2026-09-13). Репозиторий к сервису Railway не подключён: ни один из мержей
 этой ночи (#39–#41) не задеплоился сам.
 
-**Решение:** деплой вручную: `cd <репо> && railway link -p woody -e production
--s turbobaby-bot && railway up -y -d`, потом ждать SUCCESS и проверять
-`/health`, `/api/bikes`, логи на `InvalidToken`.
+**Решение:** деплой вручную, из чистой LF-выгрузки ровно того коммита, который
+выкатываешь, — НЕ `cd <репо> && railway up`: из рабочего дерева в образ уедет
+всё незакоммиченное (включая `src/`), из worktree — прошлый исходник (§13).
+Полная процедура с проверками — `docs/ROLLBACK.md` §3B, коротко:
+```
+git clone -c core.autocrlf=false --no-checkout https://github.com/gHashTag/turbobaby-user-bot.git "$DEP"
+git -C "$DEP" checkout --detach <sha>
+git -C "$DEP" status --porcelain                   # пусто
+bash "$DEP/scripts/predeploy-smoke.sh" --no-build  # SMOKE PASS
+git -C "$DEP" status --porcelain                   # всё ещё пусто
+test ! -e "$DEP/dist/assets" && echo absent        # dist/assets в выгрузке нет
+cd "$DEP"
+railway link -p woody -e production -s turbobaby-bot
+railway status                                     # woody / production / turbobaby-bot, иначе стоп
+railway up --service turbobaby-bot --environment production
+```
+Никогда `-y` и никогда `--new`: по справке CLI 5.62.1 (`railway up --help`,
+2026-09-25) `up` без входа сам входит и создаёт НОВЫЙ проект с сервисом и
+деплоит в него; в каталоге без линка `-y` делает то же (`--new` «implied … for
+`-y` when nothing is linked»), а `--new` создаёт новый проект «even if one is
+already linked». Линк хранится ПО КАТАЛОГУ: link и status — в каталоге
+выгрузки, прямо перед `up`. Потом ждать SUCCESS и пройти «Чеклист после
+деплоя».
 
 **Урок:** push в main — это только код. Прод обновляется ровно одним способом:
 `railway up`. Если когда-нибудь захочется автоматики — положить `RAILWAY_TOKEN`
@@ -209,8 +229,12 @@ railway variables --kv | grep -E 'KEY|DATABASE_URL'   # проверить
 **Симптом:** up из worktree-каталога «прошёл успешно», но на сервисе живёт
 старый код (проверяется эндпоинтом, которого в исходнике нет).
 
-**Решение:** деплой из чистого каталога: `git archive <sha> | tar -x -C /tmp/src`
-или из нормального клона репо.
+**Решение:** деплой из чистого каталога:
+`git -c core.autocrlf=false archive <sha> | tar -x -C <пустой каталог>` или
+`git clone -c core.autocrlf=false` на точный SHA (§10, `docs/ROLLBACK.md` §3B).
+Флаг обязателен: на Windows `core.autocrlf=true` стоит системно, `.gitattributes`
+нет, и без флага выгрузка получает CRLF — отдаваемая страница уже не равна
+коммиту (`docs/ROLLBACK.md` §1).
 
 **Урок:** после КАЖДОГО up проверять, что доехало именно то, что грузили
 (специфичный эндпоинт/версия/число миграций), а не только статус SUCCESS.
@@ -233,7 +257,10 @@ railway variables --kv | grep -E 'KEY|DATABASE_URL'   # проверить
 
 - [ ] `cargo check --features backend` проходит
 - [ ] `cargo check --target wasm32-unknown-unknown` проходит
-- [ ] `trunk build --release` проходит
+- [ ] `dist/` собран `scripts/build-frontend.sh` и закоммичен. Голый `trunk build --release` для `dist/` не годится: он не делает постобработку `build-frontend.sh` (`?v=` у импортов snippets, `await window.__telegramReady`, обёртка `__loadWasmWithRetry`, запись `dist/version.txt`, сжатые `.br`/`.gz`)
+- [ ] Выгрузка по §10: чистая, LF, точный SHA, `dist/assets` нет
+- [ ] На выгрузке `scripts/predeploy-smoke.sh --no-build` → SMOKE PASS, после него `git -C <выгрузка> status --porcelain` пуст. Без `--no-build` скрипт пересобирает `dist/` голым `trunk build --release` и проверяет НЕ закоммиченный бандл (а выгрузка перестаёт быть коммитом). Не смог запуститься (нет модуля Python `websocket-client`, `scripts/cdp_smoke.py`) — это FAIL, не пропуск
+- [ ] Деплой впервые накатывает 087 (на проде `4a5aa72` или старше): до деплоя снять строки `delivery_zones` и прогон `scripts/postdeploy-smoke.sh` с `SMOKE_DIST_REF=<живой sha>` в `SMOKE_OUT` вне выгрузки — без этого аварийный ремонт не из чего собрать. Откат после 087 — только вперёд либо `4a5aa72` + SQL-ремонт владельца (`docs/ROLLBACK.md` §4 «Rolling back after 087»); окно 500 на зонах у старого контейнера во время деплоя ожидаемо (`docs/ROLLBACK.md` §2)
 - [ ] Все HTTP-запросы в `admin_screen.rs` имеют `.header("X-Admin-Token", admin_token())`
 - [ ] CSP содержит `'unsafe-eval'`
 - [ ] `check_admin_access` не возвращает `false` раньше fallback
@@ -241,13 +268,14 @@ railway variables --kv | grep -E 'KEY|DATABASE_URL'   # проверить
 ## Чеклист после деплоя (на turbobaby-bot)
 
 - [ ] `railway deployment list` — последний SUCCESS
+- [ ] `SMOKE_DIST_REF=<выкаченный sha> SMOKE_OUT=<новый каталог вне выгрузки> scripts/postdeploy-smoke.sh` → `0 failed` (только GET). Запускать из клона, где есть этот коммит: проверка 5 сравнивает `/` с `dist/index.html` коммита по git-истории. `SMOKE_OUT` вне выгрузки, чтобы она осталась чистой, и новый на каждый прогон — файлы перезаписываются
 - [ ] `curl …/health` — 200
 - [ ] `curl …/api/bikes` — JSON, фото 13/13
 - [ ] `railway logs -s turbobaby-bot` — 0 `InvalidToken`, нет `SCHEMA SELF-CHECK`
 - [ ] НИКАКИХ команд в сторону `woody-weed-bot` — чужой сервис (см. топологию в loop/LOOP_STATE.md)
 - [ ] `on_saved` вызывается только внутри `if success`
 - [ ] `use_telegram_id_or_admin` используется вместо `use_telegram_id` в админке
-- [ ] После push: сообщить пользователю про полный рестарт Mini App
+- [ ] После SUCCESS (не после push — push не деплоит, §10): сообщить пользователю про полный рестарт Mini App
 - [ ] SPA-маршруты отдают `index.html` напрямую (без `303`-редиректа на `?v=4`)
 
 ## Own language first
