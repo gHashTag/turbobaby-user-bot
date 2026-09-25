@@ -1372,15 +1372,21 @@ mod tests {
         }
     }
 
-    /// Every kind the sweeper has ever written is refused, and a draft about
-    /// an event is told apart from the rest.
+    /// Every kind the sweeper writes today is refused, and a draft about an
+    /// event is told apart from the rest.
     ///
-    /// Seven kinds, read 2026-09-25 off the history of `Subject::kind`: the six
-    /// it writes today and `strain`, whose variant left with migration 083
-    /// while a draft written under it can still sit unpublished in
-    /// `promo_posts`.
+    /// Six kinds, read 2026-09-25 off `Subject::kind`: two event kinds and four
+    /// others. It once wrote a seventh, the retired catalog's own kind, whose
+    /// variant left with migration 083 while a draft written under it can
+    /// still sit unpublished in `promo_posts`. That word is not run here,
+    /// because nothing outside a comment under src/ may name it
+    /// (tests/legacy_vocabulary_wiring.rs; owner ruling 2026-09-25, item 12).
+    /// No list classifies it, so it takes the fail-closed branch that
+    /// `a_kind_nobody_classified_is_refused_too` runs; that it sits in neither
+    /// list, and that the contract still lists it among the retired shop's
+    /// kinds, is held by tests/promo_publish_wiring.rs.
     #[test]
-    fn no_draft_kind_ever_written_is_sent_while_the_shop_is_rental_only() {
+    fn no_draft_kind_written_today_is_sent_while_the_shop_is_rental_only() {
         for kind in ["event", "event_soon"] {
             assert_eq!(
                 publish_refusal(kind),
@@ -1388,7 +1394,7 @@ mod tests {
                 "a draft of kind {kind:?} would reach every customer"
             );
         }
-        for kind in ["strain", "accessory", "tea", "set", "bestseller"] {
+        for kind in ["accessory", "tea", "set", "bestseller"] {
             assert_eq!(
                 publish_refusal(kind),
                 Some(PUBLISH_REFUSED_NOT_RENTAL),
