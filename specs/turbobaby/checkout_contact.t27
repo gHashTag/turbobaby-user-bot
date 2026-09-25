@@ -370,7 +370,8 @@ pub fn a_filled_address_means_the_destination_is_ready() bool {
 ; value, so it is deliberately placed outside the enum's range. There were six until
 ; 2026-09-25: the sixth, the age box, is recorded below with the owner's answer that removed it,
 ; and the enum line and the push that held it are comments now (src/trios/store.rs:425 and
-; :476-478), so no line the paragraphs of this file cite has moved.
+; :476-478), so no line the paragraphs of this file cite has moved. Gate 3 binds BLOCKER_COUNT
+; to the number of reasons checkout_blockers pushes, so a sixth push turns it red.
 pub const BLOCKER_NO_TELEGRAM : u8 = 0;
 pub const BLOCKER_EMPTY_CART : u8 = 1;
 pub const BLOCKER_NAME : u8 = 2;
@@ -620,6 +621,13 @@ pub const SERVER_REQUIRES_AGE : bool = false;
 pub const SERVER_REQUIRED_AGE_BEFORE_2026_09_25 : bool = true;
 pub const SERVER_STILL_ACCEPTS_THE_AGE_FIELD : bool = true;
 pub const SERVER_STORES_THE_AGE_FIELD_AS_SENT : bool = true;
+; Gate 3 binds the first of these: comparisons of the age field (== or !=) in src/api/orders.rs
+; outside a line comment, the shape the refusal had. Zero now, one until 2026-09-25, and the
+; store line is the witness that the scan still sees the field. A refusal written in another
+; shape (a negated unwrap_or, a match) would not be counted: the binding pins the shape that
+; was, not every shape one could take.
+pub const AGE_FIELD_COMPARISONS_IN_THE_ORDERS_MODULE : u8 = 0;
+pub const AGE_FIELD_COMPARISONS_IN_THE_ORDERS_MODULE_BEFORE_2026_09_25 : u8 = 1;
 pub const SERVER_REQUIRES_NON_EMPTY_CART : bool = true;
 pub const SERVER_REQUIRES_NAME : bool = false;
 pub const SERVER_REQUIRES_PHONE : bool = false;
@@ -1062,6 +1070,8 @@ test a_cached_old_client_and_a_current_one_meet_the_same_server {
   assert SERVER_REQUIRED_AGE_BEFORE_2026_09_25 == true;
   assert SERVER_STILL_ACCEPTS_THE_AGE_FIELD == true;
   assert SERVER_STORES_THE_AGE_FIELD_AS_SENT == true;
+  assert AGE_FIELD_COMPARISONS_IN_THE_ORDERS_MODULE == 0;
+  assert AGE_FIELD_COMPARISONS_IN_THE_ORDERS_MODULE_BEFORE_2026_09_25 == 1;
   assert server_refuses_on_age(SERVER_REQUIRES_AGE, true, true) == false;
   assert server_refuses_on_age(SERVER_REQUIRES_AGE, false, false) == false;
   assert server_refuses_on_age(SERVER_REQUIRES_AGE, true, false) == false;

@@ -618,5 +618,6 @@ Kept at the end of this file, like the entries above, so that no line citation i
 `specs/turbobaby/checkout_contact.t27` records the decision beside
 `AGE_BLOCKER_IS_INHERITED_HERITAGE` (`AGE_BLOCKER_REMOVED_AT`, `AGE_BLOCKER_REMOVAL_IS_PROVISIONAL`),
 `legacy_retirement.t27` the answer to the question it owned (`AGE_GATE_ANSWER_*`),
-`locale_policy.t27` the key count (552 to 547) and `client_errors.t27` the unmapped body code;
-`tests/integration_create_order.rs` holds the endpoint to it.
+`locale_policy.t27` the key count (552 to 547) and `client_errors.t27` the unmapped body code.
+Gate 3 binds the button's blocker count to the code and holds the orders module to no
+comparison of the field; `tests/integration_create_order.rs` holds the endpoint to it.

@@ -87,7 +87,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         "id": "turbobaby/checkout-contact",
         # Raised 2026-09-25 from 210/62 to the measured count when the owner removed the 20+ box
         # for now (second list, answer 1): the age blocker's record and the counts before that day.
-        "min_declarations": 243,
+        # 245 with the two constants gate 3 binds the removal by, the same day.
+        "min_declarations": 245,
         "min_checks": 68,
     },
     "specs/turbobaby/client_errors.t27": {
