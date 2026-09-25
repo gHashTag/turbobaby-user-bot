@@ -16,7 +16,9 @@
 //!    three redirects, and the owner's knowledge base forbids naming a model
 //!    outside the fleet "not even as a replacement" (brain:knowledge_base:108-110
 //!    and :345-346, brain:business_rules:7-8). Only NMAX 155 is an offered family
-//!    with units.
+//!    with units. On 2026-09-25 the owner decided the same, for now: NMAX 155
+//!    alone is offered instead. The seed's `offer_instead` now says so, and it is
+//!    checked against the screen below as well.
 //! 2. **A seeded count was printed as availability.** Both screens printed
 //!    «Свободно {0} из {1}» / «Свободно: {0}» from `units_available`, a count
 //!    seeded on 2026-09-12 and changed only by an admin. `availability.t27`
@@ -250,6 +252,57 @@ fn the_click_125_redirect_matches_the_contracts_shown_labels() {
     assert_eq!(
         rust, contract,
         "the redirect the screen shows and the one the contract records disagree"
+    );
+}
+
+#[test]
+fn the_click_125_redirect_is_the_seeds_offer_instead() {
+    // The owner decided on 2026-09-25, for now, that NMAX 155 alone is offered
+    // instead of CLICK 125 (DECISIONS.md, D12 amendment of that date). The seed
+    // records the decision as family keys, the screen prints labels, and until
+    // that date the two lists differed (three keys against one label) with
+    // nothing to notice. Each key is resolved to its seed family's model, so the
+    // decision and what a customer reads cannot drift apart in silence.
+    let seed: serde_json::Value =
+        serde_json::from_str(&source(SEED)).expect("data/fleet_seed.json must parse");
+    let keys: Vec<String> = seed["pricing_policy"]["not_offered"]["click-125"]["offer_instead"]
+        .as_array()
+        .expect("the seed must carry pricing_policy.not_offered.click-125.offer_instead")
+        .iter()
+        .map(|key| {
+            key.as_str()
+                .expect("offer_instead holds family keys")
+                .to_string()
+        })
+        .collect();
+    // D16: an empty decision would compare equal to an emptied screen constant.
+    assert!(
+        !keys.is_empty(),
+        "offer_instead parsed empty; the comparison below would prove nothing"
+    );
+    let families = seed["families"]
+        .as_array()
+        .expect("the seed must carry a families array");
+    let labels: Vec<String> = keys
+        .iter()
+        .map(|key| {
+            families
+                .iter()
+                .find(|family| family["key"].as_str() == Some(key.as_str()))
+                .and_then(|family| family["model"].as_str())
+                .unwrap_or_else(|| {
+                    panic!("offer_instead names {key}, which is no in-stock family of the seed")
+                })
+                .to_string()
+        })
+        .collect();
+    let catalog = code(&source(CATALOG));
+    let rust = str_array_const(&catalog, "CLICK_125_ALTERNATIVES")
+        .expect("catalog_screen.rs must declare CLICK_125_ALTERNATIVES");
+    assert_eq!(
+        rust, labels,
+        "the screen's CLICK 125 redirect is not the owner's decision the seed records \
+         (keys {keys:?})"
     );
 }
 
