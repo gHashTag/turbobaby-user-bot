@@ -23,7 +23,9 @@
 //!   customer screen reads first, so a bundle that predates this module prints
 //!   it too. `specs/turbobaby/order_presentation.t27` records the rule.
 //! * The SHOP an order names is withheld when it names the previous shop
-//!   ([`customer_shop_id`]).
+//!   ([`customer_shop_id`]), and since the operator's decision of 2026-09-26 a
+//!   withheld shop reaches the screens as no shop label at all
+//!   ([`shown_shop`]), never as this shop's name.
 //! * A BONUS HISTORY row's stored description is served only when it is one of
 //!   the sentences this repository writes, word for word apart from its figures
 //!   ([`customer_bonus_description`]), and a garden-era row's type is served
@@ -91,6 +93,20 @@ pub const SERVED_NAME_LANG: Lang = Lang::Russian;
 /// the text, like `retired_tier` in `src/api/loyalty.rs`, so a spelling nobody
 /// listed is caught too.
 pub const OLD_SHOP_NAME: &str = "woody";
+
+/// What a withheld shop is served as: an empty shop.
+///
+/// Operator, 2026-09-26: an order of the previous shop must not be shown as
+/// TurboBaby's. Until then a withheld shop was served as no shop (`null`), and
+/// both order screens print their fallback for no shop, which names
+/// TurboBaby, so such an order read as placed with this shop. An absent shop
+/// keeps that fallback, so the withheld one needs a value of its own that
+/// still reads as a shop to every bundle: an empty one. A bundle built since
+/// prints no shop label for it ([`shown_shop`]); one built before prints an
+/// empty label, and neither prints this shop's name. The Mini App's checkout
+/// never sends an empty shop: it sends its one shop's label with every order
+/// (`shops` in `src/ui/screens/checkout_screen.rs`).
+pub const WITHHELD_SHOP: &str = "";
 
 /// The bonus types the profile labelled as a garden reward until answer 3.
 /// The garden (D5) was the previous shop's mechanic; its rows now carry the
@@ -183,9 +199,29 @@ pub fn names_the_old_shop(text: &str) -> bool {
 }
 
 /// The shop an order names, as its customer is served it: withheld when it
-/// names the previous shop. The row keeps it.
+/// names the previous shop, which is served as [`WITHHELD_SHOP`] since
+/// 2026-09-26, and as stored otherwise. No shop stays no shop. The row keeps
+/// what it stored.
 pub fn customer_shop_id(stored: Option<String>) -> Option<String> {
-    stored.filter(|shop| !names_the_old_shop(shop))
+    stored.map(|shop| {
+        if names_the_old_shop(&shop) {
+            WITHHELD_SHOP.to_string()
+        } else {
+            shop
+        }
+    })
+}
+
+/// The shop label a customer screen prints for an order, from the shop it
+/// was served: `None` for a withheld shop -- no shop label at all (operator,
+/// 2026-09-26) -- and otherwise `Some` of the served shop, which is itself
+/// `None` when the order names no shop; the screens label that one with their
+/// own fallback exactly as before.
+pub fn shown_shop(served: Option<&str>) -> Option<Option<&str>> {
+    match served {
+        Some(shop) if shop == WITHHELD_SHOP => None,
+        served => Some(served),
+    }
 }
 
 /// Whether a bonus row is of a garden-era type.
@@ -448,14 +484,38 @@ mod tests {
 
     #[test]
     fn the_previous_shop_is_withheld_in_any_case_and_this_one_is_kept() {
-        assert_eq!(customer_shop_id(Some("Woody Pier".to_string())), None);
-        assert_eq!(customer_shop_id(Some("WOODY".to_string())), None);
-        assert_eq!(customer_shop_id(Some("the woody one".to_string())), None);
+        let withheld = Some(WITHHELD_SHOP.to_string());
+        assert_eq!(customer_shop_id(Some("Woody Pier".to_string())), withheld);
+        assert_eq!(customer_shop_id(Some("WOODY".to_string())), withheld);
+        assert_eq!(
+            customer_shop_id(Some("the woody one".to_string())),
+            withheld
+        );
         assert_eq!(
             customer_shop_id(Some("TurboBaby".to_string())),
             Some("TurboBaby".to_string())
         );
         assert_eq!(customer_shop_id(None), None);
+    }
+
+    /// Operator, 2026-09-26: a withheld shop prints no shop label at all, and
+    /// an order of this shop keeps its label exactly as before -- the stored
+    /// one, or the screens' own fallback when it names none.
+    #[test]
+    fn a_withheld_shop_prints_no_label_and_every_other_order_its_label_as_before() {
+        let fallback = "TurboBaby";
+        let label = |served: Option<&str>| shown_shop(served).map(|shop| shop.unwrap_or(fallback));
+
+        let withheld = customer_shop_id(Some("\u{1f3e0} Woody Phangan".to_string()));
+        assert_eq!(label(withheld.as_deref()), None);
+        assert_eq!(shown_shop(Some(WITHHELD_SHOP)), None);
+
+        let live = customer_shop_id(Some("\u{1f3e0} TurboBaby".to_string()));
+        assert_eq!(label(live.as_deref()), Some("\u{1f3e0} TurboBaby"));
+        let absent = customer_shop_id(None);
+        assert_eq!(label(absent.as_deref()), Some(fallback));
+        assert_eq!(shown_shop(None), Some(None));
+        assert_eq!(shown_shop(Some("Kamala")), Some(Some("Kamala")));
     }
 
     #[test]

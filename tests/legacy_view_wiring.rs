@@ -45,9 +45,9 @@ use std::path::PathBuf;
 use turbobaby_bot::trios::core::Lang;
 use turbobaby_bot::trios::legacy_view::{
     customer_bonus_description, customer_bonus_tx_type, customer_order_items, customer_shop_id,
-    previous_catalogue_name, shown_line_name, ADMIN_DEDUCTION_SENTENCE, DESCRIBED_TX_TYPES,
-    GARDEN_ERA_TX_TYPES, KEPT_LINE_KEYS, MASKED_LINE_NAME_KEY, REFERRAL_BONUS_SENTENCE,
-    RETIRED_KIND_KEYS, WITHHELD_TX_TYPE,
+    previous_catalogue_name, shown_line_name, shown_shop, ADMIN_DEDUCTION_SENTENCE,
+    DESCRIBED_TX_TYPES, GARDEN_ERA_TX_TYPES, KEPT_LINE_KEYS, MASKED_LINE_NAME_KEY,
+    REFERRAL_BONUS_SENTENCE, RETIRED_KIND_KEYS, WITHHELD_SHOP, WITHHELD_TX_TYPE,
 };
 
 const ORDERS_API: &str = "src/api/orders.rs";
@@ -258,18 +258,108 @@ fn a_bike_line_passes_as_stored_beside_a_masked_one() {
 #[test]
 fn every_shop_the_old_checkout_stored_is_withheld_and_this_one_is_kept() {
     for shop in STORED_SHOPS {
-        assert_eq!(customer_shop_id(Some(shop.to_string())), None, "{shop}");
+        assert_eq!(
+            customer_shop_id(Some(shop.to_string())).as_deref(),
+            Some(WITHHELD_SHOP),
+            "{shop}"
+        );
     }
     assert_eq!(
         customer_shop_id(Some(LIVE_SHOP.to_string())).as_deref(),
         Some(LIVE_SHOP)
     );
     // The live value is still what the checkout writes; if it changes, the list
-    // above is what to re-read.
+    // above is what to re-read. It is never the withheld value.
+    assert_ne!(LIVE_SHOP, WITHHELD_SHOP);
     let checkout = source(CHECKOUT_SCREEN);
     assert!(
         checkout.contains(&format!("let shops = [(\"{LIVE_SHOP}\",")),
         "{CHECKOUT_SCREEN} no longer writes {LIVE_SHOP}"
+    );
+}
+
+/// Operator, 2026-09-26: an order of the previous shop must not be shown as
+/// TurboBaby's. Until then the withheld shop reached both order screens as no
+/// shop, and they printed their fallback for no shop, «TurboBaby». Now it
+/// reaches them as the withheld value and they print no shop label at all;
+/// an order of this shop, and one that names no shop, print exactly what they
+/// printed before.
+#[test]
+fn an_order_of_the_previous_shop_carries_no_shop_label() {
+    const FALLBACK: &str = "TurboBaby";
+    let label = |served: Option<String>| {
+        shown_shop(served.as_deref()).map(|shop| shop.unwrap_or(FALLBACK).to_string())
+    };
+    for shop in STORED_SHOPS {
+        assert_eq!(
+            label(customer_shop_id(Some(shop.to_string()))),
+            None,
+            "{shop}"
+        );
+    }
+    assert_eq!(
+        label(customer_shop_id(Some(LIVE_SHOP.to_string()))).as_deref(),
+        Some(LIVE_SHOP)
+    );
+    assert_eq!(label(customer_shop_id(None)).as_deref(), Some(FALLBACK));
+
+    // The list prints the shop and the date only when there is a label, and
+    // the date alone otherwise; the fallback line is the one the contract cites.
+    let list = code_of(&source(ORDERS_SCREEN));
+    assert_eq!(
+        list.matches("let shop = crate::trios::legacy_view::shown_shop(o.shop_id.as_deref()).map(|s| s.unwrap_or(\"TurboBaby\"));")
+            .count(),
+        1,
+        "{ORDERS_SCREEN}"
+    );
+    assert_eq!(
+        list.matches(
+            "if let Some(shop) = shop { \"\u{1f4cd} {shop} \u{b7} {date_str}\" } else { \"{date_str}\" }"
+        )
+        .count(),
+        1,
+        "{ORDERS_SCREEN}"
+    );
+    assert_eq!(list.matches("{shop}").count(), 1, "{ORDERS_SCREEN}");
+
+    // The detail prints its labelled shop row only when there is a label.
+    let detail = code_of(&source(DETAIL_SCREEN));
+    assert!(
+        detail.contains("use crate::trios::{legacy_view::shown_shop, order_status_view::arm_of};"),
+        "{DETAIL_SCREEN}"
+    );
+    assert_eq!(
+        detail
+            .matches("let shop = shown_shop(order.shop_id.as_deref()).map(|s| s.unwrap_or(\"TurboBaby\"));")
+            .count(),
+        1,
+        "{DETAIL_SCREEN}"
+    );
+    let row = detail
+        .find("if let Some(shop) = shop { div {")
+        .unwrap_or_else(|| panic!("{DETAIL_SCREEN}: the shop row is not conditional"));
+    let printed = detail
+        .find("\"{shop}\"")
+        .unwrap_or_else(|| panic!("{DETAIL_SCREEN}: the shop row is gone"));
+    let label_key = detail[row..]
+        .find("T_CART_DELIVERY")
+        .map(|at| row + at)
+        .unwrap_or_else(|| panic!("{DETAIL_SCREEN}: the row lost its label"));
+    assert!(row < label_key && label_key < printed, "{DETAIL_SCREEN}");
+    assert_eq!(detail.matches("{shop}").count(), 1, "{DETAIL_SCREEN}");
+
+    // The contract records it.
+    assert_eq!(
+        spec_value(PRESENTATION_SPEC, "RETIRED_SHOP_READS_AS_THIS_SHOP"),
+        "false"
+    );
+    assert_eq!(
+        spec_value(PRESENTATION_SPEC, "RETIRED_SHOP_LABEL_SHOWN"),
+        "false"
+    );
+    assert_eq!(
+        spec_value(PRESENTATION_SPEC, "RETIRED_SHOP_SERVED_AS"),
+        WITHHELD_SHOP
     );
 }
 

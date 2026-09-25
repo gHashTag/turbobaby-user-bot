@@ -751,3 +751,26 @@ The contracts now say one thing:
   queued row is held unsent (`notification_queue.t27`, `HELD_KINDS_DECIDED_AT`).
 
 No row was written or deleted, no migration was added and no sentence was written.
+
+## D19 addendum — an order of the previous shop shows no shop label, decided 2026-09-26
+
+Kept at the end of this file, like the entries above, so that no line citation into it moves.
+Answer 3's entry above left one item open: a withheld shop reached the order screens' fallback
+for an order with no shop, and that fallback reads «TurboBaby». So an order the previous shop took
+read as placed with TurboBaby, in the list and on the detail's labelled delivery row. The operator
+decided on 2026-09-26, announced it to the owner, and the owner did not object: an order of the
+previous shop must not be shown as TurboBaby's, and such an order shows no shop label at all.
+No wording was needed.
+
+* **Served.** The two customer reads serve a withheld shop as an empty shop, and no longer as no
+  shop (`customer_shop_id`, `WITHHELD_SHOP` in `src/trios/legacy_view.rs`). The row keeps what it
+  stored, and the admin reads are unchanged.
+* **Shown.** Both order screens read the served shop through `shown_shop`. For the empty shop the
+  list prints the date alone, and the detail leaves out its labelled delivery row. An order with
+  TurboBaby's stored shop still prints it. An order naming no shop still prints the fallback. Both
+  are exactly as before. A bundle cached from before prints an empty value for such an order,
+  which is not TurboBaby's name either. The Mini App's checkout never sends an empty shop.
+
+`specs/turbobaby/order_presentation.t27` records it (`RETIRED_SHOP_DECIDED_AT`,
+`RETIRED_SHOP_LABEL_SHOWN`, `RETIRED_SHOP_SERVED_AS`; `RETIRED_SHOP_FALLBACK_NOTE` is closed).
+`tests/legacy_view_wiring.rs` holds the screens to it, and the rules' module has the unit test.

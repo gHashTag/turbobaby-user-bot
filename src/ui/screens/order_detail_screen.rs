@@ -10,7 +10,7 @@ use crate::trios::i18n::{
     T_ORDER_DETAIL_CANCEL_CONFIRM, T_ORDER_DETAIL_LIVE, T_ORDER_DETAIL_NOT_FOUND,
     T_ORDER_DETAIL_STARS, T_ORDER_DETAIL_TOTAL, T_ORDER_REORDER,
 };
-use crate::trios::order_status_view::arm_of;
+use crate::trios::{legacy_view::shown_shop, order_status_view::arm_of};
 use crate::ui::api::context::api_base_url;
 use crate::ui::api::http::{merge_server_cart, post_client_event};
 use crate::ui::components::bottom_nav::BottomNav;
@@ -203,7 +203,7 @@ fn OrderDetailCard(
         .next()
         .unwrap_or(&order.created_at)
         .to_string();
-    let shop = order.shop_id.as_deref().unwrap_or("TurboBaby");
+    let shop = shown_shop(order.shop_id.as_deref()).map(|s| s.unwrap_or("TurboBaby"));
     // Every figure through the one order rule; an absent one is the line's dash.
     let dash = crate::ui::components::bike_card::DASH;
     let money = crate::trios::pricing::order_money_text(&order.money, dash);
@@ -287,10 +287,10 @@ fn OrderDetailCard(
                         span { style: "color: #ff4757;", "{stars}" }
                     }
                 }
-                div { style: "display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 4px;",
+                if let Some(shop) = shop { div { style: "display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 4px;",
                     span { style: "color: #8b8b9e;", "{t(lang, T_CART_DELIVERY)}" }
                     span { style: "color: #e8e8e8;", "{shop}" }
-                }
+                } }
                 div { style: "display: flex; justify-content: space-between; font-size: 18px; margin-top: 8px; padding-top: 8px; border-top: 1px solid #2a2a4a;",
                     span { style: "font-weight: 800; color: #e8e8e8;", "{t(lang, T_ORDER_DETAIL_TOTAL)}" }
                     span { style: "font-weight: 800; color: #ffe600; text-shadow: 2px 2px 0 #000;", "{money.total}" }

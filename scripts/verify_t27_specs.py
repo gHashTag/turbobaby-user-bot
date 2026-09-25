@@ -239,9 +239,10 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         "module": "turbobaby-order-presentation",
         "id": "turbobaby/order-presentation",
         # Raised 2026-09-25 from 570/73 when the owner's answer 3 gave a line of the old
-        # catalogue its neutral name and withheld the previous shop's name.
-        "min_declarations": 598,
-        "min_checks": 76,
+        # catalogue its neutral name and withheld the previous shop's name. Raised 2026-09-26
+        # to 606/77 when the operator decided such an order shows no shop label at all.
+        "min_declarations": 606,
+        "min_checks": 77,
     },
     "specs/turbobaby/order_status.t27": {
         "module": "turbobaby-order-status",
