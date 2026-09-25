@@ -50,8 +50,8 @@ const SURVIVORS: &[Survivor] = &[
     Survivor {
         path: "src/db/entities/strain.rs",
         table: "strains",
-        reason: "The entity itself. It cannot go while the three readers below \
-                 still exist, and those are blocked on an owner ruling.",
+        reason: "The entity itself. It cannot go while the readers below still \
+                 exist (the cart line waits on D9, the carousel reader on its test).",
     },
     Survivor {
         path: "src/api/cart.rs",
@@ -66,12 +66,12 @@ const SURVIVORS: &[Survivor] = &[
     Survivor {
         path: "src/db/mod.rs",
         table: "strains",
-        reason: "`get_strains_of_day`. Its only caller is the Telegram \
-                 strain-of-day carousel, which swallows the error with \
-                 `unwrap_or_default()` and so degrades to an empty page rather \
-                 than an error. Retiring the carousel is a product decision \
-                 (it prints THC percentages and ฿/г in a motorbike shop), not \
-                 a consequence of the drop.",
+        reason: "`get_strains_of_day`. No production caller since 2026-09-25, \
+                 when the carousel's buttons began to answer with the rental menu \
+                 (owner: nothing cannabis-related anywhere). It stays compiled: it \
+                 is public, and the #[ignore]d tests/integration_strain_of_day.rs \
+                 calls it. Removing the pair deletes that test file, a separate \
+                 change.",
     },
     Survivor {
         path: "src/db/strains.rs",

@@ -30,14 +30,14 @@ pub(crate) struct Locale {
     pub fact_prompt: String,
     pub fact_fail_fallback: String,
     pub interesting_fact: String,
-    pub strain_of_day: String,
-    pub prev_strain: String,
-    pub next_strain: String,
+    // strain_of_day, prev_strain, next_strain: removed 2026-09-25 with the
+    // retired carousel page they labelled (owner: nothing cannabis-related
+    // anywhere); its buttons answer with the rental menu (see callbacks.rs).
     pub add_to_cart: String,
     pub order_new_header: String,
     pub order_items: String,
     pub order_items_empty: String,
-    pub order_grams: String,
+    // order_grams ("г" / "g", the old shop's unit of sale): removed 2026-09-25.
     pub order_pickup: String,
     pub order_source: String,
     pub order_anonymous: String,
@@ -165,14 +165,14 @@ fn ru() -> Locale {
         fact_prompt: "Расскажи один интересный факт о Пхукете или Таиланде.".into(),
         fact_fail_fallback: "😅 Не смог найти факт, попробуй ещё раз!".into(),
         interesting_fact: "Ещё факт".into(),
-        strain_of_day: "Сорт дня".into(),
-        prev_strain: "◀️".into(),
-        next_strain: "▶️".into(),
+        // strain_of_day, prev_strain and next_strain left on 2026-09-25 with
+        // the retired carousel page (the struct says why); these comment lines
+        // keep every src/locales.rs line a contract cites where it was.
         add_to_cart: "🛒 В корзину".into(),
         order_new_header: "Новый заказ".into(),
         order_items: "Позиции".into(),
         order_items_empty: "(пусто)".into(),
-        order_grams: "г".into(),
+        // order_grams left the same day (see the struct).
         order_pickup: "Самовывоз:".into(),
         order_source: "Источник:".into(),
         order_anonymous: "Аноним".into(),
@@ -254,14 +254,14 @@ fn en() -> Locale {
         fact_prompt: "Tell one interesting fact about Phuket or Thailand.".into(),
         fact_fail_fallback: "😅 Couldn't find a fact, try again!".into(),
         interesting_fact: "More facts".into(),
-        strain_of_day: "Strain of the Day".into(),
-        prev_strain: "◀️".into(),
-        next_strain: "▶️".into(),
+        // strain_of_day, prev_strain and next_strain left on 2026-09-25 with
+        // the retired carousel page (the struct says why); these comment lines
+        // keep every src/locales.rs line a contract cites where it was.
         add_to_cart: "🛒 Add to cart".into(),
         order_new_header: "New Order".into(),
         order_items: "Items".into(),
         order_items_empty: "(empty)".into(),
-        order_grams: "g".into(),
+        // order_grams left the same day (see the struct).
         order_pickup: "Pickup:".into(),
         order_source: "Source:".into(),
         order_anonymous: "Anonymous".into(),
