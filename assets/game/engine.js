@@ -6,9 +6,9 @@
 // HUD, score submission, and a `stop()` it can call on unmount.
 //
 // This module is the part the games have in common: the renderer and its
-// sizing, the sky, the lighting rig, the mascot, and the pointer input. Woody
-// himself lives here because he is the brand's face and must be the same bird
-// in every game — built from primitives rather than a loaded model, for the
+// sizing, the sky, the lighting rig, the mascot, and the pointer input. The
+// mascot lives here because it is the games' one character and must be the
+// same bird in every game — built from primitives rather than a loaded model, for the
 // same reason three.js is lazy: no extra megabytes on a phone in a beach bar.
 
 import * as THREE from '/assets/vendor/three.module.min.js';
@@ -124,11 +124,11 @@ export function createStage(container, { fov = 62, near = 0.1, far = 500 } = {})
   return { renderer, scene, camera, measure, onResize, dispose };
 }
 
-/// Woody, the brand's woodpecker.
+/// The mascot, a woodpecker.
 ///
 /// The silhouette is what has to survive being six metres away at speed, so
 /// the swept-back red crest and the long beak are oversized on purpose — they
-/// are what people read as "Woody" from across the screen.
+/// are what people read as the mascot from across the screen.
 ///
 /// Returns the group plus the sub-groups a game may want to animate.
 export function buildWoody({ headTurn = -0.75 } = {}) {
