@@ -49,8 +49,10 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/availability.t27": {
         "module": "availability",
         "id": "turbobaby/availability",
-        "min_declarations": 120,
-        "min_checks": 34,
+        # Raised 2026-09-25 from 120/34 to the measured count when the bot's /start catalog
+        # line lost CLICK 125 (8 declarations and 1 test).
+        "min_declarations": 129,
+        "min_checks": 35,
     },
     "specs/turbobaby/bike_catalog.t27": {
         "module": "bike-catalog",

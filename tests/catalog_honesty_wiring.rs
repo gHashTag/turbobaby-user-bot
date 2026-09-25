@@ -1,5 +1,6 @@
-//! Two things the customer catalog used to say that the shop's own rules forbid,
-//! guarded as text where the host cannot compile the screens.
+//! Things the customer catalog used to say that the shop's own rules forbid,
+//! guarded as text where the host cannot compile the screens (two since
+//! 2026-09-24, a third, the bot's /start line, since 2026-09-25).
 //!
 //! `src/lib.rs` gates `pub mod ui;` on `#[cfg(target_arch = "wasm32")]`, so
 //! `cargo test` compiles nothing under `src/ui`. What is guarded here is the
@@ -28,6 +29,13 @@
 //!    the same thing in other words. The customer screens now say that a manager
 //!    confirms availability (`T_BIKE_AVAILABILITY_UNKNOWN`), which is copy the
 //!    repository already publishes; the admin screen keeps its count.
+//! 3. **The bot's /start welcome named CLICK 125 as the catalog's lower end**
+//!    (added 2026-09-25). `src/locales.rs` `welcome_feature1` read "from Click
+//!    125 to X-ADV 750" in both locales, though CLICK 125 is offered to nobody.
+//!    Its ends are now the seed's smallest and largest offered families, and
+//!    the guard below derives them from the seed rather than trusting a list.
+//!    It reads the bot's locale file, not a screen, which is the one exception
+//!    to the sentence above about what this file guards.
 //!
 //! What stays, on purpose: a zero count may still RULE a family out (the
 //! detail's «all taken» line and the Book control's reason), because the
@@ -303,6 +311,127 @@ fn the_click_125_redirect_is_the_seeds_offer_instead() {
         rust, labels,
         "the screen's CLICK 125 redirect is not the owner's decision the seed records \
          (keys {keys:?})"
+    );
+}
+
+// -- The bot's /start catalog line -----------------------------------------------
+
+/// The bot's locale file. Its `welcome_feature1` field is the first line of the
+/// welcome `/start` sends, and it names the catalog's two ends.
+const LOCALES: &str = "src/locales.rs";
+
+/// The two ends `welcome_feature1` names, once per published locale, in file
+/// order (ru, then en). A line of any other shape fails, so a rewording has to
+/// come back here and cannot slip past the comparison below.
+fn start_catalog_ranges() -> Vec<(String, String)> {
+    let text = source(LOCALES);
+    let rows: Vec<String> = text
+        .lines()
+        .filter_map(|line| {
+            let rest = line.trim().strip_prefix("welcome_feature1: \"")?;
+            Some(rest[..rest.find('"')?].to_string())
+        })
+        .collect();
+    // D16: both published locales, or the comparison below proves nothing.
+    assert_eq!(
+        rows.len(),
+        2,
+        "{LOCALES} must set welcome_feature1 once per published locale, found {rows:?}"
+    );
+    rows.iter()
+        .map(|row| {
+            let ends = if let Some(rest) = row.strip_prefix("Каталог: от ") {
+                rest.split_once(" до ")
+            } else if let Some(rest) = row.strip_prefix("Catalog: from ") {
+                rest.split_once(" to ")
+            } else {
+                None
+            };
+            let (low, high) = ends.unwrap_or_else(|| {
+                panic!("welcome_feature1 changed shape, re-read this guard: {row}")
+            });
+            (low.to_string(), high.to_string())
+        })
+        .collect()
+}
+
+#[test]
+fn the_start_reply_names_the_smallest_and_largest_offered_families() {
+    // Until 2026-09-25 the line read "from Click 125 to X-ADV 750" in both
+    // locales. CLICK 125 is closed to new rentals and offered to nobody (D12),
+    // so the welcome named a machine the shop does not rent. The two ends are
+    // now measured from the seed: the offered families (price-list-only ones
+    // are not in `families` at all), smallest and largest by displacement, a
+    // tie broken by the published daily rate (the lower one for the smallest
+    // end). That rule gives NMAX 155 (155 cc, shared with XSR 155, which rents
+    // for more; NMAX 155 is also the cheapest offered family outright) and
+    // X-ADV 750 (alone at 750 cc).
+    let seed: serde_json::Value =
+        serde_json::from_str(&source(SEED)).expect("data/fleet_seed.json must parse");
+    let families = seed["families"]
+        .as_array()
+        .expect("the seed must carry a families array");
+    let mut offered: Vec<(i64, i64, String)> = families
+        .iter()
+        .filter(|f| f["offered"].as_bool() == Some(true))
+        .map(|f| {
+            let model = f["model"].as_str().unwrap_or("").to_string();
+            let cc = f["displacement_cc"]
+                .as_i64()
+                .unwrap_or_else(|| panic!("{model}: an offered family has no displacement"));
+            let rate = f["base_rate_thb_day"]
+                .as_i64()
+                .unwrap_or_else(|| panic!("{model}: an offered family has no published rate"));
+            (cc, rate, model)
+        })
+        .collect();
+    // D16: the seed publishes thirteen offered families; a parser that lost
+    // them would compare two empty ends.
+    assert!(
+        offered.len() >= 10,
+        "only {} offered families parsed; the seed parser has gone blind",
+        offered.len()
+    );
+    offered.sort();
+    let smallest = offered.first().expect("offered families").2.clone();
+    let largest = offered.last().expect("offered families").2.clone();
+
+    let not_in_fleet = seed_price_list_only_models();
+    for (low, high) in start_catalog_ranges() {
+        for end in [&low, &high] {
+            assert!(
+                !not_in_fleet.contains(end),
+                "the /start reply names {end}, a price-list-only model with no machine"
+            );
+            assert!(
+                offered.iter().any(|(_, _, model)| model == end),
+                "the /start reply names {end}, which is no offered family of the seed"
+            );
+        }
+        assert_eq!(
+            (low.as_str(), high.as_str()),
+            (smallest.as_str(), largest.as_str()),
+            "the /start reply's catalog range is not the seed's smallest and largest offered families"
+        );
+    }
+
+    // The contract records the same two labels; a change of either side has to
+    // reach the other.
+    let spec = source(AVAILABILITY_SPEC);
+    let line = spec
+        .lines()
+        .find(|l| l.starts_with("pub const START_CATALOG_RANGE_LABELS "))
+        .expect("availability.t27 must declare START_CATALOG_RANGE_LABELS");
+    let contract: Vec<String> = line
+        .split('"')
+        .skip(1)
+        .step_by(2)
+        .map(str::to_string)
+        .collect();
+    assert_eq!(
+        contract,
+        vec![smallest, largest],
+        "availability.t27 records a /start catalog range the seed does not give"
     );
 }
 
