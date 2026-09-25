@@ -314,6 +314,23 @@ fn mounts_of(code: &str, screen: &str) -> usize {
     count
 }
 
+/// Every `.rs` file under `src/ui`, as its repo-relative path and its code with
+/// comments stripped. Read through `source`, so an unreadable file fails.
+fn ui_code() -> Vec<(String, String)> {
+    rust_files_under("src/ui")
+        .iter()
+        .map(|path| {
+            let relative = path
+                .strip_prefix(repo_root())
+                .unwrap_or(path)
+                .to_string_lossy()
+                .replace('\\', "/");
+            let code = code_of(&source(&relative));
+            (relative, code)
+        })
+        .collect()
+}
+
 /// The seven screens are unmounted, not deleted: `src/ui/screens/mod.rs` still
 /// exports each, and no file under `src/ui` mounts one.
 #[test]
@@ -328,34 +345,25 @@ fn the_previous_shops_screens_stay_compiled_and_unmounted() {
         );
     }
     let mut mounts = Vec::new();
-    for path in rust_files_under("src/ui") {
-        let relative = path
-            .strip_prefix(repo_root())
-            .expect("under the repo")
-            .to_string_lossy()
-            .replace('\\', "/");
-        let code = code_of(
-            &fs::read_to_string(&path)
-                .expect("readable")
-                .replace("\r\n", "\n"),
-        );
+    let mut ride_mounts = 0;
+    for (relative, code) in ui_code() {
         for screen in UNMOUNTED_ON_2026_09_25 {
             if mounts_of(&code, screen) > 0 {
                 mounts.push(format!("{relative} mounts {screen}"));
             }
         }
+        ride_mounts += mounts_of(&code, "RideScreen");
     }
     assert!(
         mounts.is_empty(),
         "a screen the owner retired on 2026-09-25 is mounted again:\n  {}",
         mounts.join("\n  ")
     );
-    // D16: the same instrument sees a mount that is there.
-    let routes = code_of(&source("src/ui/routes.rs"));
-    assert_eq!(
-        mounts_of(&routes, "RideScreen"),
-        2,
-        "/ride and /skate mount the ride"
+    // D16: the same walk and the same instrument see mounts that are there
+    // (`/ride` and `/skate` both mount the ride).
+    assert!(
+        ride_mounts >= 2,
+        "the scan saw {ride_mounts} mounts of RideScreen"
     );
 }
 
@@ -384,34 +392,30 @@ fn no_mounted_screen_navigates_to_a_retired_path() {
         .iter()
         .map(|(_, handler)| handler.trim_start_matches("fn ").trim_end_matches('('))
         .collect();
+    /// Where `line` opens `Route::{variant}` (a navigation, not a match arm).
+    fn opens(line: &str, variant: &str) -> bool {
+        ["to: Route::", "push(Route::", "replace(Route::"]
+            .iter()
+            .any(|lead| {
+                let needle = format!("{lead}{variant}");
+                line.find(&needle)
+                    .is_some_and(|at| line[at + needle.len()..].trim_start().starts_with('{'))
+            })
+    }
     let mut offences = Vec::new();
-    let sources = rust_files_under("src/ui");
-    for path in &sources {
-        let relative = path
-            .strip_prefix(repo_root())
-            .expect("under the repo")
-            .to_string_lossy()
-            .replace('\\', "/");
+    let mut live_navigations = 0;
+    for (relative, code) in ui_code() {
         if UNMOUNTED_FILES.contains(&relative.as_str()) || relative == "src/ui/routes.rs" {
             continue;
         }
-        let code = code_of(
-            &fs::read_to_string(path)
-                .expect("readable")
-                .replace("\r\n", "\n"),
-        );
         for (index, line) in code.lines().enumerate() {
             for variant in &variants {
-                for lead in ["to: Route::", "push(Route::", "replace(Route::"] {
-                    let needle = format!("{lead}{variant}");
-                    let Some(at) = line.find(&needle) else {
-                        continue;
-                    };
-                    let tail = line[at + needle.len()..].trim_start();
-                    if tail.starts_with('{') {
-                        offences.push(format!("{relative}:{} opens Route::{variant}", index + 1));
-                    }
+                if opens(line, variant) {
+                    offences.push(format!("{relative}:{} opens Route::{variant}", index + 1));
                 }
+            }
+            if opens(line, "Orders") {
+                live_navigations += 1;
             }
         }
     }
@@ -420,9 +424,12 @@ fn no_mounted_screen_navigates_to_a_retired_path() {
         "a mounted screen still opens a retired path:\n  {}",
         offences.join("\n  ")
     );
-    // D16: the scan reads live navigation (the profile opens the orders).
-    assert!(code_of(&source("src/ui/screens/profile_screen.rs"))
-        .contains("Link { to: Route::Orders {}"));
+    // D16: the same walk and the same matcher see a live navigation (the
+    // profile, among others, opens the orders).
+    assert!(
+        live_navigations > 0,
+        "the scan saw no navigation to Route::Orders"
+    );
 }
 
 /// The owner kept the quest a customer opens from the profile and had its
@@ -432,21 +439,16 @@ fn no_mounted_screen_navigates_to_a_retired_path() {
 #[test]
 fn the_quest_screen_states_no_purchase_rule_and_stays_reachable() {
     let mut offences = Vec::new();
-    for path in rust_files_under("src/ui") {
-        let relative = path
-            .strip_prefix(repo_root())
-            .expect("under the repo")
-            .to_string_lossy()
-            .replace('\\', "/");
-        let code = code_of(
-            &fs::read_to_string(&path)
-                .expect("readable")
-                .replace("\r\n", "\n"),
-        );
+    let mut quest_scanned = false;
+    for (relative, code) in ui_code() {
         for key in ["T_PURCHASE_MIN", "T_PURCHASE_REQUIRED", "T_ERROR_PURCHASE"] {
             if code.contains(key) {
                 offences.push(format!("{relative} renders {key}"));
             }
+        }
+        // D16: the walk reaches the live quest screen, and reads its code.
+        if relative == "src/ui/game/quest.rs" && code.contains("T_SCAN_QR") {
+            quest_scanned = true;
         }
     }
     assert!(
@@ -454,11 +456,9 @@ fn the_quest_screen_states_no_purchase_rule_and_stays_reachable() {
         "a screen states the previous shop's purchase rule:\n  {}",
         offences.join("\n  ")
     );
-    // D16: the scan is looking at the live quest screen.
-    let quest = code_of(&source("src/ui/game/quest.rs"));
     assert!(
-        quest.contains("T_SCAN_QR"),
-        "quest.rs no longer renders its scan control"
+        quest_scanned,
+        "the scan never read src/ui/game/quest.rs rendering its scan control"
     );
 
     // What stays: the profile row, the route and the screen behind it.
