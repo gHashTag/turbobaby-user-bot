@@ -33,7 +33,11 @@
 //!   because there is nothing honest to put in it. Since 2026-09-24 it does
 //!   not print *how many* are free either: the count is seeded and
 //!   admin-edited, not a live check, so a manager confirms availability
-//!   (`availability.t27` `FILE_MAY_CONFIRM = false`).
+//!   (`availability.t27` `FILE_MAY_CONFIRM = false`). Since 2026-09-25 a zero
+//!   count no longer prints an "every bike of this model is busy" line here
+//!   either: the owner answered "probably" to removing it (second list of that
+//!   day, answer 5), and the key is gone. The Book control's no-units reason,
+//!   which that answer did not name, is the one place a zero still shows.
 //! - the ladder comes from `GET /api/rental-terms`, one document for the whole
 //!   shop, fetched here alongside the family. A ladder that fails to load
 //!   degrades to no ladder section at all rather than to a table of dashes —
@@ -75,7 +79,7 @@ use crate::trios::i18n::{
     T_BIKE_PRICE_ON_REQUEST, T_BIKE_PRICE_TITLE, T_BIKE_QUOTE_NOTE, T_BIKE_RATE_PER_DAY,
     T_BIKE_TARIFF_BEFORE_DISCOUNT, T_BIKE_TERMS_NOTE, T_BIKE_TERMS_TITLE, T_BIKE_TERM_DAYS,
     T_BIKE_TERM_DAYS_OPEN, T_BIKE_TERM_DISCOUNT_ONE, T_BIKE_TERM_DISCOUNT_RANGE, T_BIKE_TERM_MONTH,
-    T_BIKE_TERM_TWO_WEEKS, T_BIKE_TERM_WEEK, T_BIKE_UNITS_EMPTY, T_BIKE_UNITS_TITLE,
+    T_BIKE_TERM_TWO_WEEKS, T_BIKE_TERM_WEEK, T_BIKE_UNITS_TITLE,
 };
 use crate::ui::components::card_media::CardMedia;
 use crate::ui::components::skeleton::{Skeleton, SkeletonShape};
@@ -232,10 +236,6 @@ fn render_detail(
     // Always "a manager confirms": the seeded count may not confirm (see
     // `availability_line`).
     let availability = availability_line(lang);
-    // "None free" is a fact the API stated; it is not inferred from a missing
-    // count. A zero may rule a family out (`FILE_MAY_RULE_OUT`), so this line
-    // stays while the count itself is no longer printed.
-    let none_free = bike.units_available == Some(0);
     // The colours on record across the family's units. Until 2026-09-24 the
     // row preferred the colours of the units seeded as free, labelled "free
     // colours" — the seeded count again, as a promise. Now it is the whole
@@ -402,11 +402,13 @@ fn render_detail(
                     h2 { style: section_title_style(), {t(lang, T_BIKE_UNITS_TITLE)} }
                     div { style: "border:4px solid #2a2a4a;background:#16213e;padding:12px;",
                         div { style: "font-size:15px;font-weight:700;color:#e8e8e8;", "{availability}" }
-                        {none_free.then(|| rsx! {
-                            div { style: "font-size:13px;color:#888;margin-top:6px;",
-                                {t(lang, T_BIKE_UNITS_EMPTY)}
-                            }
-                        })}
+                        // Until 2026-09-25 a zero count printed T_BIKE_UNITS_EMPTY
+                        // here (every bike of this model is out right now), from
+                        // the fleet seed of 2026-09-12 as an admin last edited it,
+                        // not from live occupancy. The owner answered "probably" to
+                        // removing it (second list of that day, answer 5), so the
+                        // line and its key are gone and the manager line above
+                        // stands alone (availability.t27, UNITS_EMPTY_LINE_*).
                         {colors_row.clone().map(|(label, list)| rsx! {
                             div { style: detail_row_style(),
                                 {t(lang, label)}

@@ -693,7 +693,7 @@ pub const T_BIKE_TERM_DISCOUNT_ONE: Key = "bike.term.discount_one";
 /// `{0}` = low percent, `{1}` = high percent.
 pub const T_BIKE_TERM_DISCOUNT_RANGE: Key = "bike.term.discount_range";
 pub const T_BIKE_UNITS_TITLE: Key = "bike.units.title";
-pub const T_BIKE_UNITS_EMPTY: Key = "bike.units.empty";
+// bike.units.empty: deleted 2026-09-25 (second list, #5).
 /// `{0}` = units free, `{1}` = units total.
 pub const T_BIKE_AVAILABILITY: Key = "bike.availability";
 /// `{0}` = units free; the total was not published.
@@ -1309,7 +1309,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_BIKE_TERM_DISCOUNT_ONE => "−{0}%",
         T_BIKE_TERM_DISCOUNT_RANGE => "−{0}…−{1}%",
         T_BIKE_UNITS_TITLE => "Наличие",
-        T_BIKE_UNITS_EMPTY => "Сейчас все байки этой модели заняты.",
+        // bike.units.empty: deleted 2026-09-25 (second list, #5).
         T_BIKE_AVAILABILITY => "Свободно {0} из {1}",
         T_BIKE_AVAILABILITY_FREE => "Свободно: {0}",
         T_BIKE_AVAILABILITY_UNKNOWN => "Наличие уточняет менеджер",
@@ -1909,7 +1909,7 @@ fn get_en_translation(key: Key) -> Value {
         T_BIKE_TERM_DISCOUNT_ONE => "−{0}%",
         T_BIKE_TERM_DISCOUNT_RANGE => "−{0}…−{1}%",
         T_BIKE_UNITS_TITLE => "Availability",
-        T_BIKE_UNITS_EMPTY => "Every bike of this model is out right now.",
+        // bike.units.empty: deleted 2026-09-25 (second list, #5).
         T_BIKE_AVAILABILITY => "{0} of {1} free",
         T_BIKE_AVAILABILITY_FREE => "{0} free",
         T_BIKE_AVAILABILITY_UNKNOWN => "A manager confirms availability",
