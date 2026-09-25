@@ -27,6 +27,10 @@ AGENT_CARD = "specs/agents/turbobaby.t27"
 # test/invariant/bench floor with the pinned compiler. Discovery supplies the tripwire. All 45 floors equal the measured counts as of 2026-09-25.
 # Re-measured 2026-09-25 for the two contracts the owner's CLICK 125 redirect decision changed:
 # availability 114 -> 120 declarations and 32 -> 34 checks, order_money 114 -> 115 declarations.
+# Re-measured 2026-09-25 again for the two contracts answer 5 of the owner's second list changed
+# (the detail's all-taken line and its key removed): availability 120 -> 132 declarations and
+# 34 -> 36 checks, locale_policy 136 -> 138 declarations. Merged 2026-09-26 on top of the /start
+# catalog line's 129/35, availability measures 141/37.
 SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     AGENT_CARD: {
         "module": "turbobaby-agent",
@@ -50,9 +54,10 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         "module": "availability",
         "id": "turbobaby/availability",
         # Raised 2026-09-25 from 120/34 to the measured count when the bot's /start catalog
-        # line lost CLICK 125 (8 declarations and 1 test).
-        "min_declarations": 129,
-        "min_checks": 35,
+        # line lost CLICK 125 (8 declarations and 1 test), and again when answer 5 of the
+        # owner's second list removed the detail's all-taken line (12 declarations and 2 tests).
+        "min_declarations": 141,
+        "min_checks": 37,
     },
     "specs/turbobaby/bike_catalog.t27": {
         "module": "bike-catalog",
@@ -172,8 +177,9 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         "id": "turbobaby/locale-policy",
         # 131 on the client half of ruling #12 alone and 130/35 on its server half alone; the
         # same day's cancel key (+1) and the deletion (-14) were reconciled in one count, with
-        # two declarations naming the +1; the three together measure 136/35.
-        "min_declarations": 136,
+        # two declarations naming the +1; the three together measure 136/35. Answer 5 of the
+        # owner's second list that day deleted one more key, named by two declarations: 138/35.
+        "min_declarations": 138,
         "min_checks": 35,
     },
     "specs/turbobaby/loyalty_ledger.t27": {

@@ -746,7 +746,12 @@ The questions that ruling left open are listed in #63.
   `availability.t27`, gate 3 and the seed gate carry it). The brain's text is the operator's to
   bring in line. *Still open after 2026-09-25:* the owner's answer 9 did not locate the "all bikes
   of this model are busy" line (`T_BIKE_UNITS_EMPTY`), so it was left untouched. Answer 8 kept the
-  rental-term discount percentages on the bike card.
+  rental-term discount percentages on the bike card. *Decided later on 2026-09-25, on branch
+  `t27/no-units-empty` (not merged):* answer 5 of the owner's second list, «Наверное»
+  ("probably"), removed that line and deleted its key (DECISIONS.md, the entry of that date;
+  `availability.t27` `UNITS_EMPTY_LINE_*`). *Still open:* the Book control's reason under the same
+  zero, `T_BIKE_BOOK_BLOCKED_NO_UNITS` ("Every bike of this model is taken"), which says nearly the
+  same thing from the same seeded count and which the answer did not name.
 * **J. Vocabulary and ownership (#62).** Should the nmax-155 rate be owned by pricing-honesty (as
   landed) or by rental-terms? Is a named copy bound by gate 3 accepted in place of an import the
   compiler lacks? New copy is needed for `T_MENU_DESC` / `T_MENU_NO_RESULTS`. The strain-of-day
