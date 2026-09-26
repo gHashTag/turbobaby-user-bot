@@ -310,48 +310,48 @@ fn a_stale_garden_deep_link_lands_nowhere() {
     );
 }
 
-/// The two panels the garden hosted are still on screen, and still reading the
-/// server for every number they print.
+/// The referral page still prints the server's numbers and none of its own
+/// (owner, R3, 2026-09-26).
 ///
-/// Both halves matter. The panels moved to the referrals page when the garden
-/// was removed (D5) — nothing else renders `referral_events` or
-/// `referral_milestones`, so if these eight strings lose their only reader
-/// again, a live mechanic goes dark and the tests stay green, because
-/// `cargo test` compiles no part of `src/ui`.
+/// The friends panel moved here when the garden was removed (D5); nothing
+/// else renders `referral_events`, so if its strings lose their only reader a
+/// live mechanic goes dark and the tests stay green, because `cargo test`
+/// compiles no part of `src/ui`. The milestone ladder that moved with it went
+/// with R3 («Убрать, только скидка 10%»), and the referral balance took its
+/// place: read off `/api/referral-credit/me/`, printed through `shown_balance`
+/// and `format_baht`, with the operator's four keys and the rule sentence.
 ///
-/// The second half is the money. The garden's milestone panel printed its own
-/// `1 => 100, 3 => 300, 5 => 500` — a fourth copy of a ladder that already
-/// existed three times on the server. A client that knows the reward renders
-/// without a network call, which is exactly what makes re-adding one so easy;
-/// it is right until somebody edits `loyalty_config`, and silently wrong
-/// afterwards, for everybody, for ever.
+/// The money half stands as it was. The garden's panel printed its own
+/// `1 => 100, 3 => 300, 5 => 500`; a client that knows the reward renders it
+/// without a network call, and is silently wrong the day the shop changes it.
+/// The ladder's keys, route and arrays must not come back either: the server
+/// serves the arrays empty since R3.
 #[test]
 fn the_referral_panels_print_the_servers_numbers_and_none_of_their_own() {
     let code = code_of(&live_source("src/ui/pages/referrals.rs"));
 
     for key in [
         "T_REFERRAL_INVITEES_TITLE",
-        "T_REFERRAL_INVITEES_EMPTY",
         "T_REFERRAL_INVITEE_JOINED",
         "T_REFERRAL_INVITEE_ORDERED",
         "T_REFERRAL_INVITEE_UNKNOWN",
-        "T_REFERRAL_MILESTONE_TITLE",
-        "T_REFERRAL_MILESTONE_SUBTITLE",
-        "T_REFERRAL_MILESTONE_AWARDED",
+        "T_REFERRAL_SUBTITLE",
+        "T_REFERRAL_BALANCE",
+        "T_REFERRAL_APPLY_TO_RENTAL",
+        "T_REFERRAL_REQUEST_PAYOUT",
+        "T_REFERRAL_PAYOUT_REQUESTED",
+        "/api/referral-credit/me/",
+        "shown_balance(",
     ] {
         assert!(
             code.contains(key),
             "{key} has no reader left; the panel it belongs to is off the screen"
         );
     }
-
-    // The two arrays the endpoint publishes: what each reached rung actually
-    // paid, and what an unreached one pays today.
-    for field in ["awards", "bonuses"] {
-        assert!(
-            code.contains(field),
-            "the milestone panel stopped reading `{field}` off the wire"
-        );
+    // `awards` and `bonuses` were the two arrays the ladder read off the wire;
+    // `/milestones` was its route.
+    for gone in ["T_REFERRAL_MILESTONE_", "/milestones", "awards", "bonuses"] {
+        assert!(!code.contains(gone), "the retired ladder is back: {gone}");
     }
 
     let mut invented = Vec::new();
@@ -366,7 +366,7 @@ fn the_referral_panels_print_the_servers_numbers_and_none_of_their_own() {
     }
     assert!(
         invented.is_empty(),
-        "the referral screen is deciding what a milestone pays:\n  {}",
+        "the referral screen is deciding what a reward pays:\n  {}",
         invented.join("\n  ")
     );
 }

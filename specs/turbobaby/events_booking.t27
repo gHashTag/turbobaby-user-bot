@@ -61,8 +61,9 @@
 ;   2. "An attendee reachout is a queue row" is refuted at both of the tree's two reachouts.
 ;      send_event_reminders sends directly at src/api/events.rs:2130 and send_event_bookings sends
 ;      directly at :2026. A grep for `notification` over src/api/events.rs returns 0, and
-;      src/db/notifications.rs declares exactly three enqueue functions (:16, :38, :52), all three
-;      referral. The consequence is not cosmetic: the queue retries three times
+;      src/db/notifications.rs declared exactly three enqueue functions (:16, :38, :52), all three
+;      referral; since 2026-09-26 (R3) it declares one (:16), and the other two are dated comments
+;      where they stood. The consequence is not cosmetic: the queue retries three times
 ;      (src/notification_queue.rs:21, was :20) and a direct send has one attempt and a `continue`
 ;      (src/api/events.rs:2134-2142). The edge to notification-queue is still taken below, as the
 ;      owner of the shape these two reachouts do NOT use.

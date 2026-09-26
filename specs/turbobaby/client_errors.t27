@@ -16,7 +16,7 @@
 ; at :117 and :519, both on GET handlers. Neither POST is gated. Five independent bounds hold that
 ; open door, they are listed below in the order they act, and only the first of them runs before
 ; the body is deserialized. FOUR of the five live in this file and only the body limit lives
-; elsewhere (src/api/mod.rs:104). Of those four, two are named constants -- the rate at :39-41 and
+; elsewhere (src/api/mod.rs:105). Of those four, two are named constants -- the rate at :39-41 and
 ; the caps at :49-52 -- and two are written into the handler's own arms: shape at :178-185,
 ; :304-306 and :633-645, sanitizing at :196-232. Not one of the four sits in a shared module, which
 ; is why a contract for the limiter does not amount to a contract for this endpoint: the mechanism
@@ -160,7 +160,7 @@ pub fn route_is_gated(route_is_admin_read: bool) bool {
 ; --- What stops this from being an open write endpoint --------------------------------------------
 ; Five bounds, listed in the order they act. Only the first runs before the body is deserialized.
 pub const BOUND_COUNT : u8 = 5;
-; 1. Body size. src/api/mod.rs:104 layers DefaultBodyLimit::max(2 * 1024 * 1024) over the merged
+; 1. Body size. src/api/mod.rs:105 layers DefaultBodyLimit::max(2 * 1024 * 1024) over the merged
 ; router that took client_errors::routes() at :94. The numeral the framework answers with is not
 ; measured in this repository, so this file pins the byte bound and declines the status.
 pub const BODY_LIMIT_BYTES : u32 = 2097152;
@@ -335,8 +335,8 @@ pub fn event_reaches_a_metric(name_in_allow_list: bool, name_has_metric_arm: boo
   return name_in_allow_list and name_has_metric_arm;
 }
 
-; No retention. The mechanism exists -- audit_sweep_sql at src/db/orders.rs:740 serves three
-; tables (:751, :795, :829) -- and neither telemetry table is enrolled in it: a grep for
+; No retention. The mechanism exists -- audit_sweep_sql at src/db/orders.rs:670 serves three
+; tables (:681, :725, :759) -- and neither telemetry table is enrolled in it: a grep for
 ; client_error_logs and client_event_logs over src/db/orders.rs returns 0, and a case-insensitive
 ; grep for a DELETE over either table across the whole tree returns two lines, both test cleanup
 ; (tests/integration_promo_agent.rs:337 and :392). So rows stay until someone removes them by
@@ -345,7 +345,7 @@ pub const TELEMETRY_RETENTION_IS_IMPLEMENTED : bool = false;
 pub const AUDIT_SWEEP_MECHANISM_EXISTS : bool = true;
 pub const TABLES_ENROLLED_IN_THE_SWEEP : u8 = 3;
 pub const TELEMETRY_TABLES_ENROLLED_IN_THE_SWEEP : u8 = 0;
-pub const TELEMETRY_RETENTION_NOTE : str = "No period is declared here because none is implemented. The sweep builder at src/db/orders.rs:740 is used by three audit tables and by neither telemetry table; the only DELETE over client_error_logs or client_event_logs anywhere in the tree is test cleanup at tests/integration_promo_agent.rs:337 and :392. Closing this needs an enrolled sweep, after which the period becomes a measurement instead of a wish.";
+pub const TELEMETRY_RETENTION_NOTE : str = "No period is declared here because none is implemented. The sweep builder at src/db/orders.rs:670 is used by three audit tables and by neither telemetry table; the only DELETE over client_error_logs or client_event_logs anywhere in the tree is test cleanup at tests/integration_promo_agent.rs:337 and :392. Closing this needs an enrolled sweep, after which the period becomes a measurement instead of a wish.";
 
 ; --- What the browser is allowed to report back ---------------------------------------------------
 ; src/trios/js_errors.rs:48-50 is the rule, and it is a conjunction of two independent refusals,

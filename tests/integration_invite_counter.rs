@@ -2,8 +2,8 @@
 //!
 //! The profile screen prints a number under **«👥 Приглашено друзей: {0}»** and
 //! that number was `loyalty_profiles.referral_count` — a denormalised column
-//! written in exactly one place, `confirm_referral`, which is called from
-//! exactly one place, `complete_order`. So it counts friends whose **order
+//! written in one place, `confirm_referral_edge_in` (`confirm_referral` until 2026-09-26),
+//! from `complete_order` and, since R3, a recorded rental. So it counts friends whose **order
 //! completed**, not friends who arrived. Invite ten people, watch all ten join,
 //! and the counter reads zero.
 //!

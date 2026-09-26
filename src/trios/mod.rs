@@ -34,3 +34,6 @@ pub mod legacy_view;
 // The name a bike line is printed under on the customer's order screens
 // (2026-09-26). Appended, like the group above, so that no line of this file moves.
 pub mod order_line;
+
+// The referral credit of 2026-09-26 (R3). Appended so that no line of this file moves.
+pub mod referral_credit;

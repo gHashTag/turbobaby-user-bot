@@ -31,7 +31,7 @@ pub const INIT_DATA_MAX_BYTES: usize = 4096;
 /// (`src/ui/api/client.rs`), and an empty header is not sent at all, so the
 /// request the server would have refused left as an ANONYMOUS one instead —
 /// a downgrade where a refusal belongs. Mirrors `init_data_size_admits` in
-/// `specs/turbobaby/request_identity.t27:242`.
+/// `specs/turbobaby/request_identity.t27:248` (`:242` until 2026-09-26).
 pub fn init_data_size_admits(byte_len: usize) -> bool {
     byte_len <= INIT_DATA_MAX_BYTES
 }
