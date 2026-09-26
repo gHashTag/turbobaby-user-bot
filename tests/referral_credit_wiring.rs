@@ -489,3 +489,89 @@ fn credit_money_reads_fail_loud() {
         );
     }
 }
+
+/// The owner's answer of 2026-09-26 on the referral top list, verbatim: «Убрать
+/// топ и закрыть адрес». `GET /api/referrals/leaderboard`, which served every
+/// caller the top referrers' Telegram ids and frozen point totals, now answers
+/// an admin only, exactly as `/api/loyalty/leaderboard` has since R1: the gate
+/// is the handler's first statement, and the query string is read only after
+/// it, so a non-admin's malformed query is a 401 too and never a 400. The
+/// route stays registered (an unregistered GET would answer the fallback, not
+/// the admin gate), and no screen outside the admin's reads it
+/// (`tests/ui_endpoints_exist.rs`).
+#[test]
+fn the_referral_leaderboard_is_admin_only_like_r1() {
+    const REFERRALS_API: &str = "src/api/referrals.rs";
+    let referrals = code_of(shipped(&source(REFERRALS_API)));
+    let body = body_of(&referrals, "async fn get_leaderboard(");
+    assert!(
+        body[1..]
+            .trim_start()
+            .starts_with("check_admin(&headers, &state)?;"),
+        "get_leaderboard must start with the admin gate (owner, 2026-09-26: «Убрать топ и \
+         закрыть адрес»): {body}"
+    );
+    let gate = body.find("check_admin(").expect("the gate");
+    let query = body
+        .find("let Query(params) = query")
+        .expect("the query string is read inside the handler, after the gate");
+    let read = body.find("get_top_referrers(").expect("the read");
+    assert!(
+        gate < query && query < read,
+        "the gate must run before the query string and the read: {body}"
+    );
+    let header = &referrals[referrals
+        .find("async fn get_leaderboard(")
+        .expect("the handler")..]
+        .split(") -> ")
+        .next()
+        .expect("a signature");
+    assert!(header.contains("headers: HeaderMap"), "{header}");
+    assert!(
+        header.contains("query: Result<Query<LeaderboardQuery>,"),
+        "a Query extractor that is not fallible answers a malformed query with 400 before \
+         the gate runs: {header}"
+    );
+    assert!(
+        referrals.contains(".route(\"/referrals/leaderboard\", get(get_leaderboard))"),
+        "the referral leaderboard route moved"
+    );
+    // The same gate and the same position as R1's route, so a non-admin gets
+    // the same answer from both.
+    let loyalty = code_of(&source(LOYALTY_API));
+    let r1 = body_of(&loyalty, "async fn get_leaderboard(");
+    assert!(r1[1..]
+        .trim_start()
+        .starts_with("check_admin(&headers, &state)?;"));
+    // The four customer routes of the graph keep their owner gate.
+    assert_eq!(
+        referrals.matches("crate::api::auth::check_owner(").count(),
+        4
+    );
+}
+
+/// The bot's `/refstats` button opens the referral page. It was labelled
+/// «📈 Таблица лидеров» / "Leaderboard" after the list that page no longer
+/// has (owner, 2026-09-26: «Убрать топ и закрыть адрес»), so it now carries
+/// the label every referral notification already gives the same button,
+/// `referrals_open_app`. No sentence was written for it. `referral_leaderboard`
+/// stays in the locale tables, read by nobody, like the other stopped strings.
+#[test]
+fn the_refstats_button_no_longer_promises_a_leaderboard() {
+    let commands = code_of(&source("src/bot/commands.rs"));
+    let refstats = &commands[commands
+        .find("Command::Refstats =>")
+        .expect("the /refstats arm")
+        ..commands.find("Command::Admin =>").expect("the /admin arm")];
+    assert!(
+        refstats.contains("&locale.referrals_open_app,")
+            && refstats.contains("Some(\"referrals\")"),
+        "the /refstats button lost its label or its page: {refstats}"
+    );
+    for (path, text) in rust_sources() {
+        assert!(
+            !code_of(&text).contains("locale.referral_leaderboard"),
+            "{path} labels something after the removed referral top list"
+        );
+    }
+}

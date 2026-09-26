@@ -593,7 +593,7 @@ pub(crate) async fn handle_command(
             bot.send_message(msg.chat.id, text)
                 .parse_mode(teloxide::types::ParseMode::Html)
                 .reply_markup(InlineKeyboardMarkup::new(vec![vec![web_app_btn(
-                    &format!("📈 {}", locale.referral_leaderboard),
+                    &locale.referrals_open_app,
                     &build_app_url(base, &lang, Some("referrals")),
                 )]]))
                 .await?;
