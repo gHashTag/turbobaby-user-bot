@@ -4031,6 +4031,10 @@ mod sensitive_read_fail_loud_tests {
     const SENSITIVE_FNS: &[(&str, &str)] = &[
         ("src/db/orders.rs", "complete_order_and_update_loyalty"),
         ("src/db/orders.rs", "auto_block_for_fraud"),
+        // The referral credit's money reads (owner, 2026-09-26, R3).
+        ("src/db/referral_credit.rs", "record_rental"),
+        ("src/db/referral_credit.rs", "resolve_request"),
+        ("src/db/referral_credit.rs", "credit_summary"),
     ];
 
     /// Columns whose silent default corrupts money / game-state / a security

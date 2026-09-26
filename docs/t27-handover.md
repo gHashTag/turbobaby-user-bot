@@ -11,11 +11,11 @@ what to do next.
 
 | | measured 2026-09-21 |
 | --- | --- |
-| canonical contracts | **45** (44 under `specs/turbobaby/` + `specs/agents/turbobaby.t27`) |
-| assertions executed, all passing | **10 758** on `t27/round4` at `168892d` after its review (2026-09-26; see "Round 4, review fixes" below; bindings still 256), **10 754** on the integration branch `t27/round4` at `2f801fe` after the owner's answers of 2026-09-26 (see "Round 4, integrated" below), **10 581** on the integration branch `t27/owner-answers-2509` at `41315b2` after the owner's second list of 2026-09-25 and the operator's shop label (2026-09-26; see "The owner's second list of 2026-09-25 and the operator's shop label" below), **10 273** on the integration branch `t27/owner-answers-2509` after the three fixes on top of `69fd4fa` (2026-09-25; see "Three fixes on top of `69fd4fa`" below), **10 246** at `69fd4fa` (the owner's answers of that day; not pushed, not merged) — **9 996** re-measured 2026-09-25 on `f5e6b4f`, after #64, which changed comments only (9 996 after #63 on 2026-09-24, 9 859 after #62, 9 535 earlier that day, 9 514 on 2026-09-23 before that day's money family, 9 038 on 2026-09-22, 8 911 on 2026-09-21) |
+| canonical contracts | **45** (44 under `specs/turbobaby/` + `specs/agents/turbobaby.t27`); **46** on `t27/round5-server` and on the integration branch `t27/round5`, with `referral_credit.t27` (2026-09-26) |
+| assertions executed, all passing | **11 048** on the integration branch `t27/round5` at `b1d900e` (2026-09-26, the review fix of round 5; see "Round 5, review fix" below), **11 033** on the integration branch `t27/round5` at `992077f` (2026-09-26, R1–R3 integrated; see "Round 5, integrated" below), **11 009** on the server lane `t27/round5-server` at `872698b` (2026-09-26, R1–R3; see "Round 5, server lane" below), **10 758** on `t27/round4` at `168892d` after its review (2026-09-26; see "Round 4, review fixes" below; bindings still 256), **10 754** on the integration branch `t27/round4` at `2f801fe` after the owner's answers of 2026-09-26 (see "Round 4, integrated" below), **10 581** on the integration branch `t27/owner-answers-2509` at `41315b2` after the owner's second list of 2026-09-25 and the operator's shop label (2026-09-26; see "The owner's second list of 2026-09-25 and the operator's shop label" below), **10 273** on the integration branch `t27/owner-answers-2509` after the three fixes on top of `69fd4fa` (2026-09-25; see "Three fixes on top of `69fd4fa`" below), **10 246** at `69fd4fa` (the owner's answers of that day; not pushed, not merged) — **9 996** re-measured 2026-09-25 on `f5e6b4f`, after #64, which changed comments only (9 996 after #63 on 2026-09-24, 9 859 after #62, 9 535 earlier that day, 9 514 on 2026-09-23 before that day's money family, 9 038 on 2026-09-22, 8 911 on 2026-09-21) |
 | contract-to-contract ownership edges | 203+, **zero dangling** |
 | source lines named by some contract | **73 407 of 80 308 (91.4 %)** |
-| enforced contract-to-source bindings | **256** on the integration branch `t27/round4` at `2f801fe` (2026-09-26; +7 the server lane of round 4, +1 its client lane), across 41 of 45 contracts and 84 source files — **248** on the integration branch `t27/owner-answers-2509` at `41315b2` (2026-09-26; +2 answer 1, +4 answer 3, +2 the kept cart, +1 the held notification kinds), across 41 of 45 contracts and 83 source files — **239** on the same branch on 2026-09-25 (the two new rows bind the CLICK 125 redirect to the seed), across the same 41 of 45 contracts and 80 source files — **237**, across 41 of 45 contracts and 80 source files, re-measured 2026-09-25 on `f5e6b4f`, after #64 (237 after #63 on 2026-09-24, 227 after #62, 198 earlier that day, 197 on 2026-09-23, 168 across 40 on 2026-09-22, 66 across 16 on 2026-09-21) |
+| enforced contract-to-source bindings | **286** on the integration branch `t27/round5` at `b1d900e` (2026-09-26; +2 the recorder guard, the review fix of round 5), across 42 of 46 contracts and 88 source files — **284** on the integration branch `t27/round5` at `992077f` (2026-09-26; +2 the Mini App's rate, the client lane added none), across 42 of 46 contracts and 88 source files — **282** on the server lane `t27/round5-server` at `872698b` (2026-09-26; −3 +29, R1–R3), across 42 of 46 contracts and 87 source files — **256** on the integration branch `t27/round4` at `2f801fe` (2026-09-26; +7 the server lane of round 4, +1 its client lane), across 41 of 45 contracts and 84 source files — **248** on the integration branch `t27/owner-answers-2509` at `41315b2` (2026-09-26; +2 answer 1, +4 answer 3, +2 the kept cart, +1 the held notification kinds), across 41 of 45 contracts and 83 source files — **239** on the same branch on 2026-09-25 (the two new rows bind the CLICK 125 redirect to the seed), across the same 41 of 45 contracts and 80 source files — **237**, across 41 of 45 contracts and 80 source files, re-measured 2026-09-25 on `f5e6b4f`, after #64 (237 after #63 on 2026-09-24, 227 after #62, 198 earlier that day, 197 on 2026-09-23, 168 across 40 on 2026-09-22, 66 across 16 on 2026-09-21) |
 
 The two re-measured rows come from gates 2 and 3, run on 2026-09-25 on `main` at `f5e6b4f` (#64
 on top of the rental-only change of #63). Both equal the 2026-09-24 readings on #63's tree to the
@@ -709,14 +709,325 @@ contract settles any of them:
   only the state, and `src/api/mod.rs` adds no auth layer. It returns the top 20's first names,
   total spend and raw tier. `legacy_retirement.t27` left the raw tier because the admin screen is
   its only reader. That reason does not cover a public route. This is a privacy question as well
-  as a naming one.
+  as a naming one. *Answered by the owner on 2026-09-26 (R1, «Только для админа»): admin only.
+  See "Round 5, server lane" below.*
 * `GET /api/quest-places`, `GET /api/treasure-hunts` and `GET /api/loyalty/config` serve stored
   rows or the stored config as they are. `GET /api/loyalty/tiers` hides only a tier named "woody".
+  *Answered by the owner on 2026-09-26 (R2, «Закрыть для клиентов»): the three answer customers
+  like a missing route. See "Round 5, server lane" below.*
 * The bot's profile as Telegram stores it (commands, description, short description). The code
   sets only the menu button.
 * The bucket's previous-shop objects, as above.
 
-## The four gates, and how to run them
+### Round 5, server lane: R1–R3, the owner's answers of 2026-09-26, not yet live
+
+Branch `t27/round5-server`, cut from `main` at `e39221e` (#68). The shared core S0 is its first
+commit, and the client lane `t27/round5-client` branches from that same commit. **Nothing is pushed
+and nothing is deployed.** `dist/` was not rebuilt: the Mini App's half is the client lane's, and
+the integration rebuilds once. The owner's words are quoted verbatim in DECISIONS.md («R1–R3, the
+owner's answers of 2026-09-26»), with the 25 operator decisions and the admin-facing wording listed
+for rewording; the `.t27` files stay ASCII.
+
+| commit | item | what landed | recorded in |
+| --- | --- | --- | --- |
+| `b3f9653` | S0 | `src/trios/referral_credit.rs`: the 10% rule (`credit_for_rental`, floor, net of what was applied), the available and shown balance, the redeem's `applied_redemption`, `order_holds_a_rental`, the four not-creditable reasons in their order, and every wire type both lanes share. 8 unit tests | `referral_credit.t27` |
+| `5279b37` | R1, R2 | `get_leaderboard` calls `check_admin` first (401, or 429). `get_quest_places`, `get_treasure_hunts` and `get_loyalty_config` call `admin_or_missing_route` first: without admin proof, the fallback's own 404 body from one builder, `missing_route`. OpenAPI documents both | `loyalty_ledger.t27` (`LEADERBOARD_GATE_SITES`, `CLOSED_READ_ROUTE_COUNT`), `legacy_retirement.t27` (`OWNER_ANSWER_R1_*`, `_R2_*`, `R2_*`) |
+| `9c64767` | R3, what stopped | The points to the inviter, the milestone ladder and award, the welcome credit, their two queue producers and their renderers are deleted; `confirm_referral_edge_in` keeps the edge confirmation without money. `/milestones` serves empty offers and `/api/loyalty/:telegram_id` drops `referral_bonus`, so a cached bundle shows neither. Queued `friend_ordered` and `milestone` rows are held, not deleted | `referral_program.t27` (the history marked "at e39221e"), `notification_queue.t27` (`HELD_KINDS_SINCE_R3`) |
+| `2cd985c` | R3, what started | Migration 089 (three tables, CREATE only), `src/db/referral_credit.rs` (`record_rental`, `reverse_rental`, `reverse_rental_for_order`, `resolve_request`, `credit_summary`, `overview`; raw SQL, fail-loud reads, lock order order row → person → referral rows), the six routes of `src/api/referral_credit.rs`, the reversal inside the bot's `RejectOrder` (same transaction, fail-closed), `/refstats`' «Реферальный баланс» line, the rule sentence in the bot's two hints, `SENSITIVE_FNS` +3 | `referral_credit.t27`, `order_status.t27` |
+| `872698b` | contracts | `referral_credit.t27` (new, 128 declarations, 21 checks) and every re-measured count; gate 1's manifest; gate 3's 29 new rows and 3 removed; every citation the round moved, re-pinned with its old line and the date; the contract map's row | the contracts |
+| the next commit | docs | DECISIONS.md's entry and this section | — |
+
+`5279b37`, `9c64767` and `2cd985c` carry code whose contract counts and gate rows land in
+`872698b`, so the four gates are green from `872698b` on, not on each commit before it. The
+commits were cut from the finished tree, so each was exported (`git archive`) and checked alone:
+`cargo check --features backend --all-targets` passes on `5279b37`, `9c64767` and `2cd985c` with
+no warning from this crate. Their tests were run only on the finished tree.
+
+**Gates**, on `872698b`, pinned compiler `40003ed`:
+
+```sh
+T27C=<path>/t27c python3 scripts/verify_t27_specs.py --require-compiler
+# OK - 46 manifested specs, 5 generators each (every floor equals the measurement)
+python3 scripts/execute_t27_assertions.py            # WITH the compiler cross-check
+# OK - 46 spec(s), 11009 assert line(s) scanned, 11009 executed, 11009 passed, 0 failed;
+#      10493 declaration name(s) and function bodies agreed with t27c; 2 pinned front-end disagreement(s)
+python3 scripts/verify_t27_against_source.py --require-git-tracked
+# OK - 282 bindings hold across 42 contracts and 87 source files
+python3 scripts/verify_fleet_seed.py -v
+# OK — 14 families (13 offered), 37 units (11 rented, 26 available); ...
+```
+
+Floors that moved (declarations/checks): `api_surface` 186/42, `catalog_write` 159/44,
+`legacy_retirement` 360/73, `locale_policy` 149/36, `loyalty_ledger` 219/49, `notification_queue`
+316/55, `observability` 165/40, `order_status` 170/32, `pricing_honesty` 122/40,
+`referral_program` 289/62, `request_identity` 161/30, `runtime_config` 210/54,
+`schema_provenance` 241/51, and the new `referral_credit` 128/21. Gate 3: 256 − 3 + 29 = 282
+(`MIN_BINDINGS` 282). **Three rows were removed in the same change that moved `MIN_BINDINGS`**,
+which the floor alone cannot catch, so they are named here: `referral_program.MILESTONE_RUNG_COUNT`
+against the ladder and against its defaults in `src/db/referrals.rs` (both deleted), and
+`legacy_retirement.WELCOME_CREDIT_SENTENCE` against its writer (deleted; the `legacy_view.rs`
+withheld-sentence row stays). Each of the 29 new rows was planted red once (`--source-override`,
+or a mirror tree for the `tree_*` rows) and restored.
+
+**Rust.** `cargo fmt -- --check` is clean. The three clippy forms pass with `-D warnings`
+(`--features backend --bin turbobaby-bot-server`, `--features backend`, and `--target
+wasm32-unknown-unknown --lib`). `cargo test --features backend -j 2 --no-fail-fast` on `872698b`: 80
+result lines, **2 570 passed, 0 failed**, 161 ignored.
+
+**DB-backed.** A fresh private PostgreSQL 18.0 (`initdb -A trust -U postgres -E UTF8 --locale=C`),
+data dir `D:/t27work/pgdata-r5a-2509`, listening on 127.0.0.1:55437 only, a fresh database per run,
+`HTTPS_PROXY`/`HTTP_PROXY`/`ALL_PROXY`/`TELOXIDE_PROXY` = `http://127.0.0.1:9`. The whole suite on
+`872698b`, `cargo test --features backend -j 2 --no-fail-fast -- --include-ignored --test-threads=1`
+skipping the two tests of `tests/https_reaches_telegram.rs`: 80 result lines, **2 729 passed, 0
+failed**, 2 filtered out. The new DB tests: the 16 of `tests/integration_referral_credit.rs`, the 2
+of `tests/integration_closed_reads.rs`, and in-crate
+`the_bot_reject_path_reverses_inside_its_transaction` (`src/db/referral_credit.rs`) and
+`a_confirmed_referral_credits_nobody` (`src/db/referrals.rs`, the renamed chain test). The server
+was stopped with `pg_ctl stop -m fast`; the data dir is left in place.
+
+**Citations.** Edits were kept line-preserving where a cited line sat below them (a removed line
+became a comment line) and new declarations were appended at the ends of files, so most citations
+did not move. 177 that did were re-pinned in place as `:new (:old until 2026-09-26)`; citations of
+code that no longer exists name it "at e39221e". Not re-pinned, deliberately: DECISIONS.md's older
+entries (D8 cites `OrderItem` in `src/db/orders.rs` at 502-525; it is at 432-455 now) and
+migrations, which are frozen. Still stale, and stale before this round: `schema_provenance.t27`'s
+citations into `scripts/verify_t27_specs.py` (the manifest grows with every floor comment).
+
+**What is left.**
+
+* **The integration** (`t27/round5`): merge this branch, then `t27/round5-client`. Both lanes edited
+  `catalog_write.t27`, `locale_policy.t27`, `runtime_config.t27` and their floors in
+  `scripts/verify_t27_specs.py`, so expect conflicts there and re-measure rather than pick a side.
+  Then gate rows 30–31 (the i18n subtitle's percent, RU and EN), `MIN_BINDINGS` to the measurement
+  (284 expected), the client paragraph of DECISIONS.md, the one `dist/` rebuild, the wasm greps and
+  the smoke test. `tests/ui_endpoints_exist.rs` is red on the client branch alone, by design, until
+  this branch is merged. *Done on 2026-09-26: see "Round 5, integrated" below.*
+* **Nothing is live** until `main` is deployed; migration 089 runs on the next start.
+* **The owner's open questions** (DECISIONS.md): the gross or net base of the 10%, the public
+  `/api/referrals/leaderboard`, and the admin-facing wording.
+* The two locale strings that announced the stopped credits (`referral_friend_ordered`,
+  `referral_milestone_bonus` in `src/locales.rs`) are read by nobody and were left, like
+  `REFERRAL_WELCOME_BONUS` and the `loyalty_config` keys `referral_bonus` and `milestone_bonus_N`.
+
+### Round 5, integrated: R1–R3 of 2026-09-26, not yet live
+
+Branch `t27/round5`, cut from `main` at `e39221e` (#68). It merges `t27/round5-server` (`a57c3ab`,
+the section above) and then `t27/round5-client` (`62ead98`), both with `--no-ff`, pins the API's
+shape on both sides, rebuilds `dist/` once and adds this section. **Nothing is pushed and nothing
+is deployed.** No row is deleted or rewritten; migration 089 only creates, and it runs on the next
+start of a deployed `main`. The owner's words are quoted verbatim in DECISIONS.md, in the entry
+«R1–R3, the owner's answers of 2026-09-26» (server) and the one after it, «R3, the Mini App's half
+and the integration» (client lane and integration).
+
+| commit | what |
+| --- | --- |
+| `2ece6ce` | merge of `t27/round5-server`, no conflict |
+| `bbdbaca` | merge of `t27/round5-client`; one file conflicted, resolved to both sides (below) |
+| `992077f` | the API's one shape pinned on both sides, gate rows 30–31, `referral_credit.t27`'s integration block, DECISIONS.md's client and integration entry |
+| `fa03a3b` | `dist/` rebuilt, bundle `7143e607a7409c70` → `4fa1b87a15ac065a` |
+| the next commit | this section, the "Where it stands" rows, and the contract map's `referral_credit.t27` row (515 → 565 lines) |
+
+**The client lane** (`593a499`, `62ead98`, both on the server lane's S0 `b3f9653`). The referrals
+page shows «Реферальный баланс» through `shown_balance` and `format_baht`, with «Списать в счёт
+аренды» and «Запросить выплату» posting the shared `OpenRequestBody` and re-reading the balance
+after every request; the milestone ladder, the «Бонус» card, the friend-facing share text and the
+empty friends panel are gone; the subtitle and the profile's referral card print the rule sentence.
+The admin screen's Loyalty tab gets «🤝 Рефералы» and `ReferralCreditPanel`, appended at the end
+of `src/ui/screens/admin_screen.rs`. Seven i18n keys retired and four declared, line for line: 526
+→ 523 declarations, naive grep 531 → 528 (measured on the merged `src/trios/i18n.rs`).
+
+**The conflict** (`bbdbaca`). Only the gate-1 manifest: both lanes raised two floors by one or more
+declarations each, for different declarations.
+
+* `catalog_write.t27`: the server's `NEXT_LARGEST_SOURCE_LINES_BEFORE_2026_09_26` (159/44) and the
+  client's `ADMIN_SCREEN_LINES_BEFORE_2026_09_26` (159/44) merge to the measured **160/44**. Both
+  readings hold together on the merged tree: `src/ui/screens/admin_screen.rs` is 6 627 lines (the
+  largest file), `src/main.rs` 4 603 (the second).
+* `locale_policy.t27`: the server's `MIGRATION_FILES_SEARCHED_BEFORE_089` (149/36) and the client's
+  five R3 key-count declarations (155/36) merge to the measured **156/36**.
+
+`catalog_write.t27`, `locale_policy.t27` and `runtime_config.t27` themselves merged without a
+textual conflict, each side's block kept. All 46 floors equal the pinned compiler's counts.
+
+**Citations across the lanes.** Every `path:N` citation in the merged tree, bare `:N` continuations
+after a named path included, that points into a file either lane changed was checked against the
+version its citing line was written against (the lane whose tip first carries the line, or both
+lanes' tips when the line is older than both), line by line through a diff of that version against
+the merged file. No citation either lane added points into a file the other lane changed and moved.
+The only moved citations are `schema_provenance.t27`'s into `scripts/verify_t27_specs.py` (lines
+599, 603, 665, 680, 689, 973), stale since before this round and now further out by this round's
+floor comments; left as they are, as the sections above say.
+
+**The API's one shape** (`992077f`). Both lanes compile against the wire types of
+`src/trios/referral_credit.rs`, so a field cannot drift between them. What no compiler compares, and
+what `tests/ui_endpoints_exist.rs` (every fetched path is served) does not see, is now pinned by
+`tests/referral_credit_api_shape_wiring.rs`, 7 tests over one table of the six routes:
+
+* the server registers exactly the six (path, verb, handler) in `routes()`;
+* each handler answers from the ledger function whose return type is the table's shared answer
+  type (`ReferralCredit`, `OpenRequestResponse`, `AdminOverview`, `RecordRentalResponse`,
+  `ReverseResponse`, `ResolveResponse`);
+* each hand-written body parser reads exactly the shared body's fields (`parse_record_body` against
+  `RecordRentalBody`, and so on);
+* each screen builds each route's URL, sends it through a helper of the route's verb
+  (`fetch_text_authed_full` and the page's `fetch_credit`; `post_json_authed`; `fetch_text_admin`;
+  the panel's `referral_admin_post` over `post_json_admin_full`), sends the shared body and parses
+  the shared answer, and builds no other credit path;
+* the request kinds the page sends are `REQUEST_KINDS`, and the resolve actions the panel sends are
+  the ones `parse_resolve_body` admits.
+
+Its parsers are pinned by their own assertions first. Negative control, each planted in the tree,
+run against the built test binary and restored from a copy: a client path (`/reverse` →
+`/reversal`), a parsed type (the page parsing `ReferralCredit` from the request's answer), the
+overview posted instead of fetched, a server verb (`post(post_rental)` → `get`), a field name the
+parser reads (`note` → `notes`), an answer type (`reverse_rental` returning `ResolveResponse`), a
+resolve action (`declined` → `decline`) and a swapped body (`ReverseBody` sent to the request
+route): **8 of 8 red**, each in the test that names it. The in-crate test
+`the_bodies_the_screens_serialize_are_what_the_parsers_read` (`src/api/referral_credit.rs`) runs
+each shared body, serialized as a screen serializes it, through its parser and gets it back
+unchanged. `referral_credit.t27` records both witnesses, names the seven retired keys (the client
+lane left their names to it) and the ninth customer sentence the client lane needed and left out;
+its floor 128/21 → **137/22**, measured.
+
+**Gates**, on `992077f` and again, with the same numbers, on the commit that adds this section
+(`fa03a3b` between them changes `dist/` only, which no gate reads); pinned compiler `40003ed`:
+
+```sh
+T27C=<path>/t27c python3 scripts/verify_t27_specs.py --require-compiler
+# OK - 46 manifested specs, 5 generators each (every floor equals the measurement)
+python3 scripts/execute_t27_assertions.py            # WITH the compiler cross-check
+# OK - 46 spec(s), 11033 assert line(s) scanned, 11033 executed, 11033 passed, 0 failed;
+#      10510 declaration name(s) and function bodies agreed with t27c; 2 pinned front-end disagreement(s)
+python3 scripts/verify_t27_against_source.py --require-git-tracked
+# OK - 284 bindings hold across 42 contracts and 88 source files
+python3 scripts/verify_fleet_seed.py -v
+# OK — 14 families (13 offered), 37 units (11 rented, 26 available); ...
+```
+
+Gate 3: 282 + 2 = **284** (`MIN_BINDINGS` 284, the measured table size; no row removed). The two
+rows bind `referral_credit.CREDIT_PERCENT` to the Mini App's rule sentence, `T_REFERRAL_SUBTITLE`
+in `src/trios/i18n.rs`, RU and EN, one arm each. Each was planted red once (the arm's rate set to 15
+through `--source-override`: `contract=10 source=15`) and restored. `src/trios/i18n.rs` is the 88th
+source file.
+
+**Rust.** `cargo fmt -- --check` clean. The three clippy forms pass with `-D warnings`
+(`--features backend --bin turbobaby-bot-server`, `--features backend`, and `--target
+wasm32-unknown-unknown --lib`). `cargo test --features backend -j 2 --no-fail-fast` on `992077f`: 82
+result lines, **2 594 passed, 0 failed**, 161 ignored, doc tests included;
+`tests/ui_endpoints_exist.rs` is green (3 passed), `tests/referral_credit_api_shape_wiring.rs` 7,
+`tests/referral_credit_client_wiring.rs` 11, `tests/referral_credit_wiring.rs` 11.
+
+**`dist/`**, `fa03a3b`. Built once with `scripts/build-frontend.sh` (trunk 0.21.14, wasm-bindgen
+0.2.122, `CARGO_BUILD_JOBS=2`, the shared target) from `992077f`: bundle `7143e607a7409c70` →
+`4fa1b87a15ac065a`, no `dist/version.txt.br`, `dist/assets/` still ignored. Read inside the new wasm
+(`grep -c -a -F`, old → new): «Присоединяйся к TurboBaby и получай бонусы!» 1 → 0, «Рубежи друзей»
+1 → 0, "Friend milestones" 1 → 0, «Получайте» 1 → 0; the old subtitles, the empty-panel sentences,
+«Получайте {0} за друга», "Earn {0} per referral" and the `/milestones` path 1 → 0 (the English
+subtitle 2 → 0); «Реферальный баланс» 0 → 1, "Referral balance" 0 → 1, the two buttons, the payout
+sentence and the rule sentence 1 each in RU and EN, `/api/referral-credit/me/` 2 (the read and the
+request), `/api/admin/referral-credit/overview` 1. `scripts/predeploy-smoke.sh --no-build`: **SMOKE
+PASS** (the app mounted, no uncaught JS error), and `git status` was empty after it.
+
+**DB-backed**, on `fa03a3b`. A fresh private PostgreSQL 18.0 (`initdb -A trust -U postgres -E UTF8
+--locale=C`), a new data dir `D:/t27work/pgdata-r5-2509`, listening on 127.0.0.1:55438 only, one
+fresh database, `HTTPS_PROXY`/`HTTP_PROXY`/`ALL_PROXY`/`TELOXIDE_PROXY` = `http://127.0.0.1:9`. The
+whole suite, `cargo test --features backend -j 2 --no-fail-fast -- --include-ignored
+--test-threads=1` skipping the two tests of `tests/https_reaches_telegram.rs`: 82 result lines,
+**2 753 passed, 0 failed, 0 ignored** (2 filtered out), no compiler warning. That is the 2 594 + 161
+of the run without a database, less the two skipped; among them the 16 of
+`tests/integration_referral_credit.rs`, the 2 of `tests/integration_closed_reads.rs`,
+`the_bot_reject_path_reverses_inside_its_transaction` and `a_confirmed_referral_credits_nobody`. The
+server was stopped with `pg_ctl stop -m fast`, and the data dir is left in place.
+
+**What is left.**
+
+* Push, review and merge of `t27/round5`, then a deploy of `main`. Nothing here is live; migration
+  089 runs on the next start, and the committed `dist/` is what a deploy would serve.
+* **The owner's open questions** (DECISIONS.md): the 10% on the net charge (as built) or the gross;
+  the public `/api/referrals/leaderboard`, which the referrals page's top list still reads and whose
+  rows print the frozen `total_bonus_earned` as «{1} заработано»; the admin-facing wording both
+  lanes wrote.
+* Customer copy needed and not given, left out (nine sentences, listed in DECISIONS.md and in
+  `referral_credit.t27`).
+* The locale strings, config keys and env variable of the stopped credits stay, read by nobody, as
+  the section above lists.
+
+### Round 5, review fix, 2026-09-26: the recorder guard and the password token, not yet live
+
+One demand of the review of `t27/round5` at `1419dc1`, verified against the tree before it was
+applied, on the same branch. **Nothing is pushed and nothing is deployed.** No migration, no row
+deleted or rewritten, no client file touched, so `dist/` was not rebuilt (bundle
+`4fa1b87a15ac065a` unchanged) and the smoke test of `fa03a3b` still covers what a deploy serves.
+
+| commit | what |
+| --- | --- |
+| `b1d900e` | the guard in code, the contract's qualification, gate 1's floor, gate 3's two rows, two tests |
+| the next commit | DECISIONS.md's entry, this section, the "Where it stands" rows, the contract map's row (565 → 616 lines) |
+
+**The demand, verified.** `check_admin` (`src/api/auth.rs`) answers `Ok(0)` for a valid
+`X-Admin-Token`, including when initData is missing, fails the strict check or names a non-admin;
+`post_rental` passed that 0 on; `record_rental` refused only `admin_id != 0 && admin_id == inviter`.
+`referral_credit.t27` said `RECORDER_MAY_BE_THE_INVITER = false` with no qualifier, and neither it
+nor DECISIONS.md named the password path. The only test of the refusal (`refusals`) used initData.
+Measured by planting the old guard back and running the new test on a fresh private database: the
+password record of the admin's friend answered **200**, and the admin's ledger held one accrual of
+100 THB on a record with `recorded_by = 0`.
+
+**The fix.** `post_rental` hands the ledger `state.config.admin_ids`, and `record_rental` refuses
+through `recorder_is_the_inviter` (`src/db/referral_credit.rs`): a named recorder when he is the
+inviter, a password record when the inviter is on the admin list. Same 422 `recorder_is_inviter`,
+nothing written. Still open and said so in the contract and in DECISIONS.md (owner's call): a person
+who knows the password and is not on `ADMIN_IDS`, and `recorded_by = 0` naming nobody; also an admin
+marking his own payout paid.
+
+* `referral_credit.t27`: both identities and the open gap in prose, eight declarations,
+  `recorder_refused`, the test `the_recorder_guard_reads_both_admin_identities` and the invariant
+  `no_admin_credits_himself_under_either_identity`; floor 137/22 → **148/24**, measured.
+* Gate 3, 284 → **286** rows (`MIN_BINDINGS` 286): `RECORDER_GUARD_ADMIN_LIST_READS` (the one
+  `admin_ids.contains(&inviter)` in the ledger, with a witness pinning the guard to the record's
+  creditable arm) and `RECORDER_GUARD_ADMIN_LIST_HANDED_TO_THE_RECORD` (the one call in
+  `post_rental` that passes `&state.config.admin_ids`). Planted RED through `--source-override`, one
+  copy each: the read replaced by `false` (`contract=1 source=0`), the old guard restored (the
+  witness matched nothing), the list replaced by `&[]` (`contract=1 source=0`).
+* Tests: in-crate `the_recorder_guard_reads_both_admin_identities` (no database) and
+  `a_password_record_of_a_listed_admins_friend_is_refused` in `tests/integration_referral_credit.rs`:
+  the token alone, initData signed with another bot's token beside the token, and a linked completed
+  order each answer 422 and leave no record, no ledger row and the edge pending; a named admin
+  records another inviter's friend under his own id; the password records an outsider's friend as
+  0. Against the planted old guard it is **red** at its first assertion (`left: (200, Null)`), and
+  `refusals` stays green, which is why the old suite never saw the gap.
+
+**Gates** on `b1d900e`, pinned compiler `40003ed`:
+
+```sh
+T27C=<path>/t27c python3 scripts/verify_t27_specs.py --require-compiler
+# OK - 46 manifested specs, 5 generators each (every floor equals the measurement)
+python3 scripts/execute_t27_assertions.py            # WITH the compiler cross-check
+# OK - 46 spec(s), 11048 assert line(s) scanned, 11048 executed, 11048 passed, 0 failed;
+#      10522 declaration name(s) and function bodies agreed with t27c; 2 pinned front-end disagreement(s)
+python3 scripts/verify_t27_against_source.py --require-git-tracked
+# OK - 286 bindings hold across 42 contracts and 88 source files
+python3 scripts/verify_fleet_seed.py -v
+# OK — 14 families (13 offered), 37 units (11 rented, 26 available); ...
+```
+
+**Rust.** `cargo fmt -- --check` clean. Clippy with `-D warnings` passes on `--features backend
+--bin turbobaby-bot-server` and `--features backend`; the wasm form was not re-run, because
+`src/db/` and `src/api/` are not compiled for wasm32 and no client file changed. `cargo test
+--features backend -j 2 --no-fail-fast`: 82 result lines, **2 596 passed, 0 failed**, 162 ignored
+(2 594 + the new unit test in the lib and the bin; 161 + the new integration test).
+
+**DB-backed.** A fresh private PostgreSQL 18.0 (`initdb -A trust -U postgres -E UTF8 --locale=C`),
+a new data dir `D:/t27work/pgdata-r5f-2509`, listening on 127.0.0.1:55439 only, a fresh database,
+`HTTPS_PROXY`/`HTTP_PROXY`/`ALL_PROXY`/`TELOXIDE_PROXY` = `http://127.0.0.1:9`. The whole suite,
+`cargo test --features backend -j 2 --no-fail-fast -- --include-ignored --test-threads=1` skipping
+the two tests of `tests/https_reaches_telegram.rs`: 82 result lines, **2 756 passed, 0 failed, 0
+ignored** (2 filtered out), no compiler warning from this crate; the 17 of
+`tests/integration_referral_credit.rs` among them. Read back afterwards: two edges from the admin id
+42, both still pending, no record of either friend, no ledger row of 42, one record by 42 (the named
+case). The negative control ran on a second fresh database of the same server; with the fixed file
+copied back, `tests/integration_referral_credit.rs` ran green on a third (17 passed). The server was
+stopped with `pg_ctl stop -m fast`, and the data dir is left in place.
 
 ```sh
 # 1. structure: module, unique ID, declaration floors, typecheck, five generators.

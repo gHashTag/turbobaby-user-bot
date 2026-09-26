@@ -391,6 +391,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
         "088_unpublish_events.sql",
         include_str!("../../migrations/088_unpublish_events.sql"),
     ),
+    (
+        "089_referral_credit.sql",
+        include_str!("../../migrations/089_referral_credit.sql"),
+    ),
 ];
 
 /// The last migration that shipped before the bike domain, and therefore the last
@@ -2197,3 +2201,6 @@ mod db_pool_max_tests {
         );
     }
 }
+
+// The referral credit of 2026-09-26 (R3): appended so that no line of this file moves.
+pub(crate) mod referral_credit;

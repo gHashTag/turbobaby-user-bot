@@ -90,6 +90,7 @@ the market's currency, `ride_runtime` names the roster owner whose decisions it 
 | `promo_broadcast.t27` | 832 | ai-assist, availability, bot-surface, deeplink, legacy-retirement, locale-policy, pricing-honesty, rate-limit |
 | `publication.t27` | 667 | BOT (the owner card) |
 | `rate_limit.t27` | 724 | ai-assist, client-errors, events-booking, http-cache, observability, promo-broadcast, request-identity, upload-media |
+| `referral_credit.t27` | 616 | commerce, deposit-tiers, loyalty-ledger, market, notification-queue, order-money, order-status, referral-program, request-identity |
 | `referral_program.t27` | 1092 | bot-surface, deeplink, loyalty-ledger, notification-queue, request-identity, star-award |
 | `rental_terms.t27` | 761 | bike-catalog, pricing-honesty |
 | `request_identity.t27` | 831 | cart-persistence, catalog-api |
@@ -101,6 +102,13 @@ the market's currency, `ride_runtime` names the roster owner whose decisions it 
 | `upload_media.t27` | 846 | catalog-write, client-errors, rate-limit, request-identity |
 | `validation_bounds.t27` | 937 | catalog-write, pricing-honesty, request-identity, ride-runtime |
 | `webapp_bridge.t27` | 896 | catalog-api, client-errors, commerce, deeplink, loyalty-ledger, request-identity |
+
+The table keeps the 2026-09-21 measurement, except one row: `referral_credit.t27` was added on
+**2026-09-26** with the owner's R3 answer and is measured on that day (515 lines on the server lane,
+565 after the integration's block the same day, 616 after the review fix's recorder guard). Two
+contracts tracked since
+the measurement, `order_presentation.t27` and `person_naming.t27`, are manifested in the gate but
+not yet indexed here.
 
 ## What each one owns, in one line
 
@@ -129,7 +137,10 @@ of every authenticated call and the DTO mirror. `upload_media` — the only gate
 
 **Money that is not a price.** `star_award` — the server side of a game payout and its ceiling.
 `loyalty_ledger` — the bonus ledger's structure, without rates the repository does not publish.
-`referral_program` — the code grammar, the self-edge guards and the milestone ladder.
+`referral_program` — the code grammar, the self-edge guards, and the milestone ladder and
+welcome credit it paid until the owner stopped them on 2026-09-26 (R3).
+`referral_credit` — the inviter's 10% of each recorded completed rental of an invited friend, a
+separate THB ledger, and the redeem or payout request a manager resolves by hand.
 `game_score` — the high-score ledger and the discriminator it does not have.
 
 **The game.** `ride_game` — the rideable roster and the handling model. `ride_runtime` — control
@@ -162,7 +173,7 @@ a spec may quietly fill in.
 | the composition order of class and term discount | `rental_terms` | an owner ruling; the seed publishes two tables and no order between them |
 | a priced Phuket delivery table | `delivery_terms` | the owner's prices; the seed publishes one area fee and forbids interpolating the rest |
 | loyalty tiers, cashback and usage caps | `loyalty_ledger` | a published source; the seed contains zero occurrences of loyalty and bonus |
-| milestone amounts | `referral_program` | the same |
+| milestone amounts | `referral_program` | moot since 2026-09-26: the owner stopped the ladder (R3); the only referral money is `referral_credit`'s 10% |
 | a reservation, hold or expiry for a rental | `commerce` | a mechanism; nothing in the tree reserves a unit |
 | a count of confirmed overlapping rentals | `commerce` | a query; nothing counts them |
 | `locked` and `abandoned` as stored cart states | `cart_persistence` | a column; the carts table has no status |

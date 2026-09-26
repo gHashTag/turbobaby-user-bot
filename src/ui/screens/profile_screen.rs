@@ -6,10 +6,10 @@ use crate::trios::i18n::{
     T_PROFILE_BONUS_ADMIN, T_PROFILE_BONUS_CASHBACK, T_PROFILE_BONUS_DEBIT,
     T_PROFILE_BONUS_HISTORY, T_PROFILE_BONUS_HISTORY_EMPTY, T_PROFILE_BONUS_OTHER,
     T_PROFILE_BONUS_REFERRAL, T_PROFILE_CASHBACK_LABEL, T_PROFILE_CONTACTS, T_PROFILE_COPY,
-    T_PROFILE_COPY_LINK, T_PROFILE_EARN_PER_REF, T_PROFILE_FRIENDS_INVITED, T_PROFILE_INVITED,
-    T_PROFILE_LOAD_ERROR, T_PROFILE_MEMBERSHIP, T_PROFILE_MORE_TO_UNLOCK, T_PROFILE_MY_ORDERS,
-    T_PROFILE_OPEN_MAP, T_PROFILE_ORDER_HISTORY, T_PROFILE_PROGRESS, T_PROFILE_QR_CODE,
-    T_PROFILE_QUESTS, T_PROFILE_QUICK_ACTIONS, T_PROFILE_REFERRAL_LINK, T_PROFILE_REFERRAL_PROGRAM,
+    T_PROFILE_COPY_LINK, T_PROFILE_FRIENDS_INVITED, T_PROFILE_INVITED, T_PROFILE_LOAD_ERROR,
+    T_PROFILE_MEMBERSHIP, T_PROFILE_MORE_TO_UNLOCK, T_PROFILE_MY_ORDERS, T_PROFILE_OPEN_MAP,
+    T_PROFILE_ORDER_HISTORY, T_PROFILE_PROGRESS, T_PROFILE_QR_CODE, T_PROFILE_QUESTS,
+    T_PROFILE_QUICK_ACTIONS, T_PROFILE_REFERRAL_LINK, T_PROFILE_REFERRAL_PROGRAM,
     T_PROFILE_REORDER, T_PROFILE_RETRY, T_PROFILE_SHARE, T_PROFILE_SPENT, T_PROFILE_STARS,
     T_PROFILE_TIER_BENEFITS, T_PROFILE_TIER_BRONZE, T_PROFILE_TIER_GOLD, T_PROFILE_TIER_SILVER,
     T_PROFILE_TIER_STARTER, T_PROFILE_TITLE,
@@ -64,13 +64,13 @@ struct LoyaltyConfigData {
     max_bonus_usage_pct: f64,
     next_tier: String,
     next_threshold: f64,
-    /// What the shop pays for a friend who orders, read from `loyalty_config`.
-    ///
-    /// `#[serde(default)]` so a client that is newer than the server still
-    /// parses the rest of the block; `Option` rather than `0.0` so "the server
-    /// did not say" is not printed as "you earn nothing".
-    #[serde(default)]
-    referral_bonus: Option<f64>,
+    // `referral_bonus`, what the shop paid for a friend who ordered, stood here
+    // with its doc. Removed 2026-09-26 (owner, R3: «Убрать, только скидка 10%»):
+    // no amount is credited per friend any more, the server stops serving the
+    // key, and a bundle that still has the field reads `None` and drops the
+    // line. The referral card prints the rule sentence instead. An older server
+    // that still sends the key is ignored: serde skips a field it does not
+    // know. One comment line per removed line, so no line below moves.
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -621,21 +621,21 @@ pub fn ProfileScreen() -> Element {
     let remaining = next_threshold.map(|t| (t - total_spent).max(0.0));
 
     let lang = crate::ui::lang::current_lang();
-    // What a friend is worth, straight off the wire. `None` when the server did
-    // not say — the line is then left off the screen rather than printed with a
-    // number this page invented, which is what it did until 2026-09-16 (`฿100`,
-    // against a configured default of 200).
-    let earn_per_referral = config
-        .as_ref()
-        .and_then(|c| c.referral_bonus)
-        .filter(|v| v.is_finite() && *v > 0.0)
-        .map(|v| {
-            tf(
-                lang,
-                T_PROFILE_EARN_PER_REF,
-                &[crate::trios::pricing::format_baht(v)],
-            )
-        });
+    // The referral card's second line is the programme's rule since 2026-09-26
+    // (owner, R3: «Должно начисляться исключительно за то кто арендовал 10%
+    // скидка»): 10% of every rental an invited friend completes. It replaced the
+    // amount per friend this card printed off `loyalty_config.referral_bonus`,
+    // which the shop no longer credits. The sentence is the operator's wording
+    // under R3, `T_REFERRAL_SUBTITLE`, the one the referrals page opens with,
+    // and its rate is held to `trios::referral_credit` by a test in
+    // `src/trios/i18n.rs`. No figure is printed here: the balance lives on the
+    // referrals page, from its own route. The block this replaced read the
+    // config's figure, dropped it when absent or not positive and formatted it
+    // through `format_baht`; none of that survives, because nothing here is an
+    // amount any more, and `LoyaltyConfigData` above no longer has the field.
+    // The line is printed always: it is copy, not a figure a server may omit.
+    // Kept at the length of that block, so no line cited below it moves.
+    let referral_rule = t(lang, crate::trios::i18n::T_REFERRAL_SUBTITLE);
     let profile_title = t(lang, T_PROFILE_TITLE);
     let is_loading = loyalty_resource.read().is_none();
 
@@ -919,9 +919,9 @@ pub fn ProfileScreen() -> Element {
                 }
                 div { style: "display: flex; gap: 12px; font-size: 13px;",
                     span { style: "color: #8b8b9e;", "{tf(lang, T_PROFILE_INVITED, &[invited_count.to_string()])}" }
-                    if let Some(earn) = earn_per_referral.clone() {
-                        span { style: "color: #39ff14;", "{earn}" }
-                    }
+                    // The rule, where the amount per friend stood (owner, R3,
+                    // 2026-09-26).
+                    span { style: "color: #39ff14;", "{referral_rule}" }
                 }
             }
 

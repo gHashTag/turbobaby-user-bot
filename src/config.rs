@@ -56,9 +56,9 @@ pub struct Config {
     /// IDs are accepted. Optional — when absent the QR endpoint falls back
     /// to a plain text payment prompt.
     pub promptpay: crate::promptpay::QrConfig,
-    /// Loop #19: one-time welcome bonus credited to a newly-referred user
-    /// when their first order completes. Kept at 0 by default so it can be
-    /// enabled later via env without changing existing economics.
+    /// Loop #19's welcome bonus for a newly-referred user's first order: read
+    /// by nobody since 2026-09-26 (R3), when the owner stopped the credit. The
+    /// env value is still parsed, so no variable and no env count moves.
     pub referral_welcome_bonus: f64,
     /// Loop #20: deterministic A/B share sources for the referral viral loop.
     /// Comma-separated list in env; defaults to ["utm_a", "utm_b"].

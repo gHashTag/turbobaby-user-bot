@@ -11,7 +11,7 @@
 ; --
 ; WHY (measured 2026-09-21). "The published command surface" is not one number in this
 ; repository, it is THREE, and they disagree. The parser accepts SIXTEEN commands
-; (src/bot/commands.rs:28-71, sixteen description attributes, sixteen dispatch arms at :186-679).
+; (src/bot/commands.rs:28-71, sixteen description attributes, sixteen dispatch arms at :186-699).
 ; The help reply advertises FIVE (src/locales.rs:197 and :286, the same five in both published
 ; locales). And Telegram itself is told NOTHING: grep -rn "set_my_commands" over every .rs in the
 ; repository returns 0, and so does a grep for descriptions(), so the derive macro's own
@@ -48,7 +48,7 @@
 ; to "name request_identity's ID as the gate owner" for admin commands. The bot does not use that
 ; gate. src/bot/commands.rs imports nothing from src/api/auth.rs, and a grep of the three bot
 ; modules for init_data, initData, check_admin and verify_init_data returns two COMMENTS and no
-; code (src/bot/mod.rs:105, src/bot/commands.rs:584). The bot's gate is one line repeated six
+; code (src/bot/mod.rs:105, src/bot/commands.rs:604). The bot's gate is one line repeated six
 ; times, config.admin_ids.contains(&user_id), against the id Telegram itself put on the webhook
 ; update. What IS shared is the roster, not the proof: both gates read the same
 ; Vec<i64> parsed from ADMIN_IDS (src/config.rs:11, :94-98), and the HTTP side reads it at
@@ -215,8 +215,8 @@ pub fn command_surface_counts_agree(accepted: u8, advertised: u8, registered: u8
 
 ; --- Who may run a command -----------------------------------------------------------------------
 ; Six commands carry the gate, each as the same single line. Gate sites, in the order of the
-; array below: engage src/bot/commands.rs:443, factpost :511, unblock :685, blocks :603,
-; errors :624, promo :646. The gate is membership in the configured roster and nothing else; the
+; array below: engage src/bot/commands.rs:443, factpost :511, unblock :705, blocks :623,
+; errors :644, promo :666. The gate is membership in the configured roster and nothing else; the
 ; boolean arrives here already decided, exactly as the corpus does everywhere else.
 pub const ADMIN_GATED_COMMAND_COUNT : u8 = 6;
 pub const ADMIN_GATED_COMMANDS : [6]str = [
@@ -247,7 +247,7 @@ pub fn bot_admin_command_allowed(command_is_gated: bool, id_is_configured_admin:
 ; THE ONE DISAGREEMENT BETWEEN WHAT A COMMAND SAYS AND WHAT IT DOES. Seven commands describe
 ; themselves as privileged: the six above are marked as admin commands and the admin command is
 ; marked owners-only (src/bot/commands.rs:60). Six are gated. admin is not, and the code says why
-; at :583-586 -- its handler only sends a Mini App button, and the screen behind it gates on a
+; at :603-606 -- its handler only sends a Mini App button, and the screen behind it gates on a
 ; shared password rather than on the roster. That is a deliberate decision and is recorded as
 ; one, not smoothed away: a reader who counts privileged descriptions gets seven and a reader who
 ; counts guards gets six, and the function below is what keeps the pair from drifting unnoticed.
@@ -554,7 +554,7 @@ pub const REPO_ESCAPE_GREP_HITS_2026_09_25 : u8 = 45;
 
 ; --- The legacy tripwire ----------------------------------------------------------------------------
 ; MEASURED, not inferred. Two of the six callback prefixes page a strain-of-day carousel whose
-; only data source is a table that migration 083 dropped. The reader is src/db/mod.rs:1037; its
+; only data source is a table that migration 083 dropped. The reader is src/db/mod.rs:1041; its
 ; one caller is src/bot/callbacks.rs:387, which writes unwrap_or_default() and so turns the query
 ; error into an empty vector. An empty vector makes the index lookup at :388 miss, the arm sends
 ; nothing, and the surface is alive precisely because it fails quietly.
@@ -585,7 +585,7 @@ pub const LEGACY_TABLES_DROPPED_BY_THAT_MIGRATION : u8 = 6;
 pub const DROPPED_TABLE_COUNT_OWNER_ID : str = "turbobaby/legacy-retirement";
 pub const DROPPED_TABLE_COUNT_OWNER_DECLARATION : str = "DROPPED_TABLE_COUNT";
 pub const DROPPED_TABLE_COUNT_OWNERS_VALUE : u8 = 6;
-pub const LEGACY_READER : str = "src/db/mod.rs:1037";
+pub const LEGACY_READER : str = "src/db/mod.rs:1041";
 pub const LEGACY_CALL_SITE : str = "src/bot/callbacks.rs:387";
 pub const LEGACY_ERROR_IS_SWALLOWED : bool = true;
 pub const LEGACY_SURVIVOR_ENTRY : str = "tests/retired_table_wiring.rs:66-76";

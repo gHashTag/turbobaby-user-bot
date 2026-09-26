@@ -163,14 +163,14 @@ pub fn friend_activity_pushed(kind: &str) {
     .increment(1);
 }
 
-/// Loop #21: a referral milestone bonus was awarded.
-pub fn milestone_awarded(milestone: i32) {
-    counter!(
-        "referral_milestone_awarded_total",
-        "milestone" => milestone.to_string()
-    )
-    .increment(1);
-}
+// `milestone_awarded` (Loop #21) stood here: it counted
+// `referral_milestone_awarded_total`, labelled by the rung reached. Its one
+// caller, `maybe_award_referral_milestones`, stopped on 2026-09-26 with the
+// milestone ladder (owner, R3: «Убрать, только скидка 10%»), and
+// `every_metric_helper_is_wired` measured the helper at zero call sites: a
+// counter nothing increments is not observability. A dashboard that graphs
+// the series will see it flat from that day. Kept at the helper's length so
+// that no line cited below moves.
 
 /// Loop #18: a TurboBaby Catch high score was submitted to the server.
 pub fn game_high_score_submitted(score: u64) {
@@ -394,7 +394,7 @@ mod tests {
         referral_invite_funnel("ordered");
         notification_queued("friend_joined");
         friend_activity_pushed("friend_ordered");
-        milestone_awarded(3);
+        // `milestone_awarded(3)` stood here (the helper left on 2026-09-26).
     }
 
     #[test]
