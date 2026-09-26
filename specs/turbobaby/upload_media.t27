@@ -14,7 +14,7 @@
 ; WHY (measured 2026-09-21). Fifteen refusal sites live in the 317 production lines of
 ; src/api/upload.rs, and they are the whole of the boundary: no other route in this repository
 ; takes a body it did not itself define the shape of. The route is also the single exception to
-; the general body limit -- src/api/mod.rs:102-105 merges it AFTER the limit layer on purpose,
+; the general body limit -- src/api/mod.rs:103-106 merges it AFTER the limit layer on purpose,
 ; so its own ceiling at src/api/upload.rs:20 admits a body 55 times the general one and its
 ; handler ceiling at :23 admits 50 times. A boundary that large, with fifteen ways to say no and
 ; one way to say yes, had no contract. What is on the far side of the yes is a filename the
@@ -37,9 +37,9 @@
 ;      non-wasm target, and Cargo.toml:65 makes the server binary require it. Its default is OFF
 ;      -- Cargo.toml:174 reads default = [] -- so on a default build this route does not exist,
 ;      and neither does any other API route. Nothing here is upload's own.
-;   2. The survey's src/api/mod.rs:105 is a real and load-bearing line, but it is not a gate. It
-;      is the merge that places this route AFTER the body-limit layer set at :104, and the two
-;      comment lines at :102-103 say so. Mistaking it for a gate inverts its meaning: it does not
+;   2. The survey's src/api/mod.rs:105 (:106 since 2026-09-26) is load-bearing, but not a gate. It
+;      is the merge that places this route AFTER the body-limit layer set at :105, and the two
+;      comment lines at :103-104 say so. Mistaking it for a gate inverts its meaning: it does not
 ;      restrict this route, it is the single line that exempts it.
 ;   3. "The content-type allowlist" does not exist in the form the phrase implies. The multipart
 ;      part's declared content type is never read: content_type() returns 0 occurrences across
