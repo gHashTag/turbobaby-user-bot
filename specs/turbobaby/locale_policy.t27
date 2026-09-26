@@ -166,13 +166,13 @@ pub const STORAGE_DEFAULT_LOCALE : str = "en";
 pub const DEFAULTS_AGREE : bool = false;
 pub const STORAGE_COLUMN : str = "migrations/001_initial.sql:4 user_languages.language VARCHAR(10) NOT NULL DEFAULT en";
 ; Measured by searching every .sql file under migrations/ for a CHECK or a constraint naming
-; that column: there is none. The search is recursive and the count says so -- 88 files sit at
-; the top level and one more in migrations/wip, and a top-level-only count would have been 88
-; while claiming to have looked everywhere. src/db/mod.rs:900-923 set_user_lang writes the code
-; it is handed after a length truncation (src/db/mod.rs:903, to 50 characters), with no
+; that column: there is none. The search is recursive and the count says so -- 89 files sit at
+; the top level and one more in migrations/wip, and a top-level-only count would have been 89
+; while claiming to have looked everywhere. src/db/mod.rs:904-927 set_user_lang writes the code
+; it is handed after a length truncation (src/db/mod.rs:907, to 50 characters), with no
 ; membership test. So the store admits a code the shop does not publish, and the read path
 ; resolves it exactly like any other unpublished code.
-pub const MIGRATION_FILES_SEARCHED : u8 = 89;
+pub const MIGRATION_FILES_SEARCHED : u8 = 90;
 pub const STORAGE_CONSTRAINS_THE_PUBLISHED_SET : bool = false;
 ; WHOSE COUNT THIS IS. turbobaby/pricing-honesty raised the same figure first, in a declaration
 ; of the same name, for a different search over the same directory. Two contracts declaring one
@@ -209,8 +209,14 @@ pub const MIGRATION_COUNT_OWNER_DECL_BEFORE_2026_09_24 : str = "MIGRATION_FILES_
 pub const MIGRATION_COUNT_IS_A_COPY : bool = true;
 pub const MIGRATION_COUNT_REMEASURED_AT : str = "2026-09-24";
 pub const MIGRATION_COUNT_OWNER_REPOINTED_AT : str = "2026-09-24";
+; CORRECTED 2026-09-26: 90 recursive, 89 at the top level. migrations/089_referral_credit.sql
+; arrived (turbobaby/referral-credit, the owner's R3 answer); it holds no CHECK and no constraint on
+; a language column, so the search still finds none. The two src/db/mod.rs citations above moved
+; four more lines when it joined MIGRATIONS (900-923 and 903 before). The count before it is kept
+; under _BEFORE_089.
 pub const MIGRATION_FILES_SEARCHED_BEFORE_087 : u8 = 87;
 pub const MIGRATION_FILES_SEARCHED_BEFORE_088 : u8 = 88;
+pub const MIGRATION_FILES_SEARCHED_BEFORE_089 : u8 = 89;
 
 ; --- The enumerated variant set, and the gap -------------------------------------------------
 ; src/trios/core.rs:8-17 enum Lang: Russian, English, Thai, Chinese, Hebrew, German, French,
@@ -512,8 +518,9 @@ test the_shared_value_is_a_coincidence_of_two_measurements_and_not_an_inheritanc
 ; owner. Since 2026-09-24 the owner is the schema census and not the pricing contract, so the edge
 ; no longer coincides with the reuse edge to pricing-honesty, and the test says that too.
 test the_migration_count_is_carried_as_a_copy_and_its_owner_is_named {
-  assert MIGRATION_FILES_SEARCHED == 89;
-  assert MIGRATION_FILES_SEARCHED == MIGRATION_FILES_SEARCHED_BEFORE_088 + 1;
+  assert MIGRATION_FILES_SEARCHED == 90;
+  assert MIGRATION_FILES_SEARCHED == MIGRATION_FILES_SEARCHED_BEFORE_089 + 1;
+  assert MIGRATION_FILES_SEARCHED_BEFORE_089 == MIGRATION_FILES_SEARCHED_BEFORE_088 + 1;
   assert MIGRATION_FILES_SEARCHED_BEFORE_088 == MIGRATION_FILES_SEARCHED_BEFORE_087 + 1;
   assert MIGRATION_COUNT_IS_A_COPY == true;
   assert MIGRATION_COUNT_OWNER_ID == "turbobaby/schema-provenance";
@@ -618,7 +625,7 @@ test the_two_defaults_do_not_agree {
   assert defaults_agree(PRIMARY_LOCALE, PRIMARY_LOCALE) == true;
   assert DEFAULTS_AGREE == false;
   assert STORAGE_CONSTRAINS_THE_PUBLISHED_SET == false;
-  assert MIGRATION_FILES_SEARCHED == 89;
+  assert MIGRATION_FILES_SEARCHED == 90;
 }
 
 test a_missing_arm_renders_the_identifier_and_only_a_test_catches_it {

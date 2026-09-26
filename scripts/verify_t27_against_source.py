@@ -486,7 +486,7 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "source": "src/api/auth.rs",
         "extract": ("regex", r"if init_data\.len\(\) > (\d+)\s*\{"),
         "relation": "equal",
-        "why": "the cap runs BEFORE parsing (request_identity.t27:240), so it is the "
+        "why": "the cap runs BEFORE parsing (request_identity.t27:246; :240 until 2026-09-26), so it is the "
                "bound on what an unauthenticated caller can make the parser do",
     },
     {
@@ -495,7 +495,7 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "const": "AUTH_DATE_MAX_AGE_SECONDS",
         "source": "src/api/auth.rs",
         "extract": ("regex", r"now\.saturating_sub\(\w+\) > (\d+)"),
-        # FRESHNESS_IS_CHECKED_IN_BOTH_PATHS (request_identity.t27:259) says two, so
+        # FRESHNESS_IS_CHECKED_IN_BOTH_PATHS (request_identity.t27:265; :259 until 2026-09-26) says two, so
         # two is what this binding demands -- and both must carry the same number.
         "occurrences": 2,
         "relation": "equal",
@@ -791,7 +791,7 @@ BINDINGS: tuple[dict[str, object], ...] = (
                "uses one again brings that promise back",
     },
     # --- censuses: the numbers that rot on the next endpoint -------------------------------------
-    # request_identity.t27:312-318 declares how many places each authorisation gate is
+    # request_identity.t27:323-333 (:312-318 until 2026-09-26) declares how many places each authorisation gate is
     # called from. The lookbehind drops the one `fn check_admin(` that is the
     # definition; without it every count is one too high.
     {
@@ -805,14 +805,14 @@ BINDINGS: tuple[dict[str, object], ...] = (
         # this number and nothing else notices". That is FALSE in the direction that
         # matters: a route which omits check_admin adds ZERO occurrences, so the census
         # cannot see it. Only a route that DOES call the gate moves the count. The
-        # contract makes no such claim either -- request_identity.t27:307-310 says the
+        # contract makes no such claim either -- request_identity.t27:313-316 (:307-310 until 2026-09-26) says the
         # counts exist "to say why no endpoint-to-gate table lives here", and :319
         # declares ENDPOINT_TO_GATE_MAP_IS_NOT_OWNED_HERE = true. A binding justified by
         # a sentence stronger than what it checks is worse than an unjustified one.
         "why": "the declared size of the admin gate's call surface. It catches the "
                "count going stale -- a site added or removed without re-measuring the "
                "contract -- and NOT an unguarded endpoint, which adds no occurrence at "
-               "all and is outside what request_identity.t27:319 claims to own",
+               "all and is outside what request_identity.t27:334 (:319 until 2026-09-26) claims to own",
     },
     {
         "name": "request_identity.GATE_CALL_SITES_OWNER ~ src/ census",
@@ -1824,7 +1824,7 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "const": "DEAL_NAMES",
         "source": "src/db/orders.rs",
         # BikeDeal's tags come from serde rename_all over the variant names and are spelled
-        # nowhere but these two tests (:1962, :2052), which cargo test holds to the enum.
+        # nowhere but these two tests (:1892, :1982), which cargo test holds to the enum.
         # This row reads the TESTS, not the enum: a variant added with no test asserting its
         # tag leaves it green (planted 2026-09-22). The row below counts the variants.
         "extract": ("regex_all", r'assert_eq!\(json(?:\["[a-z_]+"\])*\["kind"\],\s*"(bike_[a-z_]+)"\);'),
@@ -1846,7 +1846,7 @@ BINDINGS: tuple[dict[str, object], ...] = (
         # column-zero `}` must close the item that stands right before `pub enum
         # DepositForm`. Keyed on that NAME, not on the doc words between them, so rewording
         # the doc cannot blind it; an item inserted between the two enums reads 0: a noisy
-        # red, but a red. Measured 2 (:579 BikeRental, :601 BikeSale). Planted RED: a third
+        # red, but a red. Measured 2 (:509 BikeRental, :531 BikeSale). Planted RED: a third
         # struct variant and a third unit variant, neither with a test.
         "extract": ("regex_count",
                     r"^    [A-Z]\w*\s*(?:\{|\(|,)(?=(?:(?!^\}).)*?^\}\s*(?:///[^\n]*\n\s*)*"
@@ -2626,7 +2626,7 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "spec": "specs/turbobaby/bot_surface.t27",
         "const": "CALLBACK_PREFIXES",
         "source": "src/bot/callbacks.rs",
-        # The file's test module calls data.starts_with("sotd_next_") too (:968, a 7th hit
+        # The file's test module calls data.starts_with("sotd_next_") too (:942, a 7th hit
         # for the bare call). The leading `if` and the `return CallbackAction::` tail each
         # exclude it on their own (6 with either, measured 2026-09-22); the tail is what
         # ties the capture to route_callback's arms. The six are disjoint today, so a
@@ -2776,7 +2776,7 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "why": "the store takes no row claim (0 FOR UPDATE / SKIP LOCKED), so a second call "
                "site would put two drainers on the same pending rows, either free to send a "
                "row the other is sending; this row keeps 'exactly one is spawned' "
-               "(notification_queue.t27:522, :687; re-pinned 2026-09-26 -- the base's :392 and "
+               "(notification_queue.t27:541, :708; re-pinned 2026-09-26 twice -- :522 and :687 before round 5, the base's :392 and "
                ":556-557 sat three and four lines above the sentence) true of the code, per "
                "process and not per deployment",
     },
@@ -2792,7 +2792,9 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "source": "src/notification_queue.rs",
         "extract": ("regex_all", r"^\s*\"(\w+)\" =>"),
         "relation": "list_equal",
-        "witness": r"\"milestone\" => Some\(Self::Milestone\),\s*_ => None,",
+        # One arm since 2026-09-26 (R3): friend_ordered and milestone are held with the
+        # bonuses they announced, and the refusing default follows the one live kind.
+        "witness": r"\"friend_joined\" => Some\(Self::FriendJoined\),\s*_ => None,",
         "why": "a kind the drain accepts is a kind a customer can receive, and every other "
                "row is held unsent (HELD_KINDS_DECIDED_AT); an arm added here without the "
                "contract delivers a kind nobody cleared, and the retired friend_watered is the "
@@ -2939,8 +2941,8 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "spec": "specs/turbobaby/loyalty_ledger.t27",
         "const": "ADMIN_GATED_ROUTE_COUNT",
         "source": "src/api/loyalty.rs",
-        # :230 add_bonus, :418 use_bonus, :742 update_loyalty_config. The import at :10
-        # is `check_admin,` with no paren, and the test module (:774-) calls none. A gate
+        # :230 add_bonus, :418 use_bonus, :763 update_loyalty_config. The import at :10
+        # is `check_admin,` with no paren, and the test module (:795-) calls none. A gate
         # commented out -- whole line or behind a trailing `//` -- is not counted since
         # 2026-09-22 (NOT_IN_A_LINE_COMMENT); before that it read 3 and stayed green.
         "extract": ("regex_count", NOT_IN_A_LINE_COMMENT + r"(?<!fn )\bcheck_admin\("),
@@ -3024,7 +3026,7 @@ BINDINGS: tuple[dict[str, object], ...] = (
         # bonus_balance anywhere in a SET list, and an ActiveModel assignment (0). The SQL
         # alternative is case-insensitive -- SQL keywords and unquoted names are -- and lets a
         # `\` line continuation or a line break stand after SET itself as well as after a comma
-        # in the list (1 today, src/bot/callbacks.rs:735). Until 2026-09-22 it read an
+        # in the list (1 today, src/bot/callbacks.rs:689). Until 2026-09-22 it read an
         # uppercase SET followed by a space only, and both `SET \`+newline and a lowercase
         # `set` were planted green; both are RED now, and the count stayed 10. Measured
         # 2026-09-22: loyalty.rs 2, db/orders.rs 1, db/referrals.rs 3 (the paired six),
@@ -3074,35 +3076,13 @@ BINDINGS: tuple[dict[str, object], ...] = (
                "ungated route over the referral graph -- a new path or a method chained onto "
                "an old one -- goes red instead of shipping",
     },
-    {
-        "name": "referral_program.MILESTONE_RUNG_COUNT ~ referrals.rs ladder length",
-        "spec": "specs/turbobaby/referral_program.t27",
-        "const": "MILESTONE_RUNG_COUNT",
-        "source": "src/db/referrals.rs",
-        # The array's declared length, not its values: MILESTONE_THRESHOLDS [1, 3, 5] is a
-        # numeric array and regex_list/regex_all yield strings, so the values cannot be
-        # compared by this gate today.
-        "extract": ("regex", r"const MILESTONE_THRESHOLDS:\s*\[i32;\s*(\d+)\]\s*="),
-        "relation": "equal",
-        "why": "how many rungs the customer is shown and can reach; src/db/referrals.rs:"
-               "705-711 records that this list was collapsed from three copies precisely "
-               "so a rung could not be promised by one copy and paid by none",
-    },
-    {
-        "name": "referral_program.MILESTONE_RUNG_COUNT ~ referrals.rs defaults length",
-        "spec": "specs/turbobaby/referral_program.t27",
-        "const": "MILESTONE_RUNG_COUNT",
-        "source": "src/db/referrals.rs",
-        # The second copy of the ladder the contract names (DEFAULTS_CARRY_A_SECOND_COPY_
-        # OF_THE_LADDER). Bound to the SAME constant as the row above on purpose.
-        "extract": ("regex", r"const MILESTONE_DEFAULT_BONUS:\s*\[\(i32,\s*f64\);\s*(\d+)\]\s*="),
-        "relation": "equal",
-        "why": "a rung added to MILESTONE_THRESHOLDS alone gets no default; unless "
-               "loyalty_config also names milestone_bonus_N it resolves to zero, the award "
-               "loop skips it, and it is still published to the customer "
-               "(a_new_rung_can_be_offered_and_never_paid); with both rows bound, updating "
-               "the contract for the ladder turns this row red until the defaults follow",
-    },
+    # REMOVED 2026-09-26 (R3, the owner's answer of that day): the two rows that bound
+    # referral_program.MILESTONE_RUNG_COUNT to MILESTONE_THRESHOLDS and MILESTONE_DEFAULT_BONUS in
+    # src/db/referrals.rs. Both constants were deleted with the milestone award ("remove them, only
+    # the 10% discount"), so there is nothing left to bind the ladder to; the contract keeps the
+    # ladder as history, and referral_program.MILESTONE_AWARD_WRITERS (below, with the referral
+    # credit's rows) now binds the absence instead. A removal in the same change that moves
+    # MIN_BINDINGS is visible only to a reviewer reading this diff, which is why it is said here.
     {
         "name": "webapp_bridge.KEY_WRITE_SITES ~ checkout_screen.rs key signal writes",
         "spec": "specs/turbobaby/webapp_bridge.t27",
@@ -3521,7 +3501,7 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "extract": ("regex_count", METHOD_HANDLER),
         "relation": "equal",
         "why": "the third part of LEGACY_HTTP_ROUTE_COUNT; the tech-tree router is merged into "
-               "the public API (src/api/mod.rs:97) and /tech-tree is one of the eight client "
+               "the public API (src/api/mod.rs:98) and /tech-tree is one of the eight client "
                "paths the contract calls live, so a route added or removed here moves the "
                "legacy total the contract publishes",
     },
@@ -3880,22 +3860,12 @@ BINDINGS: tuple[dict[str, object], ...] = (
                "the filter the reminder mails its stored title and venue to a seat holder",
     },
     # The welcome credit's sentence without the garden's words (2026-09-26, critic note 5 under
-    # answer 3): the writer stores it, the read-side rule's module names it as the sentence it
-    # withholds, and the contract names it. Its words are the lane's interim choice, not the
-    # owner's, so it is NOT served (the review of the round, the same day; the second binding was
-    # re-pointed from "served sentence" then). Measured by hand 2026-09-26. Each planted RED once by
-    # hand (the garden's words put back in the writer; a different sentence in the rule's module).
-    {
-        "name": "legacy_retirement.WELCOME_CREDIT_SENTENCE ~ referrals.rs welcome row",
-        "spec": "specs/turbobaby/legacy_retirement.t27",
-        "const": "WELCOME_CREDIT_SENTENCE",
-        "source": "src/db/referrals.rs",
-        "extract": ("regex", r'tx_type: Set\("referral_welcome"\.to_string\(\)\),\s*'
-                             r'description: Set\(Some\(\s*("[^"]*")\.to_string\(\)'),
-        "relation": "equal",
-        "why": "the sentence every new welcome credit stores; the garden's words back in it would "
-               "write the previous shop's mechanic into every invited customer's row again",
-    },
+    # answer 3): the read-side rule's module names it as the sentence it withholds, and the
+    # contract names it. Its words are the lane's interim choice, not the owner's, so it is NOT
+    # served (the review of the round, the same day). Its first row bound it to the WRITER in
+    # src/db/referrals.rs; that row was REMOVED later on 2026-09-26, when R3 retired the welcome
+    # credit and its writer with it, and legacy_retirement.WELCOME_CREDIT_WRITERS (below) binds the
+    # absence instead. The rule's row stays: old rows still store the sentence it withholds.
     {
         "name": "legacy_retirement.WELCOME_CREDIT_SENTENCE ~ legacy_view.rs withheld sentence",
         "spec": "specs/turbobaby/legacy_retirement.t27",
@@ -3905,6 +3875,311 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "relation": "equal",
         "why": "the stored sentence the rule's tests prove withheld until the owner words one; if it "
                "drifts from the writer's, those tests hold back a sentence no row stores",
+    },
+    # --- The referral credit, R1 and R2: the owner's answers of 2026-09-26 -----------------------
+    # R3: 10% of every completed rental of an invited friend, in whole baht rounded down, to the
+    # inviter, recorded by a manager, spent on a rental or paid out by hand (turbobaby/
+    # referral-credit, migration 089). R1: the loyalty leaderboard answers an admin only. R2: three
+    # reads no mounted screen uses answer a non-admin like a missing route. Twenty-nine rows, each
+    # measured by hand on both sides on 2026-09-26 and planted RED once by hand (--source-override,
+    # or a mirror for the tree rows), then restored. Three rows left in the same change (the
+    # milestone ladder's two and the welcome writer's), each said where it stood.
+    {
+        "name": "referral_credit.CREDIT_PERCENT ~ trios REFERRAL_CREDIT_PERCENT",
+        "spec": "specs/turbobaby/referral_credit.t27",
+        "const": "CREDIT_PERCENT",
+        "source": "src/trios/referral_credit.rs",
+        "extract": ("regex", r"pub const REFERRAL_CREDIT_PERCENT:\s*i64\s*=\s*(\d+);"),
+        "relation": "equal",
+        "why": "the owner's rate, in the one arithmetic the server, the admin screen and the customer "
+               "page share (D15); a different number here pays every inviter a rate nobody decided",
+    },
+    {
+        "name": "referral_credit.CREDIT_PERCENT ~ 089 credit CHECK",
+        "spec": "specs/turbobaby/referral_credit.t27",
+        "const": "CREDIT_PERCENT",
+        "source": "migrations/089_referral_credit.sql",
+        "extract": ("regex", r"credit_thb = \(rental_amount_thb - applied_thb\) \* (\d+) / 100"),
+        "relation": "equal",
+        "why": "the CHECK makes the stored credit BE the rule, so a row the code computed at another "
+               "rate is refused by the database; the two numbers disagreeing refuses every record",
+    },
+    {
+        "name": "referral_credit.MAX_RENTAL_AMOUNT_THB ~ trios MAX_RENTAL_AMOUNT_THB",
+        "spec": "specs/turbobaby/referral_credit.t27",
+        "const": "MAX_RENTAL_AMOUNT_THB",
+        "source": "src/trios/referral_credit.rs",
+        "extract": ("regex", r"pub const MAX_RENTAL_AMOUNT_THB:\s*i64\s*=\s*([0-9_]+);"),
+        "relation": "equal",
+        "why": "the ceiling a manager's recorded rental charge is validated against before any credit "
+               "is computed; above it the record is refused (invalid_rental_amount)",
+    },
+    {
+        "name": "referral_credit.MAX_RENTAL_AMOUNT_THB ~ 089 BETWEEN",
+        "spec": "specs/turbobaby/referral_credit.t27",
+        "const": "MAX_RENTAL_AMOUNT_THB",
+        "source": "migrations/089_referral_credit.sql",
+        "extract": ("regex", r"rental_amount_thb\s+BIGINT\s+NOT NULL CHECK \(rental_amount_thb BETWEEN 1 AND (\d+)\)"),
+        "relation": "equal",
+        "why": "the column's own bound; a core ceiling above it lets a record through validation "
+               "that the INSERT then refuses as a 500",
+    },
+    {
+        "name": "referral_credit.MAX_RENTAL_AMOUNT_THB ~ orders.rs MAX_ORDER_TOTAL",
+        "spec": "specs/turbobaby/referral_credit.t27",
+        "const": "MAX_RENTAL_AMOUNT_THB",
+        "source": "src/api/orders.rs",
+        "extract": ("regex", r"const MAX_ORDER_TOTAL:\s*f64\s*=\s*([0-9_.]+)\s*;"),
+        "relation": "equal",
+        "why": "a recorded rental may not exceed what an order may total (turbobaby/order-money); "
+               "the three copies move together or a rental outgrows the shop's own ceiling",
+    },
+    {
+        "name": "referral_credit.LEDGER_KINDS ~ 089 kind CHECK",
+        "spec": "specs/turbobaby/referral_credit.t27",
+        "const": "LEDGER_KINDS",
+        "source": "migrations/089_referral_credit.sql",
+        "extract": ("regex_list", r"kind\s+VARCHAR\(20\)\s+NOT NULL CHECK \(kind IN \((.*?)\)\)"),
+        "relation": "list_equal",
+        "why": "the ledger's movements; a kind the code writes and the CHECK lacks refuses the "
+               "movement, and one the CHECK admits and nothing names is a door nobody cleared",
+    },
+    {
+        "name": "referral_credit.LEDGER_KINDS ~ trios LEDGER_KINDS",
+        "spec": "specs/turbobaby/referral_credit.t27",
+        "const": "LEDGER_KINDS",
+        "source": "src/trios/referral_credit.rs",
+        "extract": ("regex_list", r"pub const LEDGER_KINDS:\s*\[&str;\s*\d+\]\s*=\s*\[(.*?)\]\s*;"),
+        "relation": "list_equal",
+        "why": "the core's copy of the same list, element by element and in 089's order",
+    },
+    {
+        "name": "referral_credit.REQUEST_KINDS ~ 089 kind CHECK",
+        "spec": "specs/turbobaby/referral_credit.t27",
+        "const": "REQUEST_KINDS",
+        "source": "migrations/089_referral_credit.sql",
+        "extract": ("regex_list", r"kind\s+VARCHAR\(10\)\s+NOT NULL CHECK \(kind IN \((.*?)\)\)"),
+        "relation": "list_equal",
+        "why": "what a customer may ask for: a payout by hand or the balance spent on a rental",
+    },
+    {
+        "name": "referral_credit.REQUEST_KINDS ~ trios REQUEST_KINDS",
+        "spec": "specs/turbobaby/referral_credit.t27",
+        "const": "REQUEST_KINDS",
+        "source": "src/trios/referral_credit.rs",
+        "extract": ("regex_list", r"pub const REQUEST_KINDS:\s*\[&str;\s*\d+\]\s*=\s*\[(.*?)\]\s*;"),
+        "relation": "list_equal",
+        "why": "the list the request route validates a kind against (invalid_kind)",
+    },
+    {
+        "name": "referral_credit.REQUEST_STATUSES ~ 089 status CHECK",
+        "spec": "specs/turbobaby/referral_credit.t27",
+        "const": "REQUEST_STATUSES",
+        "source": "migrations/089_referral_credit.sql",
+        "extract": ("regex_list", r"status\s+VARCHAR\(10\)\s+NOT NULL DEFAULT 'open' CHECK \(status IN \((.*?)\)\)"),
+        "relation": "list_equal",
+        "why": "a request's lifecycle: open, then applied at a rental, paid by hand, or declined",
+    },
+    {
+        "name": "referral_credit.REQUEST_STATUSES ~ trios REQUEST_STATUSES",
+        "spec": "specs/turbobaby/referral_credit.t27",
+        "const": "REQUEST_STATUSES",
+        "source": "src/trios/referral_credit.rs",
+        "extract": ("regex_list", r"pub const REQUEST_STATUSES:\s*\[&str;\s*\d+\]\s*=\s*\[(.*?)\]\s*;"),
+        "relation": "list_equal",
+        "why": "the core's copy of the same lifecycle",
+    },
+    {
+        "name": "referral_credit.OPEN_REQUESTS_PER_PERSON_MAX ~ 089 partial unique index",
+        "spec": "specs/turbobaby/referral_credit.t27",
+        "const": "OPEN_REQUESTS_PER_PERSON_MAX",
+        "source": "migrations/089_referral_credit.sql",
+        "extract": ("regex_count", r"ON referral_requests \(telegram_id\) WHERE status = 'open'"),
+        "relation": "equal",
+        "why": "one open request per person is what makes a hold the whole balance and a second tap "
+               "the open request; without the index two holds could each claim the same baht",
+    },
+    {
+        "name": "referral_credit.ROUTE_COUNT ~ api/referral_credit.rs method handlers",
+        "spec": "specs/turbobaby/referral_credit.t27",
+        "const": "ROUTE_COUNT",
+        "source": "src/api/referral_credit.rs",
+        "extract": ("regex_count", METHOD_HANDLER),
+        "relation": "equal",
+        "why": "every route of the credit stands behind a gate the two rows below count; a seventh "
+               "handler would be a route this contract never gated",
+    },
+    {
+        "name": "referral_credit.OWNER_GATED_ROUTE_COUNT ~ api/referral_credit.rs check_owner calls",
+        "spec": "specs/turbobaby/referral_credit.t27",
+        "const": "OWNER_GATED_ROUTE_COUNT",
+        "source": "src/api/referral_credit.rs",
+        "extract": ("regex_count", NOT_IN_A_LINE_COMMENT + r"(?<!fn )\bcheck_owner\("),
+        "relation": "equal",
+        "why": "the two customer routes read and hold one person's balance; each must prove the "
+               "caller IS that person before the database is read",
+    },
+    {
+        "name": "referral_credit.ADMIN_GATED_ROUTE_COUNT ~ api/referral_credit.rs check_admin calls",
+        "spec": "specs/turbobaby/referral_credit.t27",
+        "const": "ADMIN_GATED_ROUTE_COUNT",
+        "source": "src/api/referral_credit.rs",
+        "extract": ("regex_count", NOT_IN_A_LINE_COMMENT + r"(?<!fn )\bcheck_admin\("),
+        "relation": "equal",
+        "why": "the four admin routes create, reverse and pay out referral money; one without the "
+               "gate lets any caller credit anybody",
+    },
+    {
+        "name": "referral_credit.ORDER_MONEY_PATH_MENTIONS ~ orders.rs",
+        "spec": "specs/turbobaby/referral_credit.t27",
+        "const": "ORDER_MONEY_PATH_MENTIONS",
+        "source": "src/api/orders.rs",
+        "extract": ("regex_count", r"referral_credit|referral_rentals|referral_requests|referral_ledger"),
+        "witness": r"fn promptpay_qr_amount\(",
+        "relation": "equal",
+        "why": "the credit never touches an order's total, its PromptPay amount or its deposit; a "
+               "mention in the order-money path is the first step of a discount nobody reconciled",
+    },
+    {
+        "name": "referral_credit.AUTOMATIC_REVERSAL_SITES ~ src/ reverse_rental_for_order calls",
+        "spec": "specs/turbobaby/referral_credit.t27",
+        "const": "AUTOMATIC_REVERSAL_SITES",
+        "source": "src/**/*.rs",
+        "extract": ("tree_regex_count", NOT_IN_A_LINE_COMMENT + r"(?<!fn )\breverse_rental_for_order\("),
+        "relation": "equal",
+        "why": "the bot's reject is the one path that un-completes an order, and it reverses the "
+               "order's record in its own transaction; a second caller reverses money from a path "
+               "nobody reviewed, and none leaves a completed order's credit standing",
+    },
+    {
+        "name": "referral_credit.MUTATING_STATEMENTS_IN_THE_MIGRATION ~ 089",
+        "spec": "specs/turbobaby/referral_credit.t27",
+        "const": "MUTATING_STATEMENTS_IN_THE_MIGRATION",
+        "source": "migrations/089_referral_credit.sql",
+        # [^\n]* and not .*: this extractor compiles with DOTALL, and a .* would run from a code
+        # line into a later comment and count a word the header only mentions.
+        "extract": ("regex_count", r"(?m)^(?![ \t]*--)[^\n]*\b(?:UPDATE|DELETE|DROP|TRUNCATE|ALTER)\b"),
+        "witness": r"CREATE TABLE IF NOT EXISTS referral_ledger",
+        "relation": "equal",
+        "why": "089 only creates (D2, no row of any existing table read, rewritten or deleted); a "
+               "mutating statement in it would touch production data on the deploy",
+    },
+    {
+        "name": "referral_credit.POINTS_TOKENS_IN_THE_CREDIT_MODULE ~ db/referral_credit.rs",
+        "spec": "specs/turbobaby/referral_credit.t27",
+        "const": "POINTS_TOKENS_IN_THE_CREDIT_MODULE",
+        "source": "src/db/referral_credit.rs",
+        "extract": ("regex_count", r"bonus_balance|BonusBalance|bonus_transactions"),
+        "witness": r"INSERT INTO referral_ledger",
+        "relation": "equal",
+        "why": "loyalty points never enter the referral ledger: a points balance paid out would pay "
+               "out cashback, and points cannot pay a rental",
+    },
+    {
+        "name": "referral_credit.CREDIT_TOKENS_IN_THE_LOYALTY_ROUTES ~ api/loyalty.rs",
+        "spec": "specs/turbobaby/referral_credit.t27",
+        "const": "CREDIT_TOKENS_IN_THE_LOYALTY_ROUTES",
+        "source": "src/api/loyalty.rs",
+        "extract": ("regex_count", r"referral_credit|referral_ledger"),
+        "witness": r"async fn use_bonus\(",
+        "relation": "equal",
+        "why": "the points routes never read or move the referral balance; the two ledgers are kept "
+               "apart from both sides",
+    },
+    {
+        "name": "referral_credit.FAIL_OPEN_READS ~ db/referral_credit.rs",
+        "spec": "specs/turbobaby/referral_credit.t27",
+        "const": "FAIL_OPEN_READS",
+        "source": "src/db/referral_credit.rs",
+        "extract": ("regex_count", r"try_get_warn!|unwrap_or\(0\)|unwrap_or_default\(\)"),
+        "witness": r"SUM\(amount_thb\)",
+        "relation": "equal",
+        "why": "a money read that fails must fail the request; a default of zero would let a hold, a "
+               "redemption or a payout be judged against a balance nobody read",
+    },
+    {
+        "name": "referral_credit.CREDIT_PERCENT ~ locales.rs RU rule sentence",
+        "spec": "specs/turbobaby/referral_credit.t27",
+        "const": "CREDIT_PERCENT",
+        "source": "src/locales.rs",
+        "extract": ("regex", r'"(\d+)% с каждой аренды приглашённого друга"'),
+        "occurrences": 2,
+        "relation": "equal",
+        "why": "the bot's /invite hint and friend-joined hint state the rate to the inviter; the "
+               "operator's sentence and the rate paid must be one number",
+    },
+    {
+        "name": "referral_credit.CREDIT_PERCENT ~ locales.rs EN rule sentence",
+        "spec": "specs/turbobaby/referral_credit.t27",
+        "const": "CREDIT_PERCENT",
+        "source": "src/locales.rs",
+        "extract": ("regex", r'"(\d+)% of every rental your invited friend completes"'),
+        "occurrences": 2,
+        "relation": "equal",
+        "why": "the same two hints in English",
+    },
+    {
+        "name": "referral_program.REFERRAL_TX_TYPE_WRITERS_SINCE_2026_09_26 ~ src/ referral_ rows",
+        "spec": "specs/turbobaby/referral_program.t27",
+        "const": "REFERRAL_TX_TYPE_WRITERS_SINCE_2026_09_26",
+        "source": "src/**/*.rs",
+        "extract": ("tree_regex_count", NOT_IN_A_LINE_COMMENT + r'tx_type: Set\("referral_'),
+        "witness": r'tx_type: Set\("order_cashback"',
+        "relation": "equal",
+        "why": "R3 stopped every referral credit in loyalty points; a line composing a referral_ "
+               "bonus transaction again would pay the points the owner removed",
+    },
+    {
+        "name": "referral_program.MILESTONE_AWARD_WRITERS ~ src/ referral_milestones inserts",
+        "spec": "specs/turbobaby/referral_program.t27",
+        "const": "MILESTONE_AWARD_WRITERS",
+        "source": "src/**/*.rs",
+        "extract": ("tree_regex_count", r"(?i)INSERT INTO referral_milestones"),
+        "witness": r'table_name = "referral_milestones"',
+        "relation": "equal",
+        "why": "the milestone ladder left with R3; an insert into referral_milestones would award a "
+               "rung nothing offers any more",
+    },
+    {
+        "name": "legacy_retirement.WELCOME_CREDIT_WRITERS ~ src/ referral_welcome rows",
+        "spec": "specs/turbobaby/legacy_retirement.t27",
+        "const": "WELCOME_CREDIT_WRITERS",
+        "source": "src/**/*.rs",
+        "extract": ("tree_regex_count", r'Set\("referral_welcome"'),
+        "witness": r'"referral_welcome"',
+        "relation": "equal",
+        "why": "the friend gets nothing (R3); a welcome row written again would credit the invitee "
+               "points and store a sentence no owner worded",
+    },
+    {
+        "name": "legacy_retirement.R2_CLOSED_READ_SITES ~ src/ admin_or_missing_route calls",
+        "spec": "specs/turbobaby/legacy_retirement.t27",
+        "const": "R2_CLOSED_READ_SITES",
+        "source": "src/**/*.rs",
+        "extract": ("tree_regex_count", NOT_IN_A_LINE_COMMENT + r"(?<!fn )\badmin_or_missing_route\("),
+        "relation": "equal",
+        "why": "one call per read the owner closed to customers; a closed read that loses it serves "
+               "its rows to anyone, and a fourth is a read nobody decided to close",
+    },
+    {
+        "name": "loyalty_ledger.CLOSED_READ_ROUTE_COUNT ~ loyalty.rs admin_or_missing_route calls",
+        "spec": "specs/turbobaby/loyalty_ledger.t27",
+        "const": "CLOSED_READ_ROUTE_COUNT",
+        "source": "src/api/loyalty.rs",
+        "extract": ("regex_count", NOT_IN_A_LINE_COMMENT + r"(?<!fn )\badmin_or_missing_route\("),
+        "relation": "equal",
+        "why": "the config GET is closed to customers (R2) and still registered beside the admin POST "
+               "that shares its path; this file's route partition counts it apart",
+    },
+    {
+        "name": "loyalty_ledger.LEADERBOARD_GATE_SITES ~ loyalty.rs get_leaderboard first line",
+        "spec": "specs/turbobaby/loyalty_ledger.t27",
+        "const": "LEADERBOARD_GATE_SITES",
+        "source": "src/api/loyalty.rs",
+        "extract": ("regex_count", r"async fn get_leaderboard\(\s*headers: HeaderMap,[^{]*\{\s*check_admin\(&headers, &state\)\?;"),
+        "relation": "equal",
+        "why": "R1: the leaderboard (first names, total spend, tier) answers an admin only, and the "
+               "gate is the handler's first statement, before the query",
     },
 )
 
@@ -4001,7 +4276,16 @@ ONE_GROUP_EXTRACTORS = (
 # The review of round 4 (2026-09-26) re-pointed the second welcome binding from the sentence the
 # rule served to the sentence it withholds, planted RED once by hand again; none added or dropped:
 # 256 rows, floor 256.
-MIN_BINDINGS = 256
+# Then the owner's answers R1-R3 of 2026-09-26 (the server lane of round 5): three rows REMOVED --
+# referral_program.MILESTONE_RUNG_COUNT twice (the ladder and its defaults, deleted with the
+# milestone award) and legacy_retirement.WELCOME_CREDIT_SENTENCE's writer row (the welcome credit
+# retired) -- and twenty-nine ADDED: the referral credit's rate, ceiling, lists, index, routes,
+# gates, order-money and points absences, reversal site, migration and fail-loud rows, the rate in
+# both bot locales, the absences of referral point rows, milestone inserts and welcome rows, R2's
+# closed-read sites and R1's leaderboard gate. Each added row was measured by hand on both sides
+# and planted RED once by hand: 256 - 3 + 29 = 282 rows over 42 contracts, floor 282. A removal
+# in the same change that moves this floor is caught only by a reviewer reading the diff.
+MIN_BINDINGS = 282
 
 
 # ---------------------------------------------------------------------------------
