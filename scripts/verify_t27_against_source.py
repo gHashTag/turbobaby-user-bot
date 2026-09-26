@@ -3849,6 +3849,19 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "why": "the rental data a served name must be referenced by; another table or column "
                "would serve what the rental catalogue never points at",
     },
+    # The operator's reversal of 2026-09-26 under the owner's answer 3: the 24-hour event reminder
+    # joins public events only. Measured by hand 2026-09-26: one filtered join, in
+    # send_event_reminders. Planted RED once by hand (the filter taken off the join).
+    {
+        "name": "events_booking.REMINDER_FLAG_FILTERED_JOINS ~ events.rs reminder join",
+        "spec": "specs/turbobaby/events_booking.t27",
+        "const": "REMINDER_FLAG_FILTERED_JOINS",
+        "source": "src/api/events.rs",
+        "extract": ("regex_count", r"JOIN events e ON e\.id = b\.event_id AND e\.is_public = TRUE \\$"),
+        "relation": "equal",
+        "why": "every event is hidden since 088 and each one left is the previous shop's; without "
+               "the filter the reminder mails its stored title and venue to a seat holder",
+    },
 )
 
 TREE_EXTRACTORS = (
@@ -3931,7 +3944,9 @@ ONE_GROUP_EXTRACTORS = (
 # upload_media.LOCAL_READ_SERVICE_NESTS to the /uploads nest in src/main.rs and
 # LOCAL_READ_REFERENCE_LOOKUPS_ON_BIKES to the reference lookup, each planted RED once by hand: 252 rows,
 # floor 252.
-MIN_BINDINGS = 252
+# Then the operator's reversal of 2026-09-26 bound events_booking.REMINDER_FLAG_FILTERED_JOINS to
+# the reminder's join, planted RED once by hand: 253 rows, floor 253.
+MIN_BINDINGS = 253
 
 
 # ---------------------------------------------------------------------------------
