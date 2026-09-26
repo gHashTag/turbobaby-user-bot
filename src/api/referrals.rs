@@ -110,7 +110,7 @@ async fn get_my_invitees(
 ///
 /// The response carries two kinds of money and they are not the same number.
 /// `awards` is what each reached milestone actually paid, read from its row.
-/// `bonuses` is what an unreached rung pays today, read from `loyalty_config`.
+/// `bonuses` was what an unreached rung paid; empty since 2026-09-26 (R3).
 /// The shop may edit the config at any time, so a rung reached in June and the
 /// same rung offered now can differ — the client must print the server's
 /// numbers rather than a table of its own, which is exactly the mistake the
@@ -131,7 +131,7 @@ async fn get_my_milestones(
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-    let bonuses = crate::db::referrals::milestone_bonus_amounts(&state.db.orm).await;
+    // The offer per rung (`bonuses`) was read here until 2026-09-26 (R3).
 
     Ok(Json(json!({
         "confirmed": confirmed,
@@ -141,14 +141,14 @@ async fn get_my_milestones(
             .iter()
             .map(|(m, amount)| json!({ "milestone": m, "bonus_amount": amount }))
             .collect::<Vec<Value>>(),
-        "thresholds": crate::db::referrals::MILESTONE_THRESHOLDS,
-        "bonuses": crate::db::referrals::MILESTONE_THRESHOLDS
-            .iter()
-            .map(|m| json!({
-                "milestone": m,
-                "bonus_amount": bonuses.get(m).copied().unwrap_or(0.0),
-            }))
-            .collect::<Vec<Value>>(),
+        // Nothing is offered since 2026-09-26 (owner, R3: «Убрать, только
+        // скидка 10%»): no rung is awarded any more, so none is promised. A
+        // cached bundle's milestones panel renders nothing when `bonuses` is
+        // empty, so the old ladder leaves the screen before the client
+        // redeploys. `awards` above still reports what was paid.
+        "thresholds": Vec::<i32>::new(),
+        "bonuses": Vec::<Value>::new(),
+        // Both stay on the wire, empty: shipped clients read them.
     })))
 }
 

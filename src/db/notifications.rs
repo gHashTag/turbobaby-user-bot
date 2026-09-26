@@ -1,7 +1,7 @@
 //! Notification queue helpers for referral lifecycle events.
 //!
 //! Loop #21: instead of fire-and-forget Telegram sends, all referrer-facing
-//! lifecycle messages (friend joined / friend ordered / milestone) are
+//! lifecycle messages (friend joined; friend ordered / milestone until R3) are
 //! appended to `notification_queue` and delivered by the background worker in
 //! `src/notification_queue.rs`. This gives retry, idempotency (via worker
 //! marking rows `processed_at`), and decouples slow Telegram calls from the
@@ -34,33 +34,33 @@ pub(crate) async fn enqueue_friend_joined(
 // is handed only the kinds the worker delivers, and never reads them. The
 // writer is code, the rows are data, and neither outlives the ruling now.
 
-/// Queue a "your friend placed their first order" notification.
-pub(crate) async fn enqueue_friend_ordered(
-    orm: &sea_orm::DatabaseConnection,
-    referrer_id: i64,
-    referred_name: &str,
-    bonus: f64,
-) -> Result<()> {
-    let payload = json!({
-        "referred_name": referred_name,
-        "bonus": bonus,
-    });
-    insert_queue_row(orm, referrer_id, "friend_ordered", payload).await
-}
+// `enqueue_friend_ordered` stood here until 2026-09-26 (owner, R3). It queued
+// the "your friend placed their first order" notice: kind `friend_ordered`,
+// with the friend's name and the referral bonus that order paid the referrer,
+// in a payload of `referred_name` and `bonus`. Its one caller was step 7 of
+// `complete_order_and_update_loyalty` (src/db/orders.rs), after the bonus was
+// credited. The owner stopped that bonus on 2026-09-26 («Убрать, только
+// скидка 10%»), so there is no bonus to announce and nothing produces the
+// event; the writer went with it. Rows already queued are data and stay as
+// they are: the worker's `DeliverableKind` (src/notification_queue.rs) no
+// longer names the kind, so the scan below is never handed such a row and it
+// is HELD, exactly as a `friend_watered` row is. Kept at the writer's length
+// so that no line cited below moves (specs/turbobaby/notification_queue.t27
+// cites this file by line).
 
-/// Queue a referral milestone award notification.
-pub(crate) async fn enqueue_milestone(
-    orm: &sea_orm::DatabaseConnection,
-    referrer_id: i64,
-    milestone: i32,
-    bonus_amount: f64,
-) -> Result<()> {
-    let payload = json!({
-        "milestone": milestone,
-        "bonus_amount": bonus_amount,
-    });
-    insert_queue_row(orm, referrer_id, "milestone", payload).await
-}
+// `enqueue_milestone` stood here too, stopped the same day. It queued the
+// milestone notice: kind `milestone`, with the rung reached and the bonus it
+// paid, in a payload of `milestone` and `bonus_amount`. Its one caller was
+// `maybe_award_referral_milestones` (src/db/referrals.rs), after the commit
+// that credited the rung, and that award left with the ladder (R3). Rows of
+// this kind already queued are HELD the same way: never handed to the drain,
+// never counted, never marked, never deleted. The friend-joined notice above
+// is the one kind a producer still writes, and the only kind the worker
+// delivers since 2026-09-26; the rule, the held kinds and the lists that must
+// agree are specs/turbobaby/notification_queue.t27's (`WRITTEN_KINDS`,
+// `RENDERABLE_KINDS`, `HELD_KINDS_SINCE_R3`), and
+// tests/notification_drain_wiring.rs holds the producers, the drain and the
+// contract to one another.
 
 async fn insert_queue_row(
     orm: &sea_orm::DatabaseConnection,
@@ -185,7 +185,7 @@ mod tests {
     /// src/notification_queue.rs), written out here because this crate cannot
     /// see the binary's module. `tests/notification_drain_wiring.rs` holds the
     /// drain's list, the producers' kinds and the contract's to one another.
-    const DELIVERED: [&str; 3] = ["friend_joined", "friend_ordered", "milestone"];
+    const DELIVERED: [&str; 1] = ["friend_joined"]; // one kind since R3 (2026-09-26)
 
     #[test]
     fn the_scan_selects_only_the_kinds_it_is_handed() {
@@ -196,16 +196,16 @@ mod tests {
         for part in [
             r#""notification_queue"."processed_at" IS NULL"#,
             r#""notification_queue"."attempts" < 3"#,
-            r#""notification_queue"."kind" IN ('friend_joined', 'friend_ordered', 'milestone')"#,
+            r#""notification_queue"."kind" IN ('friend_joined')"#,
             r#"ORDER BY "notification_queue"."scheduled_at" ASC"#,
             "LIMIT 50",
         ] {
             assert!(sql.contains(part), "the scan lost `{part}`: {sql}");
         }
-        assert!(
-            !sql.contains("friend_watered"),
-            "the retired garden's kind is handed out: {sql}"
-        );
+        for held in ["friend_watered", "friend_ordered", "milestone"] {
+            let handed = sql.contains(&format!("'{held}'"));
+            assert!(!handed, "the held kind {held} is handed out: {sql}");
+        }
     }
 
     /// A throwaway database, migrated the way `tests/common` migrates one.
@@ -258,7 +258,7 @@ mod tests {
             .map(|row| row.kind)
             .collect();
         handed.sort();
-        assert_eq!(handed, ["friend_joined", "milestone"]);
+        assert_eq!(handed, ["friend_joined"]);
 
         let held = Entity::find()
             .filter(Column::TelegramId.eq(chat))
@@ -266,7 +266,7 @@ mod tests {
             .all(&orm)
             .await
             .expect("read the held rows back");
-        assert_eq!(held.len(), 2, "a held row went missing: {held:?}");
+        assert_eq!(held.len(), 3, "a held row went missing: {held:?}");
         for row in held {
             assert!(row.processed_at.is_none(), "{} was marked", row.kind);
             assert_eq!(row.attempts, 0, "{} was counted", row.kind);
