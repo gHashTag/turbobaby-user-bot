@@ -25,6 +25,8 @@ AGENT_CARD = "specs/agents/turbobaby.t27"
 
 # To add a contract: add one entry after measuring its parse declaration floor and its
 # test/invariant/bench floor with the pinned compiler. Discovery supplies the tripwire. All 45 floors equal the measured counts as of 2026-09-25.
+# 46 contracts since 2026-09-26, when turbobaby/referral-credit (R3) arrived; all 46 floors equal the
+# measured counts that day.
 # Re-measured 2026-09-25 for the two contracts the owner's CLICK 125 redirect decision changed:
 # availability 114 -> 120 declarations and 32 -> 34 checks, order_money 114 -> 115 declarations.
 # Re-measured 2026-09-25 again for the two contracts answer 5 of the owner's second list changed
@@ -57,7 +59,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/api_surface.t27": {
         "module": "turbobaby-api-surface",
         "id": "turbobaby/api-surface",
-        "min_declarations": 172,
+        # Raised 2026-09-26 from 172/42 to the measured count (R1-R3, the owner's answers of 2026-09-26): the referral credit's six routes and stubs re-measured the router and the document.
+        "min_declarations": 186,
         "min_checks": 42,
     },
     "specs/turbobaby/availability.t27": {
@@ -101,7 +104,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/catalog_write.t27": {
         "module": "turbobaby-catalog-write",
         "id": "turbobaby/catalog-write",
-        "min_declarations": 158,
+        # Raised 2026-09-26 from 158/44 to the measured count (R1-R3, the owner's answers of 2026-09-26): src/main.rs, the second largest file, grew by four lines.
+        "min_declarations": 159,
         "min_checks": 44,
     },
     "specs/turbobaby/checkout_contact.t27": {
@@ -200,8 +204,9 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         # 317/65 on its own branch the same day, when the cannabis-era copy the bundle still
         # carried was retired (sixteen LEFTOVERS_2026_09_26_* declarations, one test and one
         # invariant). Merged 2026-09-26 on the integration branch (round 4), the measured 338/69; 341/69 after its review (the welcome sentence stored, not served: +4 WELCOME_SENTENCE_* flags, -1 count).
-        "min_declarations": 341,
-        "min_checks": 69,
+        # Raised 2026-09-26 from 341/69 to the measured count (R1-R3, the owner's answers of 2026-09-26): R1 and R2 recorded, and the welcome credit's writer retired by R3.
+        "min_declarations": 360,
+        "min_checks": 73,
     },
     "specs/turbobaby/locale_policy.t27": {
         "module": "turbobaby-locale-policy",
@@ -220,14 +225,16 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         # 146/36 on 2026-09-26: question I deleted the Book control's two count reasons, named
         # by two declarations. 148/36 the same day: nineteen cannabis-era keys no mounted screen
         # printed were deleted, named by two declarations.
-        "min_declarations": 148,
+        # Raised 2026-09-26 from 148/36 to the measured count (R1-R3, the owner's answers of 2026-09-26): migration 089 re-counted in the migration copy.
+        "min_declarations": 149,
         "min_checks": 36,
     },
     "specs/turbobaby/loyalty_ledger.t27": {
         "module": "turbobaby-loyalty-ledger",
         "id": "turbobaby/loyalty-ledger",
-        "min_declarations": 206,
-        "min_checks": 47,
+        # Raised 2026-09-26 from 206/47 to the measured count (R1-R3, the owner's answers of 2026-09-26): R1 and R2 split the route table, and R3 removed three paired credits.
+        "min_declarations": 219,
+        "min_checks": 49,
     },
     "specs/turbobaby/market_profile.t27": {
         "module": "turbobaby-market",
@@ -239,13 +246,15 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         "module": "turbobaby-notification-queue",
         "id": "turbobaby/notification-queue",
         # Raised 2026-09-26 from 270/52 to the measured count when the held kinds were recorded.
-        "min_declarations": 306,
-        "min_checks": 54,
+        # Raised 2026-09-26 from 306/54 to the measured count (R1-R3, the owner's answers of 2026-09-26): friend_ordered and milestone held with the bonuses they announced.
+        "min_declarations": 316,
+        "min_checks": 55,
     },
     "specs/turbobaby/observability.t27": {
         "module": "turbobaby-observability",
         "id": "turbobaby/observability",
-        "min_declarations": 164,
+        # Raised 2026-09-26 from 164/40 to the measured count (R1-R3, the owner's answers of 2026-09-26): the milestone metric left with its caller.
+        "min_declarations": 165,
         "min_checks": 40,
     },
     "specs/turbobaby/order_money.t27": {
@@ -271,8 +280,9 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/order_status.t27": {
         "module": "turbobaby-order-status",
         "id": "turbobaby/order-status",
-        "min_declarations": 164,
-        "min_checks": 31,
+        # Raised 2026-09-26 from 164/31 to the measured count (R1-R3, the owner's answers of 2026-09-26): the bot reject's referral-credit reversal noted.
+        "min_declarations": 170,
+        "min_checks": 32,
     },
     "specs/turbobaby/person_naming.t27": {
         "module": "turbobaby-person-naming",
@@ -283,7 +293,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/pricing_honesty.t27": {
         "module": "pricing-honesty",
         "id": "turbobaby/pricing-honesty",
-        "min_declarations": 120,
+        # Raised 2026-09-26 from 120/40 to the measured count (R1-R3, the owner's answers of 2026-09-26): migration 089 re-counted in the migration copy.
+        "min_declarations": 122,
         "min_checks": 40,
     },
     "specs/turbobaby/promo_broadcast.t27": {
@@ -304,11 +315,20 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         "min_declarations": 159,
         "min_checks": 38,
     },
+    "specs/turbobaby/referral_credit.t27": {
+        "module": "turbobaby-referral-credit",
+        "id": "turbobaby/referral-credit",
+        # New 2026-09-26 (R3, the owner's answer of that day): the referral credit, 10% of every
+        # completed rental of an invited friend, in THB. Floors are the measured counts.
+        "min_declarations": 128,
+        "min_checks": 21,
+    },
     "specs/turbobaby/referral_program.t27": {
         "module": "turbobaby-referral-program",
         "id": "turbobaby/referral-program",
-        "min_declarations": 264,
-        "min_checks": 59,
+        # Raised 2026-09-26 from 264/59 to the measured count (R1-R3, the owner's answers of 2026-09-26): R3: no referral credit of this domain, the ladder kept as history.
+        "min_declarations": 289,
+        "min_checks": 62,
     },
     "specs/turbobaby/rental_terms.t27": {
         "module": "rental-terms",
@@ -319,7 +339,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/request_identity.t27": {
         "module": "turbobaby-request-identity",
         "id": "turbobaby/request-identity",
-        "min_declarations": 155,
+        # Raised 2026-09-26 from 155/30 to the measured count (R1-R3, the owner's answers of 2026-09-26): the gate census re-measured and referral-credit added as a consumer.
+        "min_declarations": 161,
         "min_checks": 30,
     },
     "specs/turbobaby/ride_game.t27": {
@@ -337,13 +358,15 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/runtime_config.t27": {
         "module": "turbobaby-runtime-config",
         "id": "turbobaby/runtime-config",
-        "min_declarations": 206,
+        # Raised 2026-09-26 from 206/54 to the measured count (R1-R3, the owner's answers of 2026-09-26): the request notice's spawn and the unread welcome amount.
+        "min_declarations": 210,
         "min_checks": 54,
     },
     "specs/turbobaby/schema_provenance.t27": {
         "module": "turbobaby-schema-provenance",
         "id": "turbobaby/schema-provenance",
-        "min_declarations": 233,
+        # Raised 2026-09-26 from 233/51 to the measured count (R1-R3, the owner's answers of 2026-09-26): migration 089 took the next number.
+        "min_declarations": 241,
         "min_checks": 51,
     },
     "specs/turbobaby/star_award.t27": {

@@ -362,7 +362,7 @@ pub fn repointed_kept_half_splits(event_screens_kept: u8, legacy_screens_kept: u
     return REPOINTED_WITH_THE_SCREEN_DELETED + event_screens_kept + legacy_screens_kept == REPOINTED_ROUTE_COUNT;
 }
 
-; HTTP routes, merged into the public router at src/api/mod.rs:89, :91 and :97.
+; HTTP routes, merged into the public router at src/api/mod.rs:89, :91 and :98.
 ; CORRECTED 2026-09-22: QUEST_HTTP_ROUTE_COUNT was 13 and LEGACY_HTTP_ROUTE_COUNT was 44. The
 ; route count of src/api/quest.rs is 13 at 32ebe5c, where these were written, and 12 from 2c21df1
 ; (2026-09-21 19:31 +0700), which removed the /api/test registration and left a comment at
@@ -804,7 +804,8 @@ pub fn report_prints_stored_name(kind_written_by_a_live_subject: bool, link_stor
 ; reconciliation below, which names the two its neighbours closed (OWNER_ANSWER_3_LEFT_READS):
 ;   * the loyalty profile's stored tier key: the profile screen maps the old shop's key to a card
 ;     and prints the card's label, never the key; the leaderboard that serves it raw is read by
-;     the admin screen alone;
+;     the admin screen alone -- and since 2026-09-26 answers an admin alone, enforced by R1
+;     (turbobaby/loyalty-ledger, LEADERBOARD_GATE_SITES; OWNER_ANSWER_R1_* below);
 ;   * the star history (GET /api/stars/history/:telegram_id): no screen reads it, and none ever
 ;     did (no client file this repository has held calls it);
 ;   * the reads behind retired surfaces -- the bookings read, the quest locations, the legacy
@@ -926,8 +927,39 @@ pub const OWNER_ANSWER_3_KEYS_DELETED : u8 = 0;
 ;     stay four (OWNER_ANSWER_3_DESCRIBED_TX_TYPE_COUNT), and a customer sees the generic label and
 ;     the amount until the owner supplies the wording (WELCOME_SENTENCE_AWAITS_THE_OWNER). A first
 ;     version served it and credited the words to the operator; the review of the round reversed
-;     that the same day. No row is rewritten.
+;     that the same day. No row is rewritten. LATER THE SAME DAY (R3) the owner retired the welcome
+;     credit itself (turbobaby/referral-credit: the friend gets nothing), so no new welcome row is
+;     written at all since (WELCOME_CREDIT_WRITERS, bound by gate 3); the sentence stays in the
+;     rules for the rows already stored, and the question to the owner stands for those rows only.
+;   * R1 AND R2, the owner's answers of 2026-09-26 to two reads the critic's pass left open
+;     (verbatim in DECISIONS.md, "R1-R3, the owner's answers of 2026-09-26"). R1, of the loyalty
+;     leaderboard (first names, total spend, tier, served to anyone): "only for the admin",
+;     enforced in turbobaby/loyalty-ledger. R2, of three reads no mounted screen uses: "close it to
+;     customers". The operator's reading: a caller without admin proof is answered EXACTLY as an
+;     unmatched /api path is -- the same 404, JSON body and content type, the detail naming its own
+;     path -- through one builder, crate::api::missing_route, which the fallback and
+;     crate::api::admin_or_missing_route both call. An admin is served as before, the routes stay
+;     registered (the config GET shares its path with the admin POST, and an unregistered GET would
+;     answer 405), a failed attempt still counts toward the admin limiter, and no row is read or
+;     written differently.
 pub const OWNER_ANSWERS_2026_09_26_AT : str = "2026-09-26";
+pub const OWNER_ANSWER_R1_AT : str = "2026-09-26";
+pub const OWNER_ANSWER_R1_WORDS : str = "Only for the admin";
+pub const OWNER_ANSWER_R1_ROUTE : str = "GET /api/loyalty/leaderboard";
+pub const OWNER_ANSWER_R1_OWNER_ID : str = "turbobaby/loyalty-ledger";
+pub const OWNER_ANSWER_R2_AT : str = "2026-09-26";
+pub const OWNER_ANSWER_R2_WORDS : str = "Close it to customers";
+pub const OWNER_R2_CLOSED_READS : [3]str = ["GET /api/quest-places", "GET /api/treasure-hunts", "GET /api/loyalty/config"];
+pub const R2_ANSWER_IS_THE_MISSING_ROUTE_ANSWER : bool = true;
+pub const R2_ADMIN_STILL_SERVED : bool = true;
+pub const R2_ROWS_TOUCHED : u8 = 0;
+pub const R2_ROUTES_STAY_REGISTERED : bool = true;
+pub const R2_FAILED_ATTEMPTS_FEED_THE_ADMIN_LIMITER : bool = true;
+; Bound by gate 3: the call sites of admin_or_missing_route in src/, one per closed read.
+pub const R2_CLOSED_READ_SITES : u8 = 3;
+; Bound by gate 3: no writer composes a referral_welcome row since R3.
+pub const WELCOME_CREDIT_WRITERS : u8 = 0;
+pub const WELCOME_CREDIT_RETIRED_BY_R3_AT : str = "2026-09-26";
 pub const OWNER_MEDIA_ANSWER_OWNER_ID : str = "turbobaby/upload-media";
 pub const OWNER_MEDIA_ANSWER_DELETES_FILES : bool = false;
 pub const OWNER_MEDIA_ANSWER_BUCKET_NEEDS_A_PRODUCTION_LISTING : bool = true;
@@ -1654,3 +1686,34 @@ invariant the_orders_answer_of_2026_09_26_hides_orders_and_writes_nothing
 ; The leftovers of 2026-09-26 went as copy and code, never as data or as a screen.
 invariant the_leftovers_of_2026_09_26_remove_copy_and_write_nothing
     assert LEFTOVERS_2026_09_26_WRITES_ROWS == false and LEFTOVERS_2026_09_26_ADDS_A_MIGRATION == false and LEFTOVERS_2026_09_26_SENTENCES_WRITTEN == 0 and LEFTOVERS_2026_09_26_TOUCHES_THE_RIDE_GAME == false
+
+test r1_and_r2_close_the_two_reads_the_critics_pass_left_open {
+    assert OWNER_ANSWER_R1_AT == OWNER_ANSWERS_2026_09_26_AT;
+    assert OWNER_ANSWER_R2_AT == OWNER_ANSWERS_2026_09_26_AT;
+    assert OWNER_ANSWER_R1_WORDS == "Only for the admin";
+    assert OWNER_ANSWER_R2_WORDS == "Close it to customers";
+    assert OWNER_ANSWER_R1_ROUTE == "GET /api/loyalty/leaderboard";
+    assert OWNER_ANSWER_R1_OWNER_ID == "turbobaby/loyalty-ledger";
+    assert OWNER_R2_CLOSED_READS.len == 3;
+    assert OWNER_R2_CLOSED_READS[2] == "GET /api/loyalty/config";
+    assert R2_CLOSED_READ_SITES == OWNER_R2_CLOSED_READS.len;
+    assert R2_ANSWER_IS_THE_MISSING_ROUTE_ANSWER == true;
+    assert R2_ADMIN_STILL_SERVED == true;
+    assert R2_ROWS_TOUCHED == 0;
+    assert R2_ROUTES_STAY_REGISTERED == true;
+    assert R2_FAILED_ATTEMPTS_FEED_THE_ADMIN_LIMITER == true;
+}
+
+test r3_retired_the_welcome_credit_and_its_old_rows_stay_withheld {
+    assert WELCOME_CREDIT_WRITERS == 0;
+    assert WELCOME_CREDIT_RETIRED_BY_R3_AT == OWNER_ANSWERS_2026_09_26_AT;
+    assert WELCOME_SENTENCE_AWAITS_THE_OWNER == true;
+    assert WELCOME_SENTENCE_IS_SERVED == false;
+    assert WELCOME_SENTENCE_OLD_ROWS_WITHHELD == true;
+}
+
+invariant a_closed_read_answers_like_a_missing_route_and_touches_no_row
+    assert R2_ANSWER_IS_THE_MISSING_ROUTE_ANSWER == true and R2_ROWS_TOUCHED == 0 and R2_ADMIN_STILL_SERVED == true
+
+invariant no_welcome_credit_is_written_since_r3
+    assert WELCOME_CREDIT_WRITERS == 0 and WELCOME_SENTENCE_IS_SERVED == false

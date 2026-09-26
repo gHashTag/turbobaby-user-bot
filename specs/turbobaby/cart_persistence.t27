@@ -402,7 +402,7 @@ pub fn cart_after_clear_can_be_reminded_again(row_survives: bool, counter_reset:
 ; expires_at is set to a thirty-day horizon by the INSERT at src/api/cart.rs:302-303. A grep for
 ; the name over src/ returns THREE hits, not two, and the third is why the count below is named for
 ; read sites and not for occurrences: src/db/entities/cart.rs:14 is the entity field, and
-; src/main.rs:4051 is the string "expires_at" inside a lint's SENSITIVE_COLS list -- a token in a
+; src/main.rs:4055 is the string "expires_at" inside a lint's SENSITIVE_COLS list -- a token in a
 ; source-scanning test, not a load of this table. No sweep, no filter and no branch reads the
 ; value: the column is a written intention with no consumer.
 pub const EXPIRES_AT_WRITE_SITES : u8 = 1;
