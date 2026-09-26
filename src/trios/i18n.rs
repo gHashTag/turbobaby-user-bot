@@ -32,29 +32,29 @@ pub const T_NAV_ORDERS: Key = "nav.orders";
 // game.harvest: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
 // game.plant: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
 
-/// Referral social proof. These also lived under `garden.*`, because the
-/// garden screen was the only place that rendered them — but the endpoints
-/// behind them (`/invitees`, `/milestones`) read `referral_events` and
-/// `referral_milestones`, which migration 083 does not touch. The panels
-/// moved to the referrals page rather than dying with their old host.
+/// Referral social proof: the friends panel of the referrals page, which reads
+/// `referral_events` through `/invitees`. It moved there with a milestone ladder
+/// when the screen that hosted both was retired (D5). The ladder went on
+/// 2026-09-26 with the points it promised (owner, R3), and the referral
+/// balance's keys took its three lines below.
 pub const T_REFERRAL_INVITEES_TITLE: Key = "referral.invitees.title";
-pub const T_REFERRAL_INVITEES_EMPTY: Key = "referral.invitees.empty";
+// referral.invitees.empty: deleted 2026-09-26 (R3; it promised the friend bonuses).
 pub const T_REFERRAL_INVITEE_JOINED: Key = "referral.invitee.joined";
 pub const T_REFERRAL_INVITEE_ORDERED: Key = "referral.invitee.ordered";
 /// Printed instead of a name only when nothing about the person was ever
 /// recorded — see `crate::trios::person::Naming::Anonymous`.
 pub const T_REFERRAL_INVITEE_UNKNOWN: Key = "referral.invitee.unknown";
-pub const T_REFERRAL_MILESTONE_TITLE: Key = "referral.milestone.title";
-pub const T_REFERRAL_MILESTONE_SUBTITLE: Key = "referral.milestone.subtitle";
-/// `{0}` friends, `{1}` the money — already formatted by
-/// `crate::trios::pricing::format_baht`, symbol included.
-///
-/// Both translations carried a literal `฿` glued to `{1}` until the panel was
-/// rewired. That is a currency decision made in a translation file: the market
-/// profile says where the symbol goes (`THB_MARKET.symbol_suffix` is `false`,
-/// i.e. `฿500`), and the suffixed glyph disagreed with every other price on
-/// the screen. Deciding it once, in the formatter, is D15.
-pub const T_REFERRAL_MILESTONE_AWARDED: Key = "referral.milestone.awarded";
+pub const T_REFERRAL_BALANCE: Key = "referral.balance";
+pub const T_REFERRAL_APPLY_TO_RENTAL: Key = "referral.apply_to_rental";
+// referral.milestone.title, .subtitle and .awarded stood on these lines: the milestone
+// ladder's title, progress and rung. Deleted 2026-09-26 (owner, R3: «Убрать, только
+// скидка 10%»); the ladder's points are credited no more. The three keys of the referral
+// balance took their lines, and T_REFERRAL_PAYOUT_REQUESTED took the fourth stat card's,
+// so no line of this file moved. Their wording is the operator's under R3, in both
+// languages. The balance is printed through crate::trios::pricing::format_baht, never
+// by a translation (D15), and the rate in T_REFERRAL_SUBTITLE is held to
+// crate::trios::referral_credit::REFERRAL_CREDIT_PERCENT by a test below.
+pub const T_REFERRAL_REQUEST_PAYOUT: Key = "referral.request_payout";
 
 /// Generic button translations
 pub const T_CLOSE: Key = "btn.close";
@@ -210,11 +210,11 @@ pub const T_REFERRAL_LINK_LABEL: Key = "referral.link_label";
 pub const T_REFERRAL_COPY: Key = "referral.copy";
 pub const T_REFERRAL_COPIED: Key = "referral.copied";
 pub const T_REFERRAL_SHARE: Key = "referral.share";
-pub const T_REFERRAL_SHARE_TEXT: Key = "referral.share_text";
+// referral.share_text: deleted 2026-09-26 (R3; it promised bonuses; the link is sent bare).
 pub const T_REFERRAL_STAT_INVITED: Key = "referral.stat.invited";
 pub const T_REFERRAL_STAT_CONFIRMED: Key = "referral.stat.confirmed";
 pub const T_REFERRAL_STAT_PENDING: Key = "referral.stat.pending";
-pub const T_REFERRAL_STAT_BONUS: Key = "referral.stat.bonus";
+pub const T_REFERRAL_PAYOUT_REQUESTED: Key = "referral.payout_requested";
 pub const T_REFERRAL_TOP: Key = "referral.top";
 pub const T_REFERRAL_EMPTY_LEADERBOARD: Key = "referral.empty_leaderboard";
 pub const T_REFERRAL_ID_MASK: Key = "referral.id_mask";
@@ -512,14 +512,14 @@ pub const T_PROFILE_FRIENDS_INVITED: Key = "profile.friends_invited";
 pub const T_PROFILE_REFERRAL_LINK: Key = "profile.referral_link";
 pub const T_PROFILE_COPY: Key = "profile.copy";
 pub const T_PROFILE_INVITED: Key = "profile.invited";
-/// `{0}` is what a friend is worth, already formatted by
-/// `crate::trios::pricing::format_baht`, symbol included.
-///
-/// Both translations spelled the amount out — `฿100` — while the real figure is
-/// `loyalty_config.referral_bonus`, whose own default is 200. The screen was
-/// promising half of what the shop pays, in a string no compiler and no test
-/// could relate to the number it was about.
-pub const T_PROFILE_EARN_PER_REF: Key = "profile.earn_per_ref";
+// profile.earn_per_ref stood here with its seven lines of doc: the profile's amount per
+// invited friend, read from loyalty_config.referral_bonus. Deleted 2026-09-26 (owner, R3:
+// «Убрать, только скидка 10%»): no amount is credited per friend any more, and the
+// profile's referral card prints T_REFERRAL_SUBTITLE, the rule, where the amount was. The
+// doc argued that the amount must come off the wire rather than out of a translation;
+// that argument ends with the line it guarded. One comment line per deleted line, so no
+// citation into this file moves.
+// profile.earn_per_ref: deleted 2026-09-26 (R3; no amount is credited per friend).
 pub const T_PROFILE_QUICK_ACTIONS: Key = "profile.quick_actions";
 pub const T_PROFILE_MY_ORDERS: Key = "profile.my_orders";
 pub const T_PROFILE_QUESTS: Key = "profile.quests";
@@ -752,13 +752,13 @@ fn get_ru_translation(key: Key) -> Value {
         // game.harvest: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
         // game.plant: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
         T_REFERRAL_INVITEES_TITLE => "🤝 Приглашённые друзья",
-        T_REFERRAL_INVITEES_EMPTY => "Пригласи друзей — получайте бонусы вместе",
+        // referral.invitees.empty: deleted 2026-09-26 (R3; it promised the friend bonuses).
         T_REFERRAL_INVITEE_JOINED => "присоединился",
         T_REFERRAL_INVITEE_ORDERED => "оформил заказ",
         T_REFERRAL_INVITEE_UNKNOWN => "Друг",
-        T_REFERRAL_MILESTONE_TITLE => "Рубежи друзей",
-        T_REFERRAL_MILESTONE_SUBTITLE => "{0}/{1} друзей",
-        T_REFERRAL_MILESTONE_AWARDED => "🏆 {0} друзей — +{1}",
+        T_REFERRAL_BALANCE => "Реферальный баланс",
+        T_REFERRAL_APPLY_TO_RENTAL => "Списать в счёт аренды",
+        T_REFERRAL_REQUEST_PAYOUT => "Запросить выплату",
         T_CLOSE => "Закрыть",
         // Telegram buttons
         T_BTN_CART => "Корзина",
@@ -897,16 +897,16 @@ fn get_ru_translation(key: Key) -> Value {
         T_SHARE => "Поделиться",
         T_SHARE_MESSAGE => "Посмотри {0} в TurboBaby 👇",
         T_REFERRAL_TITLE => "🎁 Реферальная программа",
-        T_REFERRAL_SUBTITLE => "Приглашай друзей — получай бонусы",
+        T_REFERRAL_SUBTITLE => "10% с каждой аренды приглашённого друга",
         T_REFERRAL_LINK_LABEL => "ВАША РЕФЕРАЛЬНАЯ ССЫЛКА",
         T_REFERRAL_COPY => "📋 Копировать",
         T_REFERRAL_COPIED => "✅ Скопировано!",
         T_REFERRAL_SHARE => "📤 Поделиться",
-        T_REFERRAL_SHARE_TEXT => "🏍 Присоединяйся к TurboBaby и получай бонусы!",
+        // referral.share_text: deleted 2026-09-26 (R3; it promised bonuses).
         T_REFERRAL_STAT_INVITED => "Приглашено",
         T_REFERRAL_STAT_CONFIRMED => "Подтверждено",
         T_REFERRAL_STAT_PENDING => "В ожидании",
-        T_REFERRAL_STAT_BONUS => "Бонус",
+        T_REFERRAL_PAYOUT_REQUESTED => "Запрос на выплату отправлен менеджеру",
         T_REFERRAL_TOP => "🏆 Топ рефералов",
         T_REFERRAL_EMPTY_LEADERBOARD => "Пока нет данных — будь первым!",
         T_REFERRAL_ID_MASK => "ID: ⋯{0}",
@@ -1165,7 +1165,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_PROFILE_REFERRAL_LINK => "🔗 Реферальная ссылка",
         T_PROFILE_COPY => "Копировать",
         T_PROFILE_INVITED => "👥 Приглашено: {0}",
-        T_PROFILE_EARN_PER_REF => "Получайте {0} за друга",
+        // profile.earn_per_ref: deleted 2026-09-26 (R3; no amount is credited per friend).
         T_PROFILE_QUICK_ACTIONS => "Быстрые действия",
         T_PROFILE_MY_ORDERS => "Мои заказы",
         T_PROFILE_QUESTS => "Квесты",
@@ -1352,13 +1352,13 @@ fn get_en_translation(key: Key) -> Value {
         // game.harvest: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
         // game.plant: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
         T_REFERRAL_INVITEES_TITLE => "🤝 Friends you invited",
-        T_REFERRAL_INVITEES_EMPTY => "Invite friends — earn bonuses together",
+        // referral.invitees.empty: deleted 2026-09-26 (R3; it promised the friend bonuses).
         T_REFERRAL_INVITEE_JOINED => "joined",
         T_REFERRAL_INVITEE_ORDERED => "placed an order",
         T_REFERRAL_INVITEE_UNKNOWN => "Friend",
-        T_REFERRAL_MILESTONE_TITLE => "Friend milestones",
-        T_REFERRAL_MILESTONE_SUBTITLE => "{0}/{1} friends",
-        T_REFERRAL_MILESTONE_AWARDED => "🏆 {0} friends — +{1}",
+        T_REFERRAL_BALANCE => "Referral balance",
+        T_REFERRAL_APPLY_TO_RENTAL => "Apply to this rental",
+        T_REFERRAL_REQUEST_PAYOUT => "Request a payout",
         T_CLOSE => "Close",
         // Telegram buttons
         T_BTN_CART => "Cart",
@@ -1497,16 +1497,16 @@ fn get_en_translation(key: Key) -> Value {
         T_SHARE => "Share",
         T_SHARE_MESSAGE => "Check out {0} in TurboBaby 👇",
         T_REFERRAL_TITLE => "🎁 Referral Program",
-        T_REFERRAL_SUBTITLE => "Invite friends — earn bonuses",
+        T_REFERRAL_SUBTITLE => "10% of every rental your invited friend completes",
         T_REFERRAL_LINK_LABEL => "YOUR REFERRAL LINK",
         T_REFERRAL_COPY => "📋 Copy",
         T_REFERRAL_COPIED => "✅ Copied!",
         T_REFERRAL_SHARE => "📤 Share",
-        T_REFERRAL_SHARE_TEXT => "🏍 Join TurboBaby and get bonuses!",
+        // referral.share_text: deleted 2026-09-26 (R3; it promised bonuses).
         T_REFERRAL_STAT_INVITED => "Invited",
         T_REFERRAL_STAT_CONFIRMED => "Confirmed",
         T_REFERRAL_STAT_PENDING => "Pending",
-        T_REFERRAL_STAT_BONUS => "Bonus",
+        T_REFERRAL_PAYOUT_REQUESTED => "Payout request sent to the manager",
         T_REFERRAL_TOP => "🏆 Top Referrers",
         T_REFERRAL_EMPTY_LEADERBOARD => "No data yet — be the first!",
         T_REFERRAL_ID_MASK => "ID: ⋯{0}",
@@ -1765,7 +1765,7 @@ fn get_en_translation(key: Key) -> Value {
         T_PROFILE_REFERRAL_LINK => "🔗 Referral Link",
         T_PROFILE_COPY => "Copy",
         T_PROFILE_INVITED => "👥 {0} invited",
-        T_PROFILE_EARN_PER_REF => "Earn {0} per referral",
+        // profile.earn_per_ref: deleted 2026-09-26 (R3; no amount is credited per friend).
         T_PROFILE_QUICK_ACTIONS => "Quick Actions",
         T_PROFILE_MY_ORDERS => "My Orders",
         T_PROFILE_QUESTS => "Quests",
@@ -2414,5 +2414,84 @@ mod tests {
             missing.len(),
             missing.join("\n  ")
         );
+    }
+
+    /// The referral copy of 2026-09-26 (owner, R3), exactly as the operator
+    /// worded it, and the rate in the rule sentence held to the one constant
+    /// that computes the credit: a rate edited in one place and not the other
+    /// would promise the customer a number the server does not pay.
+    #[test]
+    fn the_referral_credit_copy_is_the_operators_wording() {
+        let rate = format!(
+            "{}%",
+            crate::trios::referral_credit::REFERRAL_CREDIT_PERCENT
+        );
+        for lang in [Lang::Russian, Lang::English] {
+            assert!(
+                t(lang, T_REFERRAL_SUBTITLE).contains(&rate),
+                "{lang:?} T_REFERRAL_SUBTITLE does not state the rate {rate}"
+            );
+        }
+        for (key, ru, en) in [
+            (T_REFERRAL_BALANCE, "Реферальный баланс", "Referral balance"),
+            (
+                T_REFERRAL_APPLY_TO_RENTAL,
+                "Списать в счёт аренды",
+                "Apply to this rental",
+            ),
+            (
+                T_REFERRAL_REQUEST_PAYOUT,
+                "Запросить выплату",
+                "Request a payout",
+            ),
+            (
+                T_REFERRAL_PAYOUT_REQUESTED,
+                "Запрос на выплату отправлен менеджеру",
+                "Payout request sent to the manager",
+            ),
+            (
+                T_REFERRAL_SUBTITLE,
+                "10% с каждой аренды приглашённого друга",
+                "10% of every rental your invited friend completes",
+            ),
+        ] {
+            assert_eq!(t(Lang::Russian, key), ru, "{key} (ru)");
+            assert_eq!(t(Lang::English, key), en, "{key} (en)");
+        }
+    }
+
+    /// The seven keys R3 retired stay retired: no declaration and no arm in
+    /// either table. Each promised points, a ladder or a per-friend amount the
+    /// shop no longer credits.
+    #[test]
+    fn the_referral_keys_r3_retired_stay_retired() {
+        let declared: Vec<&str> = declared_keys().into_iter().map(|(_, k)| k).collect();
+        for gone in [
+            "referral.invitees.empty",
+            "referral.milestone.title",
+            "referral.milestone.subtitle",
+            "referral.milestone.awarded",
+            "referral.share_text",
+            "referral.stat.bonus",
+            "profile.earn_per_ref",
+        ] {
+            assert!(!declared.contains(&gone), "{gone} is declared again");
+            assert!(
+                !has_translation(Lang::Russian, gone),
+                "{gone} has a Russian arm again"
+            );
+            assert!(
+                !has_translation(Lang::English, gone),
+                "{gone} has an English arm again"
+            );
+        }
+        for added in [
+            "referral.balance",
+            "referral.apply_to_rental",
+            "referral.request_payout",
+            "referral.payout_requested",
+        ] {
+            assert!(declared.contains(&added), "{added} is not declared");
+        }
     }
 }

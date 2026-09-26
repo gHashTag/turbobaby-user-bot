@@ -219,8 +219,10 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         # test); merged 2026-09-26 on the integration branch, 144/36.
         # 146/36 on 2026-09-26: question I deleted the Book control's two count reasons, named
         # by two declarations. 148/36 the same day: nineteen cannabis-era keys no mounted screen
-        # printed were deleted, named by two declarations.
-        "min_declarations": 148,
+        # printed were deleted, named by two declarations. 155/36 the same day on the client lane of
+        # R3 (the referral credit): seven referral keys retired and four declared, named by five
+        # declarations, with the two counts before it kept under _BEFORE_2026_09_26_R3 names.
+        "min_declarations": 155,
         "min_checks": 36,
     },
     "specs/turbobaby/loyalty_ledger.t27": {
