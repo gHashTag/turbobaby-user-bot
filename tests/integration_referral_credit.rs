@@ -1239,3 +1239,111 @@ async fn the_overview_lists_open_requests_invitees_rentals_and_balances() {
         .await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);
 }
+
+/// The review of 2026-09-26: the recording admin may not credit himself
+/// through the password token either. `check_admin` answers 0 for it, a
+/// principal that names nobody, and so it does when the admin screen sends
+/// initData that fails the strict check beside the token. A password record
+/// of a listed admin's friend is refused (422 `recorder_is_inviter`) and writes
+/// nothing. A named admin is still refused only as the inviter himself, and
+/// the password still records a friend of someone off the list: the case a
+/// password holder off the list cannot be told apart from (DECISIONS.md).
+#[tokio::test]
+#[ignore]
+async fn a_password_record_of_a_listed_admins_friend_is_refused() {
+    let shop = shop_or_skip!();
+    let token = turbobaby_bot::api::auth::generate_admin_token("test_password", BOT_TOKEN);
+    let rentals_route = "/api/admin/referral-credit/rentals";
+    let admins_rows = || {
+        let shop = &shop;
+        async move {
+            shop.int(
+                "SELECT COUNT(*)::bigint AS n FROM referral_ledger WHERE telegram_id = $1",
+                vec![ADMIN_ID.into()],
+            )
+            .await
+        }
+    };
+    let (rows_before, balance_before) = (admins_rows().await, shop.balance(ADMIN_ID).await);
+
+    let admins_friend = person();
+    shop.edge(ADMIN_ID, admins_friend).await;
+    let refused = (
+        StatusCode::UNPROCESSABLE_ENTITY,
+        json!("recorder_is_inviter"),
+    );
+
+    // The password token alone.
+    let (status, body) = shop.record(admins_friend, 1000, None).await;
+    assert_eq!((status, body["error"].clone()), refused, "{body}");
+
+    // initData that fails the strict check, beside the token.
+    let (status, body) = shop
+        .call(
+            Method::POST,
+            rentals_route,
+            &[
+                (
+                    "X-Telegram-Init-Data",
+                    make_init_data(ADMIN_ID, "not_this_bots_token"),
+                ),
+                ("X-Admin-Token", token.clone()),
+            ],
+            Some(json!({"customer_telegram_id": admins_friend, "rental_amount_thb": 1000, "idempotency_key": key()})),
+        )
+        .await;
+    assert_eq!((status, body["error"].clone()), refused, "{body}");
+
+    // Linked to a completed rental order of the friend: every order guard
+    // passes, and the recorder guard still refuses.
+    let order = shop.rental_order(admins_friend, "completed").await;
+    let (status, body) = shop.record(admins_friend, 1000, Some(&order)).await;
+    assert_eq!((status, body["error"].clone()), refused, "{body}");
+
+    // Nothing was written: no record, no ledger row, the edge still pending.
+    assert_eq!(
+        shop.int(
+            "SELECT COUNT(*)::bigint AS n FROM referral_rentals WHERE customer_telegram_id = $1",
+            vec![admins_friend.into()]
+        )
+        .await,
+        0
+    );
+    assert_eq!(admins_rows().await, rows_before);
+    assert_eq!(shop.balance(ADMIN_ID).await, balance_before);
+    assert_eq!(
+        shop.int(
+            "SELECT COUNT(*)::bigint AS n FROM referral_events WHERE referred_id = $1 AND status = 'pending'",
+            vec![admins_friend.into()]
+        )
+        .await,
+        1
+    );
+
+    // A named admin records the friend of someone else, under his own id.
+    let (inviter, friend) = (person(), person());
+    shop.edge(inviter, friend).await;
+    let (status, body) = shop
+        .call(
+            Method::POST,
+            rentals_route,
+            &[("X-Telegram-Init-Data", make_init_data(ADMIN_ID, BOT_TOKEN))],
+            Some(json!({"customer_telegram_id": friend, "rental_amount_thb": 1000, "idempotency_key": key()})),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["rental"]["recorded_by"], ADMIN_ID);
+    assert_eq!(
+        body["credit"],
+        json!({"inviter_telegram_id": inviter, "credit_thb": 100})
+    );
+
+    // The password token records the friend of someone off the list, as 0.
+    let (outsider, outsiders_friend) = (person(), person());
+    shop.edge(outsider, outsiders_friend).await;
+    let (status, body) = shop.record(outsiders_friend, 1000, None).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["rental"]["recorded_by"], 0);
+    assert_eq!(shop.balance(outsider).await, 100);
+    assert_eq!(admins_rows().await, rows_before);
+}

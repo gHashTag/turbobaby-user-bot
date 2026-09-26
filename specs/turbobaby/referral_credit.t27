@@ -91,6 +91,28 @@ pub const SELF_EDGE_IS_CREDITED : bool = false;
 pub const EDGE_AFTER_ORDER_IS_CREDITED : bool = false;
 pub const EXISTING_CUSTOMER_IS_CREDITED : bool = false;
 pub const RECORDER_MAY_BE_THE_INVITER : bool = false;
+; The recorder guard reads both identities check_admin answers with (the review of 2026-09-26;
+; until then it ran only for an admin named by Telegram, so a password record of an admin's own
+; friend credited that admin). check_admin answers the recorder's own id when Telegram names him,
+; and 0 for the shared password token, a principal that names nobody (turbobaby/request-identity,
+; PASSWORD_STEP_PRINCIPAL_IS_A_SENTINEL); initData that fails the strict check beside the token is
+; answered with 0 as well. A named recorder is refused when he is the inviter. A password record is
+; refused when the inviter is on ADMIN_IDS, since any listed admin may be the one holding the
+; password. Both are 422 recorder_is_inviter and write nothing (recorder_refused below).
+; STILL OPEN: a person who knows the password and is not on ADMIN_IDS can record the rentals of a
+; friend he invited, and his record stores recorded_by = 0, which names nobody. The code cannot
+; tell him from a manager; closing it means refusing the password token on this route, which would
+; also refuse an admin whose WebView fails the strict check. That is the owner's call (DECISIONS.md).
+pub const RECORDER_GUARD_REFUSES_A_NAMED_INVITER : bool = true;
+pub const RECORDER_GUARD_REFUSES_A_PASSWORD_RECORD_OF_A_LISTED_ADMINS_FRIEND : bool = true;
+pub const RECORDER_GUARD_COVERS_A_PASSWORD_HOLDER_OFF_THE_ADMIN_LIST : bool = false;
+pub const PASSWORD_RECORD_NAMES_ITS_RECORDER : bool = false;
+; Bound by gate 3: the one read of the admin list in IMPLEMENTATION_DB (recorder_is_the_inviter),
+; and the one call in IMPLEMENTATION_API that hands the ledger check_admin's answer with the list.
+pub const RECORDER_GUARD_ADMIN_LIST_READS : u8 = 1;
+pub const RECORDER_GUARD_ADMIN_LIST_HANDED_TO_THE_RECORD : u8 = 1;
+pub const RECORDER_GUARD_WITNESS : str = "tests/integration_referral_credit.rs a_password_record_of_a_listed_admins_friend_is_refused";
+pub const RECORDER_GUARD_FIXED_AT : str = "2026-09-26";
 ; No retroactive credit: an order created before 089 was applied is refused (409).
 pub const ORDER_BEFORE_PROGRAM_IS_CREDITED : bool = false;
 pub const REFUSAL_NO_EDGE : u8 = 1;
@@ -323,6 +345,15 @@ pub fn record_is_admitted(is_creditable: bool, applied_thb: i64) bool {
   return is_creditable or applied_thb > 0;
 }
 
+; A record that would credit its own recorder is refused. A named recorder is compared with the
+; inviter; the password token, which names nobody, with the admin list.
+pub fn recorder_refused(recorder_is_named: bool, recorder_is_the_inviter: bool, inviter_is_a_listed_admin: bool) bool {
+  if (recorder_is_named) {
+    return recorder_is_the_inviter;
+  }
+  return inviter_is_a_listed_admin;
+}
+
 pub const REQUEST_OPENED : u8 = 0;
 pub const REQUEST_ALREADY_OPEN : u8 = 1;
 pub const REQUEST_REFUSED_OTHER_KIND_OPEN : u8 = 2;
@@ -541,6 +572,23 @@ test the_integration_pins_one_shape_and_names_the_retired_keys {
   assert COPY_NEEDED_AND_NOT_WORDED.len + COPY_NEEDED_AND_NOT_WORDED_FOUND_BY_THE_CLIENT_LANE.len == 9;
 }
 
+test the_recorder_guard_reads_both_admin_identities {
+  assert RECORDER_MAY_BE_THE_INVITER == false;
+  assert RECORDER_GUARD_REFUSES_A_NAMED_INVITER == true;
+  assert RECORDER_GUARD_REFUSES_A_PASSWORD_RECORD_OF_A_LISTED_ADMINS_FRIEND == true;
+  assert recorder_refused(true, true, true) == true;
+  assert recorder_refused(true, false, true) == false;
+  assert recorder_refused(true, false, false) == false;
+  assert recorder_refused(false, false, true) == true;
+  assert recorder_refused(false, false, false) == false;
+  assert RECORDER_GUARD_COVERS_A_PASSWORD_HOLDER_OFF_THE_ADMIN_LIST == false;
+  assert PASSWORD_RECORD_NAMES_ITS_RECORDER == false;
+  assert RECORDER_GUARD_ADMIN_LIST_READS == 1;
+  assert RECORDER_GUARD_ADMIN_LIST_HANDED_TO_THE_RECORD == 1;
+  assert RECORDER_GUARD_WITNESS != API_SHAPE_WITNESS;
+  assert RECORDER_GUARD_FIXED_AT == OWNER_R3_DECIDED_AT;
+}
+
 ; --- Invariants -----------------------------------------------------------------------------------------
 
 invariant the_credit_never_exceeds_the_owners_rate
@@ -563,3 +611,6 @@ invariant a_negative_balance_is_shown_as_nothing_and_blocks_a_request
 
 invariant the_order_money_path_is_untouched
   assert ORDER_MONEY_PATH_MENTIONS == 0 and ORDER_TOTAL_IS_TOUCHED == false and PROMPTPAY_AMOUNT_IS_TOUCHED == false and DEPOSIT_IS_TOUCHED == false
+
+invariant no_admin_credits_himself_under_either_identity
+  assert RECORDER_MAY_BE_THE_INVITER == false and recorder_refused(true, true, false) == true and recorder_refused(false, false, true) == true

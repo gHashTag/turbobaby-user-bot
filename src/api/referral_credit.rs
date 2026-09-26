@@ -344,7 +344,16 @@ async fn post_rental(headers: HeaderMap, State(state): State<AppState>, body: By
         Ok(record) => record,
         Err(code) => return refused(StatusCode::BAD_REQUEST, code),
     };
-    match crate::db::referral_credit::record_rental(&state.db.orm, admin_id, &record).await {
+    // `admin_id` is 0 for the password token, which names nobody; the admin
+    // list lets the ledger refuse such a record of a listed admin's friend.
+    match crate::db::referral_credit::record_rental(
+        &state.db.orm,
+        admin_id,
+        &state.config.admin_ids,
+        &record,
+    )
+    .await
+    {
         Ok(recorded) => Json(recorded).into_response(),
         Err(e) => credit_error("record", e),
     }

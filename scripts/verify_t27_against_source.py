@@ -4141,6 +4141,38 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "relation": "equal",
         "why": "the same sentence in the English table",
     },
+    # The review of round 5 (2026-09-26): the recorder guard ran only for an admin named by
+    # Telegram, and check_admin answers 0 for the password token. It now reads the admin list for
+    # a password record. Two rows, the list's one read and the one call that hands it over, each
+    # measured by hand on both sides and planted RED once by hand (--source-override on a copy with
+    # the read, or the list, taken out) and restored.
+    {
+        "name": "referral_credit.RECORDER_GUARD_ADMIN_LIST_READS ~ db/referral_credit.rs",
+        "spec": "specs/turbobaby/referral_credit.t27",
+        "const": "RECORDER_GUARD_ADMIN_LIST_READS",
+        "source": "src/db/referral_credit.rs",
+        "extract": ("regex_count", NOT_IN_A_LINE_COMMENT + r"\badmin_ids\.contains\(&inviter\)"),
+        "witness": r"Ok\(inviter\) if recorder_is_the_inviter\(admin_id, inviter, admin_ids\)",
+        "relation": "equal",
+        "why": "the password token names nobody (check_admin answers 0), so without this read a "
+               "password record of an admin's own friend credits that admin; the witness pins the "
+               "guard to the record's creditable arm",
+    },
+    {
+        "name": "referral_credit.RECORDER_GUARD_ADMIN_LIST_HANDED_TO_THE_RECORD ~ api/referral_credit.rs",
+        "spec": "specs/turbobaby/referral_credit.t27",
+        "const": "RECORDER_GUARD_ADMIN_LIST_HANDED_TO_THE_RECORD",
+        "source": "src/api/referral_credit.rs",
+        "extract": (
+            "regex_count",
+            NOT_IN_A_LINE_COMMENT
+            + r"\brecord_rental\(\s*&state\.db\.orm,\s*admin_id,\s*&state\.config\.admin_ids,",
+        ),
+        "relation": "equal",
+        "why": "the ledger refuses a password record of a listed admin's friend only if the route "
+               "hands it the configured list; an empty list turns that half of the guard off while "
+               "every test of the named half stays green",
+    },
     {
         "name": "referral_program.REFERRAL_TX_TYPE_WRITERS_SINCE_2026_09_26 ~ src/ referral_ rows",
         "spec": "specs/turbobaby/referral_program.t27",
@@ -4312,7 +4344,10 @@ ONE_GROUP_EXTRACTORS = (
 # in the Mini App's rule sentence, RU and EN (T_REFERRAL_SUBTITLE in src/trios/i18n.rs), each
 # planted RED once by hand: 282 + 2 = 284 rows over the same 42 contracts, floor 284 (the measured
 # table size). No row removed.
-MIN_BINDINGS = 284
+# The review of round 5 (2026-09-26): the recorder guard's read of the admin list and the call
+# that hands the list to the record, each planted RED once by hand: 284 + 2 = 286 rows over the
+# same 42 contracts, floor 286 (the measured table size). No row removed.
+MIN_BINDINGS = 286
 
 
 # ---------------------------------------------------------------------------------
