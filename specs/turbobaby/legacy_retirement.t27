@@ -879,7 +879,7 @@ pub const OWNER_ANSWER_3_RENAMES_A_CART_LINE : bool = false;
 pub const OWNER_ANSWER_3_CART_GUARDS_REMOVED : [2]str = ["device_cart_line_names", "device_cart_line_pictures"];
 pub const OWNER_ANSWER_3_LEFT_READS_CLOSED : [2]str = ["abandoned_cart_reminder", "garden_notification_arm"];
 pub const OWNER_ANSWER_3_LEFT_READS_CLOSED_BY_IDS : [2]str = ["turbobaby/cart-persistence", "turbobaby/notification-queue"];
-pub const OWNER_ANSWER_3_DESCRIBED_TX_TYPE_COUNT : u8 = 4;
+pub const OWNER_ANSWER_3_DESCRIBED_TX_TYPE_COUNT : u8 = 5;
 ; How many bonus types a customer is served without their type (GARDEN_ERA_TX_TYPES in the rules'
 ; module), and that the type they are served instead is the empty one (WITHHELD_TX_TYPE there).
 pub const OWNER_ANSWER_3_WITHHELD_TX_TYPE_COUNT : u8 = 2;
@@ -914,10 +914,27 @@ pub const OWNER_ANSWER_3_KEYS_DELETED : u8 = 0;
 ;     had kept the 24-hour reminder for seats already held; every event is hidden since 088, so the
 ;     reminder mailed the previous shop's stored titles and venues. It now reminds public events
 ;     only (REMINDER_REVERSED_AT there); cancellation and refund of a held seat are unchanged.
+;   * THE WELCOME CREDIT'S SENTENCE (operator, the same day, under this answer 3). Read 4 above
+;     withheld the welcome credit's description because its sentence named the garden, and
+;     confirm_referral went on writing that sentence into every new welcome row. Since 2026-09-26 it
+;     writes the same sentence with the garden's words dropped and nothing else changed
+;     (WELCOME_CREDIT_SENTENCE in the rules' module). None of the four sentences already written
+;     fits: the referral credit's is the inviter's row, and one sentence meaning two things on two
+;     rows is not a neutral one (WELCOME_SENTENCE_REUSES_ONE_OF_THE_FOUR). The read side serves the
+;     new sentence, so the described types are five (OWNER_ANSWER_3_DESCRIBED_TX_TYPE_COUNT, four
+;     before); a row written before keeps the garden's sentence and stays withheld. No row is
+;     rewritten.
 pub const OWNER_ANSWERS_2026_09_26_AT : str = "2026-09-26";
 pub const OWNER_MEDIA_ANSWER_OWNER_ID : str = "turbobaby/upload-media";
 pub const OWNER_MEDIA_ANSWER_DELETES_FILES : bool = false;
 pub const OWNER_MEDIA_ANSWER_BUCKET_NEEDS_A_PRODUCTION_LISTING : bool = true;
+pub const OWNER_ANSWER_3_DESCRIBED_TX_TYPE_COUNT_BEFORE_2026_09_26 : u8 = 4;
+pub const WELCOME_SENTENCE_NAMES_THE_GARDEN : bool = false;
+pub const WELCOME_CREDIT_SENTENCE : str = "Welcome bonus from a friend's invite";
+pub const WELCOME_SENTENCE_NAMED_THE_GARDEN_UNTIL : str = "2026-09-26";
+pub const WELCOME_SENTENCE_REUSES_ONE_OF_THE_FOUR : bool = false;
+pub const WELCOME_SENTENCE_OLD_ROWS_WITHHELD : bool = true;
+pub const WELCOME_SENTENCE_REWRITES_A_ROW : bool = false;
 pub const OWNER_ORDERS_ANSWER_READ_BY : str = "operator";
 pub const OWNER_ORDERS_ANSWER_RULE_OWNER_ID : str = "turbobaby/order-presentation";
 pub const OWNER_ORDERS_ANSWER_HIDES_THE_ORDER : bool = true;
@@ -1378,7 +1395,8 @@ test the_answer_3_masks_reads_and_writes_no_row {
     assert OWNER_ANSWER_3_LEFT_READ_COUNT == 4;
     assert OWNER_ANSWER_3_CLIENT_GUARDS[1] == "garden_bonus_label";
     assert OWNER_ANSWER_3_CLIENT_GUARD_COUNT == 2;
-    assert OWNER_ANSWER_3_DESCRIBED_TX_TYPE_COUNT == 4;
+    // four until the welcome credit's sentence lost the garden's words on 2026-09-26
+    assert OWNER_ANSWER_3_DESCRIBED_TX_TYPE_COUNT == OWNER_ANSWER_3_DESCRIBED_TX_TYPE_COUNT_BEFORE_2026_09_26 + 1;
     // Nothing stored moves, and the archive reads it whole.
     assert OWNER_ANSWER_3_WRITES_ROWS == false;
     assert OWNER_ANSWER_3_WRITES_ROWS == OWNER_RULING_2026_09_25_DELETES_ROWS;
@@ -1436,6 +1454,18 @@ test the_media_answer_of_2026_09_26_stops_serving_and_deletes_nothing {
     assert OWNER_MEDIA_ANSWER_DELETES_FILES == false;
     assert OWNER_MEDIA_ANSWER_DELETES_FILES == OWNER_RULING_2026_09_25_DELETES_ROWS;
     assert OWNER_MEDIA_ANSWER_BUCKET_NEEDS_A_PRODUCTION_LISTING == true;
+}
+
+test a_new_welcome_credit_names_no_garden_and_an_old_one_stays_withheld {
+    assert WELCOME_SENTENCE_NAMES_THE_GARDEN == false;
+    assert WELCOME_CREDIT_SENTENCE == "Welcome bonus from a friend's invite";
+    assert WELCOME_SENTENCE_NAMED_THE_GARDEN_UNTIL == OWNER_ANSWERS_2026_09_26_AT;
+    assert WELCOME_SENTENCE_REUSES_ONE_OF_THE_FOUR == false;
+    assert OWNER_ANSWER_3_DESCRIBED_TX_TYPE_COUNT_BEFORE_2026_09_26 == 4;
+    assert OWNER_ANSWER_3_DESCRIBED_TX_TYPE_COUNT == 5;
+    assert WELCOME_SENTENCE_OLD_ROWS_WITHHELD == true;
+    assert WELCOME_SENTENCE_REWRITES_A_ROW == false;
+    assert WELCOME_SENTENCE_REWRITES_A_ROW == OWNER_ANSWER_3_WRITES_ROWS;
 }
 
 test the_identity_of_this_contract_is_fixed {

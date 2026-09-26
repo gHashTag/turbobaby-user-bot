@@ -47,8 +47,8 @@ use turbobaby_bot::trios::legacy_view::{
     customer_bonus_description, customer_bonus_tx_type, customer_order_items, customer_sees_order,
     customer_shop_id, previous_catalogue_name, shown_line_name, shown_shop,
     ADMIN_DEDUCTION_SENTENCE, DESCRIBED_TX_TYPES, GARDEN_ERA_TX_TYPES, KEPT_LINE_KEYS,
-    MASKED_LINE_NAME_KEY, REFERRAL_BONUS_SENTENCE, RETIRED_KIND_KEYS, WITHHELD_SHOP,
-    WITHHELD_TX_TYPE,
+    MASKED_LINE_NAME_KEY, REFERRAL_BONUS_SENTENCE, RETIRED_KIND_KEYS, WELCOME_CREDIT_SENTENCE,
+    WITHHELD_SHOP, WITHHELD_TX_TYPE,
 };
 
 const ORDERS_API: &str = "src/api/orders.rs";
@@ -450,16 +450,40 @@ fn the_sentences_the_writers_compose_are_the_ones_the_rule_serves() {
         Some(milestone)
     );
 
-    // The welcome credit's sentence names the garden; it is written today and
-    // withheld on read.
-    assert!(referrals.contains("\"Welcome bonus from a friend's garden invite\""));
-    assert!(!DESCRIBED_TX_TYPES.contains(&"referral_welcome"));
+    // The welcome credit's sentence named the garden until 2026-09-26; since
+    // then a new row is written with the garden's words dropped, and served.
+    // A row written before keeps the garden's sentence and stays withheld.
+    const GARDEN_WELCOME_SENTENCE: &str = "Welcome bonus from a friend's garden invite";
+    assert!(referrals.contains(&format!("\"{WELCOME_CREDIT_SENTENCE}\"")));
+    assert!(
+        !referrals.contains(GARDEN_WELCOME_SENTENCE),
+        "{REFERRALS_DB}"
+    );
     assert_eq!(
-        served(
-            "referral_welcome",
-            "Welcome bonus from a friend's garden invite".to_string()
-        ),
+        WELCOME_CREDIT_SENTENCE,
+        GARDEN_WELCOME_SENTENCE.replace("garden ", ""),
+        "only the garden's words were dropped"
+    );
+    assert!(DESCRIBED_TX_TYPES.contains(&"referral_welcome"));
+    assert_eq!(
+        served("referral_welcome", WELCOME_CREDIT_SENTENCE.to_string()),
+        Some(WELCOME_CREDIT_SENTENCE.to_string())
+    );
+    assert_eq!(
+        served("referral_welcome", GARDEN_WELCOME_SENTENCE.to_string()),
         None
+    );
+    // The writer names the type the rule serves the sentence under.
+    let welcome = &referrals[referrals
+        .find("tx_type: Set(\"referral_welcome\".to_string()),")
+        .expect("the welcome credit's row")..];
+    assert!(
+        welcome
+            .chars()
+            .take(300)
+            .collect::<String>()
+            .contains(&format!("\"{WELCOME_CREDIT_SENTENCE}\"")),
+        "{welcome}"
     );
     // A garden row, whatever its description stored.
     for tx in GARDEN_ERA_TX_TYPES {
