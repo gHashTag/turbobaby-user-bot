@@ -3797,6 +3797,96 @@ BINDINGS: tuple[dict[str, object], ...] = (
                "row is still served by the calendar, the event page, a booking, a waitlist join "
                "and the promo sweeper's event scans, whatever the admin API may now store",
     },
+    # The owner's answer of 2026-09-26 on the previous shop's orders (a customer does not see
+    # them at all). Measured by hand 2026-09-26: the list asks for 50 shown orders, and three
+    # reads by id -- get_order_status, get_order_details and cancel_order -- answer such an
+    # order exactly as a missing one, on the owner check's own line. Each planted RED once by
+    # hand (51 in the contract; one guard removed from the source).
+    {
+        "name": "order_presentation.PREVIOUS_SHOP_ORDER_LIST_LIMIT ~ orders.rs shown-orders cap",
+        "spec": "specs/turbobaby/order_presentation.t27",
+        "const": "PREVIOUS_SHOP_ORDER_LIST_LIMIT",
+        "source": "src/api/orders.rs",
+        "extract": ("regex", r"Order::newest_shown_to_customer\(newest_first, &state\.db\.orm, (\d+)\)"),
+        "relation": "equal",
+        "why": "the list's cap counts only the orders its customer is shown; read through the "
+               "old `.limit` again and the previous shop's orders would take its places",
+    },
+    {
+        "name": "order_presentation.PREVIOUS_SHOP_ORDER_BY_ID_READS ~ orders.rs owner-check guards",
+        "spec": "specs/turbobaby/order_presentation.t27",
+        "const": "PREVIOUS_SHOP_ORDER_BY_ID_READS",
+        "source": "src/api/orders.rs",
+        "extract": ("regex_count", NOT_IN_A_LINE_COMMENT
+                    + r"\.telegram_id != Some\(tid\) \|\| !Order::shown_to_customer\(&\w+\) \{"),
+        "relation": "equal",
+        "why": "each read by id answers an order of the previous shop as a missing one on the "
+               "owner check's own line; a guard dropped serves that order by id again",
+    },
+    # The owner's answer of 2026-09-26 on the previous shop's media (stop serving it): the local
+    # /uploads read serves only a name a bike's picture references. Measured by hand 2026-09-26:
+    # src/main.rs nests served_uploads, and the reference is read from bikes. Each planted RED
+    # once by hand (the nest put back to ServeDir; the table renamed in the contract).
+    {
+        "name": "upload_media.LOCAL_READ_SERVICE_NESTS ~ main.rs /uploads nest",
+        "spec": "specs/turbobaby/upload_media.t27",
+        "const": "LOCAL_READ_SERVICE_NESTS",
+        "source": "src/main.rs",
+        "extract": ("regex_count", NOT_IN_A_LINE_COMMENT
+                    + r'\.nest_service\("/uploads", api::upload::served_uploads\('),
+        "relation": "equal",
+        "why": "the one line that serves /uploads; put back to a directory service and every "
+               "file on the volume, the previous shop's included, is served to anyone with its name",
+    },
+    {
+        "name": "upload_media.LOCAL_READ_REFERENCE_LOOKUPS_ON_BIKES ~ upload.rs reference lookup",
+        "spec": "specs/turbobaby/upload_media.t27",
+        "const": "LOCAL_READ_REFERENCE_LOOKUPS_ON_BIKES",
+        "source": "src/api/upload.rs",
+        "extract": ("regex_count",
+                    r'"SELECT EXISTS \(SELECT 1 FROM bikes WHERE image_url = \$1\) AS referenced"'),
+        "relation": "equal",
+        "why": "the rental data a served name must be referenced by; another table or column "
+               "would serve what the rental catalogue never points at",
+    },
+    # The operator's reversal of 2026-09-26 under the owner's answer 3: the 24-hour event reminder
+    # joins public events only. Measured by hand 2026-09-26: one filtered join, in
+    # send_event_reminders. Planted RED once by hand (the filter taken off the join).
+    {
+        "name": "events_booking.REMINDER_FLAG_FILTERED_JOINS ~ events.rs reminder join",
+        "spec": "specs/turbobaby/events_booking.t27",
+        "const": "REMINDER_FLAG_FILTERED_JOINS",
+        "source": "src/api/events.rs",
+        "extract": ("regex_count", r"JOIN events e ON e\.id = b\.event_id AND e\.is_public = TRUE \\$"),
+        "relation": "equal",
+        "why": "every event is hidden since 088 and each one left is the previous shop's; without "
+               "the filter the reminder mails its stored title and venue to a seat holder",
+    },
+    # The welcome credit's sentence without the garden's words (operator, 2026-09-26, under
+    # answer 3): the writer and the read-side rule each hold it, and the contract names it.
+    # Measured by hand 2026-09-26. Each planted RED once by hand (the garden's words put back in
+    # the writer; a different sentence in the rule).
+    {
+        "name": "legacy_retirement.WELCOME_CREDIT_SENTENCE ~ referrals.rs welcome row",
+        "spec": "specs/turbobaby/legacy_retirement.t27",
+        "const": "WELCOME_CREDIT_SENTENCE",
+        "source": "src/db/referrals.rs",
+        "extract": ("regex", r'tx_type: Set\("referral_welcome"\.to_string\(\)\),\s*'
+                             r'description: Set\(Some\(\s*("[^"]*")\.to_string\(\)'),
+        "relation": "equal",
+        "why": "the sentence every new welcome credit stores; the garden's words back in it put "
+               "the previous shop's mechanic in the bonus history of every invited customer",
+    },
+    {
+        "name": "legacy_retirement.WELCOME_CREDIT_SENTENCE ~ legacy_view.rs served sentence",
+        "spec": "specs/turbobaby/legacy_retirement.t27",
+        "const": "WELCOME_CREDIT_SENTENCE",
+        "source": "src/trios/legacy_view.rs",
+        "extract": ("regex", r'pub const WELCOME_CREDIT_SENTENCE: &str = ("[^"]*");'),
+        "relation": "equal",
+        "why": "the one welcome sentence the bonus history serves; if it drifts from the writer's, "
+               "every new welcome credit is withheld again",
+    },
 )
 
 TREE_EXTRACTORS = (
@@ -3872,7 +3962,19 @@ ONE_GROUP_EXTRACTORS = (
 # DeliverableKind::of with a witness): 240 rows over the same 41 contracts on its own branch,
 # floor 240. Merged 2026-09-26 on the integration branch: 248 rows, floor 248 (the measured
 # table size).
-MIN_BINDINGS = 248
+# Then the owner's answer of 2026-09-26 on the previous shop's orders bound
+# order_presentation.PREVIOUS_SHOP_ORDER_LIST_LIMIT and PREVIOUS_SHOP_ORDER_BY_ID_READS to the
+# order handlers, each planted RED once by hand: 250 rows, floor 250.
+# Then the owner's answer of 2026-09-26 on the previous shop's media bound
+# upload_media.LOCAL_READ_SERVICE_NESTS to the /uploads nest in src/main.rs and
+# LOCAL_READ_REFERENCE_LOOKUPS_ON_BIKES to the reference lookup, each planted RED once by hand: 252 rows,
+# floor 252.
+# Then the operator's reversal of 2026-09-26 bound events_booking.REMINDER_FLAG_FILTERED_JOINS to
+# the reminder's join, planted RED once by hand: 253 rows, floor 253.
+# Then the welcome credit's sentence of 2026-09-26 bound legacy_retirement.WELCOME_CREDIT_SENTENCE
+# to its writer in src/db/referrals.rs and to the rule in src/trios/legacy_view.rs, each planted
+# RED once by hand: 255 rows, floor 255.
+MIN_BINDINGS = 255
 
 
 # ---------------------------------------------------------------------------------
