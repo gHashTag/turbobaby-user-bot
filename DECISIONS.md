@@ -933,7 +933,9 @@ owner:
 3. The base is the rental charge the manager took, in whole THB, without deposit and delivery, net
    of any referral balance applied to that same rental. The credit is floor((R − applied) × 10 / 100).
    Why: the credit never exceeds 10% of the cash actually received. This is the conservative
-   reading; the owner may prefer the gross charge (open question 1 below).
+   reading; the owner may prefer the gross charge (open question 1 below). *Answered 2026-09-26
+   (the entry «The base of the 10% and the referral top list»): the net base, the owner's own
+   decision since.*
 4. Rounding is down to whole baht, with integer THB (BIGINT) everywhere. A rental whose credit
    rounds to 0 is still recorded, with no ledger row.
 5. Every recorded rental credits: no cap, no expiry, no minimum payout, no fee and no cooldown. An
@@ -1008,6 +1010,8 @@ owner:
     English Telegram notices to admins are written by the lane and listed below for rewording.
 25. `/api/referrals/leaderboard` is left unchanged, although it is public, publishes `telegram_id`
     and shows frozen point totals: R1 names only `/api/loyalty/leaderboard` (open question 2).
+    *Closed 2026-09-26 on the owner's answer (the entry «The base of the 10% and the referral top
+    list»): an admin only, like R1's route, and the list is off the referral page.*
 
 **Admin-facing wording the server lane wrote**, not the owner's, listed for rewording:
 
@@ -1038,9 +1042,11 @@ sight") now concerns old rows only: no welcome row is written since R3, and old 
 **Open questions for the owner.**
 
 1. Is the 10% taken on the rental charge net of the referral balance applied to it (as built), or
-   on the gross charge?
+   on the gross charge? *Answered 2026-09-26: «После скидки — 250», the net base (the entry «The
+   base of the 10% and the referral top list»).*
 2. `/api/referrals/leaderboard` is public and publishes `telegram_id` and frozen point totals.
-   Close it like R1, or leave it?
+   Close it like R1, or leave it? *Answered 2026-09-26: «Убрать топ и закрыть адрес» (the same
+   entry).*
 3. The admin-facing wording above: keep it, or reword it?
 
 `specs/turbobaby/referral_credit.t27` owns the credit. `referral_program.t27` records what stopped,
@@ -1099,6 +1105,8 @@ lane's; this one records the client lane (`t27/round5-client`) and the integrati
 7. The top-referrers list on the referrals page is unchanged: it still reads the public
    `/api/referrals/leaderboard`, and each row's «{1} заработано» is the frozen
    `total_bonus_earned` of the points credited before R3 (open question 2 of the entry above).
+   *Removed 2026-09-26 on the owner's answer (the entry «The base of the 10% and the referral top
+   list»).*
 
 **Admin-facing wording the client lane wrote**, not the owner's, listed for rewording (the sub-tab
 «🤝 Рефералы», the amount label «Сумма аренды без депозита и доставки, ฿» and the button labels
@@ -1204,3 +1212,83 @@ qualifier, and nothing here mentioned the gap.
    creates no credit (the balance it pays out came from a record, which the guard above checks,
    short of the gap in 1), and the payout itself is made by hand. Listed, not changed: a second person on a payout is the
    owner's call.
+
+## The base of the 10% and the referral top list, the owner's answers of 2026-09-26
+
+Kept at the end of this file, like the entries above. Two of the three open questions of the entry
+«R1–R3, the owner's answers of 2026-09-26» were put to the owner after round 5, and he answered them
+the same day, verbatim:
+
+* **Open question 1**, whether the 10% is taken on the rental charge net of the referral balance
+  the friend applied to that same rental (as built), or on the gross charge: «После скидки — 250»
+  ("After the discount — 250").
+* **Open question 2**, `GET /api/referrals/leaderboard`, which answered anyone with the top
+  referrers' Telegram ids, first names and point totals frozen before R3, and which the referral
+  page's top-referrers list read: «Убрать топ и закрыть адрес» ("Remove the top and close the
+  address").
+
+The rulings in force stay: rental only, Phuket only, nothing deleted. No row is written, rewritten
+or deleted, and there is no migration.
+
+**The base.** The owner confirmed the base as built: 10% of the rental charge after the friend's own
+referral balance applied to that same rental, floor((R − applied) × 10 / 100). Decision 3 of the
+R1–R3 entry is the owner's decision now, not the operator's reading. `credit_for_rental`
+(`src/trios/referral_credit.rs`) and `record_rental` (`src/db/referral_credit.rs`) already computed
+it, so no code changed. «250» is the credit of the example the question carried; the example is
+not kept in this repository, so no test restates it. `specs/turbobaby/referral_credit.t27` records
+the answer (`OWNER_BASE_ANSWER_*`, `BASE_IS_THE_OWNERS_DECISION`, `BASE_QUESTION_IS_OPEN = false`,
+one test and one invariant).
+
+**The referral top list.**
+
+* **The address.** `get_leaderboard` in `src/api/referrals.rs` calls `check_admin` as its first
+  statement, exactly as `get_leaderboard` in `src/api/loyalty.rs` has since R1. A caller without
+  admin proof gets `check_admin`'s 401, or 429 once the admin limiter trips for his address: the
+  same status, content type and empty body R1's route gives him, whatever query string he sends,
+  and one limiter counts both routes. An admin is served the rows as before. The route stays
+  registered.
+* **The top.** The referral page (`src/ui/pages/referrals.rs`) no longer fetches the address and no
+  longer renders the list: the `TopReferrer` type, its signal, its fetch, its block and
+  `leaderboard_row` are gone. The four keys only the list used are retired, each line of
+  `src/trios/i18n.rs` one for one by a comment line: `referral.top`, `referral.empty_leaderboard`,
+  `referral.id_mask` and `referral.row_meta` (523 → 519 declarations, naive grep 528 → 524).
+  Everything else on the page stays: the link with its copy and share buttons, the three counters,
+  the referral balance with its two requests, and the friends panel.
+* **The admin screen** shows no referral top: its Loyalty tab reads R1's leaderboard, and
+  «🤝 Рефералы» reads the four admin routes of the referral credit. Nothing there changed.
+
+**The operator's decisions**, each open to the owner:
+
+1. «Закрыть адрес» is read as R1's answer, an admin only, with the admin gate's 401 (429 when
+   rate-limited). R2's reading, the missing-route 404, was for reads no screen used; this address
+   had a reader until this change, and R1 is the precedent for a leaderboard.
+2. The query string is read after the gate (a fallible `Query` extractor), so a non-admin's
+   malformed query is refused like any other request of his, never with the extractor's 400. An
+   admin's malformed query is a bare 400, as an unknown `period` already was; until now the
+   extractor answered it with a text body.
+3. What the route serves an admin is unchanged: whole `telegram_id`, first name, count and
+   `total_bonus_earned`.
+4. Nothing replaces the list on the page: no sentence was worded, so the page ends with the friends
+   panel, or with the balance when there are no friends.
+5. The bot's `/refstats` button opens the same page and was labelled «📈 Таблица лидеров» /
+   "📈 Leaderboard" after the list. It now carries `referrals_open_app`, «Открыть приглашения» /
+   "Open invites", the label every referral notification already gives a button to that page. No
+   new copy; `referral_leaderboard` stays in `src/locales.rs`, read by nobody, like the other
+   stopped strings.
+6. The four retired keys are named by `specs/turbobaby/referral_program.t27`
+   (`TOP_LIST_KEYS_RETIRED`), which owns the route and the list; `locale_policy.t27` counts them.
+7. No OpenAPI stub was added: the route had none, and it stays in the undocumented count of
+   `tests/api_document_pairing.rs` (`referrals.rs`, 5).
+
+`referral_program.t27` records the answer (the fifth route admin-gated, `UNGATED_ROUTE_COUNT` 0,
+`UNGATED_ROUTE` renamed `LEADERBOARD_ROUTE`, the 2026-09-21 readings kept), `person_naming.t27` the
+retired labelled-identifier row and the gated endpoint, `request_identity.t27` the census (122 gate
+call sites), `locale_policy.t27` the count, and `runtime_config.t27` a re-pinned line. Gate 3 binds
+the gate as the handler's first statement ahead of the query string, and the admin census of
+`src/api/referrals.rs` (286 → 288 rows). The tests are `tests/referral_credit_wiring.rs`,
+`tests/integration_closed_reads.rs` (PostgreSQL), `tests/referral_credit_client_wiring.rs`,
+`tests/ui_endpoints_exist.rs` and `the_referral_top_list_keys_stay_retired` in `src/trios/i18n.rs`.
+
+**Still open, for the owner.** Open question 3 of the R1–R3 entry (the admin-facing wording both
+lanes wrote) and the two questions of the entry «R3 review fix» (a password holder off `ADMIN_IDS`,
+and an admin marking his own payout paid).
