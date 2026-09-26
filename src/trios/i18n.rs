@@ -25,12 +25,12 @@ pub const T_NAV_FLEET: Key = "nav.fleet";
 pub const T_NAV_RIDE: Key = "nav.ride";
 pub const T_NAV_ORDERS: Key = "nav.orders";
 
-/// The two labels on the idle shop game's own plant/harvest buttons. They
-/// were declared in the garden's namespace, but the garden and the game are
-/// different mechanics: the garden had tables and endpoints, the game is
-/// client-side state. The garden is gone (D5); the game is not.
-pub const T_GAME_HARVEST: Key = "game.harvest";
-pub const T_GAME_PLANT: Key = "game.plant";
+// The two labels on the idle shop game's own plant/harvest buttons stood here.
+// The garden went with D5; the game's own planters went on 2026-09-26, with the
+// rest of the cannabis-era copy no mounted screen printed (legacy_retirement.t27,
+// the section of that date). The game itself is kept, compiled and unmounted.
+// game.harvest: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
+// game.plant: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
 
 /// Referral social proof. These also lived under `garden.*`, because the
 /// garden screen was the only place that rendered them — but the endpoints
@@ -151,8 +151,8 @@ pub const T_ACC_TITLE: Key = "acc.title";
 // Fourteen keys went in all, each one-for-one replaced by a comment line so
 // the line numbers the contracts cite do not move. Deleted, not reworded: no
 // replacement sentence was written for any of them.
-pub const T_ACC_CAT_STORAGE: Key = "acc.cat.storage";
-pub const T_ACC_CAT_LIGHTER: Key = "acc.cat.lighter";
+// acc.cat.storage: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
+// acc.cat.lighter: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
 pub const T_ACC_CAT_CLOTHING: Key = "acc.cat.clothing";
 pub const T_ACC_CAT_SOUVENIR: Key = "acc.cat.souvenir";
 pub const T_ACC_CAT_OTHER: Key = "acc.cat.other";
@@ -344,7 +344,7 @@ pub const T_WATCH_VIDEO: Key = "catalog.watch_video";
 // Game strings
 pub const T_GAME_TITLE: Key = "game.title";
 pub const T_GAME_TAB_SHOP: Key = "game.tab.shop";
-pub const T_GAME_TAB_FARM: Key = "game.tab.farm";
+// game.tab.farm: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
 pub const T_GAME_TAB_DJ: Key = "game.tab.dj";
 pub const T_GAME_TAB_GRILL: Key = "game.tab.grill";
 pub const T_GAME_TABLE_FREE: Key = "game.table.free";
@@ -353,16 +353,16 @@ pub const T_GAME_TABLE_READY: Key = "game.table.ready";
 pub const T_GAME_TABLE_EATING: Key = "game.table.eating";
 pub const T_GAME_TABLE_DIRTY: Key = "game.table.dirty";
 pub const T_GAME_TABLE_PREPARING: Key = "game.table.preparing";
-pub const T_GAME_FARM_EMPTY: Key = "game.farm.empty";
-pub const T_GAME_FARM_PLANTED: Key = "game.farm.planted";
-pub const T_GAME_FARM_WATERED: Key = "game.farm.watered";
-pub const T_GAME_FARM_GROWN: Key = "game.farm.grown";
-pub const T_GAME_FARM_WATER: Key = "game.farm.water";
+// game.farm.empty: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
+// game.farm.planted: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
+// game.farm.watered: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
+// game.farm.grown: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
+// game.farm.water: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
 pub const T_GAME_START_PARTY: Key = "game.start_party";
 pub const T_GAME_UPGRADE_MAX: Key = "game.upgrade.max";
 pub const T_GAME_UPGRADE_LEVEL_COST: Key = "game.upgrade.level_cost";
 pub const T_GAME_SERVED: Key = "game.served";
-pub const T_GAME_HARVESTED: Key = "game.harvested";
+// game.harvested: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
 pub const T_GAME_TIP: Key = "game.tip";
 pub const T_GAME_UPGRADES: Key = "game.upgrades";
 pub const T_GAME_TABLES: Key = "game.tables";
@@ -375,7 +375,7 @@ pub const T_GAME_ORDER: Key = "game.order";
 pub const T_GAME_SERVE: Key = "game.serve";
 pub const T_GAME_CLEAN: Key = "game.clean";
 pub const T_GAME_GRILL: Key = "game.grill";
-pub const T_GAME_FARM_TITLE: Key = "game.farm.title";
+// game.farm.title: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
 pub const T_GAME_PARTY_TITLE: Key = "game.party.title";
 pub const T_GAME_PARTY_STATUS_ON: Key = "game.party.status_on";
 pub const T_GAME_PARTY_STATUS_OFF: Key = "game.party.status_off";
@@ -389,7 +389,7 @@ pub const T_GAME_GRILL_COOKING: Key = "game.grill.cooking";
 pub const T_GAME_GRILL_DESC: Key = "game.grill.desc";
 pub const T_GAME_GRILL_TIP: Key = "game.grill.tip";
 pub const T_GAME_LOG_NEW_CUSTOMER: Key = "game.log.new_customer";
-pub const T_GAME_LOG_FARM_GREW: Key = "game.log.farm_grew";
+// game.log.farm_grew: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
 pub const T_GAME_LOG_RESET: Key = "game.log.reset";
 pub const T_GAME_LOG_MOVED_TO_TABLE: Key = "game.log.moved_to_table";
 pub const T_GAME_LOG_TAKING_ORDER: Key = "game.log.taking_order";
@@ -402,12 +402,12 @@ pub const T_GAME_LOG_CUSTOMER_LEFT: Key = "game.log.customer_left";
 pub const T_GAME_LOG_TABLE_CLEANED: Key = "game.log.table_cleaned";
 pub const T_GAME_LOG_PARTY_STARTED: Key = "game.log.party_started";
 pub const T_GAME_LOG_COOKING_STARTED: Key = "game.log.cooking_started";
-pub const T_GAME_LOG_PLANTED_SEED: Key = "game.log.planted_seed";
-pub const T_GAME_LOG_WATERING: Key = "game.log.watering";
-pub const T_GAME_LOG_HARVEST: Key = "game.log.harvest";
+// game.log.planted_seed: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
+// game.log.watering: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
+// game.log.harvest: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
 pub const T_GAME_EVENT_RUSH_HOUR: Key = "game.event.rush_hour";
 pub const T_GAME_EVENT_BIG_TIP: Key = "game.event.big_tip";
-pub const T_GAME_EVENT_HERB_DELIVERY: Key = "game.event.herb_delivery";
+// game.event.herb_delivery: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
 pub const T_GAME_EVENT_DJ_ENERGY: Key = "game.event.dj_energy";
 pub const T_GAME_EVENT_GRILL_DEMAND: Key = "game.event.grill_demand";
 pub const T_GAME_EVENT_DEFAULT: Key = "game.event.default";
@@ -542,7 +542,7 @@ pub const T_PROFILE_BONUS_HISTORY_EMPTY: Key = "profile.bonus_history_empty";
 pub const T_PROFILE_BONUS_CREDIT: Key = "profile.bonus_credit";
 pub const T_PROFILE_BONUS_DEBIT: Key = "profile.bonus_debit";
 pub const T_PROFILE_BONUS_REFERRAL: Key = "profile.bonus_referral";
-pub const T_PROFILE_BONUS_GARDEN: Key = "profile.bonus_garden";
+// profile.bonus_garden: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
 pub const T_PROFILE_BONUS_CASHBACK: Key = "profile.bonus_cashback";
 pub const T_PROFILE_BONUS_ADMIN: Key = "profile.bonus_admin";
 pub const T_PROFILE_BONUS_OTHER: Key = "profile.bonus_other";
@@ -559,7 +559,7 @@ pub const T_MODAL_CONFIRM: Key = "modal.confirm";
 pub const T_MODAL_CANCEL: Key = "modal.cancel";
 pub const T_MODAL_DECREASE_QTY: Key = "modal.decrease_qty";
 pub const T_MODAL_INCREASE_QTY: Key = "modal.increase_qty";
-pub const T_MODAL_CERTIFICATE: Key = "modal.certificate";
+// modal.certificate: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
 
 // Menu screen hard-coded strings
 // Same ruling: the retired menu's three plant-type filters were deleted
@@ -749,8 +749,8 @@ fn get_ru_translation(key: Key) -> Value {
         T_NAV_FLEET => "Байки",
         T_NAV_RIDE => "Заезд",
         T_NAV_ORDERS => "Заказы",
-        T_GAME_HARVEST => "Собрать",
-        T_GAME_PLANT => "Посадить",
+        // game.harvest: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
+        // game.plant: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
         T_REFERRAL_INVITEES_TITLE => "🤝 Приглашённые друзья",
         T_REFERRAL_INVITEES_EMPTY => "Пригласи друзей — получайте бонусы вместе",
         T_REFERRAL_INVITEE_JOINED => "присоединился",
@@ -845,8 +845,8 @@ fn get_ru_translation(key: Key) -> Value {
         // acc.cat.papers: deleted 2026-09-25 (#12).
         // acc.cat.pipe: deleted 2026-09-25 (#12).
         // acc.cat.bong: deleted 2026-09-25 (#12).
-        T_ACC_CAT_STORAGE => "Хранение",
-        T_ACC_CAT_LIGHTER => "Зажигалка",
+        // acc.cat.storage: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
+        // acc.cat.lighter: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
         T_ACC_CAT_CLOTHING => "Одежда",
         T_ACC_CAT_SOUVENIR => "Сувенир",
         T_ACC_CAT_OTHER => "Другое",
@@ -1009,7 +1009,7 @@ fn get_ru_translation(key: Key) -> Value {
         // Game strings
         T_GAME_TITLE => "TurboBaby Games",
         T_GAME_TAB_SHOP => "🛒 Магазин",
-        T_GAME_TAB_FARM => "🌱 Ферма",
+        // game.tab.farm: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
         T_GAME_TAB_DJ => "🎧 DJ",
         T_GAME_TAB_GRILL => "🍖 Гриль",
         T_GAME_TABLE_FREE => "Свободный стол",
@@ -1018,16 +1018,16 @@ fn get_ru_translation(key: Key) -> Value {
         T_GAME_TABLE_EATING => "Гость ест",
         T_GAME_TABLE_DIRTY => "Грязный стол",
         T_GAME_TABLE_PREPARING => "Готовится...",
-        T_GAME_FARM_EMPTY => "Пустая грядка",
-        T_GAME_FARM_PLANTED => "Росток",
-        T_GAME_FARM_WATERED => "Растёт быстро",
-        T_GAME_FARM_GROWN => "Готово к сбору!",
-        T_GAME_FARM_WATER => "💧 Полить",
+        // game.farm.empty: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
+        // game.farm.planted: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
+        // game.farm.watered: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
+        // game.farm.grown: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
+        // game.farm.water: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
         T_GAME_START_PARTY => "Запусти вечеринку, чтобы увеличить доход",
         T_GAME_UPGRADE_MAX => "МАКС",
         T_GAME_UPGRADE_LEVEL_COST => "Ур{0} • {1}🪙",
         T_GAME_SERVED => "Обслужено",
-        T_GAME_HARVESTED => "Собрано",
+        // game.harvested: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
         T_GAME_TIP => "💡 Совет: обслуживай гостей, зарабатывай монеты и прокачивай магазин.",
         T_GAME_UPGRADES => "🆙 УЛУЧШЕНИЯ",
         T_GAME_TABLES => "🪑 Столы",
@@ -1040,7 +1040,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_GAME_SERVE => "🤲 Подать",
         T_GAME_CLEAN => "🧽 Убрать",
         T_GAME_GRILL => "🍔 Гриль",
-        T_GAME_FARM_TITLE => "🌱 ФЕРМА",
+        // game.farm.title: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
         T_GAME_PARTY_TITLE => "🎧 DJ ЗОНА",
         T_GAME_PARTY_STATUS_ON => "Вечеринка идёт — чаевые +5 🪙 за подачу",
         T_GAME_PARTY_STATUS_OFF => "Запусти вечеринку, чтобы увеличить доход",
@@ -1054,7 +1054,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_GAME_GRILL_DESC => "Готовь еду. Мгновенно обслуживает голодных гостей в магазине.",
         T_GAME_GRILL_TIP => "Совет: гриль авто-обслуживает голодных гостей",
         T_GAME_LOG_NEW_CUSTOMER => "Новый клиент пришёл",
-        T_GAME_LOG_FARM_GREW => "Ферма выросла на шаг",
+        // game.log.farm_grew: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
         T_GAME_LOG_RESET => "Прогресс сброшен",
         T_GAME_LOG_MOVED_TO_TABLE => "TurboBaby подошёл к столу {0}",
         T_GAME_LOG_TAKING_ORDER => "Принимает заказ у стола {0}",
@@ -1067,12 +1067,12 @@ fn get_ru_translation(key: Key) -> Value {
         T_GAME_LOG_TABLE_CLEANED => "Стол убран",
         T_GAME_LOG_PARTY_STARTED => "Вечеринка началась! −{0} 🪙",
         T_GAME_LOG_COOKING_STARTED => "Готовка началась −{0} 🪙",
-        T_GAME_LOG_PLANTED_SEED => "Посажено семя −{0} 🪙",
-        T_GAME_LOG_WATERING => "Поливаем...",
-        T_GAME_LOG_HARVEST => "Урожай! +{0} 🪙",
+        // game.log.planted_seed: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
+        // game.log.watering: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
+        // game.log.harvest: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
         T_GAME_EVENT_RUSH_HOUR => "🎉 Час пик! Ещё больше гостей!",
         T_GAME_EVENT_BIG_TIP => "💰 Щедрые чаевые! +20 🪙",
-        T_GAME_EVENT_HERB_DELIVERY => "Все грядки политы",
+        // game.event.herb_delivery: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
         T_GAME_EVENT_DJ_ENERGY => "🎵 DJ-энергия! Вечеринка длится дольше",
         T_GAME_EVENT_GRILL_DEMAND => "🍔 Спрос на гриль! Бесплатный запас еды",
         T_GAME_EVENT_DEFAULT => "🎉 Событие!",
@@ -1190,7 +1190,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_PROFILE_LOAD_ERROR => "Не удалось загрузить профиль.",
         T_PROFILE_RETRY => "Повторить",
         T_PROFILE_BONUS_REFERRAL => "Реферальный бонус",
-        T_PROFILE_BONUS_GARDEN => "Награда из сада",
+        // profile.bonus_garden: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
         T_PROFILE_BONUS_CASHBACK => "Кэшбэк с заказа",
         T_PROFILE_BONUS_ADMIN => "Админ-начисление",
         T_PROFILE_BONUS_OTHER => "Бонус",
@@ -1206,7 +1206,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_MODAL_CANCEL => "Нет",
         T_MODAL_DECREASE_QTY => "Убавить количество",
         T_MODAL_INCREASE_QTY => "Добавить количество",
-        T_MODAL_CERTIFICATE => "📄 Сертификат",
+        // modal.certificate: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
         // Menu screen
         // menu.filter.sativa: deleted 2026-09-25 (#12).
         // menu.filter.indica: deleted 2026-09-25 (#12).
@@ -1349,8 +1349,8 @@ fn get_en_translation(key: Key) -> Value {
         T_NAV_FLEET => "Bikes",
         T_NAV_RIDE => "Ride",
         T_NAV_ORDERS => "Orders",
-        T_GAME_HARVEST => "Harvest",
-        T_GAME_PLANT => "Plant",
+        // game.harvest: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
+        // game.plant: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
         T_REFERRAL_INVITEES_TITLE => "🤝 Friends you invited",
         T_REFERRAL_INVITEES_EMPTY => "Invite friends — earn bonuses together",
         T_REFERRAL_INVITEE_JOINED => "joined",
@@ -1445,8 +1445,8 @@ fn get_en_translation(key: Key) -> Value {
         // acc.cat.papers: deleted 2026-09-25 (#12).
         // acc.cat.pipe: deleted 2026-09-25 (#12).
         // acc.cat.bong: deleted 2026-09-25 (#12).
-        T_ACC_CAT_STORAGE => "Storage",
-        T_ACC_CAT_LIGHTER => "Lighter",
+        // acc.cat.storage: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
+        // acc.cat.lighter: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
         T_ACC_CAT_CLOTHING => "Clothing",
         T_ACC_CAT_SOUVENIR => "Souvenir",
         T_ACC_CAT_OTHER => "Other",
@@ -1609,7 +1609,7 @@ fn get_en_translation(key: Key) -> Value {
         // Game strings
         T_GAME_TITLE => "TurboBaby Games",
         T_GAME_TAB_SHOP => "🛒 Shop",
-        T_GAME_TAB_FARM => "🌱 Farm",
+        // game.tab.farm: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
         T_GAME_TAB_DJ => "🎧 DJ",
         T_GAME_TAB_GRILL => "🍖 Grill",
         T_GAME_TABLE_FREE => "Free table",
@@ -1618,16 +1618,16 @@ fn get_en_translation(key: Key) -> Value {
         T_GAME_TABLE_EATING => "Guest eating",
         T_GAME_TABLE_DIRTY => "Dirty table",
         T_GAME_TABLE_PREPARING => "Preparing...",
-        T_GAME_FARM_EMPTY => "Empty plot",
-        T_GAME_FARM_PLANTED => "Sprout",
-        T_GAME_FARM_WATERED => "Growing fast",
-        T_GAME_FARM_GROWN => "Ready to harvest!",
-        T_GAME_FARM_WATER => "💧 Water",
+        // game.farm.empty: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
+        // game.farm.planted: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
+        // game.farm.watered: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
+        // game.farm.grown: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
+        // game.farm.water: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
         T_GAME_START_PARTY => "Start party to boost earnings",
         T_GAME_UPGRADE_MAX => "MAX",
         T_GAME_UPGRADE_LEVEL_COST => "Lv{0} • {1}🪙",
         T_GAME_SERVED => "Served",
-        T_GAME_HARVESTED => "Harvested",
+        // game.harvested: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
         T_GAME_TIP => "💡 Tip: serve customers to earn coins, then buy upgrades.",
         T_GAME_UPGRADES => "🆙 UPGRADES",
         T_GAME_TABLES => "🪑 Tables",
@@ -1640,7 +1640,7 @@ fn get_en_translation(key: Key) -> Value {
         T_GAME_SERVE => "🤲 Serve",
         T_GAME_CLEAN => "🧽 Clean",
         T_GAME_GRILL => "🍔 Grill",
-        T_GAME_FARM_TITLE => "🌱 FARM",
+        // game.farm.title: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
         T_GAME_PARTY_TITLE => "🎧 DJ ZONE",
         T_GAME_PARTY_STATUS_ON => "Party ON — tips +5 🪙 per serve",
         T_GAME_PARTY_STATUS_OFF => "Start party to boost shop income",
@@ -1654,7 +1654,7 @@ fn get_en_translation(key: Key) -> Value {
         T_GAME_GRILL_DESC => "Cook food. Serves hungry customers instantly when in shop.",
         T_GAME_GRILL_TIP => "Tip: grilled food auto-serves hungry customers",
         T_GAME_LOG_NEW_CUSTOMER => "New customer arrived",
-        T_GAME_LOG_FARM_GREW => "Farm grew a step",
+        // game.log.farm_grew: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
         T_GAME_LOG_RESET => "Progress reset",
         T_GAME_LOG_MOVED_TO_TABLE => "TurboBaby moved to table {0}",
         T_GAME_LOG_TAKING_ORDER => "Taking order at table {0}",
@@ -1667,12 +1667,12 @@ fn get_en_translation(key: Key) -> Value {
         T_GAME_LOG_TABLE_CLEANED => "Table cleaned",
         T_GAME_LOG_PARTY_STARTED => "Party started! −{0} 🪙",
         T_GAME_LOG_COOKING_STARTED => "Cooking started −{0} 🪙",
-        T_GAME_LOG_PLANTED_SEED => "Planted seed −{0} 🪙",
-        T_GAME_LOG_WATERING => "Watering...",
-        T_GAME_LOG_HARVEST => "Harvest! +{0} 🪙",
+        // game.log.planted_seed: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
+        // game.log.watering: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
+        // game.log.harvest: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
         T_GAME_EVENT_RUSH_HOUR => "🎉 Rush hour! More customers coming!",
         T_GAME_EVENT_BIG_TIP => "💰 Big tip! +20 coins",
-        T_GAME_EVENT_HERB_DELIVERY => "All farm plots watered",
+        // game.event.herb_delivery: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
         T_GAME_EVENT_DJ_ENERGY => "🎵 DJ energy up! Party lasts longer",
         T_GAME_EVENT_GRILL_DEMAND => "🍔 Grill demand! Free food stock",
         T_GAME_EVENT_DEFAULT => "🎉 Event!",
@@ -1790,7 +1790,7 @@ fn get_en_translation(key: Key) -> Value {
         T_PROFILE_LOAD_ERROR => "Could not load profile.",
         T_PROFILE_RETRY => "Retry",
         T_PROFILE_BONUS_REFERRAL => "Referral bonus",
-        T_PROFILE_BONUS_GARDEN => "Garden reward",
+        // profile.bonus_garden: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
         T_PROFILE_BONUS_CASHBACK => "Order cashback",
         T_PROFILE_BONUS_ADMIN => "Admin grant",
         T_PROFILE_BONUS_OTHER => "Bonus",
@@ -1806,7 +1806,7 @@ fn get_en_translation(key: Key) -> Value {
         T_MODAL_CANCEL => "No",
         T_MODAL_DECREASE_QTY => "Decrease quantity",
         T_MODAL_INCREASE_QTY => "Increase quantity",
-        T_MODAL_CERTIFICATE => "📄 Certificate",
+        // modal.certificate: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
         // Menu screen
         // menu.filter.sativa: deleted 2026-09-25 (#12).
         // menu.filter.indica: deleted 2026-09-25 (#12).
@@ -2078,7 +2078,7 @@ pub fn get_translations(lang: Lang) -> Translations {
         T_WATCH_VIDEO,
         T_GAME_TITLE,
         T_GAME_TAB_SHOP,
-        T_GAME_TAB_FARM,
+        // game.tab.farm: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
         T_GAME_TAB_DJ,
         T_GAME_TAB_GRILL,
         T_GAME_TABLE_FREE,
@@ -2087,16 +2087,16 @@ pub fn get_translations(lang: Lang) -> Translations {
         T_GAME_TABLE_EATING,
         T_GAME_TABLE_DIRTY,
         T_GAME_TABLE_PREPARING,
-        T_GAME_FARM_EMPTY,
-        T_GAME_FARM_PLANTED,
-        T_GAME_FARM_WATERED,
-        T_GAME_FARM_GROWN,
-        T_GAME_FARM_WATER,
+        // game.farm.empty: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
+        // game.farm.planted: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
+        // game.farm.watered: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
+        // game.farm.grown: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
+        // game.farm.water: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
         T_GAME_START_PARTY,
         T_GAME_UPGRADE_MAX,
         T_GAME_UPGRADE_LEVEL_COST,
         T_GAME_SERVED,
-        T_GAME_HARVESTED,
+        // game.harvested: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
         T_GAME_TIP,
         T_GAME_UPGRADES,
         T_GAME_TABLES,
@@ -2109,7 +2109,7 @@ pub fn get_translations(lang: Lang) -> Translations {
         T_GAME_SERVE,
         T_GAME_CLEAN,
         T_GAME_GRILL,
-        T_GAME_FARM_TITLE,
+        // game.farm.title: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
         T_GAME_PARTY_TITLE,
         T_GAME_PARTY_STATUS_ON,
         T_GAME_PARTY_STATUS_OFF,
@@ -2123,7 +2123,7 @@ pub fn get_translations(lang: Lang) -> Translations {
         T_GAME_GRILL_DESC,
         T_GAME_GRILL_TIP,
         T_GAME_LOG_NEW_CUSTOMER,
-        T_GAME_LOG_FARM_GREW,
+        // game.log.farm_grew: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
         T_GAME_LOG_RESET,
         T_GAME_LOG_MOVED_TO_TABLE,
         T_GAME_LOG_TAKING_ORDER,
@@ -2136,12 +2136,12 @@ pub fn get_translations(lang: Lang) -> Translations {
         T_GAME_LOG_TABLE_CLEANED,
         T_GAME_LOG_PARTY_STARTED,
         T_GAME_LOG_COOKING_STARTED,
-        T_GAME_LOG_PLANTED_SEED,
-        T_GAME_LOG_WATERING,
-        T_GAME_LOG_HARVEST,
+        // game.log.planted_seed: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
+        // game.log.watering: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
+        // game.log.harvest: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
         T_GAME_EVENT_RUSH_HOUR,
         T_GAME_EVENT_BIG_TIP,
-        T_GAME_EVENT_HERB_DELIVERY,
+        // game.event.herb_delivery: deleted 2026-09-26 (cannabis-era copy no mounted screen printed).
         T_GAME_EVENT_DJ_ENERGY,
         T_GAME_EVENT_GRILL_DEMAND,
         T_GAME_EVENT_DEFAULT,

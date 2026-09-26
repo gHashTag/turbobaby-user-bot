@@ -755,7 +755,18 @@ fn the_accessories_screen_offers_no_paraphernalia() {
         .into_iter()
         .map(|(_, s)| s.to_lowercase())
         .collect();
-    for gone in ["grinder", "papers", "rolling", "pipe", "bong", "vaporizer"] {
+    // `storage` and `lighter` went on 2026-09-26, the last two paraphernalia
+    // categories the sweep of 2026-09-25 had left.
+    for gone in [
+        "grinder",
+        "papers",
+        "rolling",
+        "pipe",
+        "bong",
+        "vaporizer",
+        "storage",
+        "lighter",
+    ] {
         assert!(
             !literals.iter().any(|l| l == gone),
             "src/ui/screens/accessories_screen.rs matches or offers `{gone}` again"
@@ -775,10 +786,13 @@ fn the_accessories_screen_offers_no_paraphernalia() {
 /// something (an emoji, an exclamation mark) is seen: the ruling removed copy
 /// and wrote none.
 ///
-/// One of the five is pinned absent instead. The checkout age notice kept its
+/// Two of the five are pinned absent instead. The checkout age notice kept its
 /// age half after the cut, and later the same day the owner removed the 20+
 /// box it belonged to, for now (answer 1 of the second list, 2026-09-25;
-/// `specs/turbobaby/checkout_contact.t27`), so its key was deleted whole.
+/// `specs/turbobaby/checkout_contact.t27`), so its key was deleted whole. The
+/// shop game's farm event kept its watering half after the cut, and on
+/// 2026-09-26 it went whole with the rest of the farm (see
+/// [`the_leftovers_retired_on_2026_09_26_stay_gone`]).
 #[test]
 fn the_cut_sentences_keep_their_rental_half() {
     let i18n = read("src/trios/i18n.rs");
@@ -799,16 +813,18 @@ fn the_cut_sentences_keep_their_rental_half() {
         Vec::<String>::new(),
         "T_CHECKOUT_AGE_NOTICE has an arm again; the 20+ box it belonged to was removed"
     );
+    // Cut on 2026-09-25 to its watering half, then deleted whole on 2026-09-26
+    // with the farm it announced.
+    assert_eq!(
+        arms("T_GAME_EVENT_HERB_DELIVERY"),
+        Vec::<String>::new(),
+        "T_GAME_EVENT_HERB_DELIVERY has an arm again; the farm it announced was removed"
+    );
     let pinned: &[(&str, [&str; 2], &str)] = &[
         (
             "T_SUCCESS_BACK_MENU",
             ["В меню", "Back to Menu"],
             "cut: the Russian arm lost its herb emoji; the English arm had none",
-        ),
-        (
-            "T_GAME_EVENT_HERB_DELIVERY",
-            ["Все грядки политы", "All farm plots watered"],
-            "cut: both lost the herb-delivery half and gained nothing",
         ),
         (
             "T_GAME_LOG_MOVED_TO_TABLE",
@@ -828,4 +844,248 @@ fn the_cut_sentences_keep_their_rental_half() {
             "{key} ({why}) -- one arm per table, exactly as the sweep left it"
         );
     }
+}
+
+// ── The leftovers retired on 2026-09-26 ─────────────────────────────────────
+
+/// Cannabis-era copy the public bundle still carried on 2026-09-26 although no
+/// mounted screen printed it: every arm of the translation tables ships in the
+/// wasm, used or not. The garden's bonus label, the last two paraphernalia
+/// categories of the accessories screen, the strain card's lab-certificate
+/// link, and the unmounted shop game's farm. Each key was deleted outright on
+/// that date (declaration and both arms one-for-one by comment lines), and the
+/// dead code that used them went too (the farm zone of `src/ui/game/shop_game.rs`,
+/// two chips of `src/ui/screens/accessories_screen.rs`); the ride game was not
+/// touched. `specs/turbobaby/legacy_retirement.t27` records it
+/// (`LEFTOVERS_2026_09_26_*`).
+///
+/// Each entry: the constant, its literal, and the Russian and English arm it
+/// had. None may come back: not the key, not the copy under another key, and
+/// not the copy written into a screen as a literal.
+const RETIRED_2026_09_26: [(&str, &str, &str, &str); 19] = [
+    (
+        "T_PROFILE_BONUS_GARDEN",
+        "profile.bonus_garden",
+        "Награда из сада",
+        "Garden reward",
+    ),
+    (
+        "T_ACC_CAT_STORAGE",
+        "acc.cat.storage",
+        "Хранение",
+        "Storage",
+    ),
+    (
+        "T_ACC_CAT_LIGHTER",
+        "acc.cat.lighter",
+        "Зажигалка",
+        "Lighter",
+    ),
+    (
+        "T_MODAL_CERTIFICATE",
+        "modal.certificate",
+        "📄 Сертификат",
+        "📄 Certificate",
+    ),
+    ("T_GAME_PLANT", "game.plant", "Посадить", "Plant"),
+    ("T_GAME_HARVEST", "game.harvest", "Собрать", "Harvest"),
+    (
+        "T_GAME_LOG_HARVEST",
+        "game.log.harvest",
+        "Урожай! +{0} 🪙",
+        "Harvest! +{0} 🪙",
+    ),
+    ("T_GAME_HARVESTED", "game.harvested", "Собрано", "Harvested"),
+    ("T_GAME_TAB_FARM", "game.tab.farm", "🌱 Ферма", "🌱 Farm"),
+    (
+        "T_GAME_FARM_TITLE",
+        "game.farm.title",
+        "🌱 ФЕРМА",
+        "🌱 FARM",
+    ),
+    (
+        "T_GAME_FARM_EMPTY",
+        "game.farm.empty",
+        "Пустая грядка",
+        "Empty plot",
+    ),
+    (
+        "T_GAME_FARM_PLANTED",
+        "game.farm.planted",
+        "Росток",
+        "Sprout",
+    ),
+    (
+        "T_GAME_FARM_WATERED",
+        "game.farm.watered",
+        "Растёт быстро",
+        "Growing fast",
+    ),
+    (
+        "T_GAME_FARM_GROWN",
+        "game.farm.grown",
+        "Готово к сбору!",
+        "Ready to harvest!",
+    ),
+    (
+        "T_GAME_FARM_WATER",
+        "game.farm.water",
+        "💧 Полить",
+        "💧 Water",
+    ),
+    (
+        "T_GAME_LOG_FARM_GREW",
+        "game.log.farm_grew",
+        "Ферма выросла на шаг",
+        "Farm grew a step",
+    ),
+    (
+        "T_GAME_LOG_PLANTED_SEED",
+        "game.log.planted_seed",
+        "Посажено семя −{0} 🪙",
+        "Planted seed −{0} 🪙",
+    ),
+    (
+        "T_GAME_LOG_WATERING",
+        "game.log.watering",
+        "Поливаем...",
+        "Watering...",
+    ),
+    (
+        "T_GAME_EVENT_HERB_DELIVERY",
+        "game.event.herb_delivery",
+        "Все грядки политы",
+        "All farm plots watered",
+    ),
+];
+
+/// Words of the growing game with no meaning in a bike rental, matched in the
+/// translation arms and in every string literal under `src/ui`: Russian stems
+/// as substrings (the words inflect), English words whole. `посадить`, the
+/// plain `собрать` and `росток` are not here: a passenger is seated («посадить
+/// пассажира»), a cart is put together again («собрать заново», a live error
+/// arm), and `росток` sits inside «подросток», a teenager.
+const FARM_STEMS_RU: [&str; 3] = ["урожа", "грядк", "зажигалк"];
+const FARM_WORDS_EN: [&str; 4] = ["harvest", "harvested", "sprout", "sprouts"];
+
+#[test]
+fn the_leftovers_retired_on_2026_09_26_stay_gone() {
+    let i18n = read("src/trios/i18n.rs");
+    let i18n_code: String = i18n
+        .lines()
+        .filter(|l| !l.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    // Every arm value, both tables.
+    let arm_values: Vec<String> = i18n
+        .lines()
+        .filter_map(|l| {
+            let t = l.trim_start();
+            if !t.starts_with("T_") {
+                return None;
+            }
+            let arrow = t.find("=> \"")?;
+            let rest = &t[arrow + 4..];
+            Some(rest[..rest.rfind('"').unwrap_or(rest.len())].to_string())
+        })
+        .collect();
+    assert!(
+        arm_values.len() > 1000,
+        "the arm reader is blind: {}",
+        arm_values.len()
+    );
+    // Every string literal a screen writes itself, and every identifier use.
+    let mut ui_literals: Vec<(String, String)> = Vec::new();
+    let mut ui_code: Vec<(String, String)> = Vec::new();
+    for path in files_under("src/ui") {
+        if path.extension().is_none_or(|e| e != "rs") {
+            continue;
+        }
+        let rel = relative(&path);
+        let source = fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("{rel}: {e}"))
+            .replace("\r\n", "\n");
+        for (_, literal) in string_literals(&source) {
+            ui_literals.push((rel.clone(), literal));
+        }
+        let code: String = source
+            .lines()
+            .filter(|l| !l.trim_start().starts_with("//"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        ui_code.push((rel, code));
+    }
+
+    let mut offences = Vec::new();
+    for (constant, literal, ru, en) in RETIRED_2026_09_26 {
+        if i18n_code.contains(&format!("pub const {constant}: Key"))
+            || i18n_code.contains(&format!("\"{literal}\""))
+        {
+            offences.push(format!("src/trios/i18n.rs declares {constant} again"));
+        }
+        for (rel, code) in &ui_code {
+            if code.contains(constant) {
+                offences.push(format!("{rel} uses {constant} again"));
+            }
+        }
+        for copy in [ru, en] {
+            if arm_values.iter().any(|v| v == copy) {
+                offences.push(format!("a translation arm carries {copy:?} again"));
+            }
+            for (rel, lit) in &ui_literals {
+                if lit.trim() == copy {
+                    offences.push(format!("{rel} writes {copy:?} as a literal"));
+                }
+            }
+        }
+    }
+    let texts = arm_values
+        .iter()
+        .map(|v| ("src/trios/i18n.rs".to_string(), v.clone()))
+        .chain(ui_literals.iter().cloned());
+    for (rel, text) in texts {
+        let lower = text.to_lowercase();
+        for stem in FARM_STEMS_RU {
+            if lower.contains(stem) {
+                offences.push(format!("{rel}: {text:?} carries `{stem}`"));
+            }
+        }
+        for word in FARM_WORDS_EN {
+            if whole_word_hits(&lower, word) > 0 {
+                offences.push(format!("{rel}: {text:?} carries `{word}`"));
+            }
+        }
+    }
+    assert!(
+        offences.is_empty(),
+        "cannabis-era copy retired on 2026-09-26 is back (owner's rulings of 2026-09-25: \
+         nothing cannabis-related anywhere; analyse all of it):\n  {}",
+        offences.join("\n  ")
+    );
+
+    // D16: the scans see what they claim to. The game and the accessories
+    // screen are still compiled and read, the kept keys around the retired
+    // ones are still declared, and the matchers find the words they look for.
+    for kept in [
+        "T_GAME_TAB_SHOP",
+        "T_ACC_CAT_CLOTHING",
+        "T_PROFILE_BONUS_OTHER",
+    ] {
+        assert!(
+            i18n_code.contains(&format!("pub const {kept}: Key")),
+            "{kept} is gone; this check is blind"
+        );
+    }
+    for screen in [
+        "src/ui/game/shop_game.rs",
+        "src/ui/screens/accessories_screen.rs",
+    ] {
+        assert!(
+            ui_code.iter().any(|(rel, _)| rel == screen),
+            "{screen} was not read; this check is blind"
+        );
+    }
+    assert!("урожай! +5".contains(FARM_STEMS_RU[0]));
+    assert_eq!(whole_word_hits("ready to harvest!", FARM_WORDS_EN[0]), 1);
+    assert_eq!(whole_word_hits("harvester", FARM_WORDS_EN[0]), 0);
 }

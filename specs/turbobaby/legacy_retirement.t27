@@ -891,6 +891,54 @@ pub const OWNER_ANSWER_3_CHANGES_AN_ADMIN_READ : bool = false;
 pub const OWNER_ANSWER_3_KEYS_ADDED : u8 = 1;
 pub const OWNER_ANSWER_3_KEYS_DELETED : u8 = 0;
 
+; --- Cannabis-era copy the bundle still carried, retired 2026-09-26 ------------------------------
+; A review of 405f30e found copy of the previous shop in the public bundle that no mounted screen
+; printed. Every arm of src/trios/i18n.rs ships in the wasm whether a screen uses it or not: the
+; committed dist/turbobaby-bot-f81e946a9d640a39_bg.wasm holds each of the phrases below once
+; (grep -c -a -F, 2026-09-26). Under the owner's rulings of 2026-09-25 -- nothing cannabis-related
+; anywhere (#12) and analyse all of it (answer 3) -- the operator had them retired on 2026-09-26.
+; Nineteen keys were deleted outright: each declaration, each arm, and each of the thirteen rows
+; the second parity gate's own list held, one-for-one by a comment line, so no line of that file
+; moved. turbobaby/locale-policy owns the count (526 after it). What they were:
+;   * the garden's bonus label, which no screen has printed since answer 3 relabelled a garden row
+;     with the generic one (LEFTOVERS_2026_09_26_GARDEN_KEYS);
+;   * the accessories screen's last two paraphernalia categories, storage and the lighter, with
+;     their chips, emoji, colours and labels; ruling #12 had removed four of their siblings
+;     (LEFTOVERS_2026_09_26_PARAPHERNALIA_KEYS);
+;   * the strain card's lab-certificate link, printed by no screen since the cut-over of
+;     2026-09-13 removed the lab results it sat beside (LEFTOVERS_2026_09_26_STRAIN_CARD_KEYS);
+;   * the farm of the previous shop's shop game: plant, water and harvest, the plot states, the farm
+;     tab and title, three log lines, the harvested counter and the random event whose herb half
+;     ruling #12 had cut (LEFTOVERS_2026_09_26_FARM_KEYS). The game is unmounted since answer 7 and
+;     stays compiled and exported, as that answer's paragraph above says; its farm zone, plots,
+;     growth loop, event and star credit were removed from src/ui/game/shop_game.rs, and git keeps
+;     them. No other screen used any of the nineteen.
+; LEFT, EACH WITH ITS REASON. The ride game is answer 2's and was not touched. The accessories
+; screen's clothing, souvenir and other categories, the shop game's cafe, grill and DJ copy, and
+; the old menu's sort and badge labels are generic words that carry nothing cannabis-related. The
+; tea model's fold list (src/trios/drink_categories.rs) still spells a CBD tea label: it is not in
+; the bundle (its one reader is the unmounted tea screen, and the linker drops it: 0 hits in the
+; same wasm), and it folds a stored label of that name into the generic tea category, so removing
+; it would surface the word, not hide it (LEFTOVERS_2026_09_26_FOLD_WORD_IN_BUNDLE).
+; No row, no migration, no sentence. tests/no_cannabis_client_wiring.rs keeps the nineteen keys and
+; their copy out of the tables and out of every string literal under src/ui.
+pub const LEFTOVERS_2026_09_26_AT : str = "2026-09-26";
+pub const LEFTOVERS_2026_09_26_DECIDED_BY : str = "operator, under the owner's rulings of 2026-09-25 (#12 and answer 3)";
+pub const LEFTOVERS_2026_09_26_KEYS_DELETED : u8 = 19;
+pub const LEFTOVERS_2026_09_26_GARDEN_KEYS : u8 = 1;
+pub const LEFTOVERS_2026_09_26_PARAPHERNALIA_KEYS : u8 = 2;
+pub const LEFTOVERS_2026_09_26_STRAIN_CARD_KEYS : u8 = 1;
+pub const LEFTOVERS_2026_09_26_FARM_KEYS : u8 = 15;
+pub const LEFTOVERS_2026_09_26_PARITY_LIST_ROWS : u8 = 13;
+pub const LEFTOVERS_2026_09_26_SENTENCES_WRITTEN : u8 = 0;
+pub const LEFTOVERS_2026_09_26_TOUCHES_THE_RIDE_GAME : bool = false;
+pub const LEFTOVERS_2026_09_26_UNMOUNTS_OR_DELETES_A_SCREEN : bool = false;
+pub const LEFTOVERS_2026_09_26_WRITES_ROWS : bool = false;
+pub const LEFTOVERS_2026_09_26_ADDS_A_MIGRATION : bool = false;
+pub const LEFTOVERS_2026_09_26_FOLD_WORD_IN_BUNDLE : bool = false;
+pub const LEFTOVERS_2026_09_26_KEY_COUNT_OWNER_ID : str = "turbobaby/locale-policy";
+pub const LEFTOVERS_2026_09_26_WITNESS : str = "tests/no_cannabis_client_wiring.rs";
+
 ; --- Tests -----------------------------------------------------------------------------------------
 
 test the_three_partial_states_are_named_and_the_value_set_is_closed {
@@ -1380,6 +1428,33 @@ test the_answer_3_cart_path_gave_way_to_the_kept_cart_rule {
     assert OWNER_ANSWER_3_WRITES_ROWS == false;
 }
 
+test the_leftovers_of_2026_09_26_are_retired_and_the_ride_is_not_touched {
+    assert LEFTOVERS_2026_09_26_AT == "2026-09-26";
+    // the four groups make the nineteen, and nothing else went
+    assert LEFTOVERS_2026_09_26_GARDEN_KEYS + LEFTOVERS_2026_09_26_PARAPHERNALIA_KEYS + LEFTOVERS_2026_09_26_STRAIN_CARD_KEYS + LEFTOVERS_2026_09_26_FARM_KEYS == LEFTOVERS_2026_09_26_KEYS_DELETED;
+    assert LEFTOVERS_2026_09_26_KEYS_DELETED == 19;
+    assert LEFTOVERS_2026_09_26_PARITY_LIST_ROWS <= LEFTOVERS_2026_09_26_FARM_KEYS;
+    // with ruling #12's fourteen, thirty-three keys of the old shop's copy have left the tables
+    assert CANNABIS_RULING_I18N_KEYS_DELETED + LEFTOVERS_2026_09_26_KEYS_DELETED == 33;
+    // copy removed, none written, as ruling #12 did it
+    assert LEFTOVERS_2026_09_26_SENTENCES_WRITTEN == 0;
+    assert LEFTOVERS_2026_09_26_SENTENCES_WRITTEN == CANNABIS_RULING_SENTENCES_INVENTED;
+    // answer 2 leaves the ride alone, and answer 7's seven screens stay compiled
+    assert LEFTOVERS_2026_09_26_TOUCHES_THE_RIDE_GAME == false;
+    assert LEFTOVERS_2026_09_26_UNMOUNTS_OR_DELETES_A_SCREEN == false;
+    assert OWNER_ANSWER_REPOINTED_COUNT == 7;
+    // nothing stored moves
+    assert LEFTOVERS_2026_09_26_WRITES_ROWS == false;
+    assert LEFTOVERS_2026_09_26_ADDS_A_MIGRATION == false;
+    assert LEFTOVERS_2026_09_26_WRITES_ROWS == OWNER_ANSWER_3_WRITES_ROWS;
+    // the word the tea fold spells is not in the bundle, which is why it stays
+    assert LEFTOVERS_2026_09_26_FOLD_WORD_IN_BUNDLE == false;
+    // the count is another contract's
+    assert LEFTOVERS_2026_09_26_KEY_COUNT_OWNER_ID == CANNABIS_RULING_KEY_COUNT_OWNER_ID;
+    assert LEFTOVERS_2026_09_26_KEY_COUNT_OWNER_ID != ID;
+    assert LEFTOVERS_2026_09_26_WITNESS == "tests/no_cannabis_client_wiring.rs";
+}
+
 test the_identity_of_this_contract_is_fixed {
     assert ID == "turbobaby/legacy-retirement";
     assert KIND == "retirement-contract";
@@ -1473,3 +1548,7 @@ invariant the_answer_3_hides_what_it_reads_and_writes_nothing
 
 invariant the_answer_3_renames_no_cart_line
     assert OWNER_ANSWER_3_RENAMES_A_CART_LINE == false and OWNER_ANSWER_3_CLIENT_GUARD_COUNT + OWNER_ANSWER_3_CART_GUARDS_REMOVED.len == OWNER_ANSWER_3_CLIENT_GUARD_COUNT_ON_ITS_BRANCH
+
+; The leftovers of 2026-09-26 went as copy and code, never as data or as a screen.
+invariant the_leftovers_of_2026_09_26_remove_copy_and_write_nothing
+    assert LEFTOVERS_2026_09_26_WRITES_ROWS == false and LEFTOVERS_2026_09_26_ADDS_A_MIGRATION == false and LEFTOVERS_2026_09_26_SENTENCES_WRITTEN == 0 and LEFTOVERS_2026_09_26_TOUCHES_THE_RIDE_GAME == false
