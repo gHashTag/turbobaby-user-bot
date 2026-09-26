@@ -28,10 +28,15 @@ use turbobaby_bot::trios::promo::{dedup_key, Subject};
 
 const MARK: &str = "promo-agent-test";
 
+/// Clears this file's own rows. CORRECTED 2026-09-26: it also deleted from
+/// `strains`, which migration 083 dropped, so every test that cleaned first
+/// failed on today's schema before it tested anything (four of seven). The
+/// watermark test's rows now live in the rental catalogue, `bikes`, under keys
+/// that start with [`MARK`].
 async fn clean(db: &turbobaby_bot::db::Database) {
     for sql in [
         format!("DELETE FROM promo_posts WHERE subject_name LIKE '{MARK}%'"),
-        format!("DELETE FROM strains WHERE name LIKE '{MARK}%'"),
+        format!("DELETE FROM bikes WHERE key LIKE '{MARK}%'"),
         format!("DELETE FROM events WHERE title LIKE '{MARK}%'"),
     ] {
         db.orm
@@ -127,6 +132,14 @@ async fn an_event_and_its_reminder_are_both_claimable() {
 ///
 /// A row created *before* the agent started watching is not news; one created
 /// after is. This is the whole difference between a promoter and a spammer.
+///
+/// REWRITTEN 2026-09-26 on the rental catalogue: the two rows were `strains`
+/// rows, a table 083 dropped. They are now two offered bike families. Like the
+/// test it replaces, this reads the watermark's rule off its own query; the
+/// promoter's news scan itself reads only the old catalogue's tables
+/// (`src/promo.rs`), whose drafts publishing refuses since 2026-09-25, and
+/// scans no rental table. The rows are removed again, so no census of the
+/// fleet counts them.
 #[tokio::test]
 #[ignore]
 async fn only_what_appeared_after_the_agent_started_watching_counts() {
@@ -135,14 +148,18 @@ async fn only_what_appeared_after_the_agent_started_watching_counts() {
     };
     clean(&db).await;
 
+    let family = |suffix: &str, created: &str| {
+        format!(
+            "INSERT INTO bikes (key, brand, model, class, body, displacement_cc, offered, created_at) \
+             VALUES ('{MARK}-{suffix}', 'Test', '{MARK} {suffix}', 'scooter', 'scooter', 125, TRUE, {created})"
+        )
+    };
+
     // Something that has been in the shop for a month.
     db.orm
         .execute(Statement::from_string(
             DbBackend::Postgres,
-            format!(
-                "INSERT INTO strains (id, name, price_per_gram, is_available, created_at) \
-                 VALUES ('promo-old', '{MARK} old', 300, TRUE, NOW() - INTERVAL '30 days')"
-            ),
+            family("old", "NOW() - INTERVAL '30 days'"),
         ))
         .await
         .expect("seed an old row");
@@ -154,10 +171,7 @@ async fn only_what_appeared_after_the_agent_started_watching_counts() {
     db.orm
         .execute(Statement::from_string(
             DbBackend::Postgres,
-            format!(
-                "INSERT INTO strains (id, name, price_per_gram, is_available, created_at) \
-                 VALUES ('promo-new', '{MARK} new', 300, TRUE, NOW() + INTERVAL '1 second')"
-            ),
+            family("new", "NOW() + INTERVAL '1 second'"),
         ))
         .await
         .expect("seed a new row");
@@ -166,26 +180,27 @@ async fn only_what_appeared_after_the_agent_started_watching_counts() {
         .orm
         .query_all(Statement::from_sql_and_values(
             DbBackend::Postgres,
-            "SELECT name FROM strains WHERE created_at > $1 AND is_available = TRUE \
-             AND name LIKE 'promo-agent-test%'",
+            "SELECT key FROM bikes WHERE created_at > $1 AND offered = TRUE \
+             AND key LIKE 'promo-agent-test%'",
             [watermark.into()],
         ))
         .await
         .expect("scan");
 
-    let names: Vec<String> = rows
+    let keys: Vec<String> = rows
         .iter()
-        .filter_map(|r| r.try_get::<String>("", "name").ok())
+        .filter_map(|r| r.try_get::<String>("", "key").ok())
         .collect();
+    clean(&db).await;
 
     assert!(
-        names.iter().any(|n| n.ends_with("new")),
-        "the newly added strain was not found: {names:?}"
+        keys.iter().any(|n| n.ends_with("new")),
+        "the newly added family was not found: {keys:?}"
     );
     assert!(
-        !names.iter().any(|n| n.ends_with("old")),
+        !keys.iter().any(|n| n.ends_with("old")),
         "a month-old product was treated as news — the first tick would message \
-         the owner about the entire catalogue: {names:?}"
+         the owner about the entire catalogue: {keys:?}"
     );
 }
 

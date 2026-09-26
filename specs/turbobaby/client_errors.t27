@@ -339,13 +339,13 @@ pub fn event_reaches_a_metric(name_in_allow_list: bool, name_has_metric_arm: boo
 ; tables (:751, :795, :829) -- and neither telemetry table is enrolled in it: a grep for
 ; client_error_logs and client_event_logs over src/db/orders.rs returns 0, and a case-insensitive
 ; grep for a DELETE over either table across the whole tree returns two lines, both test cleanup
-; (tests/integration_promo_agent.rs:322 and :377). So rows stay until someone removes them by
+; (tests/integration_promo_agent.rs:337 and :392). So rows stay until someone removes them by
 ; hand, and this file states a period the code does not implement nowhere at all.
 pub const TELEMETRY_RETENTION_IS_IMPLEMENTED : bool = false;
 pub const AUDIT_SWEEP_MECHANISM_EXISTS : bool = true;
 pub const TABLES_ENROLLED_IN_THE_SWEEP : u8 = 3;
 pub const TELEMETRY_TABLES_ENROLLED_IN_THE_SWEEP : u8 = 0;
-pub const TELEMETRY_RETENTION_NOTE : str = "No period is declared here because none is implemented. The sweep builder at src/db/orders.rs:740 is used by three audit tables and by neither telemetry table; the only DELETE over client_error_logs or client_event_logs anywhere in the tree is test cleanup at tests/integration_promo_agent.rs:322 and :377. Closing this needs an enrolled sweep, after which the period becomes a measurement instead of a wish.";
+pub const TELEMETRY_RETENTION_NOTE : str = "No period is declared here because none is implemented. The sweep builder at src/db/orders.rs:740 is used by three audit tables and by neither telemetry table; the only DELETE over client_error_logs or client_event_logs anywhere in the tree is test cleanup at tests/integration_promo_agent.rs:337 and :392. Closing this needs an enrolled sweep, after which the period becomes a measurement instead of a wish.";
 
 ; --- What the browser is allowed to report back ---------------------------------------------------
 ; src/trios/js_errors.rs:48-50 is the rule, and it is a conjunction of two independent refusals,
