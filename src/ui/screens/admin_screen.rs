@@ -4116,8 +4116,16 @@ fn LoyaltyTab() -> Element {
                     onclick: move |_| active_sub.set("leaderboard".into()),
                     "🏆 Лидерборд"
                 }
+                button {
+                    class: if *active_sub.read() == "referrals" { "admin-subtab active" } else { "admin-subtab" },
+                    onclick: move |_| active_sub.set("referrals".into()),
+                    "🤝 Рефералы"
+                }
             }
-            if *loading.read() {
+            if *active_sub.read() == "referrals" {
+                // The referral credit (owner, R3, 2026-09-26): its own reads.
+                ReferralCreditPanel {}
+            } else if *loading.read() {
                 EmptyState { icon: "⏳".to_string(), title: "Загрузка...".to_string(), description: "Получаем данные с сервера".to_string() }
             } else if *active_sub.read() == "config" {
                 if tiers.read().is_empty() {
@@ -5906,5 +5914,714 @@ async fn admin_add_failure_reason(
             }
         }
         Err(_) => "сеть/таймаут".to_string(),
+    }
+}
+
+// ─── Referral credit (owner, R3, 2026-09-26) ──────────────────
+//
+// The Loyalty tab's third sub-tab, «🤝 Рефералы». The owner answered R3 on
+// 2026-09-26: «Должно начисляться исключительно за то кто арендовал 10%
+// скидка» and «Пригласивший и может забрать скидкой за аренду или деньгами».
+// A manager records each completed rental of an invited friend here, with the
+// rental charge in whole baht (no deposit, no delivery); the server credits the
+// inviter and applies a held redemption of that customer. Payouts are made by
+// hand and marked here. Nothing on this panel moves money on its own, and no
+// figure is computed here: the preview is `trios::referral_credit`'s, and every
+// balance is the server's. Appended at the end of the file so that no line
+// cited above it moves, and so that `admin_token()` stays private. The labels
+// are operator-facing, written by the lane, and listed for rewording.
+
+/// A rental being recorded: whose, what was typed, and the idempotency key
+/// minted when the form opened. The key is reused by every retry of the same
+/// form, so a retry after a lost answer cannot credit twice.
+#[derive(Debug, Clone, PartialEq)]
+struct ReferralRentalForm {
+    customer_telegram_id: i64,
+    customer_label: String,
+    amount: String,
+    order_id: String,
+    note: String,
+    idempotency_key: String,
+}
+
+impl ReferralRentalForm {
+    fn open(customer_telegram_id: i64, customer_label: String) -> Self {
+        Self {
+            customer_telegram_id,
+            customer_label,
+            amount: String::new(),
+            order_id: String::new(),
+            note: String::new(),
+            idempotency_key: uuid::Uuid::new_v4().to_string(),
+        }
+    }
+}
+
+/// A request being resolved or a rental being reversed, waiting for the
+/// manager to confirm it (the screen's delete-confirm pattern, with a note).
+#[derive(Debug, Clone, PartialEq)]
+enum ReferralConfirm {
+    Resolve {
+        request_id: i64,
+        action: &'static str,
+        what: String,
+    },
+    Reverse {
+        rental_id: i64,
+        what: String,
+    },
+}
+
+/// Name, @handle and id, as the admin rows print a person.
+fn referral_person(first_name: Option<&str>, username: Option<&str>, telegram_id: i64) -> String {
+    let mut out = first_name
+        .map(str::trim)
+        .filter(|n| !n.is_empty())
+        .unwrap_or("—")
+        .to_string();
+    if let Some(handle) = username.map(str::trim).filter(|u| !u.is_empty()) {
+        out.push_str(&format!(" @{handle}"));
+    }
+    out.push_str(&format!(" · {telegram_id}"));
+    out
+}
+
+/// A balance as the admin sees it: signed, because a reversal can leave a
+/// debt that the customer is shown as zero.
+fn referral_signed_baht(thb: i64) -> String {
+    let shown = crate::trios::pricing::format_baht(thb.unsigned_abs() as f64);
+    if thb < 0 {
+        format!("−{shown}")
+    } else {
+        shown
+    }
+}
+
+fn referral_kind_label(kind: &str) -> &'static str {
+    match kind {
+        "payout" => "Выплата",
+        "redeem" => "В счёт аренды",
+        _ => "Запрос",
+    }
+}
+
+fn referral_edge_label(status: &str) -> &'static str {
+    match status {
+        "confirmed" => "подтверждён",
+        "pending" => "ожидает",
+        _ => "—",
+    }
+}
+
+fn referral_reason_label(code: &str) -> &'static str {
+    match code {
+        "no_edge" => "нет приглашения",
+        "self_edge" => "пригласил сам себя",
+        "edge_after_order" => "приглашение позже заказа",
+        "existing_customer" => "уже был клиентом до приглашения",
+        _ => "не начисляется",
+    }
+}
+
+/// How long ago an RFC 3339 instant was, in the admin's words; the instant
+/// itself when the browser cannot read it.
+fn referral_age(created_at: &str) -> String {
+    let at = js_sys::Date::parse(created_at);
+    if !at.is_finite() {
+        return created_at.to_string();
+    }
+    let minutes = ((js_sys::Date::now() - at) / 60_000.0).max(0.0) as i64;
+    match minutes {
+        0..=59 => format!("{minutes} мин назад"),
+        60..=2879 => format!("{} ч назад", minutes / 60),
+        _ => format!("{} дн назад", minutes / 1440),
+    }
+}
+
+/// A refusal, in the server's own words: its `error` code and `reason`, and
+/// the open request when it named one.
+fn referral_refusal(status: u16, body: &str) -> String {
+    match serde_json::from_str::<crate::trios::referral_credit::ApiError>(body) {
+        Ok(e) => {
+            let mut out = format!("HTTP {status}: {}", e.error);
+            if let Some(reason) = e.reason.as_deref() {
+                out.push_str(&format!(" ({}, {reason})", referral_reason_label(reason)));
+            }
+            if let Some(status) = e.status.as_deref() {
+                out.push_str(&format!(" [{status}]"));
+            }
+            if let Some(open) = e.open_request.as_ref() {
+                out.push_str(&format!(" #R{}", open.id));
+            }
+            out
+        }
+        Err(_) if body.trim().is_empty() => format!("HTTP {status}"),
+        Err(_) => {
+            let snip: String = body.trim().chars().take(100).collect();
+            format!("HTTP {status}: {snip}")
+        }
+    }
+}
+
+/// POST a JSON body to one of the credit's admin routes with the screen's
+/// three admin headers.
+async fn referral_admin_post(
+    url: String,
+    body: String,
+    telegram_id: i64,
+    init_data: String,
+) -> Result<(u16, String), String> {
+    let token = admin_token();
+    let tid = telegram_id.to_string();
+    let auth = crate::ui::api::http::AdminAuth {
+        init_data: &init_data,
+        token: &token,
+        telegram_id: &tid,
+    };
+    crate::ui::api::http::post_json_admin_full(&url, &auth, &body).await
+}
+
+fn non_empty(text: &str) -> Option<String> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+/// What recording `form` would do, from `trios::referral_credit` and the
+/// overview's figures; the server decides, this only previews.
+fn referral_preview(
+    form: &ReferralRentalForm,
+    data: &crate::trios::referral_credit::AdminOverview,
+) -> Vec<String> {
+    use crate::trios::referral_credit::{
+        applied_redemption, credit_for_rental, rental_amount_is_valid, REFERRAL_CREDIT_PERCENT,
+    };
+    let Some(rental) = form
+        .amount
+        .trim()
+        .parse::<i64>()
+        .ok()
+        .filter(|v| rental_amount_is_valid(*v))
+    else {
+        return vec!["Введите сумму: целое число бат, от 1".to_string()];
+    };
+    let redeem = data
+        .open_requests
+        .iter()
+        .find(|r| r.telegram_id == form.customer_telegram_id && r.kind == "redeem");
+    let applied = redeem
+        .map(|r| applied_redemption(r.amount_thb, rental, r.balance_thb))
+        .unwrap_or(0);
+    let credit = credit_for_rental(rental, applied);
+    let mut lines = vec![format!(
+        "{}% = {}",
+        REFERRAL_CREDIT_PERCENT,
+        crate::trios::pricing::format_baht(credit as f64)
+    )];
+    if applied > 0 {
+        lines.push(format!(
+            "Списать с реферального баланса клиента: {} (к оплате {})",
+            crate::trios::pricing::format_baht(applied as f64),
+            crate::trios::pricing::format_baht((rental - applied) as f64)
+        ));
+    }
+    match data
+        .invitees
+        .iter()
+        .find(|i| i.telegram_id == form.customer_telegram_id)
+    {
+        Some(invitee) if !invitee.creditable => lines.push(format!(
+            "Пригласившему не начислится: {}",
+            referral_reason_label(invitee.not_creditable_reason.as_deref().unwrap_or(""))
+        )),
+        Some(_) => {}
+        None => lines.push("Приглашение не в списке: сервер проверит сам".to_string()),
+    }
+    lines
+}
+
+#[component]
+fn ReferralCreditPanel() -> Element {
+    let telegram_id = use_telegram_id().unwrap_or(0);
+    let init_data = use_signal(use_telegram_init_data);
+    let mut overview: Signal<Option<crate::trios::referral_credit::AdminOverview>> =
+        use_signal(|| None);
+    let mut load_error: Signal<Option<String>> = use_signal(|| None);
+    let mut reload = use_signal(|| 0u32);
+    let toasts: Signal<Vec<ToastItem>> = use_signal(Vec::new);
+    let mut form: Signal<Option<ReferralRentalForm>> = use_signal(|| None);
+    let mut confirm: Signal<Option<ReferralConfirm>> = use_signal(|| None);
+    let mut confirm_note = use_signal(String::new);
+    let mut busy = use_signal(|| false);
+
+    let _ = use_resource(move || {
+        let generation = *reload.read();
+        let init = init_data.read().clone();
+        async move {
+            let _ = generation;
+            let url = format!("{}/api/admin/referral-credit/overview", api_base_url());
+            let token = admin_token();
+            let tid = telegram_id.to_string();
+            let auth = crate::ui::api::http::AdminAuth {
+                init_data: &init,
+                token: &token,
+                telegram_id: &tid,
+            };
+            match crate::ui::api::http::fetch_text_admin(&url, &auth).await {
+                Ok((200, body)) => {
+                    match serde_json::from_str::<crate::trios::referral_credit::AdminOverview>(
+                        &body,
+                    ) {
+                        Ok(data) => {
+                            overview.set(Some(data));
+                            load_error.set(None);
+                        }
+                        Err(e) => load_error.set(Some(format!("ответ не разобран: {e}"))),
+                    }
+                }
+                Ok((status, body)) => load_error.set(Some(referral_refusal(status, &body))),
+                Err(_) => load_error.set(Some("сеть/таймаут".to_string())),
+            }
+            Some(())
+        }
+    });
+
+    let note_max = crate::trios::referral_credit::NOTE_MAX_CHARS.to_string();
+    let data = overview.read().clone();
+    let error = load_error.read().clone();
+    let open_form = form.read().clone();
+    let pending = confirm.read().clone();
+
+    let submit_rental = move |_: Event<MouseData>| {
+        let Some(current) = form.read().clone() else {
+            return;
+        };
+        let Some(rental) = current
+            .amount
+            .trim()
+            .parse::<i64>()
+            .ok()
+            .filter(|v| crate::trios::referral_credit::rental_amount_is_valid(*v))
+        else {
+            push_toast(
+                toasts,
+                "Сумма: целое число бат, от 1".to_string(),
+                ToastKind::Error,
+            );
+            return;
+        };
+        if *busy.read() {
+            return;
+        }
+        let body = crate::trios::referral_credit::RecordRentalBody {
+            customer_telegram_id: current.customer_telegram_id,
+            rental_amount_thb: rental,
+            order_id: non_empty(&current.order_id),
+            note: non_empty(&current.note),
+            idempotency_key: current.idempotency_key.clone(),
+        };
+        let Ok(json) = serde_json::to_string(&body) else {
+            return;
+        };
+        busy.set(true);
+        let init = init_data.read().clone();
+        spawn(async move {
+            let url = format!("{}/api/admin/referral-credit/rentals", api_base_url());
+            match referral_admin_post(url, json, telegram_id, init).await {
+                Ok((200, text)) => {
+                    let said = match serde_json::from_str::<
+                        crate::trios::referral_credit::RecordRentalResponse,
+                    >(&text)
+                    {
+                        Ok(r) => {
+                            let mut said = format!("✅ Аренда #{} записана", r.rental.id);
+                            if let Some(c) = r.credit.as_ref() {
+                                said.push_str(&format!(
+                                    " · пригласившему {}",
+                                    crate::trios::pricing::format_baht(c.credit_thb as f64)
+                                ));
+                            }
+                            if let Some(d) = r.redemption.as_ref() {
+                                said.push_str(&format!(
+                                    " · списано с баланса {}",
+                                    crate::trios::pricing::format_baht(d.applied_thb as f64)
+                                ));
+                            }
+                            if r.idempotent_replay {
+                                said.push_str(" (уже была записана)");
+                            }
+                            said
+                        }
+                        Err(_) => "✅ Аренда записана".to_string(),
+                    };
+                    push_toast(toasts, said, ToastKind::Success);
+                    form.set(None);
+                    reload += 1;
+                }
+                // Refused or lost: the form stays open with its key, so the
+                // retry is the same request.
+                Ok((status, text)) => push_toast(
+                    toasts,
+                    format!("❌ {}", referral_refusal(status, &text)),
+                    ToastKind::Error,
+                ),
+                Err(_) => push_toast(
+                    toasts,
+                    "❌ сеть/таймаут: повторите, запрос тот же".to_string(),
+                    ToastKind::Error,
+                ),
+            }
+            busy.set(false);
+        });
+    };
+
+    let run_confirm = move |_: Event<MouseData>| {
+        let Some(action) = confirm.read().clone() else {
+            return;
+        };
+        if *busy.read() {
+            return;
+        }
+        let note = non_empty(&confirm_note.read());
+        let (url, json) = match &action {
+            ReferralConfirm::Resolve {
+                request_id, action, ..
+            } => (
+                format!(
+                    "{}/api/admin/referral-credit/requests/{}/resolve",
+                    api_base_url(),
+                    request_id
+                ),
+                serde_json::to_string(&crate::trios::referral_credit::ResolveBody {
+                    action: action.to_string(),
+                    note,
+                }),
+            ),
+            ReferralConfirm::Reverse { rental_id, .. } => (
+                format!(
+                    "{}/api/admin/referral-credit/rentals/{}/reverse",
+                    api_base_url(),
+                    rental_id
+                ),
+                serde_json::to_string(&crate::trios::referral_credit::ReverseBody { note }),
+            ),
+        };
+        let Ok(json) = json else {
+            return;
+        };
+        busy.set(true);
+        let init = init_data.read().clone();
+        spawn(async move {
+            match referral_admin_post(url, json, telegram_id, init).await {
+                Ok((200, text)) => {
+                    let said = match &action {
+                        ReferralConfirm::Resolve {
+                            request_id, action, ..
+                        } => {
+                            let replay = serde_json::from_str::<
+                                crate::trios::referral_credit::ResolveResponse,
+                            >(&text)
+                            .map(|r| r.idempotent_replay)
+                            .unwrap_or(false);
+                            let done = if *action == "paid" {
+                                "выплата отмечена"
+                            } else {
+                                "отклонён"
+                            };
+                            let again = if replay { " (уже было)" } else { "" };
+                            format!("✅ Запрос #R{request_id}: {done}{again}")
+                        }
+                        ReferralConfirm::Reverse { rental_id, .. } => {
+                            match serde_json::from_str::<
+                                crate::trios::referral_credit::ReverseResponse,
+                            >(&text)
+                            {
+                                Ok(r) if r.already_reversed => {
+                                    format!("Аренда #{rental_id} уже была сторнирована")
+                                }
+                                Ok(r) => format!(
+                                    "↩️ Аренда #{rental_id} сторнирована: снято {}, возвращено клиенту {}",
+                                    crate::trios::pricing::format_baht(r.accrual_reversed_thb as f64),
+                                    crate::trios::pricing::format_baht(
+                                        r.redemption_returned_thb as f64
+                                    )
+                                ),
+                                Err(_) => format!("↩️ Аренда #{rental_id} сторнирована"),
+                            }
+                        }
+                    };
+                    push_toast(toasts, said, ToastKind::Success);
+                    confirm.set(None);
+                    confirm_note.set(String::new());
+                    reload += 1;
+                }
+                Ok((status, text)) => push_toast(
+                    toasts,
+                    format!("❌ {}", referral_refusal(status, &text)),
+                    ToastKind::Error,
+                ),
+                Err(_) => push_toast(toasts, "❌ сеть/таймаут".to_string(), ToastKind::Error),
+            }
+            busy.set(false);
+        });
+    };
+
+    let (confirm_title, confirm_question, confirm_button) = match pending.as_ref() {
+        Some(ReferralConfirm::Resolve { action, what, .. }) if *action == "paid" => (
+            "Выплата сделана?".to_string(),
+            format!("{what}. Отметить выплаченным: баланс уменьшится на сумму запроса. Сначала выплатите вручную."),
+            "Выплачено",
+        ),
+        Some(ReferralConfirm::Resolve { what, .. }) => (
+            "Отклонить запрос?".to_string(),
+            format!("{what}. Удержание снимется, баланс не изменится."),
+            "Отклонить",
+        ),
+        Some(ReferralConfirm::Reverse { what, .. }) => (
+            "Сторнировать аренду?".to_string(),
+            format!("{what}. Начисление пригласившему снимется целиком, списанное с баланса клиента вернётся."),
+            "Сторнировать",
+        ),
+        None => (String::new(), String::new(), ""),
+    };
+
+    rsx! {
+        div {
+            {render_toasts(toasts)}
+            div { class: "admin-card-meta", style: "margin-bottom:8px;",
+                "Начисление пригласившему — с каждой записанной аренды приглашённого друга, от суммы без депозита и доставки, вниз до целого бата. Деньги сами не двигаются: выплату делает менеджер."
+            }
+            if let Some(err) = error {
+                div { class: "admin-empty",
+                    "Не загрузилось: {err}"
+                    button { class: "admin-btn admin-btn-sm secondary", style: "margin-left:8px;",
+                        onclick: move |_| reload += 1,
+                        "Обновить"
+                    }
+                }
+            }
+            if let Some(current) = open_form.clone() {
+                FormCard { title: format!("Записать аренду: {}", current.customer_label),
+                    div { class: "admin-label", "Сумма аренды без депозита и доставки, ฿" }
+                    input { style: input_style(), r#type: "number", inputmode: "numeric", min: "1", step: "1",
+                        value: "{current.amount}",
+                        oninput: move |e| {
+                            if let Some(f) = form.write().as_mut() {
+                                f.amount = e.value();
+                            }
+                        },
+                    }
+                    input { style: input_style(), placeholder: "ID заказа (необязательно)",
+                        value: "{current.order_id}",
+                        oninput: move |e| {
+                            if let Some(f) = form.write().as_mut() {
+                                f.order_id = e.value();
+                            }
+                        },
+                    }
+                    input { style: input_style(), placeholder: "Заметка (необязательно)",
+                        maxlength: "{note_max}",
+                        value: "{current.note}",
+                        oninput: move |e| {
+                            if let Some(f) = form.write().as_mut() {
+                                f.note = e.value();
+                            }
+                        },
+                    }
+                    if let Some(d) = data.as_ref() {
+                        for line in referral_preview(&current, d) {
+                            div { class: "admin-card-meta", "{line}" }
+                        }
+                    }
+                    button {
+                        style: if *busy.read() { submit_btn_disabled_style() } else { submit_btn_style() },
+                        disabled: *busy.read(),
+                        onclick: submit_rental,
+                        "Записать"
+                    }
+                    button { style: cancel_btn_style(),
+                        onclick: move |_| form.set(None),
+                        "Отмена"
+                    }
+                }
+            }
+            if let Some(d) = data.clone() {
+                h4 { style: list_title_style(), "Открытые запросы ({d.open_requests.len()})" }
+                if d.open_requests.is_empty() {
+                    div { class: "admin-empty", "Открытых запросов нет" }
+                }
+                for request in d.open_requests.clone() {
+                    {
+                        let who = referral_person(request.first_name.as_deref(), request.username.as_deref(), request.telegram_id);
+                        let amount = crate::trios::pricing::format_baht(request.amount_thb as f64);
+                        let balance = referral_signed_baht(request.balance_thb);
+                        let age = referral_age(&request.created_at);
+                        let kind = referral_kind_label(&request.kind);
+                        let is_payout = request.kind == "payout";
+                        let id = request.id;
+                        let customer = request.telegram_id;
+                        let what = format!("#R{id} · {kind} {amount} · {who}");
+                        let what_paid = what.clone();
+                        let label = who.clone();
+                        rsx! {
+                            div { class: "admin-row", key: "req-{id}",
+                                div { class: "admin-row-main",
+                                    div { class: "admin-card-title", "{kind} · {amount}" }
+                                    div { class: "admin-card-meta", "{who} · #R{id} · {age} · баланс {balance}" }
+                                }
+                                div { class: "admin-row-actions",
+                                    if is_payout {
+                                        button { class: "admin-btn admin-btn-sm primary",
+                                            onclick: move |_| {
+                                                confirm_note.set(String::new());
+                                                confirm.set(Some(ReferralConfirm::Resolve { request_id: id, action: "paid", what: what_paid.clone() }));
+                                            },
+                                            "Выплачено"
+                                        }
+                                    } else {
+                                        button { class: "admin-btn admin-btn-sm primary",
+                                            onclick: move |_| form.set(Some(ReferralRentalForm::open(customer, label.clone()))),
+                                            "Записать аренду"
+                                        }
+                                    }
+                                    button { class: "admin-btn admin-btn-sm danger",
+                                        onclick: move |_| {
+                                            confirm_note.set(String::new());
+                                            confirm.set(Some(ReferralConfirm::Resolve { request_id: id, action: "declined", what: what.clone() }));
+                                        },
+                                        "Отклонить"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                h4 { style: list_title_style(), "Приглашённые ({d.invitees.len()})" }
+                if d.invitees.is_empty() {
+                    div { class: "admin-empty", "Приглашений нет" }
+                }
+                for invitee in d.invitees.clone() {
+                    {
+                        let who = referral_person(invitee.first_name.as_deref(), invitee.username.as_deref(), invitee.telegram_id);
+                        let inviter = referral_person(invitee.inviter_first_name.as_deref(), invitee.inviter_username.as_deref(), invitee.inviter_telegram_id);
+                        let edge = referral_edge_label(&invitee.edge_status);
+                        let credited = crate::trios::pricing::format_baht(invitee.credit_thb as f64);
+                        let refusal = if invitee.creditable {
+                            None
+                        } else {
+                            Some(referral_reason_label(invitee.not_creditable_reason.as_deref().unwrap_or("")))
+                        };
+                        let customer = invitee.telegram_id;
+                        let label = who.clone();
+                        rsx! {
+                            div { class: "admin-row", key: "inv-{customer}",
+                                div { class: "admin-row-main",
+                                    div { class: "admin-card-title", "{who}" }
+                                    div { class: "admin-card-meta", "пригласил: {inviter} · {edge} · с {invitee.invited_at}" }
+                                    div { class: "admin-card-meta", "аренд записано: {invitee.rentals_recorded} · начислено {credited}" }
+                                    if let Some(why) = refusal {
+                                        div { class: "admin-card-meta", style: "color:#ffa502;", "не начисляется: {why}" }
+                                    }
+                                }
+                                div { class: "admin-row-actions",
+                                    button { class: "admin-btn admin-btn-sm primary",
+                                        onclick: move |_| form.set(Some(ReferralRentalForm::open(customer, label.clone()))),
+                                        "Записать аренду"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                h4 { style: list_title_style(), "Записанные аренды ({d.rentals.len()})" }
+                if d.rentals.is_empty() {
+                    div { class: "admin-empty", "Записей нет" }
+                }
+                for rental in d.rentals.clone() {
+                    {
+                        let id = rental.id;
+                        let amount = crate::trios::pricing::format_baht(rental.rental_amount_thb as f64);
+                        let applied = crate::trios::pricing::format_baht(rental.applied_thb as f64);
+                        let credit = crate::trios::pricing::format_baht(rental.credit_thb as f64);
+                        let order = rental.order_id.clone().unwrap_or_else(|| "—".to_string());
+                        let inviter = rental.inviter_telegram_id.map(|t| t.to_string()).unwrap_or_else(|| "—".to_string());
+                        let note = rental.note.clone().unwrap_or_default();
+                        let reversed = rental.reversed_at.clone();
+                        let what = format!("Аренда #{id} · клиент {} · {amount}", rental.customer_telegram_id);
+                        rsx! {
+                            div { class: "admin-row", key: "rent-{id}",
+                                div { class: "admin-row-main",
+                                    div { class: "admin-card-title", "#{id} · клиент {rental.customer_telegram_id} · {amount}" }
+                                    div { class: "admin-card-meta", "заказ {order} · списано с баланса {applied} · пригласивший {inviter} · начислено {credit}" }
+                                    div { class: "admin-card-meta", "{rental.recorded_at} · записал {rental.recorded_by} {note}" }
+                                }
+                                div { class: "admin-row-actions",
+                                    if let Some(when) = reversed {
+                                        span { class: "admin-badge muted", "сторно {when}" }
+                                    } else {
+                                        button { class: "admin-btn admin-btn-sm danger",
+                                            onclick: move |_| {
+                                                confirm_note.set(String::new());
+                                                confirm.set(Some(ReferralConfirm::Reverse { rental_id: id, what: what.clone() }));
+                                            },
+                                            "Сторнировать"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                h4 { style: list_title_style(), "Балансы ({d.balances.len()})" }
+                if d.balances.is_empty() {
+                    div { class: "admin-empty", "Ненулевых балансов нет" }
+                }
+                for row in d.balances.clone() {
+                    {
+                        let who = referral_person(row.first_name.as_deref(), row.username.as_deref(), row.telegram_id);
+                        let balance = referral_signed_baht(row.balance_thb);
+                        let badge = if row.balance_thb < 0 { "admin-badge danger" } else { "admin-badge success" };
+                        rsx! {
+                            div { class: "admin-row", key: "bal-{row.telegram_id}",
+                                div { class: "admin-row-main",
+                                    div { class: "admin-card-title", "{who}" }
+                                }
+                                span { class: "{badge}", "{balance}" }
+                            }
+                        }
+                    }
+                }
+            } else if load_error.read().is_none() {
+                EmptyState { icon: "⏳".to_string(), title: "Загрузка...".to_string(), description: "Получаем данные с сервера".to_string() }
+            }
+            Modal {
+                open: pending.is_some(),
+                title: Some(confirm_title),
+                show_close: true,
+                on_close: move |_| confirm.set(None),
+                div { style: "padding:16px;display:flex;flex-direction:column;gap:8px;",
+                    div { style: "color:#e8e8e8;font-size:14px;", "{confirm_question}" }
+                    input { style: input_style(), placeholder: "Заметка (необязательно)",
+                        maxlength: "{note_max}",
+                        value: "{confirm_note}",
+                        oninput: move |e| confirm_note.set(e.value()),
+                    }
+                    div { style: "display:flex;gap:8px;justify-content:center;",
+                        button { style: if *busy.read() { submit_btn_disabled_style() } else { danger_btn_style() },
+                            disabled: *busy.read(),
+                            onclick: run_confirm,
+                            "{confirm_button}"
+                        }
+                        button { style: cancel_btn_style(),
+                            onclick: move |_| confirm.set(None),
+                            "Отмена"
+                        }
+                    }
+                }
+            }
+        }
     }
 }

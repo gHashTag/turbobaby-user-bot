@@ -27,7 +27,7 @@
 ; prefers TelegramApp::init().bot_username() and falls back to the const, and
 ; src/ui/screens/profile_screen.rs:744, :898 and :911 each unwrap_or_else over that same read.
 ; The resolver behind all four is src/ui/telegram.rs:486, which reads initDataUnsafe. Two are
-; unconditional and consult nothing: src/ui/pages/referrals.rs:184, the placeholder invite link
+; unconditional and consult nothing: src/ui/pages/referrals.rs:229, the placeholder invite link
 ; built when telegram_id is 0, and src/ui/screens/home_screen.rs:446, a support href. So the
 ; defect is open and its mechanism is the platform rather than the compiler -- the client tracks
 ; whichever bot Telegram says is serving, the server tracks BOT_USERNAME, and nothing makes the
@@ -271,7 +271,7 @@ pub const MENU_BUTTON_TASK_RUNS_EVERY_BOOT : bool = true;
 ; --- The half-obeyed knob --------------------------------------------------------------------------
 pub const BOT_HANDLE_CLIENT_LITERAL_SITES : [6]str = [
   "src/ui/share.rs:24",
-  "src/ui/pages/referrals.rs:184",
+  "src/ui/pages/referrals.rs:229",
   "src/ui/screens/home_screen.rs:446",
   "src/ui/screens/profile_screen.rs:744",
   "src/ui/screens/profile_screen.rs:898",
@@ -281,6 +281,8 @@ pub const BOT_HANDLE_CLIENT_LITERAL_SITES : [6]str = [
 ; three lines above each: home_screen :442 -> :445 and profile_screen :740/:894/:907 ->
 ; :743/:897/:910. Six literals, four files, one claim -- unchanged. Re-taken 2026-09-23: one line
 ; more above each after T27 defect 2 (home :446, profile :744/:898/:911), same literals.
+; Re-taken 2026-09-26 (R3, the referral credit): the referral page's placeholder :184 -> :229, the
+; page's request helpers landing above it; same literal. The profile's three kept their lines.
 pub const BOT_HANDLE_CLIENT_LITERAL_FILES : u8 = 4;
 pub const BOT_HANDLE_SERVER_READS_ENV : bool = true;
 
@@ -290,7 +292,7 @@ pub const BOT_HANDLE_SERVER_READS_ENV : bool = true;
 ; resolver they all defer to is src/ui/telegram.rs:486, which takes the handle from initDataUnsafe
 ; -- so when the SDK answers, those four are right, and they are right about the bot Telegram is
 ; actually serving rather than about BOT_USERNAME. Two consult nothing and are wrong whenever the
-; compiled handle is wrong: src/ui/pages/referrals.rs:184 and src/ui/screens/home_screen.rs:446.
+; compiled handle is wrong: src/ui/pages/referrals.rs:229 and src/ui/screens/home_screen.rs:446.
 ; What holds in every case is that the client reads the environment variable at 0 sites, so the
 ; server knob does not reach the client by any path, agreeing or not.
 pub const BOT_HANDLE_CLIENT_LITERAL_SITES_SDK_FALLBACK : u8 = 4;
