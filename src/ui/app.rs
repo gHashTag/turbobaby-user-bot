@@ -36,7 +36,7 @@ pub fn App() -> Element {
                     if let Ok(Some(json)) = storage.get_item(CART_STORAGE_KEY) {
                         if json.len() <= 1_000_000 {
                             if let Ok(parsed) = serde_json::from_str::<Cart>(&json) {
-                                cart = parsed;
+                                cart = parsed.without_retired_lines();
                             }
                         }
                     }
@@ -77,7 +77,7 @@ pub fn App() -> Element {
                 if let Ok(parsed) = serde_json::from_str::<Cart>(&json) {
                     let current = cart_signal.read().clone();
                     if current == initial {
-                        cart_signal.set(parsed);
+                        cart_signal.set(parsed.without_retired_lines());
                     }
                 }
             }

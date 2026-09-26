@@ -405,8 +405,8 @@ fn cart_model_to_resp(
     items: &[crate::db::entities::cart_item::Model],
 ) -> CartResp {
     let mut total = 0.0_f64;
-    let item_resp: Vec<CartItemResp> = items
-        .iter()
+    // A row of a retired kind stays stored and is never served (2026-09-26).
+    let item_resp: Vec<CartItemResp> = served_rows(items)
         .map(|i| {
             let price = if i.unit_price.is_finite() {
                 i.unit_price.max(0.0)
@@ -503,6 +503,7 @@ async fn update_cart_item(
             tracing::error!("cart item find: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?
+        .filter(served_row)
         .ok_or(StatusCode::NOT_FOUND)?;
 
     let cart = crate::db::entities::cart::Entity::find_by_id(item.cart_id)
@@ -544,6 +545,7 @@ async fn delete_cart_item(
             tracing::error!("cart item find: {e}");
             StatusCode::INTERNAL_SERVER_ERROR
         })?
+        .filter(served_row)
         .ok_or(StatusCode::NOT_FOUND)?;
 
     let cart = crate::db::entities::cart::Entity::find_by_id(item.cart_id)
@@ -593,7 +595,7 @@ async fn clear_cart(
         })?;
     if let Some(c) = cart {
         crate::db::entities::cart_item::Entity::delete_many()
-            .filter(crate::db::entities::cart_item::Column::CartId.eq(c.id))
+            .filter(served_lines_of(c.id))
             .exec(&state.db.orm)
             .await
             .map_err(|e| {
@@ -662,10 +664,150 @@ async fn merge_cart(
     Ok(Json(cart_model_to_resp(&cart, &items)))
 }
 
+// ── Rows of a retired kind: stored, never served (2026-09-26) ─────────────
+//
+// The owner ruled rental only on 2026-09-24 and, on 2026-09-25 (answer 12),
+// that nothing of the previous shop may appear anywhere. A cart kept from that
+// shop still holds its rows: `cart_items` admits the old catalogue's kinds
+// beside `bike_rental` (migration 081's CHECK), and a returning customer's cart
+// row is never deleted. Nothing here deletes or rewrites one either. To the
+// API such a row is ABSENT: no response lists it or counts it in the total
+// (`cart_model_to_resp`, behind `get_cart`, `add_cart_item` and `merge_cart`),
+// PATCH and DELETE by its id answer 404 as for an id that does not exist, and
+// clearing the cart leaves it where it is. Which kinds are served is one
+// predicate shared with the reminder and the Mini App,
+// `trios::pricing::cart_kind_is_served`; specs/turbobaby/cart_persistence.t27
+// records the rule as SERVED_CART_KINDS.
+//
+// The owner's answer 3 of 2026-09-25 (second list) first masked such a row
+// here instead: served under a neutral name and with no picture. When the two
+// changes were merged on 2026-09-26 this rule was kept and that path removed:
+// a row that is never served needs no name, and a served row is a rental row,
+// whose stored name and picture are its own.
+//
+// The write gate is left as it was: `parse_kind` still names the old kinds,
+// and none of them can write a row today (the census in cart_persistence.t27,
+// KINDS_THAT_CAN_WRITE_A_ROW_TODAY). Closing it is a separate change.
+
+/// Is this stored cart row one the API may serve?
+fn served_row(row: &crate::db::entities::cart_item::Model) -> bool {
+    crate::trios::pricing::cart_kind_is_served(&row.kind)
+}
+
+/// The rows of a cart the API may serve, in the order they were loaded.
+fn served_rows(
+    items: &[crate::db::entities::cart_item::Model],
+) -> impl Iterator<Item = &crate::db::entities::cart_item::Model> {
+    items.iter().filter(|row| served_row(row))
+}
+
+/// The served lines of one cart, as a filter: what clearing the cart deletes.
+fn served_lines_of(cart_id: uuid::Uuid) -> sea_orm::Condition {
+    use crate::db::entities::cart_item::Column as ItemCol;
+    sea_orm::Condition::all()
+        .add(ItemCol::CartId.eq(cart_id))
+        .add(ItemCol::Kind.is_in(crate::trios::pricing::SERVED_CART_KINDS))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::entities::cart_item;
     use axum::http::StatusCode;
+    use sea_orm::QueryTrait;
+
+    fn cart_row() -> crate::db::entities::cart::Model {
+        crate::db::entities::cart::Model {
+            id: uuid::Uuid::nil(),
+            telegram_id: 42,
+            created_at: None,
+            updated_at: None,
+            expires_at: None,
+            reminder_sent_at: None,
+            reminder_count: Some(0),
+            reminder_variant: None,
+            start_param: None,
+            first_reminder_sent_at: None,
+        }
+    }
+
+    fn line(kind: &str, name: &str, quantity: i32, unit_price: f64) -> cart_item::Model {
+        cart_item::Model {
+            id: uuid::Uuid::new_v4(),
+            cart_id: uuid::Uuid::nil(),
+            kind: kind.to_string(),
+            catalog_id: format!("{kind}-1"),
+            quantity,
+            unit_price,
+            name: name.to_string(),
+            image_url: Some(format!("/assets/{kind}.webp")),
+            created_at: None,
+            updated_at: None,
+        }
+    }
+
+    /// The cart response never carries a row of a retired kind: not its name,
+    /// not its picture, not its money in the total.
+    #[test]
+    fn a_row_of_a_retired_kind_never_reaches_the_cart_response() {
+        let rows = vec![
+            line("accessory", "Retired Accessory", 2, 150.0),
+            line("bike_rental", "NMAX 155", 1, 0.0),
+            line("tea", "Retired Tea", 1, 90.0),
+            line("set", "Retired Set", 3, 500.0),
+            line("unknown_kind", "Unclassified", 1, 10.0),
+        ];
+        let resp = cart_model_to_resp(&cart_row(), &rows);
+
+        assert_eq!(resp.items.len(), 1, "{:?}", resp.items);
+        assert_eq!(resp.items[0].kind, "bike_rental");
+        assert_eq!(resp.items[0].name, "NMAX 155");
+        assert_eq!(
+            resp.total, 0.0,
+            "a hidden row's money leaked into the total"
+        );
+        let wire = serde_json::to_string(&resp).expect("the response serialises");
+        for hidden in [
+            "Retired",
+            "Unclassified",
+            "/assets/accessory",
+            "/assets/tea",
+        ] {
+            assert!(!wire.contains(hidden), "{hidden} reached the wire: {wire}");
+        }
+    }
+
+    /// A cart that holds only retired rows answers as an empty cart.
+    #[test]
+    fn a_cart_of_retired_rows_answers_empty() {
+        let rows = vec![
+            line("accessory", "Retired Accessory", 1, 150.0),
+            line("tea", "Retired Tea", 1, 90.0),
+        ];
+        let resp = cart_model_to_resp(&cart_row(), &rows);
+        assert!(resp.items.is_empty());
+        assert_eq!(resp.total, 0.0);
+    }
+
+    /// PATCH and DELETE by id treat a hidden row as a missing one, and
+    /// clearing a cart deletes only its served lines.
+    #[test]
+    fn only_a_served_row_is_reachable_by_id_or_by_clear() {
+        assert!(served_row(&line("bike_rental", "NMAX 155", 1, 0.0)));
+        for kind in ["accessory", "tea", "set", "bike_sale", ""] {
+            assert!(!served_row(&line(kind, "x", 1, 1.0)), "{kind:?} is served");
+        }
+        let sql = cart_item::Entity::delete_many()
+            .filter(served_lines_of(uuid::Uuid::nil()))
+            .build(sea_orm::DbBackend::Postgres)
+            .to_string();
+        assert!(
+            sql.starts_with("DELETE FROM")
+                && sql.contains(r#""cart_id" = "#)
+                && sql.contains(r#""kind" IN ('bike_rental')"#),
+            "clear must delete this cart's served lines and no others: {sql}"
+        );
+    }
 
     #[test]
     fn parse_kind_accepts_valid() {

@@ -1,4 +1,4 @@
-# Alert rules for Woody Weed Bot.
+# Alert rules for TurboBaby.
 #
 # Design:
 #   - SLO-based multi-window burn-rate alerts (Google SRE Workbook ch. 5).
@@ -17,7 +17,7 @@ groups:
   # ── SLO burn-rate (availability 99.5 %, error budget 0.5 %) ─────────
   - name: turbobaby_bot_slo_burn
     rules:
-      - alert: WoodyWeedBotFastBurnCritical
+      - alert: TurboBabyFastBurnCritical
         # 14.4x burn → 30-day budget gone in 50 hours if sustained.
         # Long window (1h) catches sustained issues; short window (5m)
         # confirms we're still bleeding right now, not just historically.
@@ -30,14 +30,14 @@ groups:
           severity: page
           slo: availability
         annotations:
-          summary: "Woody Weed Bot is burning error budget very fast (>14.4x)"
+          summary: "TurboBaby is burning error budget very fast (>14.4x)"
           description: |
             5xx error ratio over both 1h and 5m windows is >14.4x
             the sustainable rate (>7.2 %/req over 5m).
             At this rate the 30-day error budget exhausts in ~50 hours.
           runbook: "Check db_pool_acquire_failed_total + DB pool gauges; tail logs filtered by request_id."
 
-      - alert: WoodyWeedBotMediumBurnHigh
+      - alert: TurboBabyMediumBurnHigh
         # 6x burn → 30-day budget gone in 5 days if sustained.
         # 6h + 30m windows per Google SRE workbook.
         expr: |
@@ -49,10 +49,10 @@ groups:
           severity: page
           slo: availability
         annotations:
-          summary: "Woody Weed Bot is burning error budget fast (>6x)"
+          summary: "TurboBaby is burning error budget fast (>6x)"
           description: "Sustained 5xx > 3 % over both 6h and 30m. Budget exhausts in ~5 days."
 
-      - alert: WoodyWeedBotSlowBurnTicket
+      - alert: TurboBabySlowBurnTicket
         # 1x burn over a long window: not urgent, but trending bad.
         expr: |
           wwb:burn_rate:6h > 1
@@ -61,7 +61,7 @@ groups:
           severity: ticket
           slo: availability
         annotations:
-          summary: "Woody Weed Bot error rate trending above SLO"
+          summary: "TurboBaby error rate trending above SLO"
           description: "Over 6h, error ratio has averaged above the 0.5 % SLO budget. Investigate this week."
 
   # ── DB pool saturation (cycle #6 instrumentation) ───────────────────
@@ -152,7 +152,7 @@ groups:
   # ── Schema drift (DB behind on migrations) ──────────────────────────
   - name: turbobaby_bot_schema
     rules:
-      - alert: WoodyWeedBotSchemaDrift
+      - alert: TurboBabySchemaDrift
         # Set once at startup by Database::missing_critical_columns(): the
         # number of expected catalog columns absent from the live DB. > 0
         # means prod is behind on migrations — catalog endpoints (e.g.

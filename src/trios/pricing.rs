@@ -546,6 +546,37 @@ pub fn order_money_text(money: &OrderMoney, dash: &str) -> OrderMoneyText {
     }
 }
 
+// ── The cart line a cart still serves (2026-09-26) ────────────────────────
+//    specs/turbobaby/cart_persistence.t27 (turbobaby/cart-persistence) owns
+//    the rule, as SERVED_CART_KINDS. One predicate for the three readers of a
+//    stored cart -- the cart API's responses (src/api/cart.rs), the abandoned-
+//    cart reminder (src/cart_abandonment.rs) and the Mini App's saved cart
+//    (src/ui/state.rs) -- compiled for the host as well as for wasm32 so it is
+//    tested once (D15).
+
+/// The cart line kinds a customer's cart still serves: a bike rental, and
+/// nothing else.
+///
+/// Not a new list. `bike_rental` is the wire tag of the one deal the checkout
+/// admits since the owner's rental-only ruling of 2026-09-24:
+/// `BikeDeal::BikeRental` in `src/db/orders.rs`, whose doc names it "the same
+/// `kind` vocabulary D8 gives `cart_items`", while `validate_bike_lines` in
+/// `src/api/orders.rs` refuses a new `bike_sale` line (#63). It is also the
+/// kind migration 081 added to the `cart_items` CHECK. A test in
+/// `src/db/orders.rs` holds this list to the enum's serde tag, and gate 3 holds
+/// it to the contract's copy.
+///
+/// Every other kind a stored or saved cart line can carry is the previous
+/// shop's catalogue (the owner's rulings of 2026-09-24 and of 2026-09-25,
+/// answer 12). Such a line stays where it is stored and is never served.
+pub const SERVED_CART_KINDS: [&str; 1] = ["bike_rental"];
+
+/// Is a cart line of this `kind` one a cart may serve? An unknown kind is
+/// not: a line the build cannot classify is dropped, never guessed at.
+pub fn cart_kind_is_served(kind: &str) -> bool {
+    SERVED_CART_KINDS.contains(&kind)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -554,6 +585,25 @@ mod tests {
     // an assertion under `src/ui` this one runs.
     use crate::trios::core::Lang;
     use crate::trios::i18n::{t, T_BIKE_PRICE_ON_REQUEST};
+
+    #[test]
+    fn a_cart_serves_the_rental_line_and_no_other_kind() {
+        assert!(cart_kind_is_served("bike_rental"));
+        // Kinds of the previous shop's catalogue that `cart_items` still
+        // admits (migration 081's CHECK), each stored and never served. The
+        // fourth is read out of the migration itself by
+        // tests/legacy_cart_hidden_wiring.rs, outside the vocabulary guard's
+        // reach (tests/legacy_vocabulary_wiring.rs walks src/).
+        for retired in ["set", "accessory", "tea"] {
+            assert!(!cart_kind_is_served(retired), "{retired} is served");
+        }
+        // A sale is refused at checkout since 2026-09-24, an unknown kind is
+        // not guessed at, and the match is exact.
+        for other in ["bike_sale", "", "BIKE_RENTAL", "bike_rental ", "rental"] {
+            assert!(!cart_kind_is_served(other), "{other:?} is served");
+        }
+        assert_eq!(SERVED_CART_KINDS, ["bike_rental"]);
+    }
 
     fn now_utc() -> DateTime<Utc> {
         Utc::now()

@@ -1,4 +1,4 @@
-# Woody Weed Bot — Design System
+# TurboBaby — Design System
 
 > Dioxus 0.6 + WASM · Telegram WebApp · Dark Mode First
 
@@ -36,7 +36,7 @@ All tokens are defined in `styles/variables.css` under `:root`.
 
 | Token | Value | Description |
 |---|---|---|
-| `--color-primary` | `#22c55e` | Weed green — primary CTA |
+| `--color-primary` | `#22c55e` | Green — primary CTA |
 | `--color-primary-light` | `#4ade80` | Lighter green hover |
 | `--color-primary-dark` | `#16a34a` | Darker green active |
 | `--color-accent-purple` | `#a855f7` | Purple accent |
@@ -142,7 +142,9 @@ All tokens are defined in `styles/variables.css` under `:root`.
 
 ## 7. Rarity System
 
-Four tiers used for NFT-style items, plants, and achievements.
+Four tiers, rendered by `BadgeVariant` and `RarityGlow` (`Rarity`). No screen uses them
+today: outside `src/ui/components/`, no source names `Rarity`, `RarityGlow` or a rarity
+`BadgeVariant` (checked 2026-09-26).
 
 | Tier | Color | CSS Class | Glow |
 |---|---|---|---|
@@ -221,7 +223,7 @@ rsx! {
 }
 ```
 
-**Variants:** `Default`, `Product`, `Plant`, `Quest`, `Member`, `Glass`, `GlassGreen`, `GlassPurple`, `GlassGold`
+**Variants:** `Default`, `Product`, `Bike`, `Quest`, `Member`, `Glass`, `GlassGreen`, `GlassPurple`, `GlassGold`
 
 ---
 
@@ -340,7 +342,7 @@ rsx! {
 // Gold large with label
 rsx! {
     ProgressBar {
-        value: 420.0,
+        value: 650.0,
         max: 1000.0,
         color: ProgressColor::Gold,
         size: ProgressSize::Large,
@@ -362,21 +364,23 @@ rsx! {
 ```rust
 use crate::ui::components::{Chip, ChipGroup, ChipColor};
 
-let mut selected = use_signal(|| "sativa".to_string());
+// The catalog's class filter: the keys are `BikeClass::css_class`, the labels
+// the English text of `T_BIKE_FILTER_SCOOTER` and `T_BIKE_FILTER_MOTORCYCLE`.
+let mut selected = use_signal(|| "scooter".to_string());
 
 rsx! {
     ChipGroup {
         Chip {
-            label: "Sativa".to_string(),
-            selected: *selected.read() == "sativa",
-            icon: "☀️".to_string(),
-            on_click: move |_| selected.set("sativa".to_string())
+            label: "Scooters".to_string(),
+            selected: *selected.read() == "scooter",
+            icon: "🛵".to_string(),
+            on_click: move |_| selected.set("scooter".to_string())
         }
         Chip {
-            label: "Indica".to_string(),
-            selected: *selected.read() == "indica",
+            label: "Motorcycles".to_string(),
+            selected: *selected.read() == "motorcycle",
             color: ChipColor::Purple,
-            on_click: move |_| selected.set("indica".to_string())
+            on_click: move |_| selected.set("motorcycle".to_string())
         }
     }
 }
@@ -396,13 +400,13 @@ use crate::ui::components::{RarityGlow, Rarity};
 rsx! {
     RarityGlow { rarity: Rarity::Legendary,
         Card { variant: CardVariant::Default,
-            "OG Kush — Legendary"
+            "Legendary"
         }
     }
 }
 
-// From dynamic string
-let rarity = Rarity::from_str(&strain.rarity);
+// From a stored string; anything it does not recognise is Common
+let rarity = Rarity::from_str_lossy(&tier);
 rsx! {
     RarityGlow { rarity, { content } }
 }
@@ -468,10 +472,9 @@ turbobaby-bot/
 │   ├── nav.rs
 │   ├── input.rs
 │   ├── loading.rs
-│   ├── strain_card.rs
+│   ├── bike_card.rs
 │   ├── cart_item.rs
-│   ├── strain_grid.rs
-│   └── plant_cell.rs
+│   └── bike_grid.rs
 ├── docs/
 │   └── DESIGN_SYSTEM.md   ← This file
 ├── storybook.html         ← Visual component preview

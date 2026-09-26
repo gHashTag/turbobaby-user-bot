@@ -184,12 +184,46 @@ fn the_scan_and_the_giveup_read_one_bound() {
         scan[0].0,
         scan[0].1
     );
+    // Since 2026-09-26 the scan is also handed the kinds the drain delivers,
+    // on the same line and for the same reason: one list, owned by the drain.
+    assert!(
+        scan[0].1.contains("&kinds"),
+        "{DRAIN}:{} no longer hands its deliverable kinds to the scan: {}",
+        scan[0].0,
+        scan[0].1
+    );
+    let kinds = sites(&body, "let kinds =");
+    assert_eq!(
+        kinds.len(),
+        1,
+        "the kinds handed to the scan are bound in {} places: {kinds:?}",
+        kinds.len()
+    );
+    assert!(
+        kinds[0].1.contains("DeliverableKind::names()"),
+        "{DRAIN}:{} hands the scan a list that is not the drain's own: {}",
+        kinds[0].0,
+        kinds[0].1
+    );
 
     let queries = source(QUERIES);
     assert!(
         queries.contains("max_attempts: i32"),
         "{QUERIES} no longer takes the bound from its caller -- it has gone back \
          to declaring its own copy of it"
+    );
+    assert!(
+        queries.contains("kinds: &[&str]"),
+        "{QUERIES} no longer takes the deliverable kinds from its caller"
+    );
+    let filter = queries
+        .lines()
+        .filter(|l| code_of(l).contains("Column::Kind.is_in(kinds"))
+        .count();
+    assert_eq!(
+        filter, 1,
+        "{QUERIES} filters on the handed kinds {filter} times; a held row is \
+         kept from the drain by exactly that filter"
     );
 }
 
@@ -199,23 +233,72 @@ fn the_scan_and_the_giveup_read_one_bound() {
 /// `notification_queue` and nothing went out at all -- a single point of
 /// failure outbound delivery never had.
 ///
-/// One early exit is left in this loop and it is the row with no chat id,
-/// which reaches nobody whatever the database says. Any second one is a new
-/// way for a write to cancel a delivery, which is the class this asserts
-/// against rather than the one line that caused it.
+/// Two early exits are left in this loop, and neither depends on a write.
+/// The row with no chat id reaches nobody whatever the database says. The
+/// row of a HELD kind (owner rulings of 2026-09-24 and 2026-09-25, added
+/// 2026-09-26) is refused before the loop has written anything at all, so it
+/// leaves exactly as it is stored. Any third exit is a new way for a write to
+/// cancel a delivery, which is the class this asserts against rather than the
+/// one line that caused it.
 #[test]
-fn only_a_row_with_nobody_to_send_to_leaves_the_loop_early() {
+fn only_a_held_kind_and_a_row_with_nobody_to_send_to_leave_the_loop_early() {
     let body = drain_body();
     let exits = sites(&body, "continue");
     assert_eq!(
         exits.len(),
-        1,
-        "process_batch has {} early exits and may have one: {:?}. A second one is \
+        2,
+        "process_batch has {} early exits and may have two: {:?}. A third one is \
          how a failed write becomes a cancelled delivery -- the 2026-09-21 \
          finding, where a refused `attempts` UPDATE skipped the send.",
         exits.len(),
         exits
     );
+
+    // The first exit is the held kind's, and it comes before any write.
+    let held = sites(&body, "DeliverableKind::of(");
+    assert_eq!(
+        held.len(),
+        1,
+        "the held-kind guard moved or multiplied: {held:?}"
+    );
+    assert!(
+        held[0]
+            .1
+            .starts_with("let Some(deliverable) = DeliverableKind::of(&row.kind) else"),
+        "{DRAIN}:{} is not the let-else that refuses a held kind: {}",
+        held[0].0,
+        held[0].1
+    );
+    assert!(
+        held[0].0 < exits[0].0,
+        "the first early exit at {DRAIN}:{} is above the held-kind guard at :{}",
+        exits[0].0,
+        held[0].0
+    );
+    for write in ["increment_attempts(", "mark_delivered(", "send_message("] {
+        let first = sites(&body, write);
+        assert!(
+            !first.is_empty() && first[0].0 > exits[0].0,
+            "`{write}` runs at {DRAIN}:{:?}, before the held-kind exit at :{} -- a held \
+             row would be written before it is refused",
+            first.first().map(|s| s.0),
+            exits[0].0
+        );
+    }
+    let guard_block: Vec<&(usize, String)> = body
+        .iter()
+        .filter(|(n, _)| *n >= held[0].0 && *n <= exits[0].0)
+        .collect();
+    assert!(
+        guard_block
+            .iter()
+            .all(|(_, code)| !code.contains("crate::db::") && !code.contains("bot.")),
+        "the held-kind guard at {DRAIN}:{}-{} reaches the database or the bot: {guard_block:?}",
+        held[0].0,
+        exits[0].0
+    );
+
+    // The second exit is the no-chat one, where it always was.
     let no_chat = sites(&body, "telegram_id == 0");
     assert_eq!(
         no_chat.len(),
@@ -223,10 +306,10 @@ fn only_a_row_with_nobody_to_send_to_leaves_the_loop_early() {
         "the no-chat guard moved or multiplied: {no_chat:?}"
     );
     assert!(
-        exits[0].0 > no_chat[0].0,
-        "the one early exit at {DRAIN}:{} is above the no-chat guard at :{} -- it \
+        exits[1].0 > no_chat[0].0,
+        "the second early exit at {DRAIN}:{} is above the no-chat guard at :{} -- it \
          is therefore some other condition skipping the send",
-        exits[0].0,
+        exits[1].0,
         no_chat[0].0
     );
 
@@ -353,4 +436,152 @@ fn a_pass_puts_at_most_one_message_on_the_wire() {
         "process_batch sends from {} places: {sends:?}",
         sends.len()
     );
+}
+
+// --- Held kinds: owner rulings of 2026-09-24 and 2026-09-25, wired 2026-09-26 ---
+//
+// The drain delivers exactly the kinds a producer writes and holds every other
+// row untouched: the retired garden's `friend_watered`, and any kind nothing
+// here writes. That is three lists in three places -- the drain's
+// `DeliverableKind`, the producers' `insert_queue_row` calls, the contract's
+// RENDERABLE_KINDS and WRITTEN_KINDS -- and the tests below hold them to one
+// another. A producer kind missing from the drain would be held in silence; a
+// drain kind no producer writes would be a door for a row nobody cleared.
+
+/// Every quoted string on the one `pub const NAME :` line of the contract.
+fn spec_list(name: &str) -> Vec<String> {
+    let spec = source(SPEC);
+    let head = format!("pub const {name} :");
+    let line = spec
+        .lines()
+        .find(|l| l.starts_with(&head))
+        .unwrap_or_else(|| panic!("`{name}` is no longer declared in {SPEC}"));
+    line.split('"')
+        .skip(1)
+        .step_by(2)
+        .map(str::to_string)
+        .collect()
+}
+
+/// The part of the drain that ships: everything above its test module.
+fn drain_shipped() -> String {
+    let text = source(DRAIN);
+    let end = text
+        .find("#[cfg(test)]")
+        .unwrap_or_else(|| panic!("{DRAIN} has no test module to stop at"));
+    text[..end].to_string()
+}
+
+/// The kinds `DeliverableKind::of` accepts, in its arm order.
+fn drain_kinds() -> Vec<String> {
+    drain_shipped()
+        .lines()
+        .map(code_of)
+        .filter(|l| l.contains("\" => Some(Self::"))
+        .map(|l| l.split('"').nth(1).unwrap_or_default().to_string())
+        .collect()
+}
+
+/// The kinds the producers write, in file order.
+fn written_kinds() -> Vec<String> {
+    source(QUERIES)
+        .lines()
+        .map(code_of)
+        .filter(|l| l.contains("insert_queue_row(orm, "))
+        .map(|l| l.split('"').nth(1).unwrap_or_default().to_string())
+        .collect()
+}
+
+#[test]
+fn the_drain_the_producers_and_the_contract_name_the_same_kinds() {
+    let drain = drain_kinds();
+    assert_eq!(
+        drain,
+        ["friend_joined", "friend_ordered", "milestone"],
+        "the reader lost DeliverableKind::of's arms in {DRAIN}"
+    );
+    assert_eq!(
+        written_kinds(),
+        drain,
+        "{QUERIES}'s producers and {DRAIN}'s deliverable kinds disagree: a row \
+         of a kind only one side names is held unsent or sent uncleared"
+    );
+    assert_eq!(
+        spec_list("RENDERABLE_KINDS"),
+        drain,
+        "{SPEC} RENDERABLE_KINDS"
+    );
+    assert_eq!(spec_list("WRITTEN_KINDS"), drain, "{SPEC} WRITTEN_KINDS");
+
+    let held = spec_list("HELD_KINDS_KNOWN");
+    assert_eq!(held, ["friend_watered"], "{SPEC} HELD_KINDS_KNOWN");
+    for kind in &held {
+        assert!(!drain.contains(kind), "{DRAIN} delivers the held `{kind}`");
+        assert!(
+            drain_shipped()
+                .lines()
+                .all(|l| !code_of(l).contains(kind.as_str())),
+            "the shipped part of {DRAIN} names the held `{kind}` outside a comment"
+        );
+    }
+}
+
+/// An unknown kind is refused, not rendered. The catch-all that stood at the
+/// end of `build_message` until 2026-09-26 showed the customer the raw kind
+/// column; the renderer now takes a `DeliverableKind`, matched with no
+/// wildcard, and only `DeliverableKind::of` turns a column into one -- with a
+/// default arm that answers `None`.
+#[test]
+fn an_unknown_kind_has_no_way_into_a_message() {
+    let text = source(DRAIN);
+    let render = body_of(&text, "fn build_message(");
+    assert!(
+        render
+            .iter()
+            .any(|(_, code)| code.trim() == "kind: DeliverableKind,"),
+        "build_message takes something other than a DeliverableKind again"
+    );
+    assert!(
+        render.iter().all(|(_, code)| !code.contains("_ =>")),
+        "build_message has a wildcard arm again: {render:?}"
+    );
+    let shipped = drain_shipped();
+    let wildcards: Vec<&str> = shipped
+        .lines()
+        .map(code_of)
+        .filter(|l| l.contains("_ =>"))
+        .collect();
+    assert_eq!(
+        wildcards,
+        ["            _ => None,"],
+        "the only wildcard arm in the shipped drain must be DeliverableKind::of's refusal"
+    );
+    let calls = sites(&drain_body(), "build_message(");
+    assert_eq!(calls.len(), 1, "the drain renders from {calls:?}");
+    assert!(
+        calls[0].1.contains("build_message(deliverable,"),
+        "{DRAIN}:{} renders something other than the kind the guard accepted: {}",
+        calls[0].0,
+        calls[0].1
+    );
+}
+
+/// The retired garden's message left the bot's locale file with its arm: the
+/// field is gone from the struct and from both constructors, and nothing is
+/// left for a held row to be rendered with.
+#[test]
+fn the_retired_garden_message_is_gone_from_the_locale_file() {
+    let locales = source("src/locales.rs");
+    for needle in ["garden_friend_watered_legacy", "{streak}"] {
+        let hits: Vec<(usize, &str)> = locales
+            .lines()
+            .enumerate()
+            .filter(|(_, l)| code_of(l).contains(needle))
+            .map(|(n, l)| (n + 1, l))
+            .collect();
+        assert!(
+            hits.is_empty(),
+            "src/locales.rs still ships `{needle}` outside a comment: {hits:?}"
+        );
+    }
 }

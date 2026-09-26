@@ -40,7 +40,7 @@ impl CartItem {
     /// Loop #11/15: convert a server-side cart line to the local UI model.
     /// Shared helper so app.rs and cart_screen.rs do not drift.
     pub fn from_server(item: ServerCartItem) -> Option<Self> {
-        let item_type = match item.kind.as_str() {
+        let item_type = match served_kind(&item.kind)? {
             "strain" => CartItemType::Strain,
             "accessory" => CartItemType::Accessory,
             "tea" => CartItemType::Tea,
@@ -77,6 +77,32 @@ impl CartItem {
     pub fn is_priced(&self) -> bool {
         crate::trios::pricing::published_money(self.price).is_some()
     }
+
+    /// Is this line of a kind a cart still serves (2026-09-26)?
+    ///
+    /// Asked of the wire kind the line would be sent back as
+    /// (`cart_item_type_to_kind`), through the one predicate the server's cart
+    /// API and its abandoned-cart reminder ask too. None of the four
+    /// `CartItemType` variants is a rental line, so today no line a saved cart
+    /// can hold is served: they are the previous shop's catalogue.
+    pub fn is_served(&self) -> bool {
+        crate::trios::pricing::cart_kind_is_served(crate::ui::api::http::cart_item_type_to_kind(
+            &self.item_type,
+        ))
+    }
+}
+
+/// `Some(kind)` when a cart may serve a line of this wire kind, `None` when it
+/// may not (2026-09-26).
+///
+/// `from_server` reads its kind through this, so a line of a retired kind is
+/// dropped the way an unreadable one always was: the owner ruled rental only on
+/// 2026-09-24 and, on 2026-09-25 (answer 12), that nothing of the previous
+/// shop may appear anywhere. A cart kept from that shop still holds its lines on
+/// the server, where they stay stored and are not served
+/// (specs/turbobaby/cart_persistence.t27, SERVED_CART_KINDS).
+fn served_kind(kind: &str) -> Option<&str> {
+    crate::trios::pricing::cart_kind_is_served(kind).then_some(kind)
 }
 
 /// Shopping cart
@@ -101,7 +127,19 @@ impl Cart {
         }
     }
 
+    /// Add a line, or add to the line with its id.
+    ///
+    /// A line of a kind a cart does not serve never enters (2026-09-26), the
+    /// same predicate the two other ways in ask (`without_retired_lines` for a
+    /// saved cart, `from_server` for a server one). So no path puts a line of
+    /// the previous shop's catalogue into this cart: not a reorder, not a
+    /// screen nothing mounts. That is why no cart screen needs a neutral name
+    /// for such a line (specs/turbobaby/cart_persistence.t27, the section
+    /// reconciled with the owner's answer 3).
     pub fn add_item(&mut self, item: CartItem) {
+        if !item.is_served() {
+            return;
+        }
         if let Some(existing) = self.items.iter_mut().find(|i| i.id == item.id) {
             existing.quantity = existing.quantity.saturating_add(item.quantity);
         } else {
@@ -118,6 +156,22 @@ impl Cart {
     pub fn clear(&mut self) {
         self.items.clear();
         self.total = Some(0.0);
+    }
+
+    /// This cart without the lines of a retired kind, total recomputed
+    /// (2026-09-26).
+    ///
+    /// Every read of a SAVED cart goes through this: the device's
+    /// localStorage copy at start-up and the Telegram CloudStorage copy
+    /// restored after it (`src/ui/app.rs`). The line is dropped from what the
+    /// screens see, and nothing else is written for it: the persist effect in
+    /// `App` then saves the cart it is shown, so the customer's own device
+    /// storage loses the retired lines on the next save, while the server's
+    /// copy of the same cart keeps its rows untouched.
+    pub fn without_retired_lines(mut self) -> Self {
+        self.items.retain(CartItem::is_served);
+        self.recalculate_total();
+        self
     }
 
     pub fn recalculate_total(&mut self) {

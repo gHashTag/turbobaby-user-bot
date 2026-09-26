@@ -660,8 +660,8 @@ mod tests {
             (evaluating 'wasm.__wasm_bindgen_func_elem_13031(arg0, arg1, \
             addBorrowedObject(arg2))') at \
             https://turbobaby-bot-production.up.railway.app/turbobaby-bot-abc.js:12:34";
-        let stack = "at cart_screen::CartScreen::handler (woody.wasm:1:9999)\n\
-                     at dioxus_core::scope (woody.wasm:1:8888)";
+        let stack = "at cart_screen::CartScreen::handler (turbobaby.wasm:1:9999)\n\
+                     at dioxus_core::scope (turbobaby.wasm:1:8888)";
 
         let alert = compose_crash_alert("/cart", "window.onerror", message, Some(stack));
 

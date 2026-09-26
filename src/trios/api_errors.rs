@@ -281,23 +281,32 @@ pub fn order_cancel_may_send(progress: OrderCancelProgress, since: StatusSinceAn
 /// whose fresh reading shows the order has left pending, where the status label
 /// is the answer and nothing may claim what THIS attempt did.
 ///
-/// Only keys that already exist. While an unknown outcome is checked, the line
-/// says what the screen is doing: reading the status, or failing to. Once a
-/// fresh reading shows the order still pending, the attempt did not land and is
-/// told as what it was. The general mapper is used where its sentence is true
-/// of a cancellation (401, 403, 429, 5xx; a 5xx only after that check). It is
-/// not used for 400, 404, 409 and 422: those sentences speak of a cart, an
-/// item, a duplicate order and a price, and 409 is the one refusal this route
-/// actually makes. A refused cancellation (409) has no published sentence yet;
-/// it is told the general mapper's own fallback until the owner writes one.
+/// Keys that already existed, and one written for this surface. While an
+/// unknown outcome is checked, the line says what the screen is doing: reading
+/// the status, or failing to. Once a fresh reading shows the order still
+/// pending, the attempt did not land and is told as what it was. The general
+/// mapper is used where its sentence is true of a cancellation (401, 403, 429,
+/// 5xx; a 5xx only after that check). It is not used for 400, 404, 409 and 422:
+/// those sentences speak of a cart, an item, a duplicate order and a price, and
+/// 409 is the one refusal this route actually makes (`cancel_order` in
+/// `src/api/orders.rs` answers it when the order has left pending). That
+/// refusal is told `T_ORDER_DETAIL_CANCEL_REFUSED`: the app can no longer
+/// cancel this order, write to the manager. It says nothing about what the shop
+/// is doing with the order, because the same 409 answers an order the shop took,
+/// one it rejected and one already cancelled. Until 2026-09-25 it was told the
+/// general mapper's own fallback, whose "try again later" is false advice for
+/// it; the copy was chosen that day under the owner's delegation, reworded the
+/// same day so that it holds for every 409 (the first wording said the order was
+/// already being handled), and `client_errors.t27` records the decision. Any
+/// other refusal keeps that fallback.
 pub fn order_cancel_line(
     lang: Lang,
     progress: OrderCancelProgress,
     since: StatusSinceAnswer,
 ) -> Option<OrderCancelLine> {
     use super::i18n::{
-        T_CHECKOUT_ERR_NETWORK, T_ORDER_DETAIL_CANCELLED_BY_USER, T_ORDER_DETAIL_NOT_FOUND,
-        T_SUCCESS_STATUS_ERROR, T_SUCCESS_STATUS_LOADING,
+        T_CHECKOUT_ERR_NETWORK, T_ORDER_DETAIL_CANCELLED_BY_USER, T_ORDER_DETAIL_CANCEL_REFUSED,
+        T_ORDER_DETAIL_NOT_FOUND, T_SUCCESS_STATUS_ERROR, T_SUCCESS_STATUS_LOADING,
     };
     let OrderCancelProgress::Answered(answer) = progress else {
         return None;
@@ -329,6 +338,10 @@ pub fn order_cancel_line(
             }
             OrderCancelAnswer::Refused(404) => (
                 t(lang, T_ORDER_DETAIL_NOT_FOUND).to_string(),
+                OrderCancelTone::NotDone,
+            ),
+            OrderCancelAnswer::Refused(409) => (
+                t(lang, T_ORDER_DETAIL_CANCEL_REFUSED).to_string(),
                 OrderCancelTone::NotDone,
             ),
             OrderCancelAnswer::Refused(_) => (
@@ -546,8 +559,8 @@ mod tests {
     // id, no name and no identity (D14).
 
     use crate::trios::i18n::{
-        T_CHECKOUT_ERR_NETWORK, T_ORDER_DETAIL_CANCELLED_BY_USER, T_ORDER_DETAIL_NOT_FOUND,
-        T_SUCCESS_STATUS_ERROR, T_SUCCESS_STATUS_LOADING,
+        T_CHECKOUT_ERR_NETWORK, T_ORDER_DETAIL_CANCELLED_BY_USER, T_ORDER_DETAIL_CANCEL_REFUSED,
+        T_ORDER_DETAIL_NOT_FOUND, T_SUCCESS_STATUS_ERROR, T_SUCCESS_STATUS_LOADING,
     };
 
     const LANGS: [Lang; 2] = [Lang::Russian, Lang::English];
@@ -676,13 +689,70 @@ mod tests {
                 text_of(lang, answered(OrderCancelAnswer::Refused(404)), SINCE[0]),
                 t(lang, T_ORDER_DETAIL_NOT_FOUND)
             );
-            for s in [400u16, 409, 418, 422] {
+            // 409 is not here: it has its own key since 2026-09-25 (below).
+            for s in [400u16, 418, 422] {
                 assert_eq!(
                     text_of(lang, answered(OrderCancelAnswer::Refused(s)), SINCE[0]),
                     t(lang, T_API_ERR_UNKNOWN),
                     "{s}"
                 );
             }
+        }
+    }
+
+    /// The one refusal `cancel_order` makes itself: 409, the order has left
+    /// pending. Until 2026-09-25 it was told the general fallback, whose
+    /// "try again later" is false advice: a repeat meets the same 409 for as
+    /// long as the order stays where the shop moved it. Since then it has a key
+    /// of its own, chosen under the owner's delegation of that day and recorded
+    /// in `client_errors.t27`. The first wording said the order was already
+    /// being handled, which is false when the shop rejected it or an earlier
+    /// attempt cancelled it; the sentence was reworded the same day to speak of
+    /// the app alone, and the last assertions below hold it there.
+    #[test]
+    fn a_refused_cancellation_is_told_its_own_sentence_and_not_the_fallback() {
+        for lang in LANGS {
+            let refused = t(lang, T_ORDER_DETAIL_CANCEL_REFUSED);
+            // A refusal is a known outcome: whatever has been read since, the
+            // line is the same, and it is coloured as not done.
+            for since in SINCE {
+                let line = order_cancel_line(lang, answered(order_cancel_answer(Some(409))), since)
+                    .expect("a refused cancellation is always told");
+                assert_eq!(line.text, refused, "{since:?}");
+                assert_eq!(line.tone, OrderCancelTone::NotDone, "{since:?}");
+            }
+            // The old sentence is gone from this answer, and so is its advice.
+            assert_ne!(refused, t(lang, T_API_ERR_UNKNOWN));
+            // Only 409 gets it: every other status is told something else.
+            for s in (100u16..=599).filter(|&s| s != 409) {
+                assert_ne!(
+                    text_of(lang, answered(order_cancel_answer(Some(s))), SINCE[2]),
+                    refused,
+                    "{s} is told the refused-cancellation sentence"
+                );
+            }
+        }
+        let ru = t(Lang::Russian, T_ORDER_DETAIL_CANCEL_REFUSED);
+        let en = t(Lang::English, T_ORDER_DETAIL_CANCEL_REFUSED);
+        assert_ne!(ru, en, "the sentence is not coming from the table");
+        // No invitation to repeat an attempt that meets the same refusal.
+        assert!(!ru.contains("позже"), "{ru}");
+        assert!(!en.contains("later"), "{en}");
+        // The next step it names is a person, and it is named in both locales.
+        assert!(ru.contains("менеджер"), "{ru}");
+        assert!(en.contains("manager"), "{en}");
+        // It says what the app can no longer do, which is true of every 409.
+        assert!(ru.contains("в приложении уже нельзя"), "{ru}");
+        assert!(en.contains("can no longer be cancelled in the app"), "{en}");
+        // And nothing about what the shop is doing with the order: the same 409
+        // answers an order the shop took, one it rejected and one already
+        // cancelled, so a claim that the order is being handled is false for
+        // two of the three (the first wording of 2026-09-25 made it).
+        for claim in ["в работе", "обрабат", "выполня"] {
+            assert!(!ru.contains(claim), "{ru} claims the order is {claim}");
+        }
+        for claim in ["being handled", "in progress", "processing", "accepted"] {
+            assert!(!en.contains(claim), "{en} claims the order is {claim}");
         }
     }
 

@@ -12,7 +12,7 @@ port = 8080
 open = false
 
 [[proxy]]
-backend = "https://woody-weed-bot-production-370f.up.railway.app/api/"
+backend = "https://turbobaby-bot-production.up.railway.app/api/"
 rewrite = "/api/"
 
 [tools]

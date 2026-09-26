@@ -411,8 +411,10 @@ fn the_contracts_money_sites_land_on_their_code() {
             &["MONEY_WITHHELD_UNUSABLE: &str = \"stored_value_not_finite_non_negative\";"],
         ),
         (
+            // `Order::for_customer` runs `Order::from` first (owner, 2026-09-25,
+            // answer 3; `tests/legacy_view_wiring.rs` holds it to that).
             "ORDER_ENDPOINTS_SERIALISE_THROUGH_ONE_CONVERSION",
-            &["Order::from(model)", "map(Order::from)"],
+            &["Order::for_customer(model)", "map(Order::for_customer)"],
         ),
         (
             "ADMIN_ENDPOINTS_SERIALISE_THROUGH_THE_SAME_CONVERSION",

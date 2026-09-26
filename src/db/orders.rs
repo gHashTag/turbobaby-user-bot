@@ -1865,7 +1865,7 @@ mod tests {
     fn test_order_item_serde_roundtrip() {
         let item = OrderItem {
             strain_id: Some("s1".into()),
-            strain_name: Some("Indica".into()),
+            strain_name: Some("Legacy line".into()),
             accessory_id: None,
             accessory_name: None,
             tea_id: None,
@@ -2081,7 +2081,7 @@ mod tests {
         // None, not a parse error.
         let legacy = serde_json::json!({
             "strain_id": "s1",
-            "strain_name": "Indica",
+            "strain_name": "Legacy line",
             "quantity": 2.5,
             "is_set": false
         });
@@ -2213,5 +2213,120 @@ mod tests {
             .expect("the order serialises");
         let money: OrderMoney = serde_json::from_value(wire).expect("the client reads the order");
         assert_eq!(order_money_text(&money, dash).total, format_baht(0.0));
+    }
+
+    /// The cart serves exactly the deal the checkout admits (2026-09-26).
+    ///
+    /// `trios::pricing::SERVED_CART_KINDS` is not a list of its own: it is the
+    /// wire tag of `BikeDeal::BikeRental`, the one deal a new order line may
+    /// carry since the rental-only ruling of 2026-09-24 (a `bike_sale` line is
+    /// refused by `validate_bike_lines`, #63). If the enum's tag moved, a cart
+    /// row of the rental kind would stop being served while the checkout still
+    /// took the line, so the two are held together here.
+    #[test]
+    fn the_cart_serves_the_tag_of_the_only_deal_the_checkout_admits() {
+        use crate::trios::pricing::{cart_kind_is_served, SERVED_CART_KINDS};
+        let rental = serde_json::to_value(BikeDeal::BikeRental {
+            rental_start: d(2026, 9, 26),
+            rental_end: d(2026, 9, 27),
+            rate_thb_day: None,
+            deposit: None,
+        })
+        .expect("a rental deal serialises");
+        let sale = serde_json::to_value(BikeDeal::BikeSale { price_thb: None })
+            .expect("a sale deal serialises");
+        let rental_kind = rental["kind"].as_str().expect("the rental deal is tagged");
+        let sale_kind = sale["kind"].as_str().expect("the sale deal is tagged");
+
+        assert_eq!(SERVED_CART_KINDS, [rental_kind]);
+        assert!(cart_kind_is_served(rental_kind));
+        assert!(!cart_kind_is_served(sale_kind));
+    }
+}
+
+// Owner, 2026-09-25, answer 3: stored content of the previous shop is kept out
+// of customers' sight, and nothing stored is rewritten. Kept at the end of the
+// file so that no line the contracts cite above moves.
+impl Order {
+    /// The order as the customer who placed it is served it: every stored line
+    /// through `crate::trios::legacy_view::customer_order_items` and the shop
+    /// through `customer_shop_id`, beside the same money conversion as
+    /// [`From`]. Only the two customer reads use it -- `get_user_orders` and
+    /// `get_order_details` in `src/api/orders.rs`; the admin reads keep
+    /// [`From`] and see the row whole.
+    pub(crate) fn for_customer(m: crate::db::entities::order::Model) -> Self {
+        let mut order = Self::from(m);
+        order.items = crate::trios::legacy_view::customer_order_items(&order.items);
+        order.shop_id = crate::trios::legacy_view::customer_shop_id(order.shop_id.take());
+        order
+    }
+}
+
+#[cfg(test)]
+mod customer_view_tests {
+    use super::Order;
+
+    fn stored(
+        items: serde_json::Value,
+        shop_id: Option<&str>,
+    ) -> crate::db::entities::order::Model {
+        crate::db::entities::order::Model {
+            id: "ord-answer-3".into(),
+            telegram_id: Some(1),
+            customer_name: None,
+            customer_phone: None,
+            customer_telegram: None,
+            items,
+            subtotal: 700.0,
+            bonus_used: 0.0,
+            stars_used: 0,
+            total: 700.0,
+            status: "delivered".into(),
+            shop_id: shop_id.map(str::to_string),
+            delivery_address: None,
+            delivery_notes: None,
+            age_confirmed: true,
+            delivery_zone_id: None,
+            created_at: chrono::DateTime::parse_from_rfc3339("2026-06-01T00:00:00+07:00")
+                .expect("fixed timestamp parses"),
+        }
+    }
+
+    /// The customer's two reads mask what the admin reads keep: the stored
+    /// line's name and id and the previous shop's name. Figures are untouched.
+    #[test]
+    fn the_customer_is_served_the_neutral_line_and_the_admin_the_row() {
+        let items = serde_json::json!([
+            { "accessory_id": "stored-id", "accessory_name": "Stored name", "quantity": 2.0, "unit_price": 350.0 },
+        ]);
+        let row = stored(items.clone(), Some("\u{1f3e0} Woody Phangan"));
+
+        let customer = Order::for_customer(row.clone());
+        let neutral = crate::trios::legacy_view::previous_catalogue_name(
+            crate::trios::legacy_view::SERVED_NAME_LANG,
+        );
+        assert_eq!(
+            customer.items,
+            serde_json::json!([{ "strain_name": neutral, "quantity": 2.0, "unit_price": 350.0 }])
+        );
+        // Withheld as the empty shop, which the screens print as no shop label
+        // at all (operator, 2026-09-26), never as this shop's fallback.
+        assert_eq!(
+            customer.shop_id.as_deref(),
+            Some(crate::trios::legacy_view::WITHHELD_SHOP)
+        );
+        assert_eq!(customer.total, Some(700.0));
+        assert_eq!(customer.subtotal, Some(700.0));
+
+        let admin = Order::from(row);
+        assert_eq!(admin.items, items);
+        assert_eq!(admin.shop_id.as_deref(), Some("\u{1f3e0} Woody Phangan"));
+    }
+
+    #[test]
+    fn this_shops_orders_keep_their_shop() {
+        let customer = Order::for_customer(stored(serde_json::json!([]), Some("TurboBaby")));
+        assert_eq!(customer.shop_id.as_deref(), Some("TurboBaby"));
+        assert_eq!(customer.items, serde_json::json!([]));
     }
 }

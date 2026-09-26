@@ -98,7 +98,7 @@ fi
 # Информация о запущенных сервисах
 echo ""
 echo -e "${GREEN}═══════════════════════════════════════════════════${NC}"
-echo -e "${GREEN}🌿 Woody Weed Bot запущен!${NC}"
+echo -e "${GREEN}🏍 TurboBaby запущен!${NC}"
 echo ""
 echo -e "  🎨 Фронтенд: ${BLUE}http://localhost:8080${NC}"
 echo -e "  📊 API (Backend): ${BLUE}http://localhost:3000${NC}"

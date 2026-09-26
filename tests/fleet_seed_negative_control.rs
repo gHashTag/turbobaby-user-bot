@@ -14,6 +14,15 @@
 //! 3. on a copy with exactly one published figure changed -- the nmax-155 day rate,
 //!    449 -> 450 -- where it must exit 1 and name that field.
 //!
+//! Added 2026-09-25 with the gate's redirect check (the owner's decision that
+//! NMAX 155 alone is offered instead of CLICK 125, for now), two more plants:
+//!
+//! 4. the CLICK 125 redirect put back to the list it held until that date,
+//!    `["pcx-150", "adv-150", "nmax-155"]`, where it must exit 1 and name both
+//!    price-list-only keys;
+//! 5. the redirect's source pointed at a `sources` entry that does not exist,
+//!    where it must exit 1 and say the decision has no dated source.
+//!
 //! The copies live under `CARGO_TARGET_TMPDIR`, a build-output directory cargo
 //! gives integration tests, under fixed names that each run overwrites. Nothing
 //! outside `target/` is written and nothing is deleted.
@@ -33,6 +42,14 @@ const NMAX_MONEY_LINE: &str =
     r#""base_rate_thb_day": 449, "deposit_thb": 3000, "monthly_low_season_thb": 5000,"#;
 const NMAX_MONEY_LINE_PLANTED: &str =
     r#""base_rate_thb_day": 450, "deposit_thb": 3000, "monthly_low_season_thb": 5000,"#;
+
+/// The CLICK 125 redirect as the owner decided it on 2026-09-25, the list it
+/// replaced, and the name of the dated source the decision rests on. Each is
+/// asserted to occur exactly once before a plant replaces it.
+const REDIRECT_DECIDED: &str = r#""offer_instead": ["nmax-155"],"#;
+const REDIRECT_BEFORE_2026_09_25: &str = r#""offer_instead": ["pcx-150", "adv-150", "nmax-155"],"#;
+const REDIRECT_SOURCE: &str = r#""offer_instead_source": "owner_decision_2026_09_25","#;
+const REDIRECT_SOURCE_PLANTED: &str = r#""offer_instead_source": "owner_decision_nowhere","#;
 
 /// The fleet the tracked seed describes, as the gate prints it under `-v`. Written
 /// out rather than matched loosely: a gate that parsed fewer rows would still say
@@ -152,5 +169,63 @@ fn one_changed_published_figure_turns_the_gate_red() {
     assert!(
         text.contains("nmax-155.base_rate_thb_day"),
         "the gate went red without naming the field that was changed:\n{text}"
+    );
+}
+
+/// Replace exactly one occurrence of `from` in a copy of the tracked seed and run
+/// the gate on that copy.
+fn run_on_planted_copy(from: &str, to: &str, name: &str) -> Output {
+    let seed = tracked_seed();
+    assert_eq!(
+        seed.matches(from).count(),
+        1,
+        "{from} is not where this control expects it; re-aim the plant rather than \
+         let it land somewhere else or on nothing"
+    );
+    let planted = seed.replacen(from, to, 1);
+    assert_ne!(planted, seed, "the plant changed nothing");
+    let copy = scratch(name);
+    fs::write(&copy, planted).expect("write the planted copy");
+    run_seed_gate(&["--seed", copy.to_str().expect("utf-8 scratch path")])
+}
+
+#[test]
+fn a_redirect_to_a_machine_the_fleet_does_not_hold_turns_the_gate_red() {
+    let output = run_on_planted_copy(
+        REDIRECT_DECIDED,
+        REDIRECT_BEFORE_2026_09_25,
+        "planted_click_redirect.json",
+    );
+    let text = both_streams(&output);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "a CLICK 125 redirect naming price-list-only families was not reported \
+         (exit 1):\n{text}"
+    );
+    for key in ["pcx-150", "adv-150"] {
+        assert!(
+            text.contains(&format!("click-125.offer_instead: {key}")),
+            "the gate went red without naming {key}:\n{text}"
+        );
+    }
+}
+
+#[test]
+fn a_redirect_without_a_dated_source_turns_the_gate_red() {
+    let output = run_on_planted_copy(
+        REDIRECT_SOURCE,
+        REDIRECT_SOURCE_PLANTED,
+        "planted_redirect_source.json",
+    );
+    let text = both_streams(&output);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "a redirect whose source names no dated entry was not reported (exit 1):\n{text}"
+    );
+    assert!(
+        text.contains("owner_decision_nowhere") && text.contains("dated source"),
+        "the gate went red without naming the missing dated source:\n{text}"
     );
 }

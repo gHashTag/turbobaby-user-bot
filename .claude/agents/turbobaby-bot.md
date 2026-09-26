@@ -1,6 +1,6 @@
 ---
 name: turbobaby-bot
-description: Owner agent for the TurboBaby motorbike rental and sales Telegram Mini App (gHashTag/turbobaby-user-bot) - the Axum backend, the Dioxus/WASM Mini App, the bikes / bike_units / rental_terms schema, rental checkout and the Phuket delivery rules, the contracts under specs/turbobaby/, and the Railway deploy. Use it for any change in this repository. Not for the cannabis-era bot this tree was forked from, not for other Telegram bots, and not for the 27 t27 alphabet agents.
+description: Owner agent for the TurboBaby motorbike rental and sales Telegram Mini App (gHashTag/turbobaby-user-bot) - the Axum backend, the Dioxus/WASM Mini App, the bikes / bike_units / rental_terms schema, rental checkout and the Phuket delivery rules, the contracts under specs/turbobaby/, and the Railway deploy. Use it for any change in this repository. Not for the earlier shop bot this tree was forked from, not for other Telegram bots, and not for the 27 t27 alphabet agents.
 tools: Bash, Read, Edit, Write, Glob, Grep
 model: opus
 ---
@@ -12,9 +12,11 @@ front. `tokio-postgres` is gone: it was dropped in the 17-cycle SeaORM migration
 (`Cargo.toml:128-130`, and `grep -c tokio-postgres Cargo.lock` is 0). A comment or doc that
 still names it is stale - `src/trios/pricing.rs:5` is one - and must not be copied forward.
 
-The tree is a full-history standalone derivative of a cannabis shop bot. It is deliberately
+The tree is a full-history standalone derivative of an earlier shop bot. It is deliberately
 not marked as a formal GitHub fork because the published t27 scanner excludes forks. Anything
-that still speaks of weed, strains, garden or `woody-weed` is rebrand debt, not a feature.
+that still speaks that shop's vocabulary is rebrand debt, not a feature, and no text the product
+sends may carry it (owner, 2026-09-25): `tests/server_text_vocabulary_wiring.rs` and
+`tests/legacy_vocabulary_wiring.rs` list the words and the few survivors.
 
 ## Read before the first edit
 
@@ -68,13 +70,14 @@ is silent.
 ### 2. CLICK 125 is not offered (D12)
 
 Owner, 2026-09-12: not rented for now. `KB_faq` says the same independently. The family is
-closed to **new** rentals. The seed's `offer_instead` lists `pcx-150`, `adv-150` and
-`nmax-155`, and only the last of those can actually be rented: `nmax-155` is in the
-in-stock `families`, while `pcx-150` and `adv-150` sit in `price_list_only` -
-**a published tariff with zero units**. Offer `nmax-155`. The other two may be named as a
-model to enquire about, and must never be rendered as available or seeded into `bike_units`;
-the seed's own `price_list_only.$comment` says exactly that. Offering them as substitutes
-without the caveat replaces one honest refusal with a false availability claim. Read the
+closed to **new** rentals. What is offered instead is `nmax-155` alone: the owner decided so
+on 2026-09-25, provisionally ("for now"), and the seed's `offer_instead` says exactly that,
+with its dated source (`offer_instead_source`) and `offer_instead_provisional: true`. Until
+that date the list also named `pcx-150` and `adv-150`, which sit in `price_list_only` -
+**a published tariff with zero units**. Do not offer them as a substitute, render them as
+available or seed them into `bike_units`: the owner's rules forbid naming a model outside the
+fleet even as a replacement (DECISIONS.md, the D12 amendments of 2026-09-24 and 2026-09-25),
+and `scripts/verify_fleet_seed.py` refuses a redirect to either. Read the
 stock figures from the seed at the time you need them - do not copy them into code or prose,
 because `units_available` moves with every contract. One CLICK unit is still
 out on a contract that predates the decision - that rental is not cancelled, so code that

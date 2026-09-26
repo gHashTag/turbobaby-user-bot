@@ -1917,8 +1917,8 @@ mod touch_target_tests {
         // The surrounding card also supports swipe/arrow navigation.
         "width:8px;height:8px;border-radius:50%;border:none;background:#39ff14;cursor:pointer;",
         "width:8px;height:8px;border-radius:50%;border:none;background:#2a2a4a;cursor:pointer;",
-        // Checkout age-gate / terms checkbox styled with accent-color; native
-        // checkbox hit area is supplied by the browser and spacing from label.
+        // The checkout 20+ checkbox's style; no screen renders it since 2026-09-25 (the
+        // box is removed for now) and the entry is kept for its return.
         "width:20px;height:20px;margin-top:2px;cursor:pointer;accent-color:#39ff14;",
     ];
 

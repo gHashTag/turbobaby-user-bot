@@ -419,9 +419,9 @@ fn class_badge_style(class: &str) -> String {
 /// `availability.t27` declares `FILE_MAY_CONFIRM = false`: a file snapshot may
 /// rule a family out but never confirm it. The owner's rule is the same —
 /// do not promise without checking occupancy. So no count reaches the line;
-/// the admin screen keeps its own. A zero count still rules a family out
-/// elsewhere (the detail's "all taken" line, `BookBlock::NoUnitsFree`), which
-/// the contract allows (`FILE_MAY_RULE_OUT = true`).
+/// the admin screen keeps its own. A zero count still rules a family out in
+/// the Book control's reason (`BookBlock::NoUnitsFree`; the detail's "all
+/// taken" line went on 2026-09-25), as `FILE_MAY_RULE_OUT = true` allows.
 pub fn availability_line(lang: Lang) -> String {
     t(lang, T_BIKE_AVAILABILITY_UNKNOWN).to_string()
 }

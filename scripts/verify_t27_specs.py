@@ -24,7 +24,17 @@ CANONICAL_ROOT = REPO_ROOT / "specs" / "turbobaby"
 AGENT_CARD = "specs/agents/turbobaby.t27"
 
 # To add a contract: add one entry after measuring its parse declaration floor and its
-# test/invariant/bench floor with the pinned compiler. Discovery supplies the tripwire. All 45 floors equal the measured counts as of 2026-09-24.
+# test/invariant/bench floor with the pinned compiler. Discovery supplies the tripwire. All 45 floors equal the measured counts as of 2026-09-25.
+# Re-measured 2026-09-25 for the two contracts the owner's CLICK 125 redirect decision changed:
+# availability 114 -> 120 declarations and 32 -> 34 checks, order_money 114 -> 115 declarations.
+# Re-measured 2026-09-25 again for the two contracts answer 5 of the owner's second list changed
+# (the detail's all-taken line and its key removed): availability 120 -> 132 declarations and
+# 34 -> 36 checks, locale_policy 136 -> 138 declarations. Merged 2026-09-26 on top of the /start
+# catalog line's 129/35, availability measures 141/37.
+# Re-measured 2026-09-26 for the kept-cart change (retired kinds stored, never served):
+# cart_persistence 213 -> 266 declarations and 43 -> 52 checks.
+# Re-measured 2026-09-26 for the two contracts the notification queue's held kinds changed:
+# notification_queue 270 -> 306 declarations and 52 -> 54 checks, locale_policy 136 -> 139 and 35 -> 36.
 SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     AGENT_CARD: {
         "module": "turbobaby-agent",
@@ -47,8 +57,11 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/availability.t27": {
         "module": "availability",
         "id": "turbobaby/availability",
-        "min_declarations": 114,
-        "min_checks": 32,
+        # Raised 2026-09-25 from 120/34 to the measured count when the bot's /start catalog
+        # line lost CLICK 125 (8 declarations and 1 test), and again when answer 5 of the
+        # owner's second list removed the detail's all-taken line (12 declarations and 2 tests).
+        "min_declarations": 141,
+        "min_checks": 37,
     },
     "specs/turbobaby/bike_catalog.t27": {
         "module": "bike-catalog",
@@ -59,14 +72,16 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/bot_surface.t27": {
         "module": "turbobaby-bot-surface",
         "id": "turbobaby/bot-surface",
-        "min_declarations": 232,
-        "min_checks": 56,
+        "min_declarations": 251,
+        "min_checks": 59,
     },
     "specs/turbobaby/cart_persistence.t27": {
         "module": "turbobaby-cart-persistence",
         "id": "turbobaby/cart-persistence",
-        "min_declarations": 213,
-        "min_checks": 43,
+        # 266/52 with the kept-cart change of 2026-09-26; 276/54 once that change was
+        # reconciled the same day with the owner's answer 3 (one rule for a kept cart).
+        "min_declarations": 276,
+        "min_checks": 54,
     },
     "specs/turbobaby/catalog_api.t27": {
         "module": "catalog-api",
@@ -83,13 +98,21 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/checkout_contact.t27": {
         "module": "turbobaby-checkout-contact",
         "id": "turbobaby/checkout-contact",
-        "min_declarations": 210,
-        "min_checks": 62,
+        # Raised 2026-09-25 from 210/62 to the measured count when the owner removed the 20+ box
+        # for now (second list, answer 1): the age blocker's record and the counts before that day.
+        # 245 with the two constants gate 3 binds the removal by, the same day.
+        "min_declarations": 245,
+        "min_checks": 68,
     },
     "specs/turbobaby/client_errors.t27": {
         "module": "turbobaby-client-errors",
         "id": "turbobaby/client-errors",
-        "min_declarations": 239,
+        # Raised 2026-09-25 from 239 to the measured count when owner question D's sentence
+        # landed by delegation (9 declarations; the checks were renamed, not added). Raised
+        # again the same day from 248 to 253 when the sentence was reworded to hold for every
+        # 409 (5 declarations; no check added). 249 on its own branch the same day: the retired
+        # age body code's count before that day (the 20+ box, removed); merged 2026-09-26, 254.
+        "min_declarations": 254,
         "min_checks": 58,
     },
     "specs/turbobaby/commerce.t27": {
@@ -101,14 +124,16 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/customer_surface.t27": {
         "module": "turbobaby-customer-surface",
         "id": "turbobaby/customer-surface",
-        "min_declarations": 190,
+        "min_declarations": 191,
         "min_checks": 44,
     },
     "specs/turbobaby/deeplink.t27": {
         "module": "turbobaby-deeplink",
         "id": "turbobaby/deeplink",
-        "min_declarations": 165,
-        "min_checks": 45,
+        # Raised 2026-09-25 from 165/45 to the measured count when the owner's answer 7 added
+        # the seven legacy paths to the compatibility set.
+        "min_declarations": 170,
+        "min_checks": 46,
     },
     "specs/turbobaby/delivery_terms.t27": {
         "module": "turbobaby-delivery-terms",
@@ -133,7 +158,7 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/game_score.t27": {
         "module": "turbobaby-game-score",
         "id": "turbobaby/game-score",
-        "min_declarations": 121,
+        "min_declarations": 123,
         "min_checks": 34,
     },
     "specs/turbobaby/happy_hour.t27": {
@@ -151,14 +176,33 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/legacy_retirement.t27": {
         "module": "turbobaby-legacy-retirement",
         "id": "turbobaby/legacy-retirement",
-        "min_declarations": 165,
-        "min_checks": 44,
+        # Raised 2026-09-25 from 165/44 to the measured count when the owner's answer 7 on the
+        # eight legacy paths was recorded (200/49) and, with it, both halves of ruling #12
+        # (client 190/48 and server 194/48 on their own); the three together measure 254/57.
+        # 266/59 the same day, with the owner's answer on the 20+ age gate (second list, answer 1).
+        # Raised the same day to 277/59 on its own branch when the owner's answer 3 (stored
+        # content out of customers' sight) was recorded; merged 2026-09-26, the measured 289/61.
+        # 299/63 once answer 3 was reconciled the same day with the kept-cart and held-kind
+        # changes (its cart path gave way to the kept-cart rule; two left reads closed).
+        "min_declarations": 299,
+        "min_checks": 63,
     },
     "specs/turbobaby/locale_policy.t27": {
         "module": "turbobaby-locale-policy",
         "id": "turbobaby/locale-policy",
-        "min_declarations": 127,
-        "min_checks": 34,
+        # 131 on the client half of ruling #12 alone and 130/35 on its server half alone; the
+        # same day's cancel key (+1) and the deletion (-14) were reconciled in one count, with
+        # two declarations naming the +1; the three together measure 136/35. Answer 5 of the
+        # owner's second list that day deleted one more key, named by two declarations: 138/35.
+        # 138/35 on its own branch too, with the five keys the removed 20+ box used (-5, two
+        # declarations naming them); merged 2026-09-26 on the integration branch, 140/35.
+        # Answer 3's key added one declaration naming its recorder (137/35 on its own branch);
+        # merged 2026-09-26, 141/35.
+        # Raised 2026-09-26 to 139/36 on its own branch: the struct surface re-counted after the
+        # queue's held kinds took the retired garden message's field (two declarations and one
+        # test); merged 2026-09-26 on the integration branch, 144/36.
+        "min_declarations": 144,
+        "min_checks": 36,
     },
     "specs/turbobaby/loyalty_ledger.t27": {
         "module": "turbobaby-loyalty-ledger",
@@ -175,8 +219,9 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/notification_queue.t27": {
         "module": "turbobaby-notification-queue",
         "id": "turbobaby/notification-queue",
-        "min_declarations": 270,
-        "min_checks": 52,
+        # Raised 2026-09-26 from 270/52 to the measured count when the held kinds were recorded.
+        "min_declarations": 306,
+        "min_checks": 54,
     },
     "specs/turbobaby/observability.t27": {
         "module": "turbobaby-observability",
@@ -187,14 +232,17 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/order_money.t27": {
         "module": "turbobaby-order-money",
         "id": "turbobaby/order-money",
-        "min_declarations": 114,
+        "min_declarations": 115,
         "min_checks": 37,
     },
     "specs/turbobaby/order_presentation.t27": {
         "module": "turbobaby-order-presentation",
         "id": "turbobaby/order-presentation",
-        "min_declarations": 570,
-        "min_checks": 73,
+        # Raised 2026-09-25 from 570/73 when the owner's answer 3 gave a line of the old
+        # catalogue its neutral name and withheld the previous shop's name. Raised 2026-09-26
+        # to 606/77 when the operator decided such an order shows no shop label at all.
+        "min_declarations": 606,
+        "min_checks": 77,
     },
     "specs/turbobaby/order_status.t27": {
         "module": "turbobaby-order-status",
@@ -217,8 +265,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/promo_broadcast.t27": {
         "module": "turbobaby-promo-broadcast",
         "id": "turbobaby/promo-broadcast",
-        "min_declarations": 176,
-        "min_checks": 54,
+        "min_declarations": 205,
+        "min_checks": 62,
     },
     "specs/turbobaby/publication.t27": {
         "module": "turbobaby-publish-proof",

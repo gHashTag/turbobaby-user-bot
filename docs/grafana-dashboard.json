@@ -5,7 +5,7 @@
   "graphTooltip": 1,
   "id": null,
   "uid": "turbobaby-bot",
-  "title": "Woody Weed Bot — Golden Signals",
+  "title": "TurboBaby — Golden Signals",
   "tags": ["turbobaby-bot", "rust", "axum"],
   "timezone": "browser",
   "schemaVersion": 39,
