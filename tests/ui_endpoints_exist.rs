@@ -212,3 +212,50 @@ fn no_screen_fetches_a_route_the_server_does_not_serve() {
         orphans.join("\n")
     );
 }
+
+// ------------------------------------------------ reads the owner closed
+
+/// Reads the owner closed to everyone but an admin: the loyalty leaderboard
+/// (R1, 2026-09-26, «Только для админа») and the referral top list's address
+/// (2026-09-26, «Убрать топ и закрыть адрес»). Both stay registered, so the
+/// orphan check above passes whoever fetches them.
+const ADMIN_ONLY_READS: [&str; 2] = ["/api/loyalty/leaderboard", "/api/referrals/leaderboard"];
+
+/// The one screen that proves an admin (`X-Admin-Token`, initData).
+const ADMIN_SCREEN: &str = "src/ui/screens/admin_screen.rs";
+
+/// A customer screen that fetches an admin-only read fails the way the strain
+/// of the day did, one status code over: a 401 instead of the SPA's HTML, a
+/// list that stays empty, nothing loud. The referral page fetched the second
+/// read until 2026-09-26, when the owner had the list taken off it; this keeps
+/// it off, and keeps every other screen from picking either read up.
+#[test]
+fn an_admin_only_read_is_fetched_by_the_admin_screen_alone() {
+    let routes = server_routes();
+    for path in ADMIN_ONLY_READS {
+        assert!(
+            routes.contains(path),
+            "{path} is no longer registered -- closed, not removed"
+        );
+    }
+    let sites = ui_call_sites();
+    let mut offences: Vec<String> = sites
+        .iter()
+        .filter(|s| ADMIN_ONLY_READS.contains(&s.path.as_str()) && s.file != ADMIN_SCREEN)
+        .map(|s| format!("  {}:{} fetches {}", s.file, s.line, s.path))
+        .collect();
+    offences.sort();
+    assert!(
+        offences.is_empty(),
+        "{} call site(s) outside {ADMIN_SCREEN} fetch a read only an admin is answered:\n{}",
+        offences.len(),
+        offences.join("\n")
+    );
+    // The scan can see such a fetch: the admin screen still makes R1's.
+    assert!(
+        sites
+            .iter()
+            .any(|s| s.file == ADMIN_SCREEN && s.path == "/api/loyalty/leaderboard"),
+        "the admin screen's leaderboard fetch is missing from the scan"
+    );
+}

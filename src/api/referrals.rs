@@ -7,7 +7,7 @@ use axum::{
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use crate::api::auth::{check_not_blocked, validate_telegram_id_param};
+use crate::api::auth::{check_admin, check_not_blocked, validate_telegram_id_param};
 use crate::db::referrals::{
     get_invitees, get_or_create_referral_code, get_referral_milestones, get_referrer_stats,
     get_top_referrers,
@@ -210,10 +210,20 @@ fn validate_leaderboard_query(params: &LeaderboardQuery) -> Result<(&str, i64), 
 }
 
 /// GET /api/referrals/leaderboard?period=weekly|monthly|all&limit=10
+///
+/// The top referrers, each row with its Telegram id and the point total frozen
+/// before R3. The owner, of the top list the invite screen printed from it
+/// (2026-09-26, verbatim): «Убрать топ и закрыть адрес». An admin only, exactly
+/// like `/api/loyalty/leaderboard` (R1): anyone else gets `check_admin`'s 401
+/// (429 once the admin limiter trips), before the query string is read, so a
+/// malformed query is refused the same way; the admin's answer is unchanged.
 async fn get_leaderboard(
+    headers: HeaderMap,
     State(state): State<AppState>,
-    Query(params): Query<LeaderboardQuery>,
+    query: Result<Query<LeaderboardQuery>, axum::extract::rejection::QueryRejection>,
 ) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
+    let Query(params) = query.map_err(|_| StatusCode::BAD_REQUEST)?;
     let (period, limit) = validate_leaderboard_query(&params)?;
 
     let top = get_top_referrers(&state.db.orm, period, limit)

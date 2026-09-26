@@ -198,3 +198,184 @@ async fn r2_the_closed_reads_answer_like_a_missing_route_and_serve_an_admin() {
     .await;
     assert_eq!(write.status, StatusCode::UNAUTHORIZED);
 }
+
+/// One request with the headers given, answered as [`Answer`]; the body is kept
+/// as bytes too, so two answers can be compared byte for byte.
+async fn get_with(
+    app: &axum::Router,
+    uri: &str,
+    from: &str,
+    headers: &[(&str, String)],
+) -> (Answer, Vec<u8>) {
+    let mut req = Request::builder()
+        .method(Method::GET)
+        .uri(uri)
+        .header("X-Forwarded-For", from);
+    for (name, value) in headers {
+        req = req.header(*name, value.as_str());
+    }
+    let resp = app
+        .clone()
+        .oneshot(req.body(Body::empty()).expect("request"))
+        .await
+        .expect("response");
+    let status = resp.status();
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string);
+    let bytes = axum::body::to_bytes(resp.into_body(), 1 << 20)
+        .await
+        .expect("body")
+        .to_vec();
+    let body = if bytes.is_empty() {
+        Value::Null
+    } else {
+        serde_json::from_slice(&bytes).unwrap_or(Value::Null)
+    };
+    (
+        Answer {
+            status,
+            content_type,
+            body,
+        },
+        bytes,
+    )
+}
+
+/// The owner's answer of 2026-09-26 on the referral top list, verbatim: «Убрать
+/// топ и закрыть адрес». `GET /api/referrals/leaderboard` answers an admin only,
+/// and a caller without admin proof gets exactly what R1's
+/// `GET /api/loyalty/leaderboard` gives him: the same status, content type and
+/// bytes, whatever query string he sends, and the same 429 once the shared
+/// admin limiter trips for his address.
+#[tokio::test]
+#[ignore]
+async fn the_referral_leaderboard_answers_an_admin_only_like_r1() {
+    let Some((app, db)) = make_app_with_db().await else {
+        eprintln!("DATABASE_URL unset — skipping");
+        return;
+    };
+    // One referrer with five confirmed friends, so the answer has a row to
+    // withhold from a customer and to serve an admin.
+    let referrer: i64 = 8_000_000_000_000 + (uuid::Uuid::new_v4().as_u128() % 1_000_000_000) as i64;
+    for friend in 1..=5_i64 {
+        db.orm
+            .execute(Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                "INSERT INTO referral_events (referrer_id, referred_id, code, status, source) \
+                 VALUES ($1, $2, 'R6TOP', 'confirmed', 'test')",
+                [referrer.into(), (referrer + friend).into()],
+            ))
+            .await
+            .expect("an edge");
+    }
+    let token = turbobaby_bot::api::auth::generate_admin_token("test_password", BOT_TOKEN);
+    let customer = common::make_init_data(7_000_001, BOT_TOKEN);
+    let admin_init = common::make_init_data(42, BOT_TOKEN);
+
+    // Without admin proof: nothing, a customer's valid initData, a bad token.
+    let refusals: [(&str, Vec<(&str, String)>); 3] = [
+        ("nothing", vec![]),
+        (
+            "a customer's initData",
+            vec![("X-Telegram-Init-Data", customer.clone())],
+        ),
+        ("a wrong token", vec![("X-Admin-Token", "0".repeat(64))]),
+    ];
+    for (n, (who, headers)) in refusals.iter().enumerate() {
+        let (r1, r1_bytes) = get_with(
+            &app,
+            "/api/loyalty/leaderboard",
+            &format!("10.64.{n}.1"),
+            headers,
+        )
+        .await;
+        assert_eq!(r1.status, StatusCode::UNAUTHORIZED, "R1, {who}");
+        for (m, query) in [
+            "",
+            "?limit=10",
+            "?period=weekly&limit=5",
+            "?limit=abc",
+            "?period=bogus",
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let (shut, shut_bytes) = get_with(
+                &app,
+                &format!("/api/referrals/leaderboard{query}"),
+                &format!("10.64.{n}.{}", m + 2),
+                headers,
+            )
+            .await;
+            assert_eq!(shut.status, r1.status, "{who}, `{query}`: {}", shut.body);
+            assert_eq!(shut.content_type, r1.content_type, "{who}, `{query}`");
+            assert_eq!(shut_bytes, r1_bytes, "{who}, `{query}`");
+            assert!(
+                !String::from_utf8_lossy(&shut_bytes).contains(&referrer.to_string()),
+                "{who}, `{query}`: a customer was served the referrer's id"
+            );
+        }
+    }
+
+    // The admin, by password or by initData, is served as before.
+    for (n, (who, headers)) in [
+        ("the password", vec![("X-Admin-Token", token.clone())]),
+        (
+            "an admin's initData",
+            vec![("X-Telegram-Init-Data", admin_init.clone())],
+        ),
+    ]
+    .iter()
+    .enumerate()
+    {
+        let (served, _) = get_with(
+            &app,
+            "/api/referrals/leaderboard?limit=50",
+            &format!("10.65.{n}.1"),
+            headers,
+        )
+        .await;
+        assert_eq!(served.status, StatusCode::OK, "{who}: {}", served.body);
+        assert_eq!(served.body["period"], "all", "{who}");
+        let row = served.body["leaderboard"]
+            .as_array()
+            .expect("a list")
+            .iter()
+            .find(|row| row["telegram_id"] == referrer)
+            .unwrap_or_else(|| panic!("{who}: the seeded referrer is missing: {}", served.body))
+            .clone();
+        assert_eq!(row["referral_count"], 5, "{who}: {row}");
+        // The query is still validated for the admin, after the gate.
+        for bad in ["?period=bogus", "?limit=abc"] {
+            let (refused, _) = get_with(
+                &app,
+                &format!("/api/referrals/leaderboard{bad}"),
+                &format!("10.65.{n}.2"),
+                headers,
+            )
+            .await;
+            assert_eq!(refused.status, StatusCode::BAD_REQUEST, "{who}, `{bad}`");
+        }
+    }
+
+    // One limiter for both routes: once an address trips it on this route, R1's
+    // route answers it 429 as well.
+    let from = "10.66.0.1";
+    let mut tripped = None;
+    for attempt in 1..=30 {
+        let (answer, _) = get_with(&app, "/api/referrals/leaderboard", from, &[]).await;
+        if answer.status == StatusCode::TOO_MANY_REQUESTS {
+            tripped = Some(attempt);
+            break;
+        }
+        assert_eq!(answer.status, StatusCode::UNAUTHORIZED, "attempt {attempt}");
+    }
+    assert!(tripped.is_some(), "the admin limiter never tripped");
+    let (r1, _) = get_with(&app, "/api/loyalty/leaderboard", from, &[]).await;
+    assert_eq!(r1.status, StatusCode::TOO_MANY_REQUESTS);
+    let (again, _) = get_with(&app, "/api/referrals/leaderboard", from, &[]).await;
+    assert_eq!(again.status, StatusCode::TOO_MANY_REQUESTS);
+}

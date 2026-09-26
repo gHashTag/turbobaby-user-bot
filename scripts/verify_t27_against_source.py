@@ -3049,7 +3049,7 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "spec": "specs/turbobaby/referral_program.t27",
         "const": "OWNER_GATED_ROUTE_COUNT",
         "source": "src/api/referrals.rs",
-        # :68, :88, :124, :164. The test module (:232-) calls none. `\bcheck_owner\(` does
+        # :68, :88, :124, :164. The test module (:242-; :232- at 8000ae8) calls none. `\bcheck_owner\(` does
         # not match check_owner_lenient(, so a downgrade to the lenient gate is a 3: RED. So,
         # since 2026-09-22, is a gate commented out (NOT_IN_A_LINE_COMMENT; green before).
         "extract": ("regex_count", NOT_IN_A_LINE_COMMENT + r"(?<!fn )\bcheck_owner\("),
@@ -3071,10 +3071,13 @@ BINDINGS: tuple[dict[str, object], ...] = (
         # on loyalty.rs; a route commented out in place is still counted.
         "extract": ("regex_count", METHOD_HANDLER),
         "relation": "equal",
+        # Since the owner's answer of 2026-09-26 on the referral top list, the fifth route calls
+        # check_admin (referral_program.ADMIN_GATED_ROUTE_COUNT, bound at the end of this table),
+        # so the three rows pin UNGATED_ROUTE_COUNT = 5 - 4 - 1 = 0; until then the pair pinned 1.
         "why": "the gate census above cannot see a route that calls no gate; this count "
-               "can, so the pair pins UNGATED_ROUTE_COUNT = 5 - 4 = 1 and a second "
-               "ungated route over the referral graph -- a new path or a method chained onto "
-               "an old one -- goes red instead of shipping",
+               "can, so with the owner and admin censuses it pins UNGATED_ROUTE_COUNT = "
+               "5 - 4 - 1 = 0 and an ungated route over the referral graph -- a new path or a "
+               "method chained onto an old one -- goes red instead of shipping",
     },
     # REMOVED 2026-09-26 (R3, the owner's answer of that day): the two rows that bound
     # referral_program.MILESTONE_RUNG_COUNT to MILESTONE_THRESHOLDS and MILESTONE_DEFAULT_BONUS in
@@ -4236,6 +4239,38 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "why": "R1: the leaderboard (first names, total spend, tier) answers an admin only, and the "
                "gate is the handler's first statement, before the query",
     },
+    # The owner's answer of 2026-09-26 on the referral top list ("remove the top and close the
+    # address"; the Russian is verbatim in DECISIONS.md): the referral leaderboard answers an admin only, exactly as R1's.
+    # The shape of R1's row, stricter by one clause: the query string is taken as a fallible
+    # extractor and read only after the gate, or a non-admin's malformed query would be answered
+    # 400 by the extractor before the gate ran.
+    {
+        "name": "referral_program.LEADERBOARD_GATE_SITES ~ referrals.rs get_leaderboard first line",
+        "spec": "specs/turbobaby/referral_program.t27",
+        "const": "LEADERBOARD_GATE_SITES",
+        "source": "src/api/referrals.rs",
+        "extract": (
+            "regex_count",
+            r"async fn get_leaderboard\(\s*headers: HeaderMap,[^{]*"
+            r"query: Result<Query<LeaderboardQuery>,[^{]*\{\s*"
+            r"check_admin\(&headers, &state\)\?;\s*let Query\(params\) = query\b",
+        ),
+        "relation": "equal",
+        "why": "the referral top (Telegram ids, frozen point totals) answers an admin only since the "
+               "owner's answer of 2026-09-26: the gate is the handler's first statement, before the "
+               "query string and the read, as R1's is",
+    },
+    {
+        "name": "referral_program.ADMIN_GATED_ROUTE_COUNT ~ api/referrals.rs check_admin calls",
+        "spec": "specs/turbobaby/referral_program.t27",
+        "const": "ADMIN_GATED_ROUTE_COUNT",
+        "source": "src/api/referrals.rs",
+        "extract": ("regex_count", NOT_IN_A_LINE_COMMENT + r"(?<!fn )\bcheck_admin\("),
+        "relation": "equal",
+        "why": "one admin-gated route among the five; with the owner census and the handler count it "
+               "pins the ungated count at zero, and a second admin read on the customers' module is a "
+               "route nobody decided to add",
+    },
 )
 
 TREE_EXTRACTORS = (
@@ -4347,7 +4382,11 @@ ONE_GROUP_EXTRACTORS = (
 # The review of round 5 (2026-09-26): the recorder guard's read of the admin list and the call
 # that hands the list to the record, each planted RED once by hand: 284 + 2 = 286 rows over the
 # same 42 contracts, floor 286 (the measured table size). No row removed.
-MIN_BINDINGS = 286
+# Then the owner's answer of 2026-09-26 on the referral top list (round 6): the referral
+# leaderboard's admin gate as its first statement, ahead of the query string, and the admin census
+# of src/api/referrals.rs, each planted RED once by hand: 286 + 2 = 288 rows over the same 42
+# contracts, floor 288 (the measured table size). No row removed.
+MIN_BINDINGS = 288
 
 
 # ---------------------------------------------------------------------------------

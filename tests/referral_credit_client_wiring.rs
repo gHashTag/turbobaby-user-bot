@@ -446,3 +446,91 @@ fn the_admin_form_records_through_the_shared_body_with_a_minted_key() {
         .expect("the paid button is inside the payout branch");
     assert!(!panel[branch..paid].contains("} else {"));
 }
+
+/// The owner, of the top-referrers list on the invite screen and the public
+/// address it read (2026-09-26, verbatim): «Убрать топ и закрыть адрес». The
+/// list printed other customers' ids and the point totals frozen before R3.
+/// The page neither fetches `/api/referrals/leaderboard` nor renders a row of
+/// it, and the four keys only the list used have no reader in `src/ui` or
+/// `src/trios` (the i18n table keeps one comment line per deleted line). The
+/// rest of the page stands: the link, the three counters, the balance and its
+/// two requests, and the friends panel.
+#[test]
+fn the_top_referrers_list_is_gone_and_the_rest_of_the_page_stands() {
+    let raw = source(PAGE);
+    let code = code_of(&raw);
+    for gone in [
+        "/api/referrals/leaderboard",
+        "TopReferrer",
+        "leaderboard_row",
+        "leaderboard",
+        "total_bonus_earned",
+    ] {
+        assert!(
+            !code.contains(gone),
+            "the top-referrers list is back on the page: `{gone}`"
+        );
+    }
+    // No literal of any shape, the query string included, still names the path.
+    assert!(!raw.contains("\"{}/api/referrals/leaderboard"));
+
+    let retired = [
+        "T_REFERRAL_TOP",
+        "T_REFERRAL_EMPTY_LEADERBOARD",
+        "T_REFERRAL_ID_MASK",
+        "T_REFERRAL_ROW_META",
+    ];
+    let mut scanned = 0;
+    let mut offences = Vec::new();
+    for dir in ["src/ui", "src/trios"] {
+        for (path, text) in rust_sources(dir) {
+            scanned += 1;
+            for (n, line) in code_of(&text).lines().enumerate() {
+                for key in retired {
+                    if line.contains(key) {
+                        offences.push(format!("{path}:{}: {}", n + 1, line.trim()));
+                    }
+                }
+            }
+        }
+    }
+    assert!(scanned >= 60, "only {scanned} files scanned");
+    assert!(
+        offences.is_empty(),
+        "a key of the removed top list is back in code:\n  {}",
+        offences.join("\n  ")
+    );
+
+    // What stays on the page, in the order it renders.
+    let referrals = body_of(&code, "pub fn Referrals(");
+    let mut last = 0;
+    for needle in [
+        "\"{}/api/referrals/me/{}\"",
+        "fetch_credit(&format!(\"{}/api/referral-credit/me/{}\", base, tid), &init)",
+        "\"{}/api/referrals/me/{}/invitees\"",
+        "t(lang, T_REFERRAL_TITLE)",
+        "t(lang, T_REFERRAL_SUBTITLE)",
+        "t(lang, T_REFERRAL_LINK_LABEL)",
+        "T_REFERRAL_COPY",
+        "t(lang, T_REFERRAL_SHARE)",
+        "t(lang, T_REFERRAL_STAT_INVITED)",
+        "t(lang, T_REFERRAL_STAT_CONFIRMED)",
+        "t(lang, T_REFERRAL_STAT_PENDING)",
+        "credit_panel(lang, telegram_id, init_data.clone(), state, credit, busy, failed)",
+        "invitees_panel(lang, list)",
+    ] {
+        let at = referrals[last..]
+            .find(needle)
+            .map(|i| last + i)
+            .unwrap_or_else(|| {
+                panic!("the referral page lost `{needle}`, or it moved out of order")
+            });
+        last = at;
+    }
+    // The friends panel closes the page now: nothing renders after it.
+    let tail = &referrals[last..];
+    assert!(
+        !tail.contains("h2 {") && !tail.contains("for ("),
+        "something renders after the friends panel: {tail}"
+    );
+}
