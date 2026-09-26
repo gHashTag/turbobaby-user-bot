@@ -1396,6 +1396,55 @@ pub fn order_presentation_order_is_shown(names_the_previous_shop: bool, holds_a_
   return holds_a_bike_line;
 }
 
+; --- The name of a bike line (2026-09-26) -------------------------------------------------------
+; FIXED 2026-09-26. A review of 405f30e found that every bike line printed "Unknown" on both owned
+; screens and on the profile's recent orders. Each screen named a line from the old catalogue's
+; four name keys only, and a bike line fills none of them: the customer read even serves them empty
+; on a bike line (customer_order_line, RETIRED_LINE_RULE). So a bike line fell through to the
+; screens' last resort, the keyless English string at two of KEYLESS_CUSTOMER_STRING_SITES. The
+; wire does name the bike: a bike line carries its bike as an object with the family key, always,
+; and with the brand and model stored when the line was written, sometimes (BikeLine in
+; src/db/orders.rs; BIKE_LINE_NAME_FIELDS, in the order they are tried). The rule is that struct's
+; own documented fallback and nothing more: the stored name when it has text, else the family key.
+; Nothing is looked up -- the order screens hold no catalogue -- and nothing is invented: a line
+; that carries neither prints what it printed before. The staff message names a bike line the same
+; way (admin_item_line in src/api/orders.rs), so the customer and the shop read one name for one
+; line. Each screen's name function tries the bike first and the old keys after it, and the keyless
+; fallback stays on its cited line (BIKE_LINE_UNKNOWN_FALLBACK_KEPT), reachable now only by a line
+; the current server never serves. Each screen's line struct gained one field and lost the blank
+; line after it, and each name function was rewritten line for line, so no cited line moved:
+; LIST_LINE_COUNT and DETAIL_LINE_COUNT hold, and KEYLESS_CUSTOMER_STRING_SITES lands where it did.
+; The rule is host-compiled (BIKE_LINE_NAME_RULE) with unit tests, one of which writes a line with
+; the backend's own OrderItem and serves it through the customer read; gate 3 binds the field list.
+pub const BIKE_LINE_NAME_FIXED_AT : str = "2026-09-26";
+pub const BIKE_LINE_NAME_RULE : str = "src/trios/order_line.rs";
+pub const BIKE_LINE_NAME_FIELDS : [2]str = ["bike_name", "bike_key"];
+pub const BIKE_LINE_NAME_FROM_NOTHING : u8 = 0;
+pub const BIKE_LINE_NAME_FROM_NAME : u8 = 1;
+pub const BIKE_LINE_NAME_FROM_KEY : u8 = 2;
+pub const BIKE_LINE_PRINTED_UNKNOWN_BEFORE_2026_09_26 : bool = true;
+pub const BIKE_LINE_PRINTS_UNKNOWN : bool = false;
+pub const BIKE_LINE_NAME_IS_LOOKED_UP : bool = false;
+pub const BIKE_LINE_NAME_IS_INVENTED : bool = false;
+pub const BIKE_LINE_UNKNOWN_FALLBACK_KEPT : bool = true;
+pub const BIKE_LINE_NAME_SITES : [3]str = [
+  "src/ui/screens/orders_screen.rs:48",
+  "src/ui/screens/order_detail_screen.rs:147",
+  "src/ui/screens/profile_screen.rs:370",
+];
+pub const BIKE_LINE_NAME_WITNESS : str = "tests/order_presentation_wiring.rs";
+
+; Where a bike line's printed name comes from, given whether each field has text.
+pub fn order_presentation_bike_line_name_source(name_has_text: bool, key_has_text: bool) u8 {
+  if (name_has_text) {
+    return BIKE_LINE_NAME_FROM_NAME;
+  }
+  if (key_has_text) {
+    return BIKE_LINE_NAME_FROM_KEY;
+  }
+  return BIKE_LINE_NAME_FROM_NOTHING;
+}
+
 ; --- The live view, and what it promises --------------------------------------------------------
 ; The detail screen polls the status endpoint on a bounded schedule: 360 ticks, ten seconds apart
 ; (src/ui/screens/order_detail_screen.rs:439-446), which is one hour and then silence. A live
@@ -2593,6 +2642,37 @@ test the_neutral_name_is_served_only_beside_a_rental_line {
   assert order_presentation_order_is_shown(true, true) == false;
 }
 
+test a_bike_line_is_named_by_its_stored_name_else_its_family_key {
+  assert BIKE_LINE_NAME_FIXED_AT == "2026-09-26";
+  assert BIKE_LINE_NAME_RULE == "src/trios/order_line.rs";
+  // the stored name is tried first, the family key second, and nothing else
+  assert BIKE_LINE_NAME_FIELDS.len == 2;
+  assert BIKE_LINE_NAME_FIELDS[0] == "bike_name";
+  assert BIKE_LINE_NAME_FIELDS[1] == "bike_key";
+  assert order_presentation_bike_line_name_source(true, true) == BIKE_LINE_NAME_FROM_NAME;
+  assert order_presentation_bike_line_name_source(true, false) == BIKE_LINE_NAME_FROM_NAME;
+  assert order_presentation_bike_line_name_source(false, true) == BIKE_LINE_NAME_FROM_KEY;
+  assert order_presentation_bike_line_name_source(false, false) == BIKE_LINE_NAME_FROM_NOTHING;
+  assert BIKE_LINE_NAME_FROM_NAME != BIKE_LINE_NAME_FROM_KEY;
+  // what a bike line printed until then, and what it prints now
+  assert BIKE_LINE_PRINTED_UNKNOWN_BEFORE_2026_09_26 == true;
+  assert BIKE_LINE_PRINTS_UNKNOWN == false;
+  assert BIKE_LINE_NAME_IS_LOOKED_UP == false;
+  assert BIKE_LINE_NAME_IS_INVENTED == false;
+  // a bike line is never a retired line, so the neutral name never stands in for a bike
+  assert order_presentation_line_is_retired(true) == false;
+  // the keyless fallback stays on its cited lines, and no cited line moved
+  assert BIKE_LINE_UNKNOWN_FALLBACK_KEPT == true;
+  assert KEYLESS_CUSTOMER_STRING_SITE_COUNT == 6;
+  assert KEYLESS_CUSTOMER_STRING_SITES[0] == "src/ui/screens/orders_screen.rs:53";
+  assert KEYLESS_CUSTOMER_STRING_SITES[3] == "src/ui/screens/order_detail_screen.rs:152";
+  assert LIST_LINE_COUNT == 411;
+  assert DETAIL_LINE_COUNT == 589;
+  // one name site per screen that prints a line, the same screens as the retired line's
+  assert BIKE_LINE_NAME_SITES.len == RETIRED_LINE_PRINT_SITES.len;
+  assert BIKE_LINE_NAME_WITNESS == "tests/order_presentation_wiring.rs";
+}
+
 ; --- Invariants -----------------------------------------------------------------------------------
 
 invariant an_order_of_the_previous_shop_is_never_shown_and_nothing_is_written_for_it
@@ -2698,3 +2778,7 @@ invariant the_alias_question_stays_open_and_no_status_name_is_invented_here
 
 invariant no_order_identity_and_no_user_copy_ever_enters_this_file
   assert NO_ORDER_IDENTITY_IS_CARRIED_HERE == true and D14_NOTE != "" and LABEL_KEY_NAMES[7] == "T_ORDERS_STATUS_UNKNOWN"
+
+; Since 2026-09-26 a bike line is named by what the line itself says, and never by a guess.
+invariant a_bike_line_is_named_by_the_line_and_never_by_a_guess
+  assert BIKE_LINE_PRINTS_UNKNOWN == false and BIKE_LINE_NAME_IS_INVENTED == false and BIKE_LINE_NAME_IS_LOOKED_UP == false and order_presentation_bike_line_name_source(false, true) == BIKE_LINE_NAME_FROM_KEY

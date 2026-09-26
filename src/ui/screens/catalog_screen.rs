@@ -48,13 +48,13 @@
 use crate::trios::core::Lang;
 use crate::trios::i18n::{
     t, tf, Key, T_BIKE_AVAILABILITY_UNKNOWN, T_BIKE_BOOK_BLOCKED_NOT_OFFERED,
-    T_BIKE_BOOK_BLOCKED_NOT_WIRED, T_BIKE_BOOK_BLOCKED_NO_RATE, T_BIKE_BOOK_BLOCKED_NO_UNITS,
-    T_BIKE_BOOK_BLOCKED_UNKNOWN_AVAILABILITY, T_BIKE_CATALOG_DESC, T_BIKE_CATALOG_TITLE, T_BIKE_CC,
-    T_BIKE_CLASS_DISCOUNT, T_BIKE_CLASS_MOTORCYCLE, T_BIKE_CLASS_SCOOTER, T_BIKE_DEPOSIT,
-    T_BIKE_DETAILS, T_BIKE_FILTER_MOTORCYCLE, T_BIKE_FILTER_SCOOTER,
-    T_BIKE_NOT_OFFERED_ALTERNATIVES, T_BIKE_NOT_OFFERED_TITLE, T_BIKE_NO_RESULTS, T_BIKE_PER_DAY,
-    T_BIKE_PRICE_ON_REQUEST, T_BIKE_QUOTE_NOTE, T_BIKE_SORT_DEFAULT, T_BIKE_SORT_PRICE_ASC,
-    T_BIKE_SORT_PRICE_DESC, T_BIKE_TARIFF_BEFORE_DISCOUNT, T_FILTER_ALL, T_SEARCH_PLACEHOLDER,
+    T_BIKE_BOOK_BLOCKED_NOT_WIRED, T_BIKE_BOOK_BLOCKED_NO_RATE, T_BIKE_CATALOG_DESC,
+    T_BIKE_CATALOG_TITLE, T_BIKE_CC, T_BIKE_CLASS_DISCOUNT, T_BIKE_CLASS_MOTORCYCLE,
+    T_BIKE_CLASS_SCOOTER, T_BIKE_DEPOSIT, T_BIKE_DETAILS, T_BIKE_FILTER_MOTORCYCLE,
+    T_BIKE_FILTER_SCOOTER, T_BIKE_NOT_OFFERED_ALTERNATIVES, T_BIKE_NOT_OFFERED_TITLE,
+    T_BIKE_NO_RESULTS, T_BIKE_PER_DAY, T_BIKE_PRICE_ON_REQUEST, T_BIKE_QUOTE_NOTE,
+    T_BIKE_SORT_DEFAULT, T_BIKE_SORT_PRICE_ASC, T_BIKE_SORT_PRICE_DESC,
+    T_BIKE_TARIFF_BEFORE_DISCOUNT, T_FILTER_ALL, T_SEARCH_PLACEHOLDER,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
@@ -146,7 +146,7 @@ pub struct ApiBike {
     /// `Some(false)` closes the family to new rentals (D12: CLICK 125).
     /// `None` means the API does not say — which must not hide a bike, so it
     /// is treated as "offered" for display and still cannot be booked until a
-    /// rate and a free unit exist.
+    /// published rate exists.
     #[serde(default)]
     pub offered: Option<bool>,
     /// Rentable units — everything except `retired`. **Detail only**:
@@ -155,7 +155,7 @@ pub struct ApiBike {
     #[serde(default)]
     pub units_total: Option<i64>,
     /// Units whose seeded, admin-edited status is `available`. Served by both
-    /// endpoints. A zero may rule a family out; it is never printed as "free".
+    /// endpoints, never printed as "free", and read by no booking decision.
     #[serde(default)]
     pub units_available: Option<i64>,
     /// Count per unit status, all four statuses always present. Parsed so the
@@ -306,18 +306,20 @@ pub fn client_day_rate(bike: &ApiBike) -> Option<f64> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Why the Book control is not usable. Every arm names a reason a customer
-/// can read (issue #9: a family with no available unit shows the specs and a
-/// disabled Book control **with the reason named**).
+/// can read (issue #9: a disabled Book control always names its reason).
+///
+/// No arm reads the unit count. Until 2026-09-26 two did: `NoUnitsFree`
+/// under a seeded zero («Все байки этой модели заняты») and
+/// `UnknownAvailability` when the count was not served. The owner answered
+/// question I that day: «Разрешить бронь, наличие уточнит менеджер» — allow
+/// booking, a manager confirms availability (`availability.t27`,
+/// `NO_UNITS_BOOK_REASON_*`). Both arms and both keys are gone.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BookBlock {
     /// D12: the family is closed to new rentals.
     NotOffered,
     /// D11: no published price, so the bot must not take the booking.
     NoPublishedRate,
-    /// Every unit is rented, in service or retired.
-    NoUnitsFree,
-    /// The API did not say how many units are free. Fail closed.
-    UnknownAvailability,
     /// Nothing is wrong with the bike: this app has no bike cart line yet.
     NotWired,
 }
@@ -328,8 +330,6 @@ impl BookBlock {
         match self {
             Self::NotOffered => T_BIKE_BOOK_BLOCKED_NOT_OFFERED,
             Self::NoPublishedRate => T_BIKE_BOOK_BLOCKED_NO_RATE,
-            Self::NoUnitsFree => T_BIKE_BOOK_BLOCKED_NO_UNITS,
-            Self::UnknownAvailability => T_BIKE_BOOK_BLOCKED_UNKNOWN_AVAILABILITY,
             Self::NotWired => T_BIKE_BOOK_BLOCKED_NOT_WIRED,
         }
     }
@@ -338,17 +338,15 @@ impl BookBlock {
 /// `None` when this family can be booked from the app, otherwise the reason
 /// it cannot. `booking_wired` is false until a bike cart line exists — see
 /// the note on [`BikeDetail`](crate::ui::screens::bike_detail::BikeDetail).
+///
+/// `units_available` is not read: whether a zero, a positive count or no
+/// count at all, the seeded figure decides nothing here (owner, 2026-09-26).
 pub fn book_block(bike: &ApiBike, booking_wired: bool) -> Option<BookBlock> {
     if bike.offered == Some(false) {
         return Some(BookBlock::NotOffered);
     }
     if client_day_rate(bike).is_none() {
         return Some(BookBlock::NoPublishedRate);
-    }
-    match bike.units_available {
-        Some(free) if free > 0 => {}
-        Some(_) => return Some(BookBlock::NoUnitsFree),
-        None => return Some(BookBlock::UnknownAvailability),
     }
     if !booking_wired {
         return Some(BookBlock::NotWired);
@@ -419,9 +417,10 @@ fn class_badge_style(class: &str) -> String {
 /// `availability.t27` declares `FILE_MAY_CONFIRM = false`: a file snapshot may
 /// rule a family out but never confirm it. The owner's rule is the same —
 /// do not promise without checking occupancy. So no count reaches the line;
-/// the admin screen keeps its own. A zero count still rules a family out in
-/// the Book control's reason (`BookBlock::NoUnitsFree`; the detail's "all
-/// taken" line went on 2026-09-25), as `FILE_MAY_RULE_OUT = true` allows.
+/// the admin screen keeps its own. A zero count rules nothing out either: the
+/// detail's "all taken" line went on 2026-09-25, and the Book control's
+/// no-units reason on 2026-09-26, when the owner allowed booking and left
+/// availability to a manager (`availability.t27`, question I).
 pub fn availability_line(lang: Lang) -> String {
     t(lang, T_BIKE_AVAILABILITY_UNKNOWN).to_string()
 }
@@ -1057,16 +1056,15 @@ mod tests {
             Some(BookBlock::NoPublishedRate)
         );
 
+        // Owner, 2026-09-26 (question I): a seeded zero, or no count at all,
+        // no longer disables the control; a manager confirms availability.
         let mut none_free = bike(Some(337.0), None, None);
         none_free.units_available = Some(0);
-        assert_eq!(book_block(&none_free, true), Some(BookBlock::NoUnitsFree));
+        assert_eq!(book_block(&none_free, true), None);
 
         let mut unknown = bike(Some(337.0), None, None);
         unknown.units_available = None;
-        assert_eq!(
-            book_block(&unknown, true),
-            Some(BookBlock::UnknownAvailability)
-        );
+        assert_eq!(book_block(&unknown, true), None);
 
         assert_eq!(
             book_block(&bike(Some(337.0), None, None), false),

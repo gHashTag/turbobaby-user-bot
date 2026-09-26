@@ -1,7 +1,6 @@
 use crate::trios::i18n::{
-    t, tf, T_ACC_CAT_CLOTHING, T_ACC_CAT_LIGHTER, T_ACC_CAT_OTHER, T_ACC_CAT_SOUVENIR,
-    T_ACC_CAT_STORAGE, T_ACC_TITLE, T_ADD_TO_CART, T_CATALOG_EMPTY, T_CATALOG_ERROR, T_FILTER_ALL,
-    T_LOW_STOCK, T_MENU_SOLD_OUT,
+    t, tf, T_ACC_CAT_CLOTHING, T_ACC_CAT_OTHER, T_ACC_CAT_SOUVENIR, T_ACC_TITLE, T_ADD_TO_CART,
+    T_CATALOG_EMPTY, T_CATALOG_ERROR, T_FILTER_ALL, T_LOW_STOCK, T_MENU_SOLD_OUT,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::components::bottom_nav::BottomNav;
@@ -44,10 +43,12 @@ struct AccessoriesResponse {
 // A stored row that still carries one of those category strings falls to the
 // generic arms below; the row itself is data (hidden by migration 085), not
 // this screen's to rename.
+// On 2026-09-26 two more of the old shop's paraphernalia categories, storage
+// and the lighter, went the same way (chip, emoji, colour, label and both
+// keys; `legacy_retirement.t27`, the section of that date). No route mounts
+// this screen since 2026-09-25.
 fn category_emoji(cat: &str) -> &'static str {
     match cat.to_lowercase().as_str() {
-        "storage" => "📦",
-        "lighter" => "🔥",
         "clothing" => "👕",
         "souvenir" => "🎭",
         _ => "🛠️",
@@ -58,8 +59,6 @@ fn category_emoji(cat: &str) -> &'static str {
 /// badge.
 fn category_color(cat: &str) -> &'static str {
     match cat.to_lowercase().as_str() {
-        "storage" => "#ff9d00",
-        "lighter" => "#ff4757",
         "clothing" => "#ff6b9d",
         "souvenir" => "#4ecdc4",
         _ => "#888",
@@ -69,15 +68,13 @@ fn category_color(cat: &str) -> &'static str {
 fn localized_category_label(lang: crate::trios::core::Lang, cat: &str) -> String {
     match cat.to_lowercase().as_str() {
         "all" => t(lang, T_FILTER_ALL).to_string(),
-        "storage" => t(lang, T_ACC_CAT_STORAGE).to_string(),
-        "lighter" => t(lang, T_ACC_CAT_LIGHTER).to_string(),
         "clothing" => t(lang, T_ACC_CAT_CLOTHING).to_string(),
         "souvenir" => t(lang, T_ACC_CAT_SOUVENIR).to_string(),
         _ => t(lang, T_ACC_CAT_OTHER).to_string(),
     }
 }
 
-const CATEGORIES: &[&str] = &["All", "Storage", "Lighter", "Clothing", "Souvenir", "Other"];
+const CATEGORIES: &[&str] = &["All", "Clothing", "Souvenir", "Other"];
 
 #[component]
 pub fn AccessoriesScreen() -> Element {
