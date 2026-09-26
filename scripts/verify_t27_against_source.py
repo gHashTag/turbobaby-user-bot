@@ -34,7 +34,12 @@ declared, is RED. DECISIONS.md D16 is the rule -- a gate whose input can reach z
 must pin a floor, because "found nothing" and "found nothing wrong" look identical
 from the outside. The floor on the table itself is MIN_BINDINGS.
 
-WHAT A GREEN RUN DOES NOT PROVE. Re-measured 2026-09-24, after the owner's rental-only ruling
+WHAT A GREEN RUN DOES NOT PROVE. Re-measured 2026-09-25 on the integration of that day's owner
+answers (items 7, 10, 11, 12 client and server, and 13): the table's 239 bindings cover 226
+distinct (contract, constant) pairs out of 5698 top-level `pub const` declarations across the
+45 files under specs/, touching 41 of those 45 contracts -- 4.0% of the declared constants,
+and 0% of the 10246 `assert` statements. The reading of 2026-09-24 follows, as it was.
+Re-measured 2026-09-24, after the owner's rental-only ruling
 (nine rows over the same 41 contracts) and its review (one row: migration 088's hide) landed on
 top of the spec-hygiene change: the table's 237 bindings cover 224 distinct (contract, constant)
 pairs out of 5564 top-level `pub const` declarations across the 45 files under specs/, touching
@@ -741,6 +746,35 @@ BINDINGS: tuple[dict[str, object], ...] = (
                "contract does not record is a model the owner's rules forbid naming even as a "
                "replacement, and tests/catalog_honesty_wiring.rs ties each label to the seed",
     },
+    # The owner's decision of 2026-09-25 ("for now", NMAX 155 alone) is recorded twice: in the
+    # contract as CLICK_125_REDIRECTS / CLICK_125_REDIRECTS_ARE_PROVISIONAL and in the seed as
+    # pricing_policy.not_offered.click-125 offer_instead / offer_instead_provisional. Measured by
+    # hand on both sides first: ["nmax-155"] and true in each; until that date the two lists read
+    # ["pcx-150", "adv-150", "nmax-155"] in both files and nothing tied them. The anchors are keyed
+    # on the quoted field name with its closing quote, so the seed's offer_instead_before_2026_09_25
+    # and offer_instead_source are not read (each anchor must match exactly once).
+    {
+        "name": "availability.CLICK_125_REDIRECTS ~ seed click-125 offer_instead",
+        "spec": "specs/turbobaby/availability.t27",
+        "const": "CLICK_125_REDIRECTS",
+        "source": "data/fleet_seed.json",
+        "extract": ("regex_list", r'"offer_instead":\s*\[(.*?)\]'),
+        "relation": "list_equal",
+        "why": "the seed and the contract each record what the owner decided to offer instead of "
+               "CLICK 125; a list re-decided in one and not the other leaves the repository "
+               "offering two things, and the screen's label is tied to the contract, not the seed",
+    },
+    {
+        "name": "availability.CLICK_125_REDIRECTS_ARE_PROVISIONAL ~ seed offer_instead_provisional",
+        "spec": "specs/turbobaby/availability.t27",
+        "const": "CLICK_125_REDIRECTS_ARE_PROVISIONAL",
+        "source": "data/fleet_seed.json",
+        "extract": ("regex", r'"offer_instead_provisional":\s*(true|false)\s*[,}]'),
+        "relation": "equal",
+        "why": "the owner said \"for now\"; a decision made final (or re-opened) in the seed "
+               "under a contract that still calls it provisional, or the reverse, misstates "
+               "how settled the redirect is",
+    },
     {
         "name": "availability.CONFIRMING_KEY_LINES_IN_UI ~ src/ui/ absence",
         "spec": "specs/turbobaby/availability.t27",
@@ -1386,6 +1420,53 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "why": "the reading's sites in the contract, and in order-status's DISPLAY_PIPELINE_"
                "MODEL_A, were measured against a file of this length",
     },
+    # The owner's answer 3 of 2026-09-25: a line of the old catalogue is served under the
+    # neutral name with its stored figures only. The rule is src/trios/legacy_view.rs; the
+    # contract names the name field it writes, the figures it keeps and how many bonus types
+    # keep their description. Measured by hand 2026-09-25: strain_name, [quantity,
+    # unit_price] and 4. (The key the name is looked up by is an identifier, which this reader
+    # does not evaluate; tests/legacy_view_wiring.rs holds it to the contract.)
+    {
+        "name": "order_presentation.RETIRED_LINE_NAME_FIELD ~ legacy_view.rs MASKED_LINE_NAME_KEY",
+        "spec": "specs/turbobaby/order_presentation.t27",
+        "const": "RETIRED_LINE_NAME_FIELD",
+        "source": "src/trios/legacy_view.rs",
+        "extract": ("regex", r'pub const MASKED_LINE_NAME_KEY: &str = ("[a-z_]+");'),
+        "relation": "equal",
+        "why": "the field is the one every owned screen reads first; another field would leave "
+               "a bundle that predates the rule printing its own fallback",
+    },
+    {
+        "name": "order_presentation.RETIRED_LINE_KEPT_FIELDS ~ legacy_view.rs KEPT_LINE_KEYS",
+        "spec": "specs/turbobaby/order_presentation.t27",
+        "const": "RETIRED_LINE_KEPT_FIELDS",
+        "source": "src/trios/legacy_view.rs",
+        "extract": ("regex_list", r"pub const KEPT_LINE_KEYS: \[&str; \d+\] = \[([^\]]*)\];"),
+        "relation": "list_equal",
+        "why": "only the quantity and the unit price may pass as stored; a key added here would "
+               "serve a stored id or name of the old catalogue to its customer again",
+    },
+    {
+        "name": "legacy_retirement.OWNER_ANSWER_3_DESCRIBED_TX_TYPE_COUNT ~ legacy_view.rs",
+        "spec": "specs/turbobaby/legacy_retirement.t27",
+        "const": "OWNER_ANSWER_3_DESCRIBED_TX_TYPE_COUNT",
+        "source": "src/trios/legacy_view.rs",
+        "extract": ("regex", r"pub const DESCRIBED_TX_TYPES: \[&str; (\d+)\]"),
+        "relation": "equal",
+        "why": "a bonus type added to the served list serves its stored descriptions, which "
+               "nothing here can tell from the previous shop's",
+    },
+    # Measured by hand 2026-09-25 (UTC): 2 (garden_harvest, garden_reward).
+    {
+        "name": "legacy_retirement.OWNER_ANSWER_3_WITHHELD_TX_TYPE_COUNT ~ legacy_view.rs",
+        "spec": "specs/turbobaby/legacy_retirement.t27",
+        "const": "OWNER_ANSWER_3_WITHHELD_TX_TYPE_COUNT",
+        "source": "src/trios/legacy_view.rs",
+        "extract": ("regex", r"pub const GARDEN_ERA_TX_TYPES: \[&str; (\d+)\]"),
+        "relation": "equal",
+        "why": "a garden-era type dropped from the list is served as stored, and every bundle "
+               "cached before answer 3 labels it with the garden's label again",
+    },
     # cancel family. The order detail screen sent POST /api/orders/:id/cancel, bound the
     # answer to `let _resp` and closed its dialog right after the await, on every path.
     # Measured by hand 2026-09-22 with these exact patterns: at 14b01ac (git show) 1 and 1,
@@ -1424,7 +1505,10 @@ BINDINGS: tuple[dict[str, object], ...] = (
     # after the server class was held for a fresh reading (the unknown-outcome arms now come
     # first), same six in file order: T_SUCCESS_STATUS_LOADING, T_SUCCESS_STATUS_ERROR,
     # T_ORDER_DETAIL_CANCELLED_BY_USER, T_ORDER_DETAIL_NOT_FOUND, T_API_ERR_UNKNOWN,
-    # T_CHECKOUT_ERR_NETWORK.
+    # T_CHECKOUT_ERR_NETWORK. Re-measured 2026-09-25, when question D's key arrived for
+    # the 409 arm: seven, T_ORDER_DETAIL_CANCEL_REFUSED between T_ORDER_DETAIL_NOT_FOUND
+    # and T_API_ERR_UNKNOWN (the new test in that file names the key in a `let`, not in
+    # this shape, so it adds no capture).
     {
         "name": "client_errors.ORDER_CANCEL_OWN_KEY_NAMES ~ api_errors.rs order_cancel_line arms",
         "spec": "specs/turbobaby/client_errors.t27",
@@ -1435,9 +1519,9 @@ BINDINGS: tuple[dict[str, object], ...] = (
             r"t\(lang, (T_[A-Z0-9_]+)\)\.to_string\(\),\s*OrderCancelTone::",
         ),
         "relation": "set_equal",
-        "why": "the owner's sentence for a refused cancellation (question D) arrives as a key; "
-               "until it does, the surface speaks only existing keys, and a key added or "
-               "swapped here has to be recorded where the sentence is owned",
+        "why": "every sentence this surface speaks is a key the contract names, the one "
+               "written for question D on 2026-09-25 included; a key added or swapped here "
+               "has to be recorded where the sentence is owned",
     },
     # The delegation to the general mapper, counted as every NON-TEST call in the module
     # that defines it, whatever its spelling and whichever function holds it. Corrected
@@ -1673,6 +1757,33 @@ BINDINGS: tuple[dict[str, object], ...] = (
                "the padding split are both written against this one number, measured raw at "
                "the button outside the mode test and trimmed at the handler",
     },
+    # Added 2026-09-25 with the owner's removal of the 20+ box (second list, answer 1): the two
+    # places the removal is a number. The pushes are counted only in checkout_blockers' own
+    # `out.push(` shape; the tests build their expected lists with `vec![`, so they are not.
+    {
+        "name": "checkout_contact.BLOCKER_COUNT ~ store.rs checkout_blockers pushes",
+        "spec": "specs/turbobaby/checkout_contact.t27",
+        "const": "BLOCKER_COUNT",
+        "source": "src/trios/store.rs",
+        "extract": ("regex_count", NOT_IN_A_LINE_COMMENT + r"\bout\.push\(CheckoutBlocker::\w+\)"),
+        "relation": "equal",
+        "why": "the button's closed set of reasons; the age box left it on 2026-09-25 (the "
+               "owner, for now), and a sixth push is a reason the contract does not name",
+    },
+    {
+        "name": "checkout_contact.AGE_FIELD_COMPARISONS_IN_THE_ORDERS_MODULE ~ orders.rs absence",
+        "spec": "specs/turbobaby/checkout_contact.t27",
+        "const": "AGE_FIELD_COMPARISONS_IN_THE_ORDERS_MODULE",
+        "source": "src/api/orders.rs",
+        "extract": ("regex_count", NOT_IN_A_LINE_COMMENT + r"\bage_confirmed\s*[!=]="),
+        # The expected value is ZERO, so the scan must be shown to see the field before the
+        # zero is believed (D16): the line that stores it as sent.
+        "witness": r"age_confirmed: Set\(req\.age_confirmed\.unwrap_or\(false\)\)",
+        "relation": "equal",
+        "why": "SERVER_REQUIRES_AGE is false since the owner's answer of 2026-09-25; the "
+               "refusal it replaced was `req.age_confirmed != Some(true)`, and a comparison of "
+               "that field back in the orders module is that refusal's shape returning",
+    },
     # commerce.t27 declares FULFILLMENT_NAMES once and names neither the client's
     # Fulfillment::as_str (src/trios/store.rs) nor the server's admission list as a second
     # home for it, so it is bound to ONE source: the server's, which is what a bike line
@@ -1857,6 +1968,39 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "why": "parse_kind is the only gate on both cart write paths (cart_persistence.t27:"
                "34-41); bike_rental unwritable, no deal kind in a cart row and zero kinds "
                "that can write today all turn on this arm list staying these four",
+    },
+    # Added 2026-09-26 with the kept-cart change: a cart kept from the previous shop is stored and
+    # never served. The contract's list of the kinds a cart serves IS the code's list, the one the
+    # cart API, the reminder and the Mini App all ask through trios::pricing::cart_kind_is_served.
+    # The witness pins the predicate to that array, so a literal of its own inside the predicate
+    # (`kind == "bike_rental" || kind == "tea"`) cannot leave this row green. Planted RED once by
+    # hand: "tea" added to the array, and the predicate rewritten to compare a literal.
+    {
+        "name": "cart_persistence.SERVED_CART_KINDS ~ trios/pricing.rs SERVED_CART_KINDS",
+        "spec": "specs/turbobaby/cart_persistence.t27",
+        "const": "SERVED_CART_KINDS",
+        "source": "src/trios/pricing.rs",
+        "extract": ("regex_list", r"pub const SERVED_CART_KINDS:\s*\[&str;\s*\d+\]\s*=\s*\[(.*?)\]\s*;"),
+        "witness": r"pub fn cart_kind_is_served\(kind: &str\) -> bool \{\s*SERVED_CART_KINDS\.contains\(&kind\)\s*\}",
+        # set_equal: the list is read by membership only (contains), so an order is not a fact.
+        "relation": "set_equal",
+        "why": "which stored cart lines a customer is shown at all: the owner's rulings of "
+               "2026-09-24 and 2026-09-25 (answer 12) leave the rental line and nothing else, and "
+               "a kind added here reaches the cart API, the reminder and the Mini App at once",
+    },
+    # The same change's census of the reminder's reads of cart_items: both carry the served-kind
+    # filter, the inner join (witness) included, which is what keeps a cart of hidden rows from ever
+    # being due. Planted RED once by hand: the join's filter removed (count 1, witness blind).
+    {
+        "name": "cart_persistence.REMINDER_KIND_FILTERED_QUERIES ~ cart_abandonment.rs kind filters",
+        "spec": "specs/turbobaby/cart_persistence.t27",
+        "const": "REMINDER_KIND_FILTERED_QUERIES",
+        "source": "src/cart_abandonment.rs",
+        "extract": ("regex_count", r"kind = ANY\(\$\d\)"),
+        "witness": r"JOIN cart_items ci ON ci\.cart_id = c\.id AND ci\.kind = ANY\(\$3\)",
+        "relation": "equal",
+        "why": "the reminder sums, names and spends a rung on the lines these two queries return; "
+               "a read without the filter would put a hidden line's name into a Telegram message",
     },
     {
         "name": "cart_persistence.CARTS_COLUMNS ~ cart entity fields",
@@ -2615,19 +2759,38 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "why": "the store takes no row claim (0 FOR UPDATE / SKIP LOCKED), so a second call "
                "site would put two drainers on the same pending rows, either free to send a "
                "row the other is sending; this row keeps 'exactly one is spawned' "
-               "(notification_queue.t27:392, :556-557) true of the code, per process and not "
-               "per deployment",
+               "(notification_queue.t27:522, :687; re-pinned 2026-09-26 -- the base's :392 and "
+               ":556-557 sat three and four lines above the sentence) true of the code, per "
+               "process and not per deployment",
     },
     {
-        "name": "notification_queue.RENDERABLE_KINDS ~ build_message arms",
+        # Since 2026-09-26 the only `"kind" =>` arms in the file are DeliverableKind::of's:
+        # build_message matches the enum, and its friend_watered arm and raw-column catch-all
+        # are gone (HELD_KINDS_DECIDED_AT). The witness pins the refusing default arm right
+        # after the last kind, the shape the value depends on and the extractor cannot see:
+        # a default arm that answered Some(..) would deliver every held row.
+        "name": "notification_queue.RENDERABLE_KINDS ~ DeliverableKind::of arms",
         "spec": "specs/turbobaby/notification_queue.t27",
         "const": "RENDERABLE_KINDS",
         "source": "src/notification_queue.rs",
         "extract": ("regex_all", r"^\s*\"(\w+)\" =>"),
         "relation": "list_equal",
-        "why": "a row whose kind lost its arm is still SENT, through the catch-all that shows "
-               "the customer the raw kind column (UNKNOWN_KIND_EMITS_THE_RAW_COLUMN); the "
-               "legacy friend_watered arm is the one most likely to be tidied away",
+        "witness": r"\"milestone\" => Some\(Self::Milestone\),\s*_ => None,",
+        "why": "a kind the drain accepts is a kind a customer can receive, and every other "
+               "row is held unsent (HELD_KINDS_DECIDED_AT); an arm added here without the "
+               "contract delivers a kind nobody cleared, and the retired friend_watered is the "
+               "one most likely to be put back",
+    },
+    {
+        "name": "notification_queue.WRITTEN_KINDS ~ insert_queue_row call sites",
+        "spec": "specs/turbobaby/notification_queue.t27",
+        "const": "WRITTEN_KINDS",
+        "source": "src/db/notifications.rs",
+        "extract": ("regex_all", r"insert_queue_row\(orm, \w+, \"(\w+)\""),
+        "relation": "list_equal",
+        "why": "the drain delivers exactly the kinds a producer writes and holds every other "
+               "row (HELD_KINDS_DECIDED_AT); a producer kind missing from this list is a "
+               "message held in silence, which tests/notification_drain_wiring.rs also refuses",
     },
     {
         "name": "promo_broadcast.ADMIN_API_ATTEMPTS_PER_WINDOW ~ admin.rs BROADCAST_RL_MAX_ATTEMPTS",
@@ -2844,7 +3007,7 @@ BINDINGS: tuple[dict[str, object], ...] = (
         # bonus_balance anywhere in a SET list, and an ActiveModel assignment (0). The SQL
         # alternative is case-insensitive -- SQL keywords and unquoted names are -- and lets a
         # `\` line continuation or a line break stand after SET itself as well as after a comma
-        # in the list (1 today, src/bot/callbacks.rs:762). Until 2026-09-22 it read an
+        # in the list (1 today, src/bot/callbacks.rs:735). Until 2026-09-22 it read an
         # uppercase SET followed by a space only, and both `SET \`+newline and a lowercase
         # `set` were planted green; both are RED now, and the count stayed 10. Measured
         # 2026-09-22: loyalty.rs 2, db/orders.rs 1, db/referrals.rs 3 (the paired six),
@@ -3379,20 +3542,23 @@ BINDINGS: tuple[dict[str, object], ...] = (
                "or HTTP -- must turn this red",
     },
     {
-        "name": "legacy_retirement.LEGACY_LIVE_ROUTES ~ routes.rs legacy paths",
+        "name": "legacy_retirement.LEGACY_PATHS_DECLARED ~ routes.rs legacy paths",
         "spec": "specs/turbobaby/legacy_retirement.t27",
-        "const": "LEGACY_LIVE_ROUTES",
+        "const": "LEGACY_PATHS_DECLARED",
         "source": "src/ui/routes.rs",
         # The pattern spells the eight paths, so this is a presence-and-order check on
         # the route ATTRIBUTES. Which screen a path mounts is decided in its handler far
         # below, and a one-capture pattern cannot tie the two: a path kept and repointed
-        # at CatalogScreen, as /sets and /sommelier are (:136-155), stays green here.
+        # at CatalogScreen, as /sets and /sommelier are, stays green here. Until 2026-09-25
+        # this row read LEGACY_LIVE_ROUTES, which held the same eight; on the owner's answer
+        # of that day seven of them render the catalog (the REPOINTED row counts them), and
+        # LEGACY_LIVE_ROUTES now names the one that still mounts a legacy screen.
         "extract": ("regex_all", r'^\s*#\[route\("(/accessories|/tea|/quest/:id|/game|/treasure-hunt|/ar-hunt|/location-quest|/tech-tree)"\)\]'),
         "relation": "list_equal",
-        "why": "the eight client paths the contract calls live must still be declared, in "
-               "this order; deleting or renaming one (the /garden mode) turns this red. It "
-               "does NOT see a path kept and repointed to the live catalog (the /sets and "
-               "/sommelier mode, the likelier one for a deep-linked path), nor a NEW legacy path",
+        "why": "the eight legacy client paths must still be declared, in this order, because "
+               "a link already sent never expires; deleting or renaming one (the /garden mode) "
+               "turns this red. It does NOT see which surface a path lands on -- the REPOINTED "
+               "row does -- nor a NEW legacy path",
     },
     {
         "name": "observability.REQUEST_ID_HEADER ~ observability.rs REQUEST_ID_HEADER",
@@ -3504,14 +3670,15 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "const": "REPOINTED_ROUTE_COUNT",
         "source": "src/ui/routes.rs",
         # A handler whose WHOLE body renders the catalog: /sets and /sommelier since their
-        # screens were deleted, and the three events paths since 2026-09-24. Home renders the
+        # screens were deleted, the three events paths since 2026-09-24, and seven of the eight
+        # legacy paths since the owner's answer of 2026-09-25 (5 -> 12). Home renders the
         # catalog too, but behind a branch, and Menu mounts MenuScreen, so neither matches. An
         # EventDetail keeps its `id` prop (`let _ = id;`) so an old /events/<id> still parses.
         "extract": ("regex_count", r"fn \w+\([^)]*\) -> Element \{\s*(?:let _ = \w+;\s*)?rsx! \{\s*CatalogScreen \{\}\s*\}\s*\}"),
         "relation": "equal",
-        "why": "the count LEGACY_LIVE_ROUTES cannot see: a kept path repointed to the live catalog; "
-               "a handler put back onto a retired screen, or a sixth path repointed without the "
-               "contract, turns this red",
+        "why": "the count LEGACY_PATHS_DECLARED cannot see: a kept path repointed to the live "
+               "catalog; a handler put back onto a retired screen, or a thirteenth path repointed "
+               "without the contract, turns this red",
     },
     {
         "name": "events_booking.EVENT_SCREENS_MOUNTED_BY_THE_CLIENT_ROUTER ~ routes.rs absence",
@@ -3570,7 +3737,8 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "source": "src/ui/routes.rs",
         # Presence only, in any order (the contract lists /skate first, the router declares it
         # last). What each path renders is the REPOINTED row's and the ride contracts' business.
-        "extract": ("regex_all", r'^\s*#\[route\("(/skate|/sets|/sommelier|/events|/events/:id|/my-bookings)"\)\]'),
+        # Seven legacy paths joined on 2026-09-25 (the owner's answer; 6 -> 13 members).
+        "extract": ("regex_all", r'^\s*#\[route\("(/skate|/sets|/sommelier|/events|/events/:id|/my-bookings|/accessories|/tea|/game|/treasure-hunt|/ar-hunt|/location-quest|/tech-tree)"\)\]'),
         "relation": "set_equal",
         "why": "LEGACY_LINKS_DO_NOT_EXPIRE: every path in the compatibility set must stay "
                "declared, or links already in customers' Telegram histories become router misses",
@@ -3683,7 +3851,28 @@ ONE_GROUP_EXTRACTORS = (
 # compatibility set, commerce's sale refusal and catalog-api's two sale-offer facts. 236
 # rows, floor 236. Review of that change added events-booking's hide of the rows already
 # public (migration 088): 237 rows, floor 237.
-MIN_BINDINGS = 237
+# Then the owner's decision of 2026-09-25 on CLICK 125's redirect (NMAX 155 alone, for now)
+# bound availability.CLICK_125_REDIRECTS and CLICK_125_REDIRECTS_ARE_PROVISIONAL to the seed,
+# each planted RED once by hand: 239 rows over the same 41 contracts, floor 239.
+# Then the owner's answer 1 of the second list on 2026-09-25 (the 20+ box removed, for now)
+# bound checkout_contact.BLOCKER_COUNT and AGE_FIELD_COMPARISONS_IN_THE_ORDERS_MODULE,
+# each planted RED once by hand: 241 rows over the same 41 contracts, floor 241.
+# Then the owner's answer 3 of 2026-09-25 (the previous shop's stored content out of
+# customers' sight) bound order-presentation's RETIRED_LINE_NAME_FIELD and
+# RETIRED_LINE_KEPT_FIELDS and legacy-retirement's OWNER_ANSWER_3_DESCRIBED_TX_TYPE_COUNT and
+# OWNER_ANSWER_3_WITHHELD_TX_TYPE_COUNT to src/trios/legacy_view.rs, each planted RED once by
+# hand: 243 rows over the same 41 contracts and 81 source files on its own branch, floor 243.
+# Merged 2026-09-26 on the integration branch: 245 rows, floor 245 (the measured table size).
+# Then the kept-cart change of 2026-09-26 bound cart_persistence.SERVED_CART_KINDS to the shared
+# list in src/trios/pricing.rs and REMINDER_KIND_FILTERED_QUERIES to the reminder, each planted
+# RED once by hand: 241 rows over the same 41 contracts on its own branch, floor 241. Merged
+# 2026-09-26 on the integration branch: 247 rows, floor 247 (the measured table size).
+# Then the held notification kinds of 2026-09-26 bound notification_queue.WRITTEN_KINDS to
+# the producers' insert_queue_row calls (and re-pointed RENDERABLE_KINDS at
+# DeliverableKind::of with a witness): 240 rows over the same 41 contracts on its own branch,
+# floor 240. Merged 2026-09-26 on the integration branch: 248 rows, floor 248 (the measured
+# table size).
+MIN_BINDINGS = 248
 
 
 # ---------------------------------------------------------------------------------

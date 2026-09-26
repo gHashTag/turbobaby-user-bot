@@ -2,11 +2,10 @@ use crate::trios::checkout_errors::{friendly_order_error, friendly_order_error_c
 use crate::trios::core::Lang;
 use crate::trios::i18n::{
     t, tf, T_BACK, T_BIKE_PRICE_ON_REQUEST, T_CHECKOUT_ADDRESS_LABEL,
-    T_CHECKOUT_ADDRESS_PLACEHOLDER, T_CHECKOUT_AGE_CONFIRM, T_CHECKOUT_AGE_NOTICE,
-    T_CHECKOUT_BLOCKED_TITLE, T_CHECKOUT_BONUS, T_CHECKOUT_BONUS_APPLIED,
-    T_CHECKOUT_BONUS_AVAILABLE, T_CHECKOUT_BONUS_MAX, T_CHECKOUT_CART_EMPTY,
-    T_CHECKOUT_CASH_ON_DELIVERY, T_CHECKOUT_CHANGE, T_CHECKOUT_ERR_400, T_CHECKOUT_ERR_ADDRESS,
-    T_CHECKOUT_ERR_ADDRESS_LONG, T_CHECKOUT_ERR_ITEMS, T_CHECKOUT_ERR_NAME,
+    T_CHECKOUT_ADDRESS_PLACEHOLDER, T_CHECKOUT_BLOCKED_TITLE, T_CHECKOUT_BONUS,
+    T_CHECKOUT_BONUS_APPLIED, T_CHECKOUT_BONUS_AVAILABLE, T_CHECKOUT_BONUS_MAX,
+    T_CHECKOUT_CART_EMPTY, T_CHECKOUT_CASH_ON_DELIVERY, T_CHECKOUT_CHANGE, T_CHECKOUT_ERR_400,
+    T_CHECKOUT_ERR_ADDRESS, T_CHECKOUT_ERR_ADDRESS_LONG, T_CHECKOUT_ERR_ITEMS, T_CHECKOUT_ERR_NAME,
     T_CHECKOUT_ERR_NAME_LONG, T_CHECKOUT_ERR_NETWORK, T_CHECKOUT_ERR_NO_TELEGRAM,
     T_CHECKOUT_ERR_PARSE, T_CHECKOUT_ERR_PHONE, T_CHECKOUT_ERR_PHONE_INVALID,
     T_CHECKOUT_ERR_PHONE_LONG, T_CHECKOUT_FULFILLMENT, T_CHECKOUT_FULFILLMENT_DELIVERY,
@@ -16,10 +15,11 @@ use crate::trios::i18n::{
     T_CHECKOUT_PHONE_PLACEHOLDER, T_CHECKOUT_PROCESSING, T_CHECKOUT_RETRY, T_CHECKOUT_SELECT_ZONE,
     T_CHECKOUT_STARS, T_CHECKOUT_STARS_AVAILABLE, T_CHECKOUT_STARS_MINUS, T_CHECKOUT_STEP_CART,
     T_CHECKOUT_STEP_CONFIRM, T_CHECKOUT_STEP_DETAILS, T_CHECKOUT_TITLE, T_CHECKOUT_TRUST_COD,
-    T_CHECKOUT_TRUST_SECURE, T_CHECKOUT_TRUST_TITLE, T_CHECKOUT_TRUST_VERIFIED,
-    T_CHECKOUT_USE_MY_LOCATION, T_DELIVERY, T_DELIVERY_ETA, T_DELIVERY_FEE, T_DELIVERY_ZONE,
-    T_PAYMENT, T_PICKUP_LOCATION, T_PLACE_ORDER, T_TOTAL, T_YOUR_INFO, T_YOUR_ORDER,
+    T_CHECKOUT_TRUST_SECURE, T_CHECKOUT_TRUST_TITLE, T_CHECKOUT_USE_MY_LOCATION, T_DELIVERY,
+    T_DELIVERY_ETA, T_DELIVERY_FEE, T_DELIVERY_ZONE, T_PAYMENT, T_PICKUP_LOCATION, T_PLACE_ORDER,
+    T_TOTAL, T_YOUR_INFO, T_YOUR_ORDER,
 };
+// The 20+ box's three keys (box, notice, trust line) left this import on 2026-09-25.
 use crate::trios::store::{checkout_blockers, normalize_phone, validate_checkout_for, Fulfillment};
 use crate::ui::api::context::api_base_url;
 // `fetch_text_authed_full` left this import with the 409 arm that was its only
@@ -106,8 +106,8 @@ struct CheckoutDraft {
     // drops the two keys that named a reward nothing can grant any more.
     #[serde(default)]
     bonus: f64,
-    #[serde(default)]
-    age_confirmed: bool,
+    // `age_confirmed` (the 20+ box, removed 2026-09-25) was here; serde drops
+    // it from a draft an older build saved, as it drops `reward_id`.
 }
 
 const CHECKOUT_DRAFT_LOCAL_KEY: &str = "woody_checkout_draft";
@@ -370,10 +370,10 @@ pub fn CheckoutScreen() -> Element {
     let mut delivery_address = use_signal(String::new);
     let mut delivery_notes = use_signal(String::new);
     let mut delivery_zone_id = use_signal(|| Option::<String>::None);
-    // Age gate: the user must explicitly confirm they are 20+ before placing
-    // an order. This drives both the in-app primary button and Telegram
-    // MainButton enabled state.
-    let mut age_confirmed = use_signal(|| false);
+    // No age signal. The 20+ box that stood here is removed for now (owner,
+    // 2026-09-25, «Пока убираем»): neither the in-app button nor Telegram's
+    // MainButton waits on it, the request carries no `age_confirmed`, and
+    // POST /api/orders accepts an order without one.
 
     // Loop #15: emit checkout_started once when the screen mounts with a
     // non-empty cart. Track only the first signalization to avoid noise.
@@ -449,11 +449,11 @@ pub fn CheckoutScreen() -> Element {
                 // `woody_last_reward_id` is deliberately neither read nor
                 // cleared: it is a key in live browsers, and a removal that
                 // reaches into someone's storage to delete it buys nothing.
-                if !draft.age_confirmed {
-                    if let Ok(Some(v)) = storage.get_item("woody_last_age_confirmed") {
-                        draft.age_confirmed = v == "true";
-                    }
-                }
+                // `woody_last_age_confirmed` is left the same way. It held the
+                // 20+ box's last answer; the box is removed for now (2026-09-25),
+                // so this build neither reads, writes nor clears it, and an older
+                // build still cached somewhere finds there what the customer
+                // last chose.
             }
         }
         customer_name.set(draft.name.clone());
@@ -463,7 +463,7 @@ pub fn CheckoutScreen() -> Element {
         delivery_notes.set(draft.notes.clone());
         stars_to_use.set(draft.stars);
         bonus_to_use.set(draft.bonus.max(0.0));
-        age_confirmed.set(draft.age_confirmed);
+        // (No 20+ box to restore since 2026-09-25.)
         loaded_draft.set(Some(draft));
     });
 
@@ -479,7 +479,7 @@ pub fn CheckoutScreen() -> Element {
         let mut notes_sig = delivery_notes;
         let mut stars_sig = stars_to_use;
         let mut bonus_sig = bonus_to_use;
-        let mut age_sig = age_confirmed;
+        // (No 20+ box signal since 2026-09-25.)
         let loaded = loaded_draft;
         spawn(async move {
             let tg = TelegramApp;
@@ -495,7 +495,7 @@ pub fn CheckoutScreen() -> Element {
                                 notes: notes_sig(),
                                 stars: stars_sig(),
                                 bonus: bonus_sig(),
-                                age_confirmed: age_sig(),
+                                // (No 20+ box since 2026-09-25.)
                             };
                             current == ld
                         }
@@ -509,7 +509,7 @@ pub fn CheckoutScreen() -> Element {
                         notes_sig.set(draft.notes);
                         stars_sig.set(draft.stars);
                         bonus_sig.set(draft.bonus.max(0.0));
-                        age_sig.set(draft.age_confirmed);
+                        // (No 20+ box to restore since 2026-09-25.)
                     }
                 }
             }
@@ -528,7 +528,7 @@ pub fn CheckoutScreen() -> Element {
             notes: delivery_notes(),
             stars: stars_to_use(),
             bonus: bonus_to_use().max(0.0),
-            age_confirmed: age_confirmed(),
+            // (No 20+ box to save since 2026-09-25.)
         };
         #[cfg(target_arch = "wasm32")]
         {
@@ -858,7 +858,7 @@ pub fn CheckoutScreen() -> Element {
             &delivery_address(),
             fulfillment(),
             cart_len,
-            age_confirmed(),
+            // (The 20+ box was the seventh argument until 2026-09-25.)
         )
         .is_empty()
             && !is_processing()
@@ -895,11 +895,11 @@ pub fn CheckoutScreen() -> Element {
             tg.haptic_notification(HapticNotification::Error);
             return;
         }
-        if !age_confirmed() {
-            order_error.set(Some(t(lang, T_CHECKOUT_AGE_NOTICE).to_string()));
-            tg.haptic_notification(HapticNotification::Warning);
-            return;
-        }
+        // No age refusal here any more: the 20+ box is removed for now (owner,
+        // 2026-09-25, «Пока убираем»). The identity check above and the
+        // validator below are the handler's form checks -- the same subjects
+        // the button counts in `checkout_blockers` -- so the two still cannot
+        // disagree about whether the form is complete.
         let trios_items = to_trios_items(&submit_cart_items);
         if let Err(e) = validate_checkout_for(
             &customer_name(),
@@ -1027,7 +1027,7 @@ pub fn CheckoutScreen() -> Element {
             "fulfillment": fulfillment().as_str(),
             "delivery_address": delivery_address(),
             "delivery_notes": delivery_notes(),
-            "age_confirmed": age_confirmed(),
+            // No "age_confirmed": the server stopped requiring it on 2026-09-25.
             "delivery_zone_id": zone_to_submit(delivery_zone_id(), zone_info.as_ref()),
         });
 
@@ -1070,10 +1070,10 @@ pub fn CheckoutScreen() -> Element {
                             let _ = storage.set_item("woody_last_stars", &submit_stars.to_string());
                             let _ =
                                 storage.set_item("woody_last_bonus", &format!("{submit_bonus:.0}"));
-                            let _ = storage.set_item(
-                                "woody_last_age_confirmed",
-                                if age_confirmed() { "true" } else { "false" },
-                            );
+                            // `woody_last_age_confirmed` is no longer written:
+                            // the 20+ box it remembered is removed for now
+                            // (2026-09-25). A value an older build stored is
+                            // left as it is.
                         }
                     }
                     // Stop the spinner and hide the native button before leaving the screen.
@@ -1331,24 +1331,24 @@ pub fn CheckoutScreen() -> Element {
                                 p { style: "font-size: 12px; color: #ff4757; margin-top: 4px;", "{err}" }
                             }
                         }
-                        // Age gate: explicit 20+ confirmation required to place an order.
-                        div { style: "display: flex; align-items: flex-start; gap: 8px; margin-top: 8px;",
-                            input {
-                                r#type: "checkbox",
-                                id: "age-confirm",
-                                checked: "{age_confirmed()}",
-                                style: "width: 20px; height: 20px; margin-top: 2px; cursor: pointer; accent-color: #39ff14;",
-                                onclick: move |_| {
-                                    age_confirmed.set(!age_confirmed());
-                                },
-                            }
-                            label {
-                                r#for: "age-confirm",
-                                style: "font-size: 13px; color: #8b8b9e; cursor: pointer; line-height: 1.4;",
-                                "{t(lang, T_CHECKOUT_AGE_CONFIRM)}"
-                            }
-                        }
-                        p { style: "font-size: 11px; color: #8b8b9e; margin-top: 6px; line-height: 1.4;", "{t(lang, T_CHECKOUT_AGE_NOTICE)}" }
+                        // The 20+ box stood here until 2026-09-25: a checkbox the
+                        // order button waited on (`checkout.age_confirm`) and a
+                        // notice under it (`checkout.age_notice`). The owner
+                        // removed it for now («Пока убираем», answer 1 of the
+                        // second numbered list of that day). It came with the
+                        // fork of the previous shop's bot rather than from a
+                        // decision about a bike rental, and
+                        // specs/turbobaby/checkout_contact.t27 records it as
+                        // inherited heritage. With it went the button's age
+                        // blocker, the submit handler's age refusal, the trust
+                        // block's age line and the server's refusal of an order
+                        // without `age_confirmed: true`. The answer says "for
+                        // now", so it may come back; git history holds the box,
+                        // its two keys and its blocker. Nothing a customer saved
+                        // is touched: a draft that carries `age_confirmed` still
+                        // restores. Each line of the removed block became a line
+                        // of this comment, so no line of this file that a
+                        // contract cites has moved.
                     }
 
                     // Shop selection
@@ -1576,7 +1576,7 @@ pub fn CheckoutScreen() -> Element {
                 ",
                         div { style: "font-size: 13px; color: #39ff14; font-weight: 700; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;", "{t(lang, T_CHECKOUT_TRUST_TITLE)}" }
                         div { style: "display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #8b8b9e;",
-                            div { "{t(lang, T_CHECKOUT_TRUST_VERIFIED)}" }
+                            // The age-check line left with the 20+ box (2026-09-25).
                             div { "{t(lang, T_CHECKOUT_TRUST_COD)}" }
                             div { "{t(lang, T_CHECKOUT_TRUST_SECURE)}" }
                         }
@@ -1605,8 +1605,8 @@ pub fn CheckoutScreen() -> Element {
 
                     // Why the order button is not clickable yet. A disabled
                     // button on its own told the customer nothing, so an
-                    // unticked age box or a rejected phone looked like the app
-                    // being broken.
+                    // empty name or a rejected phone looked like the app being
+                    // broken.
                     {
                         let blockers = checkout_blockers(
                             telegram_id.is_some(),
@@ -1615,7 +1615,7 @@ pub fn CheckoutScreen() -> Element {
                             &delivery_address(),
                             fulfillment(),
                             cart_items.len(),
-                            age_confirmed(),
+                            // (The 20+ box was the seventh argument until 2026-09-25.)
                         );
                         if blockers.is_empty() {
                             rsx! {}
@@ -1656,7 +1656,7 @@ pub fn CheckoutScreen() -> Element {
                                 &delivery_address(),
                                 fulfillment(),
                                 cart_items.len(),
-                                age_confirmed(),
+                                // (The 20+ box was the seventh argument until 2026-09-25.)
                             );
                             let can_order = blockers.is_empty() && !is_processing();
                             let btn_bg = if can_order { "#39ff14" } else { "#2a2a4a" };

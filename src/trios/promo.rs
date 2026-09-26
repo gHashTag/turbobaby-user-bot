@@ -184,10 +184,10 @@ pub const MAX_POST_LEN: usize = 900;
 /// The instruction given to the model.
 ///
 /// Written as rules rather than a vibe, because the output goes out under the
-/// shop's name: no invented facts (the model does not know the THC figure, the
-/// price or the schedule unless it is in the prompt), no invented discounts,
-/// and no claims about effects that would be a legal problem for a cannabis
-/// shop to publish.
+/// shop's name: no invented facts (the model does not know the price or the
+/// schedule unless it is in the prompt), no invented discounts, and no claims
+/// about effects the shop could not stand behind. (Reworded 2026-09-25: this
+/// comment used to name the old shop's trade.)
 pub fn prompt_for(subject: &Subject, lang: &str, facts: &str) -> String {
     let what = match subject {
         Subject::Accessory { name, .. } => format!("новый аксессуар «{name}»"),
@@ -378,6 +378,93 @@ pub struct DigestRow {
     pub revenue: f64,
 }
 
+/// What `/promo` and `GET /api/admin/promo-report` print where they withhold a
+/// published post's stored name (`report_kind_and_name`).
+///
+/// Admin-facing copy, chosen on 2026-09-25 under the owner's ruling of that
+/// day (answer 12 of the numbered list: nothing cannabis-related anywhere) and
+/// recorded in `specs/turbobaby/legacy_retirement.t27`
+/// (`PROMO_REPORT_NAME_DECIDED_AT`). It says what happened to the name and
+/// claims nothing about what the post was about. Short enough that the
+/// digest never cuts it (`DIGEST_MAX_NAME_CHARS`).
+pub const REPORT_WITHHELD_NAME: &str = "(название скрыто)";
+
+/// The deep-link kind a post of this stored `kind` opens when a `Subject` the
+/// sweeper can build today wrote it, or `None` when none writes that word.
+///
+/// The words are `Subject::kind`'s and the kinds `Subject::deeplink_target`'s.
+/// The unit test `every_live_subject_keeps_its_name_in_the_report` holds this
+/// table to both for one of each variant, so it cannot drift from them.
+fn live_link_kind(kind: &str) -> Option<crate::trios::deeplink::Kind> {
+    use crate::trios::deeplink::Kind;
+    match kind {
+        "accessory" => Some(Kind::Accessory),
+        "tea" => Some(Kind::Tea),
+        "set" | "bestseller" => Some(Kind::Set),
+        "event" | "event_soon" => Some(Kind::Event),
+        _ => None,
+    }
+}
+
+/// Whether the owners' sales report may print a published post's stored name.
+///
+/// `promo_posts` keeps every row the sweeper ever wrote, and the report reads
+/// the `subject_name` stored with each one. From 2026-08-19 until migration 083
+/// dropped the old shop's product table, the sweeper also wrote about that
+/// table: rows of a kind whose `Subject` variant left with 083, and bestseller
+/// rows drawn from it. Their stored name is the old shop's product name, and
+/// the owner ruled on 2026-09-25 that nothing cannabis-related may appear
+/// anywhere. Only the NAME is withheld: the row stays in the report with its
+/// numbers, so the month's totals are not understated, and nothing in the
+/// table changes.
+///
+/// Fail closed at every step:
+/// * a kind no live `Subject` writes is withheld -- the one 083 retired, and
+///   one this code never classified (the database forked from another shop's
+///   bot, DECISIONS.md D19);
+/// * a stored link must open the deep-link kind a live post of the same kind
+///   opens. A bestseller row whose link opens the dropped table's product is
+///   withheld, and so is a link that does not parse;
+/// * a row with no link (drafted before migration 076, 2026-08-22) is judged
+///   by its kind, except a bestseller: bestsellers were drawn from both tables
+///   until 083, and without its link nothing tells which.
+pub fn report_may_print_name(kind: &str, link_payload: Option<&str>) -> bool {
+    let Some(opens) = live_link_kind(kind) else {
+        return false;
+    };
+    match link_payload {
+        Some(payload) => matches!(
+            crate::trios::deeplink::parse(payload),
+            Some(crate::trios::deeplink::Target::Product { kind: k, .. }) if k == opens
+        ),
+        None => kind != "bestseller",
+    }
+}
+
+/// The kind and the name the report prints for one published row, from what
+/// the row stores.
+///
+/// A withheld row keeps a kind a live `Subject` writes (a withheld bestseller
+/// still shows as one) and loses a kind none writes, because that word is the
+/// retired one or an unclassified one; its name becomes
+/// [`REPORT_WITHHELD_NAME`]. `crate::promo::report` routes every row through
+/// here, so the bot's `/promo` digest and the admin JSON print the same thing.
+pub fn report_kind_and_name(
+    kind: String,
+    link_payload: Option<&str>,
+    name: String,
+) -> (String, String) {
+    if report_may_print_name(&kind, link_payload) {
+        return (kind, name);
+    }
+    let kind = if live_link_kind(&kind).is_some() {
+        kind
+    } else {
+        String::new()
+    };
+    (kind, REPORT_WITHHELD_NAME.to_string())
+}
+
 /// Rows one digest message shows at most.
 ///
 /// Telegram rejects a message over 4096 characters outright, and a month of
@@ -394,7 +481,9 @@ pub const DIGEST_MAX_NAME_CHARS: usize = 32;
 fn digest_icon(kind: &str) -> &'static str {
     match kind {
         "set" => "🎁",
-        "strain" => "🌿",
+        // A row of the retired catalogue kind (promo_posts rows stored before
+        // 083) gets the generic icon: its leaf left on 2026-09-25 (owner:
+        // nothing cannabis-related anywhere).
         "event" => "📅",
         "event_soon" => "⏰",
         "bestseller" => "🔥",
@@ -513,7 +602,7 @@ mod tests {
         vec![
             Subject::Accessory {
                 id: "a1".into(),
-                name: "Asia 420".into(),
+                name: "Phone mount".into(),
             },
             Subject::Tea {
                 id: "t1".into(),
@@ -693,7 +782,7 @@ mod tests {
             "   ",
             "ok",
             "Не могу помочь с этим запросом.",
-            "I'm sorry, but I cannot write promotional content for cannabis.",
+            "I'm sorry, but I cannot write promotional content for this product.",
             "As an AI language model, I must decline.",
         ] {
             assert_eq!(
@@ -846,11 +935,11 @@ mod tests {
     fn one_expensive_item_does_not_dwarf_the_whole_shop() {
         let cheap = Subject::Accessory {
             id: "a1".into(),
-            name: "papers".into(),
+            name: "sticker".into(),
         };
         let dear = Subject::Accessory {
             id: "a2".into(),
-            name: "gold grinder".into(),
+            name: "gold helmet".into(),
         };
         let (lo, hi) = (score(&cheap, Some(150.0)), score(&dear, Some(50_000.0)));
         assert!(hi > lo, "the expensive one should still rank higher");
@@ -903,7 +992,7 @@ mod tests {
             id: "k1".into(),
             name: "Snickers Cake".into(),
         };
-        let p = prompt_for(&s, "ru", "Цена: 950 ฿. В наборе: 5 сортов.");
+        let p = prompt_for(&s, "ru", "Цена: 950 ฿. В наборе: 5 позиций.");
         assert!(p.contains("Snickers Cake"));
         assert!(p.contains("950"), "the facts were not passed to the model");
         assert!(
@@ -912,7 +1001,7 @@ mod tests {
         );
         assert!(
             p.contains("медицинского"),
-            "no rule against health claims, which a cannabis shop cannot publish"
+            "no rule against health claims, which the shop cannot publish"
         );
     }
 
@@ -955,13 +1044,15 @@ mod tests {
     fn rows_render_with_icons_and_the_causality_caveat() {
         let rows = [
             row("set", "Party Pack", 12, 3, 3600.0),
-            row("strain", "DA FUNK", 8, 1, 300.0),
+            row("legacy_kind", "Old Row", 8, 1, 300.0),
             row("event_soon", "UFC NIGHT", 21, 0, 0.0),
         ];
         let d = format_promo_digest(30, &rows);
         assert!(d.starts_with("📊 Промо за 30 дней"));
         assert!(d.contains("🎁 Party Pack — 12 откр · 3 зак · 3600 ฿"));
-        assert!(d.contains("🌿 DA FUNK — 8 откр · 1 зак · 300 ฿"));
+        // A kind with no icon of its own (a stored row of a retired kind)
+        // gets the generic one.
+        assert!(d.contains("📣 Old Row — 8 откр · 1 зак · 300 ฿"));
         assert!(d.contains("Итого: 3 поста · 4 заказа · 3900 ฿"));
         assert!(d.contains("24 ч после открытия ссылки"));
     }
@@ -985,8 +1076,8 @@ mod tests {
         let rows: Vec<DigestRow> = (0..40)
             .map(|i| {
                 row(
-                    "strain",
-                    &format!("Very Long Strain Name Number {i}"),
+                    "set",
+                    &format!("Very Long Pack Name Number {i}"),
                     3,
                     1,
                     100.0,
@@ -1008,9 +1099,178 @@ mod tests {
     #[test]
     fn the_total_counts_capped_rows_too() {
         let rows: Vec<DigestRow> = (0..30)
-            .map(|_| row("accessory", "Grinder", 1, 1, 50.0))
+            .map(|_| row("accessory", "Phone mount", 1, 1, 50.0))
             .collect();
         let d = format_promo_digest(30, &rows);
         assert!(d.contains("1500 ฿"), "total ignored capped rows: {d}");
+    }
+
+    /// One of each variant the sweeper can build today, with a UUID-shaped id
+    /// like the catalogue's, so each link is exactly the one `record_body`
+    /// stores.
+    fn one_of_each_live_subject() -> Vec<Subject> {
+        let id = || "3f2c8a1e-6b7d-4c19-9e0a-5d4b2f7c8e91".to_string();
+        let name = || "Some Name".to_string();
+        vec![
+            Subject::Accessory {
+                id: id(),
+                name: name(),
+            },
+            Subject::Tea {
+                id: id(),
+                name: name(),
+            },
+            Subject::Set {
+                id: id(),
+                name: name(),
+            },
+            Subject::Event {
+                id: id(),
+                name: name(),
+            },
+            Subject::EventSoon {
+                id: id(),
+                name: name(),
+                when: "09:00 – 12:00".into(),
+                seats_left: None,
+            },
+            Subject::Bestseller {
+                id: id(),
+                name: name(),
+                kind: BestsellerKind::Set,
+                sold: 3,
+                period: "2026-W39".into(),
+            },
+        ]
+    }
+
+    fn stored_link(s: &Subject) -> String {
+        s.deeplink_target()
+            .and_then(|t| crate::trios::deeplink::payload_for(&t))
+            .expect("every live subject stores a transportable link")
+    }
+
+    /// A post about something a live subject can be about keeps its name,
+    /// with the link it was stored with and, for every kind but a
+    /// bestseller, without one. This is also what holds `live_link_kind` to
+    /// `Subject::kind` and `Subject::deeplink_target`.
+    #[test]
+    fn every_live_subject_keeps_its_name_in_the_report() {
+        let every = one_of_each_live_subject();
+        let mut kinds: Vec<&str> = every.iter().map(Subject::kind).collect();
+        kinds.sort_unstable();
+        kinds.dedup();
+        assert_eq!(kinds.len(), every.len(), "one of each variant: {kinds:?}");
+        for s in &every {
+            let opens = match s.deeplink_target() {
+                Some(crate::trios::deeplink::Target::Product { kind, .. }) => kind,
+                other => panic!("{} links to {other:?}, not a product", s.kind()),
+            };
+            assert_eq!(live_link_kind(s.kind()), Some(opens), "{}", s.kind());
+            let link = stored_link(s);
+            assert!(
+                report_may_print_name(s.kind(), Some(&link)),
+                "{} with its own link {link} was withheld",
+                s.kind()
+            );
+            assert_eq!(
+                report_kind_and_name(s.kind().into(), Some(&link), "Kept".into()),
+                (s.kind().to_string(), "Kept".to_string())
+            );
+        }
+        for kind in ["accessory", "tea", "set", "event", "event_soon"] {
+            assert!(report_may_print_name(kind, None), "{kind} without a link");
+        }
+    }
+
+    /// A bestseller row whose link opens any product kind but the one a live
+    /// bestseller opens is withheld. Swept over every deep-link kind rather
+    /// than listed, so the kind of the table 083 dropped is covered without
+    /// this file naming it. The same holds for every other live kind: a link
+    /// to another table's product is not this row's product.
+    #[test]
+    fn a_link_to_another_tables_product_withholds_the_name() {
+        use crate::trios::deeplink::{product_payload_from, Kind};
+        let mut withheld = 0;
+        for s in one_of_each_live_subject() {
+            let opens = live_link_kind(s.kind()).expect("a live kind");
+            for other in Kind::ALL.into_iter().filter(|k| *k != opens) {
+                let link = product_payload_from(other, s.id(), Some("promo_bestseller"));
+                assert!(
+                    !report_may_print_name(s.kind(), Some(&link)),
+                    "{} row printed its name under a link to {other:?}",
+                    s.kind()
+                );
+                assert_eq!(
+                    report_kind_and_name(s.kind().into(), Some(&link), "Old".into()),
+                    (s.kind().to_string(), REPORT_WITHHELD_NAME.to_string())
+                );
+                withheld += 1;
+            }
+        }
+        assert!(withheld >= 6, "the sweep checked nothing");
+    }
+
+    /// Fail closed. A kind no live subject writes -- an empty column read, a
+    /// case or spacing variant, a word another shop's bot wrote -- is
+    /// withheld with its word, even under a link that would pass for a set.
+    #[test]
+    fn a_kind_no_live_subject_writes_is_withheld_with_its_word() {
+        let set_link = stored_link(&one_of_each_live_subject()[2]);
+        for kind in ["", "Set", "set ", "sommelier", "legacy_kind"] {
+            assert!(!report_may_print_name(kind, None), "{kind:?}");
+            assert!(!report_may_print_name(kind, Some(&set_link)), "{kind:?}");
+            assert_eq!(
+                report_kind_and_name(kind.into(), Some(&set_link), "Old".into()),
+                (String::new(), REPORT_WITHHELD_NAME.to_string()),
+                "{kind:?}"
+            );
+        }
+    }
+
+    /// Before migration 076 no link was stored. Every kind is judged by its
+    /// word then, except a bestseller: it was drawn from two tables, and
+    /// without the link nothing says which.
+    #[test]
+    fn a_bestseller_without_its_link_is_withheld_and_keeps_its_kind() {
+        assert!(!report_may_print_name("bestseller", None));
+        assert_eq!(
+            report_kind_and_name("bestseller".into(), None, "Old".into()),
+            ("bestseller".to_string(), REPORT_WITHHELD_NAME.to_string())
+        );
+    }
+
+    /// A link that does not parse to a product is not evidence of anything.
+    #[test]
+    fn a_link_that_is_not_a_product_withholds_the_name() {
+        for link in ["", "cart", "referrals", "o_123", "p_set_", "not a link!"] {
+            assert!(!report_may_print_name("set", Some(link)), "{link:?}");
+        }
+    }
+
+    /// The owner reads a withheld row like any other: its numbers, the
+    /// generic icon when its word was withheld too, and the label whole. It
+    /// still counts in the totals.
+    #[test]
+    fn a_withheld_row_renders_in_the_digest_and_still_counts() {
+        assert!(REPORT_WITHHELD_NAME.chars().count() <= DIGEST_MAX_NAME_CHARS);
+        let (kind, name) = report_kind_and_name("legacy_kind".into(), None, "Old".into());
+        let rows = [
+            DigestRow {
+                kind,
+                name,
+                openers: 8,
+                orders: 1,
+                revenue: 300.0,
+            },
+            row("set", "Party Pack", 12, 3, 3600.0),
+        ];
+        let d = format_promo_digest(30, &rows);
+        assert!(
+            d.contains("📣 (название скрыто) — 8 откр · 1 зак · 300 ฿"),
+            "{d}"
+        );
+        assert!(!d.contains("Old"), "the stored name leaked: {d}");
+        assert!(d.contains("Итого: 2 поста · 4 заказа · 3900 ฿"), "{d}");
     }
 }

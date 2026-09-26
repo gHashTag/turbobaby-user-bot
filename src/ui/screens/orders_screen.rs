@@ -272,7 +272,7 @@ pub fn OrdersScreen() -> Element {
                                         let status_color = arm.color();
                                         let status_label = t(lang, arm.label_key());
                                         let date_str = o.created_at.split('T').next().unwrap_or(&o.created_at).to_string();
-                                        let shop = o.shop_id.as_deref().unwrap_or("TurboBaby");
+                                        let shop = crate::trios::legacy_view::shown_shop(o.shop_id.as_deref()).map(|s| s.unwrap_or("TurboBaby"));
                                         let total_str = crate::trios::pricing::order_total_text(o.total, crate::ui::components::bike_card::DASH);
                                         let is_cancelled = arm.chip() == StatusChip::Cancelled;
                                         let opacity = if is_cancelled { "0.7" } else { "1" };
@@ -303,7 +303,7 @@ pub fn OrdersScreen() -> Element {
                                                 div { style: "margin-bottom: 8px;",
                                                     for item in o.items.iter() {
                                                         div { style: "display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 3px;",
-                                                            span { style: "color: #8b8b9e;", "{item_name(item)} x{item.quantity as i32}" }
+                                                            span { style: "color: #8b8b9e;", "{crate::trios::legacy_view::shown_line_name(lang, &item_name(item))} x{item.quantity as i32}" }
                                                         }
                                                     }
                                                 }
@@ -318,7 +318,7 @@ pub fn OrdersScreen() -> Element {
                                                 // на отзыв, который сервер отказался принять и нигде не сохранил.
                                                 // Соврать об успехе дороже, чем показать ошибку.
                                                 div { style: "display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid #2a2a4a; font-size: 13px;",
-                                                    span { style: "color: #8b8b9e;", "📍 {shop} · {date_str}" }
+                                                    span { style: "color: #8b8b9e;", if let Some(shop) = shop { "📍 {shop} · {date_str}" } else { "{date_str}" } }
                                                     span { style: "font-size: 20px; font-weight: 800; color: #ffe600; text-shadow: 2px 2px 0 #000;", "{total_str}" }
                                                 }
                                                 if arm.reorder_offered() {

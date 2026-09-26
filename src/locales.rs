@@ -30,14 +30,14 @@ pub(crate) struct Locale {
     pub fact_prompt: String,
     pub fact_fail_fallback: String,
     pub interesting_fact: String,
-    pub strain_of_day: String,
-    pub prev_strain: String,
-    pub next_strain: String,
+    // strain_of_day, prev_strain, next_strain: removed 2026-09-25 with the
+    // retired carousel page they labelled (owner: nothing cannabis-related
+    // anywhere); its buttons answer with the rental menu (see callbacks.rs).
     pub add_to_cart: String,
     pub order_new_header: String,
     pub order_items: String,
     pub order_items_empty: String,
-    pub order_grams: String,
+    // order_grams ("г" / "g", the old shop's unit of sale): removed 2026-09-25.
     pub order_pickup: String,
     pub order_source: String,
     pub order_anonymous: String,
@@ -93,10 +93,10 @@ pub(crate) struct Locale {
     pub cart_open: String,
     // Loop #21: referrer-facing lifecycle messages (sent by notification worker)
     pub referral_friend_joined: String,
-    /// Only reachable by `notification_queue` rows queued before D5 — nothing
-    /// writes the `friend_watered` kind any more. Kept, and kept worded for the
-    /// garden, because that is what those rows are about.
-    pub garden_friend_watered_legacy: String,
+    // `garden_friend_watered_legacy` stood here, the garden message for queued
+    // `friend_watered` rows. Removed 2026-09-26 (owner: nothing cannabis-related
+    // anywhere): such rows are now held unsent (src/notification_queue.rs,
+    // `DeliverableKind`), and these comment lines keep every cited line put.
     pub referral_friend_ordered: String,
     pub referral_invite_progress_hint: String,
     pub referral_milestone_bonus: String,
@@ -165,14 +165,14 @@ fn ru() -> Locale {
         fact_prompt: "Расскажи один интересный факт о Пхукете или Таиланде.".into(),
         fact_fail_fallback: "😅 Не смог найти факт, попробуй ещё раз!".into(),
         interesting_fact: "Ещё факт".into(),
-        strain_of_day: "Сорт дня".into(),
-        prev_strain: "◀️".into(),
-        next_strain: "▶️".into(),
+        // strain_of_day, prev_strain and next_strain left on 2026-09-25 with
+        // the retired carousel page (the struct says why); these comment lines
+        // keep every src/locales.rs line a contract cites where it was.
         add_to_cart: "🛒 В корзину".into(),
         order_new_header: "Новый заказ".into(),
         order_items: "Позиции".into(),
         order_items_empty: "(пусто)".into(),
-        order_grams: "г".into(),
+        // order_grams left the same day (see the struct).
         order_pickup: "Самовывоз:".into(),
         order_source: "Источник:".into(),
         order_anonymous: "Аноним".into(),
@@ -197,7 +197,7 @@ fn ru() -> Locale {
         help_commands: "/start — начало\n/menu — меню\n/joke — анекдот\n/fact — факт\n/lang — язык"
             .into(),
         opening_sets: "Открываю наборы...".into(),
-        welcome_feature1: "Каталог: от Click 125 до X-ADV 750".into(),
+        welcome_feature1: "Каталог: от NMAX 155 до X-ADV 750".into(),
         welcome_feature2: "Тарифы на день и на месяц".into(),
         welcome_feature3: "Доставка по всему Пхукету".into(),
         welcome_feature4: "Прозрачные залоги и условия".into(),
@@ -221,7 +221,7 @@ fn ru() -> Locale {
         cart_open: "Открыть корзину".into(),
         // Loop #21
         referral_friend_joined: "🎉 {name} присоединился по вашей ссылке!".into(),
-        garden_friend_watered_legacy: "🔥 {name} полил растение и удерживает стрик {streak} дн.".into(),
+        // garden_friend_watered_legacy left on 2026-09-26 (see the struct).
         referral_friend_ordered: "🎉 {name} сделал первый заказ! Вам начислено {bonus} бонусных баллов.".into(),
         referral_invite_progress_hint: "Приглашайте больше друзей — получайте бонусы за их активность.".into(),
         referral_milestone_bonus: "🏆 Поздравляем! Вы достигли рубежа {milestone} друзей и получили {bonus} бонусных баллов от @{bot}.".into(),
@@ -254,14 +254,14 @@ fn en() -> Locale {
         fact_prompt: "Tell one interesting fact about Phuket or Thailand.".into(),
         fact_fail_fallback: "😅 Couldn't find a fact, try again!".into(),
         interesting_fact: "More facts".into(),
-        strain_of_day: "Strain of the Day".into(),
-        prev_strain: "◀️".into(),
-        next_strain: "▶️".into(),
+        // strain_of_day, prev_strain and next_strain left on 2026-09-25 with
+        // the retired carousel page (the struct says why); these comment lines
+        // keep every src/locales.rs line a contract cites where it was.
         add_to_cart: "🛒 Add to cart".into(),
         order_new_header: "New Order".into(),
         order_items: "Items".into(),
         order_items_empty: "(empty)".into(),
-        order_grams: "g".into(),
+        // order_grams left the same day (see the struct).
         order_pickup: "Pickup:".into(),
         order_source: "Source:".into(),
         order_anonymous: "Anonymous".into(),
@@ -286,7 +286,7 @@ fn en() -> Locale {
         help_commands: "/start — start\n/menu — menu\n/joke — joke\n/fact — fact\n/lang — language"
             .into(),
         opening_sets: "Opening sets...".into(),
-        welcome_feature1: "Catalog: from Click 125 to X-ADV 750".into(),
+        welcome_feature1: "Catalog: from NMAX 155 to X-ADV 750".into(),
         welcome_feature2: "Daily and monthly rates".into(),
         welcome_feature3: "Delivery across Phuket".into(),
         welcome_feature4: "Clear deposits and terms".into(),
@@ -310,7 +310,7 @@ fn en() -> Locale {
         cart_open: "Open cart".into(),
         // Loop #21
         referral_friend_joined: "🎉 {name} joined via your link!".into(),
-        garden_friend_watered_legacy: "🔥 {name} watered their plant and kept a {streak}-day streak.".into(),
+        // garden_friend_watered_legacy left on 2026-09-26 (see the struct).
         referral_friend_ordered: "🎉 {name} placed their first order! You earned {bonus} bonus points.".into(),
         referral_invite_progress_hint: "Invite more friends — earn bonuses for their activity.".into(),
         referral_milestone_bonus: "🏆 Congrats! You hit the {milestone} friends milestone and received {bonus} bonus points from @{bot}.".into(),

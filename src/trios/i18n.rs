@@ -141,16 +141,16 @@ pub const T_EVENTS_WEEKDAY_SUN: Key = "events.weekday.sun";
 /// Screen title translations
 pub const T_HOME_TITLE: Key = "home.title";
 pub const T_HOME_SUBTITLE: Key = "home.subtitle";
-pub const T_MENU_TITLE: Key = "menu.title";
-pub const T_MENU_DESC: Key = "menu.description";
+// Owner's ruling 2026-09-25 (#12, nothing cannabis-related anywhere): the
+// retired strain menu's title and subtitle keys were deleted here.
 pub const T_SETS_TITLE: Key = "sets.title";
 pub const T_SETS_DESC: Key = "sets.description";
 pub const T_ACC_TITLE: Key = "acc.title";
-pub const T_ACC_DESC: Key = "acc.description";
-pub const T_ACC_CAT_GRINDER: Key = "acc.cat.grinder";
-pub const T_ACC_CAT_PAPERS: Key = "acc.cat.papers";
-pub const T_ACC_CAT_PIPE: Key = "acc.cat.pipe";
-pub const T_ACC_CAT_BONG: Key = "acc.cat.bong";
+// Same ruling: the accessories screen's smoking-gear subtitle and its four
+// paraphernalia categories (grinder, papers, pipe, bong) were deleted here.
+// Fourteen keys went in all, each one-for-one replaced by a comment line so
+// the line numbers the contracts cite do not move. Deleted, not reworded: no
+// replacement sentence was written for any of them.
 pub const T_ACC_CAT_STORAGE: Key = "acc.cat.storage";
 pub const T_ACC_CAT_LIGHTER: Key = "acc.cat.lighter";
 pub const T_ACC_CAT_CLOTHING: Key = "acc.cat.clothing";
@@ -192,7 +192,7 @@ pub const T_CHECKOUT_BLOCKED_TITLE: Key = "checkout.blocked_title";
 pub const T_CHECKOUT_FULFILLMENT: Key = "checkout.fulfillment";
 pub const T_CHECKOUT_FULFILLMENT_DELIVERY: Key = "checkout.fulfillment.delivery";
 pub const T_CHECKOUT_FULFILLMENT_PICKUP: Key = "checkout.fulfillment.pickup";
-pub const T_CHECKOUT_ERR_AGE: Key = "checkout.error.age";
+// checkout.error.age: deleted 2026-09-25 (the 20+ gate, second list #1).
 pub const T_CHECKOUT_CHANGE: Key = "checkout.change";
 pub const T_CHECKOUT_PHONE_FROM_TELEGRAM: Key = "checkout.phone_from_telegram";
 pub const T_CHECKOUT_ERR_NETWORK: Key = "checkout.error.network";
@@ -261,7 +261,7 @@ pub const T_CHECKOUT_ERR_5XX: Key = "checkout.err.5xx";
 // Loop #7: per-field checkout error messages surfaced from the server
 // response body (422 with a stable `error` code) so the UI can show a
 // sentence instead of the generic price-change hint.
-pub const T_CHECKOUT_ERR_AGE_NOT_CONFIRMED: Key = "checkout.err.age_not_confirmed";
+// checkout.err.age_not_confirmed: deleted 2026-09-25 (the 20+ gate, second list #1).
 pub const T_CHECKOUT_ERR_ZONE_INVALID: Key = "checkout.err.zone_invalid";
 
 // Generic API error messages (cycle #74). Used by
@@ -320,13 +320,13 @@ pub const T_CHECKOUT_CASH_ON_DELIVERY: Key = "checkout.cash_on_delivery";
 pub const T_CHECKOUT_PAY_ON_RECEIVE: Key = "checkout.pay_on_receive";
 pub const T_CHECKOUT_PROCESSING: Key = "checkout.processing";
 
-// Checkout trust + age gate micro-copy
+// Checkout trust micro-copy (the 20+ gate's keys here: deleted 2026-09-25)
 pub const T_CHECKOUT_TRUST_TITLE: Key = "checkout.trust_title";
-pub const T_CHECKOUT_TRUST_VERIFIED: Key = "checkout.trust.verified";
+// checkout.trust.verified: deleted 2026-09-25 (the 20+ gate, second list #1).
 pub const T_CHECKOUT_TRUST_COD: Key = "checkout.trust.cod";
 pub const T_CHECKOUT_TRUST_SECURE: Key = "checkout.trust.secure";
-pub const T_CHECKOUT_AGE_CONFIRM: Key = "checkout.age_confirm";
-pub const T_CHECKOUT_AGE_NOTICE: Key = "checkout.age_notice";
+// checkout.age_confirm: deleted 2026-09-25 (the 20+ gate, second list #1).
+// checkout.age_notice: deleted 2026-09-25 (the 20+ gate, second list #1).
 
 // Catalog shared strings
 pub const T_CATALOG_EMPTY: Key = "catalog.empty";
@@ -498,8 +498,11 @@ pub const T_ORDER_DETAIL_LIVE: Key = "order.detail.live";
 pub const T_ORDER_DETAIL_CANCEL: Key = "order.detail.cancel";
 pub const T_ORDER_DETAIL_CANCEL_CONFIRM: Key = "order.detail.cancel_confirm";
 pub const T_ORDER_DETAIL_CANCELLED_BY_USER: Key = "order.detail.cancelled_by_user";
+/// A cancellation refused because the order has left pending (409). Copy chosen
+/// and reworded 2026-09-25 under the owner's delegation; `client_errors.t27` records it.
+pub const T_ORDER_DETAIL_CANCEL_REFUSED: Key = "order.detail.cancel_refused";
 pub const T_ORDER_REORDER: Key = "order.reorder";
-
+pub const T_ORDER_LINE_PREVIOUS_CATALOGUE: Key = "order.line.previous_catalogue";
 // Profile screen hard-coded strings
 pub const T_PROFILE_MEMBERSHIP: Key = "profile.membership";
 pub const T_PROFILE_QR_CODE: Key = "profile.qr_code";
@@ -559,18 +562,18 @@ pub const T_MODAL_INCREASE_QTY: Key = "modal.increase_qty";
 pub const T_MODAL_CERTIFICATE: Key = "modal.certificate";
 
 // Menu screen hard-coded strings
-pub const T_MENU_FILTER_SATIVA: Key = "menu.filter.sativa";
-pub const T_MENU_FILTER_INDICA: Key = "menu.filter.indica";
-pub const T_MENU_FILTER_HYBRID: Key = "menu.filter.hybrid";
+// Same ruling: the retired menu's three plant-type filters were deleted
+// here, and so were its empty-result sentence, its strain-of-the-day badge,
+// its flavour prefix and its per-gram price suffix further down.
 pub const T_MENU_SORT_TOP: Key = "menu.sort.top";
 pub const T_MENU_SORT_PRICE_ASC: Key = "menu.sort.price_asc";
 pub const T_MENU_SORT_PRICE_DESC: Key = "menu.sort.price_desc";
 pub const T_MENU_SORT_NAME: Key = "menu.sort.name";
-pub const T_MENU_NO_RESULTS: Key = "menu.no_results";
+// menu.no_results: deleted 2026-09-25 (#12).
 pub const T_MENU_NEW_ARRIVALS: Key = "menu.new_arrivals";
 pub const T_MENU_PRICE_REQUEST: Key = "menu.price_request";
 pub const T_MENU_SOLD_OUT: Key = "menu.sold_out";
-pub const T_MENU_SOTD_BADGE: Key = "menu.sotd_badge";
+// menu.sotd_badge: deleted 2026-09-25 (#12).
 pub const T_MENU_NEW_BADGE: Key = "menu.new_badge";
 pub const T_MENU_BEST_BADGE: Key = "menu.best_badge";
 pub const T_MENU_SALE_BADGE: Key = "menu.sale_badge";
@@ -580,8 +583,8 @@ pub const T_SET_BADGE: Key = "set.badge";
 pub const T_MENU_SET_LABEL: Key = "menu.set_label";
 pub const T_MENU_OFF: Key = "menu.off";
 pub const T_MENU_WEIGHT: Key = "menu.weight";
-pub const T_MENU_FLAVOR_PREFIX: Key = "menu.flavor_prefix";
-pub const T_MENU_PER_GRAM: Key = "menu.per_gram";
+// menu.flavor_prefix: deleted 2026-09-25 (#12).
+// menu.per_gram: deleted 2026-09-25 (#12).
 
 // Home screen hard-coded strings
 pub const T_HOME_CATEGORIES: Key = "home.categories";
@@ -690,7 +693,7 @@ pub const T_BIKE_TERM_DISCOUNT_ONE: Key = "bike.term.discount_one";
 /// `{0}` = low percent, `{1}` = high percent.
 pub const T_BIKE_TERM_DISCOUNT_RANGE: Key = "bike.term.discount_range";
 pub const T_BIKE_UNITS_TITLE: Key = "bike.units.title";
-pub const T_BIKE_UNITS_EMPTY: Key = "bike.units.empty";
+// bike.units.empty: deleted 2026-09-25 (second list, #5).
 /// `{0}` = units free, `{1}` = units total.
 pub const T_BIKE_AVAILABILITY: Key = "bike.availability";
 /// `{0}` = units free; the total was not published.
@@ -832,16 +835,16 @@ fn get_ru_translation(key: Key) -> Value {
         // Screen titles
         T_HOME_TITLE => "Главная",
         T_HOME_SUBTITLE => "Аренда байков на Пхукете · Камала",
-        T_MENU_TITLE => "🌿 Меню",
-        T_MENU_DESC => "Наши премиальные сорта",
+        // menu.title, menu.description: deleted 2026-09-25 (#12).
+        // See the declarations; nothing replaces them.
         T_SETS_TITLE => "🎁 Наборы",
         T_SETS_DESC => "Готовые наборы со скидкой",
         T_ACC_TITLE => "🛠️ Аксессуары",
-        T_ACC_DESC => "Всё для курения и вейпинга",
-        T_ACC_CAT_GRINDER => "Гриндер",
-        T_ACC_CAT_PAPERS => "Бумага",
-        T_ACC_CAT_PIPE => "Трубка",
-        T_ACC_CAT_BONG => "Бонг",
+        // acc.description: deleted 2026-09-25 (#12).
+        // acc.cat.grinder: deleted 2026-09-25 (#12).
+        // acc.cat.papers: deleted 2026-09-25 (#12).
+        // acc.cat.pipe: deleted 2026-09-25 (#12).
+        // acc.cat.bong: deleted 2026-09-25 (#12).
         T_ACC_CAT_STORAGE => "Хранение",
         T_ACC_CAT_LIGHTER => "Зажигалка",
         T_ACC_CAT_CLOTHING => "Одежда",
@@ -875,7 +878,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_CHECKOUT_FULFILLMENT => "Способ получения",
         T_CHECKOUT_FULFILLMENT_DELIVERY => "🛵 Доставка",
         T_CHECKOUT_FULFILLMENT_PICKUP => "🏪 Самовывоз",
-        T_CHECKOUT_ERR_AGE => "Подтвердите, что вам есть 20 лет",
+        // checkout.error.age: deleted 2026-09-25 (the 20+ gate, second list #1).
         T_CHECKOUT_CHANGE => "изменить",
         T_CHECKOUT_PHONE_FROM_TELEGRAM => "📱 Взять номер из Telegram",
         T_CHECKOUT_ERR_ADDRESS => "Укажите адрес доставки",
@@ -938,7 +941,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_CHECKOUT_ERR_404 => "Один из товаров больше не доступен. Обновите меню и попробуйте снова.",
         T_CHECKOUT_ERR_409 => "Этот заказ уже создан. Откройте «Мои заказы» — он там.",
         T_CHECKOUT_ERR_422 => "Цены или товары изменились с момента добавления в корзину. Обновите меню и оформите заказ заново.",
-        T_CHECKOUT_ERR_AGE_NOT_CONFIRMED => "Для оформления заказа нужно подтвердить, что вам есть 20 лет.",
+        // checkout.err.age_not_confirmed: deleted 2026-09-25 (the 20+ gate, second list #1).
         T_CHECKOUT_ERR_ZONE_INVALID => "Выбранный район доставки недоступен. Выберите другой.",
         T_CHECKOUT_ERR_429 => "Слишком быстро. Подождите минуту и попробуйте снова.",
         T_CHECKOUT_ERR_5XX => "Сервер сейчас недоступен. Попробуйте через минуту.",
@@ -985,13 +988,13 @@ fn get_ru_translation(key: Key) -> Value {
         T_CHECKOUT_CASH_ON_DELIVERY => "Оплата при получении",
         T_CHECKOUT_PAY_ON_RECEIVE => "Оплатите при получении",
         T_CHECKOUT_PROCESSING => "⏳ Оформление...",
-        // Checkout trust + age gate micro-copy
+        // Checkout trust micro-copy (the 20+ gate's keys here: deleted 2026-09-25)
         T_CHECKOUT_TRUST_TITLE => "Почему нам доверяют",
-        T_CHECKOUT_TRUST_VERIFIED => "🛡️ Проверка возраста (20+)",
+        // checkout.trust.verified: deleted 2026-09-25 (the 20+ gate, second list #1).
         T_CHECKOUT_TRUST_COD => "📦 Оплата при получении",
         T_CHECKOUT_TRUST_SECURE => "🔒 Авторизация через Telegram",
-        T_CHECKOUT_AGE_CONFIRM => "Мне исполнилось 20+",
-        T_CHECKOUT_AGE_NOTICE => "Оформляя заказ, вы подтверждаете, что вам 20+, и соглашаетесь с правилами медицинского использования.",
+        // checkout.age_confirm: deleted 2026-09-25 (the 20+ gate, second list #1).
+        // checkout.age_notice: deleted 2026-09-25 (the 20+ gate, second list #1).
         // Catalog shared strings
         T_CATALOG_EMPTY => "Пока нет товаров",
         T_CATALOG_ERROR => "Не удалось загрузить каталог",
@@ -1053,7 +1056,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_GAME_LOG_NEW_CUSTOMER => "Новый клиент пришёл",
         T_GAME_LOG_FARM_GREW => "Ферма выросла на шаг",
         T_GAME_LOG_RESET => "Прогресс сброшен",
-        T_GAME_LOG_MOVED_TO_TABLE => "Вуди подошёл к столу {0}",
+        T_GAME_LOG_MOVED_TO_TABLE => "TurboBaby подошёл к столу {0}",
         T_GAME_LOG_TAKING_ORDER => "Принимает заказ у стола {0}",
         T_GAME_LOG_SERVING => "Обслуживает стол {0}",
         T_GAME_LOG_CLEANING => "Убирает стол {0}",
@@ -1069,7 +1072,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_GAME_LOG_HARVEST => "Урожай! +{0} 🪙",
         T_GAME_EVENT_RUSH_HOUR => "🎉 Час пик! Ещё больше гостей!",
         T_GAME_EVENT_BIG_TIP => "💰 Щедрые чаевые! +20 🪙",
-        T_GAME_EVENT_HERB_DELIVERY => "🌿 Доставка травы! Все грядки политы",
+        T_GAME_EVENT_HERB_DELIVERY => "Все грядки политы",
         T_GAME_EVENT_DJ_ENERGY => "🎵 DJ-энергия! Вечеринка длится дольше",
         T_GAME_EVENT_GRILL_DEMAND => "🍔 Спрос на гриль! Бесплатный запас еды",
         T_GAME_EVENT_DEFAULT => "🎉 Событие!",
@@ -1105,7 +1108,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_SUCCESS_ETA_VALUE => "{0} мин",
         T_SUCCESS_PAYMENT => "Оплата:",
         T_SUCCESS_CASH_ON_DELIVERY => "Наличными при получении",
-        T_SUCCESS_BACK_MENU => "🌿 В меню",
+        T_SUCCESS_BACK_MENU => "В меню",
         T_SUCCESS_MY_ORDERS => "📋 Мои заказы",
         T_SUCCESS_TRACK_ORDER => "🔔 Отслеживать",
         T_SUCCESS_PUSH_REASSURANCE => "🔔 Push-уведомления о каждом статусе заказа",
@@ -1151,8 +1154,9 @@ fn get_ru_translation(key: Key) -> Value {
         T_ORDER_DETAIL_CANCEL => "Отменить заказ",
         T_ORDER_DETAIL_CANCEL_CONFIRM => "Отменить заказ? Бонусы и звёзды вернутся на счёт.",
         T_ORDER_DETAIL_CANCELLED_BY_USER => "Вы отменили заказ",
+        T_ORDER_DETAIL_CANCEL_REFUSED => "Отменить этот заказ в приложении уже нельзя. Напишите менеджеру.",
         T_ORDER_REORDER => "Повторить заказ",
-        // Profile screen
+        T_ORDER_LINE_PREVIOUS_CATALOGUE => "Позиция прежнего каталога",
         T_PROFILE_MEMBERSHIP => "Ваш статус",
         T_PROFILE_QR_CODE => "Ваш QR-код",
         T_PROFILE_COPY_LINK => "Копировать ссылку",
@@ -1204,18 +1208,18 @@ fn get_ru_translation(key: Key) -> Value {
         T_MODAL_INCREASE_QTY => "Добавить количество",
         T_MODAL_CERTIFICATE => "📄 Сертификат",
         // Menu screen
-        T_MENU_FILTER_SATIVA => "☀️ Sativa",
-        T_MENU_FILTER_INDICA => "🌙 Indica",
-        T_MENU_FILTER_HYBRID => "⚖️ Hybrid",
+        // menu.filter.sativa: deleted 2026-09-25 (#12).
+        // menu.filter.indica: deleted 2026-09-25 (#12).
+        // menu.filter.hybrid: deleted 2026-09-25 (#12).
         T_MENU_SORT_TOP => "✨ Топ",
         T_MENU_SORT_PRICE_ASC => "💰 Цена ↑",
         T_MENU_SORT_PRICE_DESC => "💰 Цена ↓",
         T_MENU_SORT_NAME => "А–Я",
-        T_MENU_NO_RESULTS => "Не найдено {0} сортов",
+        // menu.no_results: deleted 2026-09-25 (#12).
         T_MENU_NEW_ARRIVALS => "🆕 НОВИНКИ",
         T_MENU_PRICE_REQUEST => "Цена по запросу",
         T_MENU_SOLD_OUT => "Нет в наличии",
-        T_MENU_SOTD_BADGE => "⭐ СОТД",
+        // menu.sotd_badge: deleted 2026-09-25 (#12).
         T_MENU_NEW_BADGE => "🆕 НОВИНКА",
         T_MENU_BEST_BADGE => "⭐ ЛУЧШЕЕ",
         T_MENU_SALE_BADGE => "🔥 СКИДКА",
@@ -1223,8 +1227,8 @@ fn get_ru_translation(key: Key) -> Value {
         T_SET_BADGE => "📦 НАБОР",
         T_MENU_OFF => "{0}%",
         T_MENU_WEIGHT => "⚖️ {0}",
-        T_MENU_FLAVOR_PREFIX => "🍃 {0}",
-        T_MENU_PER_GRAM => "/г",
+        // menu.flavor_prefix: deleted 2026-09-25 (#12).
+        // menu.per_gram: deleted 2026-09-25 (#12).
         // Home screen
         T_HOME_CATEGORIES => "Категории",
         T_HOME_SETS_PACKS => "📦 Наборы",
@@ -1305,7 +1309,7 @@ fn get_ru_translation(key: Key) -> Value {
         T_BIKE_TERM_DISCOUNT_ONE => "−{0}%",
         T_BIKE_TERM_DISCOUNT_RANGE => "−{0}…−{1}%",
         T_BIKE_UNITS_TITLE => "Наличие",
-        T_BIKE_UNITS_EMPTY => "Сейчас все байки этой модели заняты.",
+        // bike.units.empty: deleted 2026-09-25 (second list, #5).
         T_BIKE_AVAILABILITY => "Свободно {0} из {1}",
         T_BIKE_AVAILABILITY_FREE => "Свободно: {0}",
         T_BIKE_AVAILABILITY_UNKNOWN => "Наличие уточняет менеджер",
@@ -1431,16 +1435,16 @@ fn get_en_translation(key: Key) -> Value {
         // Screen titles
         T_HOME_TITLE => "Home",
         T_HOME_SUBTITLE => "Bike rental in Phuket · Kamala",
-        T_MENU_TITLE => "🌿 Menu",
-        T_MENU_DESC => "Our premium selection",
+        // menu.title, menu.description: deleted 2026-09-25 (#12).
+        // See the declarations; nothing replaces them.
         T_SETS_TITLE => "🎁 Sets",
         T_SETS_DESC => "Ready-made packs at a discount",
         T_ACC_TITLE => "🛠️ Accessories",
-        T_ACC_DESC => "Smoking and vaping gear",
-        T_ACC_CAT_GRINDER => "Grinder",
-        T_ACC_CAT_PAPERS => "Papers",
-        T_ACC_CAT_PIPE => "Pipe",
-        T_ACC_CAT_BONG => "Bong",
+        // acc.description: deleted 2026-09-25 (#12).
+        // acc.cat.grinder: deleted 2026-09-25 (#12).
+        // acc.cat.papers: deleted 2026-09-25 (#12).
+        // acc.cat.pipe: deleted 2026-09-25 (#12).
+        // acc.cat.bong: deleted 2026-09-25 (#12).
         T_ACC_CAT_STORAGE => "Storage",
         T_ACC_CAT_LIGHTER => "Lighter",
         T_ACC_CAT_CLOTHING => "Clothing",
@@ -1474,7 +1478,7 @@ fn get_en_translation(key: Key) -> Value {
         T_CHECKOUT_FULFILLMENT => "How you get it",
         T_CHECKOUT_FULFILLMENT_DELIVERY => "🛵 Delivery",
         T_CHECKOUT_FULFILLMENT_PICKUP => "🏪 Pickup",
-        T_CHECKOUT_ERR_AGE => "Confirm that you are 20 or older",
+        // checkout.error.age: deleted 2026-09-25 (the 20+ gate, second list #1).
         T_CHECKOUT_CHANGE => "change",
         T_CHECKOUT_PHONE_FROM_TELEGRAM => "📱 Use my Telegram number",
         T_CHECKOUT_ERR_ADDRESS => "Please enter a delivery address",
@@ -1537,7 +1541,7 @@ fn get_en_translation(key: Key) -> Value {
         T_CHECKOUT_ERR_404 => "One of the items is no longer available. Refresh the menu and try again.",
         T_CHECKOUT_ERR_409 => "This order has already been placed. Open «My Orders» — it's there.",
         T_CHECKOUT_ERR_422 => "Prices or items changed since you added to cart. Refresh the menu and place the order again.",
-        T_CHECKOUT_ERR_AGE_NOT_CONFIRMED => "Please confirm you are 20+ to place an order.",
+        // checkout.err.age_not_confirmed: deleted 2026-09-25 (the 20+ gate, second list #1).
         T_CHECKOUT_ERR_ZONE_INVALID => "Selected delivery zone is unavailable. Please choose another.",
         T_CHECKOUT_ERR_429 => "Too fast. Wait a minute and try again.",
         T_CHECKOUT_ERR_5XX => "Server is currently unavailable. Try again in a minute.",
@@ -1584,13 +1588,13 @@ fn get_en_translation(key: Key) -> Value {
         T_CHECKOUT_CASH_ON_DELIVERY => "Cash on Delivery",
         T_CHECKOUT_PAY_ON_RECEIVE => "Pay when you receive",
         T_CHECKOUT_PROCESSING => "⏳ Processing...",
-        // Checkout trust + age gate micro-copy
-        T_CHECKOUT_TRUST_TITLE => "Fast & discreet",
-        T_CHECKOUT_TRUST_VERIFIED => "🛡️ Age-verified orders (20+)",
+        // Checkout trust micro-copy (the 20+ gate's keys here: deleted 2026-09-25)
+        T_CHECKOUT_TRUST_TITLE => "Why people trust us",
+        // checkout.trust.verified: deleted 2026-09-25 (the 20+ gate, second list #1).
         T_CHECKOUT_TRUST_COD => "📦 Cash on delivery",
         T_CHECKOUT_TRUST_SECURE => "🔒 Telegram-secured identity",
-        T_CHECKOUT_AGE_CONFIRM => "I confirm I am 20+",
-        T_CHECKOUT_AGE_NOTICE => "By placing this order, you confirm you are 20+ and agree to medical-use terms.",
+        // checkout.age_confirm: deleted 2026-09-25 (the 20+ gate, second list #1).
+        // checkout.age_notice: deleted 2026-09-25 (the 20+ gate, second list #1).
         // Catalog shared strings
         T_CATALOG_EMPTY => "No items yet",
         T_CATALOG_ERROR => "Failed to load. Pull to refresh or try again.",
@@ -1668,7 +1672,7 @@ fn get_en_translation(key: Key) -> Value {
         T_GAME_LOG_HARVEST => "Harvest! +{0} 🪙",
         T_GAME_EVENT_RUSH_HOUR => "🎉 Rush hour! More customers coming!",
         T_GAME_EVENT_BIG_TIP => "💰 Big tip! +20 coins",
-        T_GAME_EVENT_HERB_DELIVERY => "🌿 Herb delivery! All farm plots watered",
+        T_GAME_EVENT_HERB_DELIVERY => "All farm plots watered",
         T_GAME_EVENT_DJ_ENERGY => "🎵 DJ energy up! Party lasts longer",
         T_GAME_EVENT_GRILL_DEMAND => "🍔 Grill demand! Free food stock",
         T_GAME_EVENT_DEFAULT => "🎉 Event!",
@@ -1750,8 +1754,9 @@ fn get_en_translation(key: Key) -> Value {
         T_ORDER_DETAIL_CANCEL => "Cancel order",
         T_ORDER_DETAIL_CANCEL_CONFIRM => "Cancel order? Bonus and stars will be refunded.",
         T_ORDER_DETAIL_CANCELLED_BY_USER => "You cancelled the order",
+        T_ORDER_DETAIL_CANCEL_REFUSED => "This order can no longer be cancelled in the app. Please message the manager.",
         T_ORDER_REORDER => "Reorder order",
-        // Profile screen
+        T_ORDER_LINE_PREVIOUS_CATALOGUE => "Item from the previous catalogue",
         T_PROFILE_MEMBERSHIP => "Your membership status",
         T_PROFILE_QR_CODE => "Your QR Code",
         T_PROFILE_COPY_LINK => "Copy Link",
@@ -1803,18 +1808,18 @@ fn get_en_translation(key: Key) -> Value {
         T_MODAL_INCREASE_QTY => "Increase quantity",
         T_MODAL_CERTIFICATE => "📄 Certificate",
         // Menu screen
-        T_MENU_FILTER_SATIVA => "☀️ Sativa",
-        T_MENU_FILTER_INDICA => "🌙 Indica",
-        T_MENU_FILTER_HYBRID => "⚖️ Hybrid",
+        // menu.filter.sativa: deleted 2026-09-25 (#12).
+        // menu.filter.indica: deleted 2026-09-25 (#12).
+        // menu.filter.hybrid: deleted 2026-09-25 (#12).
         T_MENU_SORT_TOP => "✨ Top",
         T_MENU_SORT_PRICE_ASC => "💰 ↑",
         T_MENU_SORT_PRICE_DESC => "💰 ↓",
         T_MENU_SORT_NAME => "A–Z",
-        T_MENU_NO_RESULTS => "No {0} strains found",
+        // menu.no_results: deleted 2026-09-25 (#12).
         T_MENU_NEW_ARRIVALS => "🆕 NEW ARRIVALS",
         T_MENU_PRICE_REQUEST => "Price on request",
         T_MENU_SOLD_OUT => "Sold Out",
-        T_MENU_SOTD_BADGE => "⭐ SOTD",
+        // menu.sotd_badge: deleted 2026-09-25 (#12).
         T_MENU_NEW_BADGE => "🆕 NEW",
         T_MENU_BEST_BADGE => "⭐ BEST",
         T_MENU_SALE_BADGE => "🔥 SALE",
@@ -1822,8 +1827,8 @@ fn get_en_translation(key: Key) -> Value {
         T_SET_BADGE => "📦 SET",
         T_MENU_OFF => "{0}% OFF",
         T_MENU_WEIGHT => "⚖️ {0}",
-        T_MENU_FLAVOR_PREFIX => "🍃 {0}",
-        T_MENU_PER_GRAM => "/g",
+        // menu.flavor_prefix: deleted 2026-09-25 (#12).
+        // menu.per_gram: deleted 2026-09-25 (#12).
         // Home screen
         T_HOME_CATEGORIES => "Categories",
         T_HOME_SETS_PACKS => "📦 Packs",
@@ -1904,7 +1909,7 @@ fn get_en_translation(key: Key) -> Value {
         T_BIKE_TERM_DISCOUNT_ONE => "−{0}%",
         T_BIKE_TERM_DISCOUNT_RANGE => "−{0}…−{1}%",
         T_BIKE_UNITS_TITLE => "Availability",
-        T_BIKE_UNITS_EMPTY => "Every bike of this model is out right now.",
+        // bike.units.empty: deleted 2026-09-25 (second list, #5).
         T_BIKE_AVAILABILITY => "{0} of {1} free",
         T_BIKE_AVAILABILITY_FREE => "{0} free",
         T_BIKE_AVAILABILITY_UNKNOWN => "A manager confirms availability",
@@ -2028,12 +2033,12 @@ pub fn get_translations(lang: Lang) -> Translations {
         // Screen titles
         T_HOME_TITLE,
         T_HOME_SUBTITLE,
-        T_MENU_TITLE,
-        T_MENU_DESC,
+        // menu.title: deleted 2026-09-25 (#12).
+        // menu.description: deleted 2026-09-25 (#12).
         T_SETS_TITLE,
         T_SETS_DESC,
         T_ACC_TITLE,
-        T_ACC_DESC,
+        // acc.description: deleted 2026-09-25 (#12).
         T_TEA_TITLE,
         T_TEA_DESC,
         T_CART_TITLE,
@@ -2057,11 +2062,11 @@ pub fn get_translations(lang: Lang) -> Translations {
         T_LOADING,
         T_FILTER_ALL,
         T_CHECKOUT_TRUST_TITLE,
-        T_CHECKOUT_TRUST_VERIFIED,
+        // checkout.trust.verified: deleted 2026-09-25 (the 20+ gate, second list #1).
         T_CHECKOUT_TRUST_COD,
         T_CHECKOUT_TRUST_SECURE,
-        T_CHECKOUT_AGE_CONFIRM,
-        T_CHECKOUT_AGE_NOTICE,
+        // checkout.age_confirm: deleted 2026-09-25 (the 20+ gate, second list #1).
+        // checkout.age_notice: deleted 2026-09-25 (the 20+ gate, second list #1).
         T_CATALOG_EMPTY,
         T_CATALOG_ERROR,
         T_CATALOG_SORT_DEFAULT,

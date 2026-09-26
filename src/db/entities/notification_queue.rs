@@ -4,7 +4,7 @@
 //! Schema (migrations/067_notification_queue.sql):
 //!   id            UUID PRIMARY KEY DEFAULT gen_random_uuid()
 //!   telegram_id   BIGINT NOT NULL
-//!   kind          VARCHAR(50) NOT NULL  -- friend_joined / friend_watered / friend_ordered / milestone
+//!   kind          VARCHAR(50) NOT NULL  -- friend_joined / friend_ordered / milestone (others held)
 //!   payload       JSONB NOT NULL DEFAULT '{}'
 //!   scheduled_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 //!   processed_at  TIMESTAMPTZ

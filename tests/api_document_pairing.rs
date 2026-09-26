@@ -64,8 +64,8 @@ const DOCUMENTATION_EXEMPT: [(&str, &str); 2] = [
 
 /// Routed `/api` paths that no `#[utoipa::path]` stub names, per module.
 ///
-/// Per module and not one total, for the reason
-/// `tests/customer_surface_wiring.rs:738-741` gives about its own ratchet: a
+/// Per module and not one total, for the reason the doc comment of
+/// `UNCOMPILED_TEST_DEBT` in `tests/customer_surface_wiring.rs` gives about its own ratchet: a
 /// path documented in one module and a new one added in another would net out
 /// to the same number and this gate would wave both through. It is still a
 /// coarse instrument — a module that documents one path and adds another in
@@ -574,7 +574,8 @@ fn the_undocumented_debt_is_written_down_accurately() {
         "UNDOCUMENTED_DEBT no longer describes the tree:\n{}\n\n\
          A ratchet that is not tightened after a win is a ratchet that has given the \
          ground back — the freed slots would silently authorise new undocumented \
-         paths (tests/customer_surface_wiring.rs:813-816 makes the same argument \
+         paths (the assertion in tests/customer_surface_wiring.rs's \
+         the_uncompiled_test_debt_is_written_down_accurately makes the same argument \
          about its own).",
         wrong.join("\n"),
     );

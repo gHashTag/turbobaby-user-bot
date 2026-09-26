@@ -39,17 +39,17 @@ async fn get_loyalty_tiers(State(state): State<AppState>) -> Result<Json<Value>,
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
     let rows = state.db.orm.query_all(Statement::from_string(
         DbBackend::Postgres,
-        "SELECT tier, name, min_points, discount_percent, points_multiplier::float8, perks, icon, color \
+        "SELECT tier, name, min_points, discount_percent, points_multiplier::float8, icon, color \
          FROM loyalty_tiers ORDER BY min_points ASC LIMIT 500".to_string(),
     )).await.map_err(|e| { tracing::error!("loyalty_tiers: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?;
-    // Cycle #98: propagate `try_get` errors on the *financial* fields
-    // (min_points / discount_percent / points_multiplier). Per
-    // TRY_GET_AUDIT, defaulting these to 0 on schema drift would wipe
-    // all tier-based discounts — UI would show "every user gets 0%"
-    // instead of failing loud. String/array fields keep default-on-
-    // missing since cosmetic columns are NULL-able by intent.
+    // Cycle #98: propagate `try_get` errors on the *financial* fields (min_points /
+    // discount_percent / points_multiplier). Per TRY_GET_AUDIT, defaulting these to 0 on
+    // schema drift would wipe all tier-based discounts — UI would show "every user gets 0%"
+    // instead of failing loud. String/array fields keep default-on-missing since cosmetic
+    // columns are NULL-able by intent. The filter and the empty `perks`: see `retired_row`.
     let tiers: Vec<Value> = rows
         .iter()
+        .filter(|r| !retired_row(r))
         .map(|r| {
             let pm = r.try_get::<f64>("", "points_multiplier")?;
             let points_multiplier = if pm.is_finite() { pm.max(0.0) } else { 0.0 };
@@ -59,7 +59,7 @@ async fn get_loyalty_tiers(State(state): State<AppState>) -> Result<Json<Value>,
                 "min_points":       r.try_get::<i32>("", "min_points")?,
                 "discount_percent": r.try_get::<i32>("", "discount_percent")?,
                 "points_multiplier": points_multiplier,
-                "perks":            r.try_get::<Vec<String>>("", "perks").unwrap_or_default(),
+                "perks":            Vec::<String>::new(),
                 "icon":             r.try_get::<String>("", "icon").unwrap_or_default(),
                 "color":            r.try_get::<String>("", "color").unwrap_or_default(),
             }))
@@ -629,8 +629,8 @@ async fn get_bonus_history(
             json!({
                 "id": m.id,
                 "amount": m.amount,
-                "tx_type": m.tx_type,
-                "description": m.description,
+                "tx_type": crate::trios::legacy_view::customer_bonus_tx_type(&m.tx_type),
+                "description": crate::trios::legacy_view::customer_bonus_description(&m.tx_type, m.description),
                 "related_order_id": m.related_order_id,
                 "created_at": m.created_at,
             })
@@ -1059,5 +1059,64 @@ mod tests {
             validate_use_bonus_amount(f64::INFINITY).unwrap_err(),
             StatusCode::BAD_REQUEST
         );
+    }
+}
+
+/// What `GET /api/loyalty/tiers` stopped serving on 2026-09-25, when the owner
+/// ruled that nothing cannabis-related may appear anywhere. Two things, both
+/// stopped here in code; no row is written or deleted:
+///
+/// * every `perks` list is served empty, and the column is no longer read.
+///   The stored perks are the old shop's promises (migration 009 seeded them:
+///   its catalogue, its founder, its events) and no TurboBaby perk copy has
+///   been approved to stand in their place. The key stays, so a reader of the
+///   old shape still parses.
+/// * the tier named after the old shop is not served: this function, over
+///   `retired_tier`. Nothing assigns that tier: the recompute in `db::orders`
+///   only ever writes gold, silver, bronze or none.
+///
+/// Kept at the end of the file so that no line the contracts cite above moves.
+fn retired_row(r: &sea_orm::QueryResult) -> bool {
+    let tier = r.try_get::<String>("", "tier").unwrap_or_default();
+    let name = r.try_get::<String>("", "name").unwrap_or_default();
+    retired_tier(&tier, &name)
+}
+
+/// Whether a `loyalty_tiers` row is the tier named after the old shop, which
+/// `GET /api/loyalty/tiers` no longer serves (owner, 2026-09-25: nothing
+/// cannabis-related anywhere).
+///
+/// Read from the row rather than from a list of seeded keys, so a renamed or
+/// re-keyed copy of the same tier in production is caught too: the key or the
+/// display name carrying the old shop's name, in any case.
+fn retired_tier(tier: &str, name: &str) -> bool {
+    const OLD_SHOP_NAME: &str = "woody";
+    tier.to_lowercase().contains(OLD_SHOP_NAME) || name.to_lowercase().contains(OLD_SHOP_NAME)
+}
+
+#[cfg(test)]
+mod retired_tier_tests {
+    use super::retired_tier;
+
+    #[test]
+    fn the_old_shops_tier_is_retired_by_key_or_by_name() {
+        // The row migration 009 seeds, and the two ways a copy of it could
+        // differ in production.
+        assert!(retired_tier("woody", "Woody Elite"));
+        assert!(retired_tier("WOODY", "Elite"));
+        assert!(retired_tier("elite", "Woody Elite"));
+    }
+
+    #[test]
+    fn every_other_seeded_tier_is_served() {
+        for (tier, name) in [
+            ("bronze", "Бронза"),
+            ("silver", "Серебро"),
+            ("gold", "Золото"),
+            ("platinum", "Платина"),
+            ("diamond", "Бриллиант"),
+        ] {
+            assert!(!retired_tier(tier, name), "{tier} must still be served");
+        }
     }
 }

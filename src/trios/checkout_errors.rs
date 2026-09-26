@@ -11,12 +11,12 @@
 //! Unknown HTTP statuses keep their inline `format!` fallback — routing
 //! arbitrary integers through the static key table is more machinery
 //! than the rare "we got HTTP 999" path warrants.
+//! The 20+ gate's body code, `age_not_confirmed`, lost its sentence on 2026-09-25.
 
 use super::core::Lang;
 use super::i18n::{
     t, T_CHECKOUT_ERR_400, T_CHECKOUT_ERR_403, T_CHECKOUT_ERR_404, T_CHECKOUT_ERR_409,
-    T_CHECKOUT_ERR_422, T_CHECKOUT_ERR_429, T_CHECKOUT_ERR_5XX, T_CHECKOUT_ERR_AGE_NOT_CONFIRMED,
-    T_CHECKOUT_ERR_ZONE_INVALID,
+    T_CHECKOUT_ERR_422, T_CHECKOUT_ERR_429, T_CHECKOUT_ERR_5XX, T_CHECKOUT_ERR_ZONE_INVALID,
 };
 
 /// Map an HTTP status code from `POST /api/orders` to a customer-friendly
@@ -37,11 +37,11 @@ pub fn friendly_order_error(lang: Lang, status: u16) -> String {
 
 /// Map a stable `error` code from the JSON body of a failed checkout response
 /// to a customer-friendly localised sentence. Used for per-field 422 codes
-/// such as `age_not_confirmed` or `zone_invalid` that the generic status
-/// mapper would otherwise collapse into the price-change hint.
+/// such as `zone_invalid` that the generic status mapper would otherwise
+/// collapse into the price-change hint.
 pub fn friendly_order_error_code(lang: Lang, code: &str) -> Option<String> {
     let key = match code {
-        "age_not_confirmed" => T_CHECKOUT_ERR_AGE_NOT_CONFIRMED,
+        // "age_not_confirmed": unmapped 2026-09-25, the 20+ gate is removed for now.
         "zone_invalid" => T_CHECKOUT_ERR_ZONE_INVALID,
         _ => return None,
     };
@@ -125,15 +125,15 @@ mod tests {
     }
 
     #[test]
-    fn maps_age_not_confirmed_code_to_sentence() {
-        let s = ru_code("age_not_confirmed").expect("known code should map");
+    fn the_retired_age_code_maps_to_nothing() {
+        // The 20+ gate is removed for now (owner, 2026-09-25): the server no
+        // longer refuses on age, so its code keeps no sentence of its own. An
+        // unmapped code falls back to the status sentence at the call site,
+        // as `returns_none_for_unknown_error_code` pins for any unknown code.
+        assert!(ru_code("age_not_confirmed").is_none());
         assert!(
-            s.contains("20") || s.contains("20+"),
-            "should mention age requirement: {s}"
-        );
-        assert!(
-            !s.contains("price"),
-            "should not be the generic 422 hint: {s}"
+            friendly_order_error_code(Lang::English, "age_not_confirmed").is_none(),
+            "the retired age code must not map in English either"
         );
     }
 

@@ -15,9 +15,13 @@
 //! instrument that could ever have noticed is a source walk, which is why
 //! `tests/customer_surface_wiring.rs` now carries one.
 //!
-//! The image *files* those constants pointed at are still on disk. Deleting
-//! shipped artwork is the owner's call, not a consequence of tidying up the
-//! code that stopped pointing at it.
+//! The image *files* those constants pointed at stayed on disk until the
+//! owner ruled on them: deleting shipped artwork was the owner's call, not a
+//! consequence of tidying up the code that stopped pointing at it. The ruling
+//! came on 2026-09-25 (#12, nothing cannabis-related anywhere), and the files
+//! left `assets/` with the rest of the old shop's media; git history keeps
+//! them. `tests/no_cannabis_client_wiring.rs` now lists the media `assets/`
+//! may serve.
 
 /// Logo and favicon.
 ///
@@ -27,20 +31,9 @@ pub mod logo {
     pub const MAIN: &str = "/assets/logo.jpg";
 }
 
-/// Member card images — served from /assets/member-cards/.
-///
-/// UNREFERENCED since the loyalty ladder became wheels: the artwork behind
-/// both sets is a cannabis bud (`*-member-full.webp` was the 1536×1024 hero
-/// card on the profile screen, `*-member.webp` the ~70 KB tier thumbnail),
-/// which is the wrong identity for a bike shop. `Tier::full_card_image` and
-/// `Tier::wheel_image` in `ui/screens/profile_screen.rs` now draw a
-/// tier-coloured wheel inline instead. The files and the constants are kept
-/// until the owner signs off on the vector art.
-pub mod member_cards {
-    pub const BRASS: &str = "/assets/member-cards/brass-member-full.webp";
-    pub const SILVER: &str = "/assets/member-cards/silver-member-full.webp";
-    pub const GOLD: &str = "/assets/member-cards/gold-member-full.webp";
-    pub const BRONZE_WEBP: &str = "/assets/member-cards/bronze-member.webp";
-    pub const SILVER_WEBP: &str = "/assets/member-cards/silver-member.webp";
-    pub const GOLD_WEBP: &str = "/assets/member-cards/gold-member.webp";
-}
+// `member_cards` stood here: six paths into `/assets/member-cards/`, kept
+// UNREFERENCED since the loyalty ladder became wheels (`Tier::full_card_image`
+// and `Tier::wheel_image` in `ui/screens/profile_screen.rs` draw a
+// tier-coloured wheel inline) and "until the owner signs off on the vector
+// art". The artwork behind all six was a cannabis bud. The owner's ruling of
+// 2026-09-25 (#12) removed the files, and the constants went with them.

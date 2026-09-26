@@ -287,17 +287,28 @@ async fn load_card(
         // превращает `None` в 404. Вариант оставлен разбираемым, чтобы
         // `share_kind_wire` в UI не разошёлся с сервером.
         ShareKind::Strain => return Ok(None),
+        // The three legacy catalogue kinds build a card only from a row the
+        // public catalog would show: `is_available = TRUE`, the same filter
+        // `src/api/catalog.rs` applies to every public read, by list and by id.
+        // Until 2026-09-25 this lookup had none, so a share link already in a
+        // chat still rendered a card, photo and price included, for a row
+        // migration 085 had hidden -- the old shop's catalogue, which the
+        // owner ruled that day must appear nowhere. A hidden row now answers
+        // not found, as the strain and event kinds do.
         ShareKind::Accessory => {
             "SELECT name AS title, COALESCE(description, '') AS description, \
-             price::float8 AS price, image_url FROM accessories WHERE id = $1"
+             price::float8 AS price, image_url FROM accessories \
+             WHERE id = $1 AND is_available = TRUE"
         }
         ShareKind::Tea => {
             "SELECT name AS title, COALESCE(description, '') AS description, \
-             price::float8 AS price, image_url FROM tea_products WHERE id = $1"
+             price::float8 AS price, image_url FROM tea_products \
+             WHERE id = $1 AND is_available = TRUE"
         }
         ShareKind::Set => {
             "SELECT name AS title, COALESCE(description, '') AS description, \
-             total_price::float8 AS price, image_url FROM sets WHERE id = $1"
+             total_price::float8 AS price, image_url FROM sets \
+             WHERE id = $1 AND is_available = TRUE"
         }
         // Events left every customer surface on 2026-09-24 (owner: rental
         // only), and this lookup had no `is_public` filter, so a hidden event
@@ -543,11 +554,11 @@ mod tests {
 
     fn card() -> ShareCard {
         ShareCard {
-            title: "KING JUICE".into(),
+            title: "RIDE PACK".into(),
             schedule: None,
-            description: "King Juice is a premium sativa-dominant hybrid.".into(),
+            description: "Ride Pack is a premium helmet-and-gloves bundle.".into(),
             price_baht: Some(350.0),
-            image_url: Some("https://cdn.example/king.png".into()),
+            image_url: Some("https://cdn.example/pack.png".into()),
         }
     }
 
@@ -634,21 +645,21 @@ mod tests {
     fn relative_event_poster_becomes_a_public_https_url() {
         assert_eq!(
             absolute_share_image_url(
-                "https://woody.example/app?lang=ru",
+                "https://turbobaby.example/app?lang=ru",
                 "/uploads/events/poster.jpg"
             )
             .as_deref(),
-            Some("https://woody.example/uploads/events/poster.jpg")
+            Some("https://turbobaby.example/uploads/events/poster.jpg")
         );
     }
 
     #[test]
     fn caption_carries_name_price_and_description() {
         let caption = build_caption(&card());
-        assert!(caption.contains("KING JUICE"), "name missing: {caption}");
+        assert!(caption.contains("RIDE PACK"), "name missing: {caption}");
         assert!(caption.contains("350"), "price missing: {caption}");
         assert!(
-            caption.contains("premium sativa-dominant"),
+            caption.contains("premium helmet-and-gloves"),
             "description missing: {caption}"
         );
     }
@@ -702,7 +713,7 @@ mod tests {
     fn photo_result_used_when_an_https_image_exists() {
         let v = build_inline_result("r1", &card(), "Open", "https://t.me/b?start=p_strain_1");
         assert_eq!(v["type"], "photo");
-        assert_eq!(v["photo_url"], "https://cdn.example/king.png");
+        assert_eq!(v["photo_url"], "https://cdn.example/pack.png");
         assert_eq!(v["parse_mode"], "HTML");
     }
 
@@ -718,7 +729,7 @@ mod tests {
             assert!(v["input_message_content"]["message_text"]
                 .as_str()
                 .unwrap_or_default()
-                .contains("KING JUICE"));
+                .contains("RIDE PACK"));
         }
     }
 

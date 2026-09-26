@@ -1,5 +1,10 @@
 # E2E Tests — Admin Panel (Playwright)
 
+> **Skipped since 2026-09-25, and not run by CI.** `admin.spec.ts` and `upload.spec.ts`
+> each call `test.skip(true, STALE_REASON)`: the admin gate is password-only
+> (`X-Admin-Token`), so the initData these tests inject reaches the login screen. Their
+> tab names were brought in line with `src/ui/screens/admin_screen.rs` on that date.
+
 ## Prerequisites
 
 - Node.js ≥ 18
@@ -44,13 +49,14 @@ npm run test:debug
 
 ## Tabs under test
 
-`Strains`, `Accessories`, `Tea`, `Sets`, `AccessorySets`, `TeaSets`,
-`Dashboard`, `Orders`, `Quests`, `Treasures`, `Garden`, `Loyalty`, `Managers`
+`Дашборд`, `Заказы`, `Байки`, `Юниты`, `Сервис`, `Сокровища`, `Лояльность`,
+`Менеджеры`, `События`, `Рассылка` — the ten tabs `AdminPanel` renders (each label
+also carries an emoji). Until 2026-09-25 this list named the old shop's tabs.
 
 Each tab gets its own `test('Tab: <Name>', ...)` which:
 1. Opens `https://turbobaby-bot-production.up.railway.app/admin`
 2. Injects `window.Telegram.WebApp` with the HMAC-signed `initData` from `/tmp/secrets/init_data`
-3. Waits for `.admin-tab-bar` to appear (WASM load)
+3. Waits for `.admin-tabs` to appear (WASM load)
 4. Clicks the tab
 5. Takes a screenshot to `e2e/screenshots/<tab>.png`
 

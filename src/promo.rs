@@ -680,7 +680,7 @@ pub async fn publish(
         .orm
         .query_one(Statement::from_sql_and_values(
             DbBackend::Postgres,
-            "SELECT body, subject_name, published_at, link_payload, image_url \
+            "SELECT kind, body, subject_name, published_at, link_payload, image_url \
              FROM promo_posts WHERE dedup_key = $1",
             [dedup_key.into()],
         ))
@@ -695,6 +695,14 @@ pub async fn publish(
         // Pressing twice is ordinary — the message stays in the chat with its
         // button. Saying so beats posting the same thing to every client again.
         return "Уже опубликовано".to_string();
+    }
+
+    // Nothing retired reaches a customer off an old draft's button. Refused
+    // before the stamp below, so the row stays a draft and nothing is written.
+    let kind: String = row.try_get("", "kind").unwrap_or_default();
+    if let Some(refusal) = publish_refusal(&kind) {
+        tracing::info!(dedup_key, kind = %kind, by, "promo: publish refused, not a rental");
+        return refusal.to_string();
     }
 
     // Marked published *before* the fan-out starts. A broadcast takes minutes
@@ -755,6 +763,51 @@ pub async fn publish(
         broadcast_post(db, bot, config, post, recipients).await;
     });
     format!("Рассылка запущена: {total} получателей")
+}
+
+/// The draft kinds the Publish button may still send to customers.
+///
+/// Empty. The shop has been rental-only since the owner's ruling of
+/// 2026-09-24, and no kind the sweeper has ever written names a rental: every
+/// one of them is an event or the retired catalog's (`RENTAL_SUBJECT_KIND_COUNT`
+/// in `specs/turbobaby/promo_broadcast.t27` is zero). The first promotion about
+/// a bike declares its kind here, and
+/// `every_subject_kind_is_classified_for_publishing` below stops compiling
+/// until the new variant is classified.
+const PUBLISHABLE_KINDS: &[&str] = &[];
+
+/// The two kinds a draft about an event is written under: the announcement
+/// and the day-before reminder (`Subject::kind`).
+const RETIRED_EVENT_KINDS: [&str; 2] = ["event", "event_soon"];
+
+/// The owner's answer when the draft is about an event.
+const PUBLISH_REFUSED_EVENT: &str = "Не опубликовано: мероприятия сняты, рассылка о них не идёт";
+
+/// The owner's answer for every other draft that is not about a rental.
+const PUBLISH_REFUSED_NOT_RENTAL: &str = "Не опубликовано: рассылка идёт только об аренде байков";
+
+/// Why this draft must not reach customers, or `None` when it may.
+///
+/// Operator decision of 2026-09-25, under the owner's delegation (recorded in
+/// `specs/turbobaby/promo_broadcast.t27`, `PUBLISH_REFUSAL_DECIDED_AT`). Events
+/// left every customer surface with the rental-only ruling, and the retired
+/// shop's goods with it, but `promo_posts` keeps every draft the sweeper ever
+/// wrote, and each one still carries its Publish button in the owners' chat.
+/// Pressed, an old event draft went out to the whole customer list.
+///
+/// Keyed on the row's `kind` column. A kind in neither list -- an empty
+/// column, or one written by the other shop's bot this database forked from
+/// (DECISIONS.md D19) -- is refused too: only a kind declared publishable is
+/// sent. Nothing is deleted; the caller refuses before stamping the row, so it
+/// stays a draft.
+fn publish_refusal(kind: &str) -> Option<&'static str> {
+    if PUBLISHABLE_KINDS.contains(&kind) {
+        None
+    } else if RETIRED_EVENT_KINDS.contains(&kind) {
+        Some(PUBLISH_REFUSED_EVENT)
+    } else {
+        Some(PUBLISH_REFUSED_NOT_RENTAL)
+    }
 }
 
 /// What a broadcast carries, lifted out of the row so the background task owns
@@ -1038,13 +1091,21 @@ pub async fn unmute(db: &Database, who: i64) -> bool {
 /// same customer. It cannot prove the post caused the order — somebody who was
 /// going to buy anyway also taps links — so this is an upper bound on the
 /// effect, and it is reported as "orders after" rather than "orders caused".
+///
+/// **Not every stored name is printed.** Since 2026-09-25 (owner: nothing
+/// cannabis-related anywhere) each row's kind and name go through
+/// `crate::trios::promo::report_kind_and_name`, with the link the row was
+/// stored with: a post about the product table migration 083 dropped keeps its
+/// row and its numbers and prints `REPORT_WITHHELD_NAME` instead of its name.
+/// Both readers — the bot's `/promo` and `GET /api/admin/promo-report` — get
+/// the rows from here.
 pub async fn report(db: &Database, days: i64) -> Result<Vec<PromoResult>, sea_orm::DbErr> {
     let rows = db
         .orm
         .query_all(Statement::from_sql_and_values(
             DbBackend::Postgres,
             "WITH published AS ( \
-                 SELECT dedup_key, kind, subject_id, subject_name, published_at \
+                 SELECT dedup_key, kind, subject_id, subject_name, link_payload, published_at \
                  FROM promo_posts \
                  WHERE published_at IS NOT NULL AND published_at > NOW() - ($1 || ' days')::interval \
              ), opens AS ( \
@@ -1056,7 +1117,7 @@ pub async fn report(db: &Database, days: i64) -> Result<Vec<PromoResult>, sea_or
                   AND e.occurred_at >= p.published_at \
                  WHERE e.telegram_id IS NOT NULL \
              ) \
-             SELECT p.dedup_key, p.kind, p.subject_name, \
+             SELECT p.dedup_key, p.kind, p.subject_name, p.link_payload, \
                     COUNT(DISTINCT o.telegram_id)::int4          AS openers, \
                     COUNT(DISTINCT ord.id)::int4                 AS orders, \
                     COALESCE(SUM(DISTINCT ord.total), 0)::float8 AS revenue \
@@ -1065,7 +1126,7 @@ pub async fn report(db: &Database, days: i64) -> Result<Vec<PromoResult>, sea_or
              LEFT JOIN orders ord \
                     ON ord.telegram_id = o.telegram_id \
                    AND ord.created_at BETWEEN o.occurred_at AND o.occurred_at + INTERVAL '24 hours' \
-             GROUP BY p.dedup_key, p.kind, p.subject_name, p.published_at \
+             GROUP BY p.dedup_key, p.kind, p.subject_name, p.link_payload, p.published_at \
              ORDER BY revenue DESC, orders DESC",
             [days.to_string().into()],
         ))
@@ -1073,12 +1134,20 @@ pub async fn report(db: &Database, days: i64) -> Result<Vec<PromoResult>, sea_or
 
     Ok(rows
         .into_iter()
-        .map(|r| PromoResult {
-            kind: r.try_get("", "kind").unwrap_or_default(),
-            subject_name: r.try_get("", "subject_name").unwrap_or_default(),
-            openers: r.try_get("", "openers").unwrap_or(0),
-            orders: r.try_get("", "orders").unwrap_or(0),
-            revenue: r.try_get("", "revenue").unwrap_or(0.0),
+        .map(|r| {
+            let link: Option<String> = r.try_get("", "link_payload").ok().flatten();
+            let (kind, subject_name) = crate::trios::promo::report_kind_and_name(
+                r.try_get("", "kind").unwrap_or_default(),
+                link.as_deref(),
+                r.try_get("", "subject_name").unwrap_or_default(),
+            );
+            PromoResult {
+                kind,
+                subject_name,
+                openers: r.try_get("", "openers").unwrap_or(0),
+                orders: r.try_get("", "orders").unwrap_or(0),
+                revenue: r.try_get("", "revenue").unwrap_or(0.0),
+            }
         })
         .collect())
 }
@@ -1086,7 +1155,10 @@ pub async fn report(db: &Database, days: i64) -> Result<Vec<PromoResult>, sea_or
 /// One published post and what followed it.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct PromoResult {
+    /// The stored kind, or empty when no live subject writes that word
+    /// (`crate::trios::promo::report_kind_and_name`).
     pub kind: String,
+    /// The stored name, or `REPORT_WITHHELD_NAME` where it is withheld.
     pub subject_name: String,
     /// Distinct people who opened the link.
     pub openers: i32,
@@ -1317,5 +1389,128 @@ mod tests {
                 "open button presence wrong for {link:?}"
             );
         }
+    }
+
+    /// Every kind the sweeper writes today is refused, and a draft about an
+    /// event is told apart from the rest.
+    ///
+    /// Six kinds, read 2026-09-25 off `Subject::kind`: two event kinds and four
+    /// others. It once wrote a seventh, the retired catalog's own kind, whose
+    /// variant left with migration 083 while a draft written under it can
+    /// still sit unpublished in `promo_posts`. That word is not run here,
+    /// because nothing outside a comment under src/ may name it
+    /// (tests/legacy_vocabulary_wiring.rs; owner ruling 2026-09-25, item 12).
+    /// No list classifies it, so it takes the fail-closed branch that
+    /// `a_kind_nobody_classified_is_refused_too` runs; that it sits in neither
+    /// list, and that the contract still lists it among the retired shop's
+    /// kinds, is held by tests/promo_publish_wiring.rs.
+    #[test]
+    fn no_draft_kind_written_today_is_sent_while_the_shop_is_rental_only() {
+        for kind in ["event", "event_soon"] {
+            assert_eq!(
+                publish_refusal(kind),
+                Some(PUBLISH_REFUSED_EVENT),
+                "a draft of kind {kind:?} would reach every customer"
+            );
+        }
+        for kind in ["accessory", "tea", "set", "bestseller"] {
+            assert_eq!(
+                publish_refusal(kind),
+                Some(PUBLISH_REFUSED_NOT_RENTAL),
+                "a draft of kind {kind:?} would reach every customer"
+            );
+        }
+    }
+
+    /// Fail closed. The database forked from another shop's bot (DECISIONS.md
+    /// D19), so a kind this file has never classified may be in the table; it
+    /// is refused like the retired ones, not waved through because nobody
+    /// listed it. The column is NOT NULL, but a failed read lands on "" and
+    /// that is refused as well.
+    #[test]
+    fn a_kind_nobody_classified_is_refused_too() {
+        for kind in ["", "Event", "event ", "sommelier", "garden"] {
+            assert_eq!(
+                publish_refusal(kind),
+                Some(PUBLISH_REFUSED_NOT_RENTAL),
+                "an unclassified kind {kind:?} was let through"
+            );
+        }
+    }
+
+    /// Every variant the sweeper can draft today is classified. The match
+    /// below has no wildcard on purpose: a new `Subject` variant -- the first
+    /// rental one, one day -- stops this test compiling until somebody decides
+    /// whether its drafts may be sent, and adds it to `PUBLISHABLE_KINDS` if
+    /// they may.
+    #[test]
+    fn every_subject_kind_is_classified_for_publishing() {
+        fn is_about_an_event(s: &Subject) -> bool {
+            match s {
+                Subject::Event { .. } | Subject::EventSoon { .. } => true,
+                Subject::Accessory { .. }
+                | Subject::Tea { .. }
+                | Subject::Set { .. }
+                | Subject::Bestseller { .. } => false,
+            }
+        }
+        let id = || "x1".to_string();
+        let name = || "irrelevant to the kind".to_string();
+        let every = [
+            Subject::Accessory {
+                id: id(),
+                name: name(),
+            },
+            Subject::Tea {
+                id: id(),
+                name: name(),
+            },
+            Subject::Set {
+                id: id(),
+                name: name(),
+            },
+            Subject::Event {
+                id: id(),
+                name: name(),
+            },
+            Subject::EventSoon {
+                id: id(),
+                name: name(),
+                when: "09:00 – 12:00".into(),
+                seats_left: None,
+            },
+            Subject::Bestseller {
+                id: id(),
+                name: name(),
+                kind: promo::BestsellerKind::Set,
+                sold: 2,
+                period: "2026-W39".into(),
+            },
+        ];
+        let mut kinds: Vec<&str> = every.iter().map(Subject::kind).collect();
+        kinds.sort_unstable();
+        kinds.dedup();
+        assert_eq!(kinds.len(), every.len(), "one of each variant: {kinds:?}");
+        for s in &every {
+            let expected = if is_about_an_event(s) {
+                PUBLISH_REFUSED_EVENT
+            } else {
+                PUBLISH_REFUSED_NOT_RENTAL
+            };
+            assert_eq!(publish_refusal(s.kind()), Some(expected), "{}", s.kind());
+        }
+    }
+
+    /// The answer is shown in the Publish button's alert, and Telegram
+    /// documents `answerCallbackQuery` text as 0-200 characters. It must also
+    /// read as a refusal: the owner has just pressed a button that used to
+    /// start a mailing.
+    #[test]
+    fn the_refusals_fit_in_the_alert_and_say_nothing_was_sent() {
+        for answer in [PUBLISH_REFUSED_EVENT, PUBLISH_REFUSED_NOT_RENTAL] {
+            assert!(answer.chars().count() <= 200, "too long: {answer}");
+            assert!(answer.starts_with("Не опубликовано"), "{answer}");
+        }
+        assert_ne!(PUBLISH_REFUSED_EVENT, PUBLISH_REFUSED_NOT_RENTAL);
     }
 }

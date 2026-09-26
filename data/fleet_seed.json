@@ -53,10 +53,10 @@
       "note": "A live owner quote sheet. Its figures are POST-discount (class discount already applied) and are NOT used as base rates here; they are recorded because they reconcile the tariff exactly - see `reconciliation`."
     },
     "owner_decision": {
-      "id": "shtab_task_61-c",
-      "date": "2026-09-12",
+      "id": "shtab_task_61-c", "date": "2026-09-12",
       "note": "The owner's ruling on which sheet governs a client-facing price, and the CLICK 125 exclusion. See `pricing_policy`."
-    }
+    },
+    "owner_decision_2026_09_25": { "id": "owner answers of 2026-09-25, answer 10", "date": "2026-09-25", "note": "The owner's answer 10 to a numbered list of open questions. For now NMAX 155 is what is offered instead of CLICK 125, not PCX 150 or ADV 150, and the answer says 'for now' twice, so the decision is provisional. The Russian original is in DECISIONS.md (D12 amendment of 2026-09-25). It governs `pricing_policy.not_offered.click-125.offer_instead` and nothing else in this file. The redirect KB_faq gave until then named all three; the brain's text is the operator's to change, not this file's." }
   },
 
   "reconciliation": {
@@ -96,8 +96,8 @@
     "not_offered": {
       "click-125": {
         "reason": "Owner, 2026-09-12: not rented for now. KB_faq independently says the same and directs the request elsewhere.",
-        "offer_instead": ["pcx-150", "adv-150", "nmax-155"],
-        "note": "One CLICK unit is still out on a contract that predates the decision. The family is closed to NEW rentals; the existing rental is not cancelled."
+        "offer_instead": ["nmax-155"], "offer_instead_source": "owner_decision_2026_09_25", "offer_instead_provisional": true, "offer_instead_before_2026_09_25": ["pcx-150", "adv-150", "nmax-155"],
+        "note": "One CLICK unit is still out on a contract that predates the decision. The family is closed to NEW rentals; the existing rental is not cancelled. offer_instead is the owner's decision of 2026-09-25, provisional in the owner's own words ('for now'). Until then it held the three names of KB_faq's redirect, kept under offer_instead_before_2026_09_25; pcx-150 and adv-150 are price_list_only rows with zero units, so nmax-155 was the only one of the three that could be handed over."
       }
     }
   },

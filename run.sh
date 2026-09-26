@@ -1,5 +1,5 @@
 #!/bin/bash
-# Woody Weed Bot - запуск бэкенда и фронтенда одной командой
+# TurboBaby - запуск бэкенда и фронтенда одной командой
 
 set -e
 
@@ -10,7 +10,7 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}🌿 Woody Weed Bot - запуск всех сервисов${NC}"
+echo -e "${BLUE}🏍 TurboBaby - запуск всех сервисов${NC}"
 echo ""
 
 # Очистка при выходе
@@ -104,7 +104,7 @@ echo ""
 
 # Информация о запущенных сервисах
 echo -e "${GREEN}═══════════════════════════════════════════════${NC}"
-echo -e "${GREEN}🌿 Woody Weed Bot запущен!${NC}"
+echo -e "${GREEN}🏍 TurboBaby запущен!${NC}"
 echo ""
 echo -e "  📊 Бэкенд: ${BLUE}http://localhost:8080${NC}"
 echo -e "  🎨 Фронтенд: ${BLUE}http://localhost:8080${NC}"

@@ -1,16 +1,33 @@
 /**
- * E2E tests for the admin panel — 13 tabs.
+ * E2E tests for the admin panel — one test per tab.
  *
  * initData is read from /tmp/secrets/init_data (HMAC-signed Telegram WebApp initData).
  * It is injected into window.Telegram.WebApp so the SPA sees a valid auth context.
  *
  * Run: npm test
  * Screenshots land in e2e/screenshots/<tab>.png
+ *
+ * SKIPPED since 2026-09-25 (see STALE_REASON). Not run by CI. The tab list below was
+ * brought in line with what `AdminPanel` in src/ui/screens/admin_screen.rs renders on
+ * that date; until then it expected the old shop's catalogue tabs, which the admin no
+ * longer has.
  */
 
 import { test, expect, Page } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
+
+// Why the whole file is skipped rather than fixed. The tab labels and the tab-bar class
+// are corrected below from admin_screen.rs; what is still stale is the way in. The admin
+// gate is password-only (`AdminScreen`: a token read by `admin_token()` and checked with
+// X-Admin-Token at /api/admin/check), so the initData this suite injects lands on the
+// login screen and `.admin-tabs` never appears. The active tab is styled inline, with no
+// `.active` class for `clickTab` or the named Dashboard test to find. Reviving the suite
+// needs an admin token for it, which is a credential and not this file's to invent.
+const STALE_REASON =
+  '2026-09-25: the admin gate is password-only (X-Admin-Token); injected initData ' +
+  'reaches the login screen, and the active tab carries no .active class';
+test.skip(true, STALE_REASON);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -81,14 +98,16 @@ function ensureScreenshotsDir() {
 async function openAdmin(page: Page, initData: string): Promise<void> {
   await injectTelegramContext(page, initData);
   await page.goto(PROD_URL, { waitUntil: 'domcontentloaded' });
-  // Wait for the admin tab-bar to appear (WASM may take a while)
-  await page.waitForSelector('.admin-tab-bar', { timeout: 30_000 });
+  // Wait for the admin tab-bar to appear (WASM may take a while). AdminPanel renders it
+  // as `div.admin-tabs` (it was `.admin-tab-bar` here until 2026-09-25, a class the
+  // screen no longer renders).
+  await page.waitForSelector('.admin-tabs', { timeout: 30_000 });
 }
 
 /** Click a tab by its visible label and wait for it to become active. */
 async function clickTab(page: Page, label: string): Promise<void> {
-  // Tab labels may be inside buttons or anchor elements within .admin-tab-bar
-  await page.click(`.admin-tab-bar >> text=${label}`);
+  // Tab labels are the text of the buttons inside .admin-tabs
+  await page.click(`.admin-tabs >> text=${label}`);
   // Wait for the tab to be marked active (class or aria-selected depending on impl)
   await expect(
     page.locator('.admin-tab.active, [data-tab].active, .tab-button.active').filter({ hasText: label }),
@@ -102,19 +121,19 @@ async function clickTab(page: Page, label: string): Promise<void> {
 // Tests
 // ---------------------------------------------------------------------------
 
+// The ten tabs AdminPanel renders, in its order, by the word of each label (the label
+// also carries an emoji). Read from src/ui/screens/admin_screen.rs on 2026-09-25.
 const ADMIN_TABS = [
-  'Strains',
-  'Accessories',
-  'Tea',
-  'Sets',
-  'AccessorySets',
-  'TeaSets',
-  'Dashboard',
-  'Orders',
-  'Treasures',
-  'Garden',
-  'Loyalty',
-  'Managers',
+  'Дашборд',
+  'Заказы',
+  'Байки',
+  'Юниты',
+  'Сервис',
+  'Сокровища',
+  'Лояльность',
+  'Менеджеры',
+  'События',
+  'Рассылка',
 ] as const;
 
 type TabName = (typeof ADMIN_TABS)[number];
@@ -161,11 +180,11 @@ test('Tab: Dashboard (named)', async ({ page }) => {
     };
   }, initData);
   // Wait for WASM / React to paint the tab-bar
-  await page.waitForSelector('.admin-tab-bar', { timeout: 30_000 });
+  await page.waitForSelector('.admin-tabs', { timeout: 30_000 });
   // Click the Dashboard tab
-  await page.click('text=Dashboard');
-  // Verify tab is active
-  await expect(page.locator('.admin-tab.active')).toContainText('Dashboard');
+  await page.click('text=Дашборд');
+  // Verify tab is active (stale: no tab carries an .active class; see STALE_REASON)
+  await expect(page.locator('.admin-tab.active')).toContainText('Дашборд');
   // Screenshot
   await page.screenshot({ path: path.join(SCREENSHOTS_DIR, 'dashboard.png') });
 });

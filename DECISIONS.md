@@ -482,3 +482,295 @@ bike sales: no row hidden, the offer masked on read — neither a completed reti
 `catalog_api.t27`, `commerce.t27` and `deeplink.t27` correct the facts the ruling changed,
 `schema_provenance.t27` carries the migration census 088 moved, and `tests/rental_only_wiring.rs`
 guards the source.
+
+## D19 addendum — the legacy paths, decided 2026-09-25
+
+The owner answered a numbered list of questions in chat on 2026-09-25; answer 7, verbatim: «да».
+It settles the question the entry above left open. Kept at the end of this file, like the entries
+above, so that no line citation into it moves.
+
+* **Repointed.** The previous shop's client paths that are not a rental — its goods
+  (`/accessories`, `/tea`), its game (`/game`) and its hunts (`/treasure-hunt`, `/ar-hunt`,
+  `/location-quest`) — stay declared and render the catalog, as `/sets` and the events paths do.
+  `/tech-tree`, a development tech tree, is repointed with them: the answer does not name it, and
+  counting it among the old non-rental addresses is this repository's reading, recorded as such in
+  `legacy_retirement.t27` so the owner can overrule it. Their screens stay compiled and unmounted;
+  no row is touched and no table dropped.
+* **Kept.** The ride game (`/ride`), the referral programme and loyalty. The quest a customer opens
+  from the profile (`/quest/:id`) stays, without the line «Минимальная покупка: 300 бат» — the
+  previous shop's minimum purchase. The key stays translated and no screen renders it. No sentence
+  was written new; a line was removed.
+* **Not decided.** The HTTP routes behind the repointed paths — the legacy catalog, quest and
+  tech-tree routers — still answer; the quest router is also what the kept quest scans through.
+
+`specs/turbobaby/legacy_retirement.t27` records the answer path by path, `deeplink.t27` the
+compatibility set it grew (six paths to thirteen), and `tests/rental_only_wiring.rs` guards the
+source.
+
+## D12 amendment (2026-09-25) — NMAX 155 is offered instead of CLICK 125, for now
+
+Kept at the end of this file, like the amendment of 2026-09-24, so that no line citation into it
+moves.
+
+The owner answered the redirect question on 2026-09-25, in answer 10 of a numbered list, verbatim:
+«Пока предлагаем нмакс 155 пока» — for now, NMAX 155 is what is offered instead of CLICK 125, and
+not PCX 150 or ADV 150. The answer says «пока» twice, so the decision is recorded as provisional:
+a later answer may change it, and the repository says so wherever it records the list.
+
+* **The seed.** `data/fleet_seed.json`, `pricing_policy.not_offered.click-125.offer_instead`, held
+  `["pcx-150", "adv-150", "nmax-155"]`, the KB_faq redirect D12 quotes, and holds `["nmax-155"]`.
+  Beside it: `offer_instead_source` names the dated source `sources.owner_decision_2026_09_25`,
+  `offer_instead_provisional` is `true`, and the old list is kept as
+  `offer_instead_before_2026_09_25`. The file kept its 350 lines, so no line citation into it
+  moved; `order_money.t27` re-measures its size (20161 bytes).
+* **The contract.** `specs/turbobaby/availability.t27` `CLICK_125_REDIRECTS` holds the decision,
+  with `CLICK_125_REDIRECTS_ARE_PROVISIONAL` and `CLICK_125_REDIRECTS_DECIDED_ON`; the three-name
+  list is kept as `CLICK_125_REDIRECTS_BEFORE_2026_09_25`, so the correction of 2026-09-24 still
+  executes against it. Gate 3 binds the list and the provisional flag to the seed.
+* **What a customer sees does not change.** The screens' source has named NMAX 155 alone since the
+  amendment of 2026-09-24 (`CLICK_125_ALTERNATIVES` in `src/ui/screens/catalog_screen.rs`); the
+  decision confirms that list. `tests/catalog_honesty_wiring.rs` now also checks the screen's
+  label against the seed's `offer_instead`. No customer sentence was written or changed.
+* **The seed gate.** `scripts/verify_fleet_seed.py` now reads `pricing_policy.not_offered`: every
+  key a closed family offers must be an offered family with a unit the SQL seeds as available,
+  never a price-list-only one, and the list must name a `sources` entry with a date.
+  `tests/fleet_seed_negative_control.rs` plants the pre-2026-09-25 list and a missing source,
+  and sees the gate go red on each.
+
+The brain's `knowledge_base` still carries the three-name redirect in the places the amendment of
+2026-09-24 names; that text is the operator's to change, not this repository's.
+
+## D19 addendum — nothing cannabis-related anywhere, decided 2026-09-25
+
+Owner decision, 2026-09-25, answer 12 of a numbered list, verbatim: «всё что касается канабиса нигде
+не должно быть» — nothing cannabis-related may appear anywhere. Kept at the end of this file, like
+the entries above, so that no line citation into it moves. This entry is the server half: the bot,
+the HTTP API and the docs. The Mini App's own copy is a separate change.
+
+Nothing is deleted from the database, no table is dropped and no migration is added. Every change
+stops SERVING or SENDING something, in code.
+
+* **Bot.** The strain-of-day buttons still under old messages answer with the rental menu, the one
+  `/menu` sends, instead of a strain card with a THC line and a per-gram price, and read no table.
+  `/admin` loses the line listing the old catalogue's tabs, `/factpost` its leaf, and the bot's
+  locale file the carousel's heading and arrows and the old unit of sale.
+* **API.** `GET /api/loyalty/tiers` serves every `perks` list empty and omits the tier named after
+  the old shop; that closes the perks question the 2026-09-24 addendum left open. The public
+  tech-tree reads (`/api/tech-tree/nodes`, `/nodes/:id`, `/achievements`) answer an empty roadmap,
+  not found and an empty badge list, because the stored roadmap and badges are the old shop's. The
+  share card builds only from a catalogue row the public catalog shows, so a row 085 hid answers
+  not found. The served OpenAPI document is held to a wider list of retired words.
+* **Promo report** (added by review the same day). The owners' sales report — the bot's `/promo`
+  and `GET /api/admin/promo-report` — prints «(название скрыто)» where a published post was about
+  the product table migration 083 dropped: a row of that table's kind, or a bestseller whose stored
+  link opens that table's card or that has no link to tell. A kind no live post writes is printed
+  empty. The rows stay and still count in the totals; `promo_posts` is not written. Whether an old
+  draft may still be SENT is the Publish button's question, answered by the same day's item-13
+  decision in `specs/turbobaby/promo_broadcast.t27`, not by this entry.
+* **Docs.** `docs/README.md` is a TurboBaby index. `README.md`, the owner agent card,
+  `docs/DESIGN_SYSTEM.md` and `docs/SETUP_TEMPLATE.md` no longer describe the product as the old
+  shop.
+* **Guard.** `tests/server_text_vocabulary_wiring.rs` reads every string literal the server can
+  send (test code excluded) and the two front pages against the vocabulary. The few survivors are
+  listed with reasons: wire names of the retired catalogue kind, the file names of migrations 083
+  and 085, the old URLs `src/config.rs` refuses, and the key admin tokens are signed with.
+* **Kept, as records or as names.** Old migrations (D2), the history in this file, `docs/reports/`
+  and the commit history. Internal names that are never shown: the `strain` wire kind, the
+  `woody_*` localStorage keys (D19), the Railway project and service names the deploy runbook
+  checks. The reader of the dropped `strains` table stays compiled for one ignored test.
+* **Open.** The old catalogue's media under `assets/` (photos named after strains, the
+  paraphernalia, the garden sprites) is still served by path; removing it is a deletion this change
+  did not make. *Closed the same day by the client half of the ruling, which landed with this entry
+  in one integration:* 128 files of the old shop's media left `assets/` and 13 stay (git history
+  keeps the removed ones; `legacy_retirement.t27`, `CANNABIS_RULING_SERVED_FILES_REMOVED`). A loyalty profile that still stores the old shop's tier key is served that key by
+  the profile and leaderboard reads; re-keying it is a data change for the owner.
+
+The contracts carry the details: `specs/turbobaby/legacy_retirement.t27` records the ruling
+(`OWNER_RULING_2026_09_25_AT`) and classifies the surfaces, the promo report's rule among them
+(`PROMO_REPORT_NAME_*`, held to the code by `tests/promo_report_names_wiring.rs`),
+`bot_surface.t27` the carousel (`CAROUSEL_RETIRED_AT`), `locale_policy.t27` the locale struct's
+four removed fields.
+
+## The bike detail's «all taken» line, removed 2026-09-25
+
+Kept at the end of this file, like the entries above, so that no line citation into it moves.
+
+The owner answered a second numbered list in chat on 2026-09-25, items 1 to 5; the owner confirmed
+that numbering. Item 5 was the line the bike detail screen printed under a zero unit count,
+«Сейчас все байки этой модели заняты.» / "Every bike of this model is out right now."
+(`T_BIKE_UNITS_EMPTY`). That zero is the fleet seed of 2026-09-12 as an admin last edited it, not
+live occupancy. Answer 9 of the first list that day had not located the line, so it was left
+untouched then. Answer 5, verbatim: «Наверное» ("probably"), read as: remove it. The answer hedges,
+so the removal is recorded as hedged, and a later answer may restore the line.
+
+* **Removed.** The line, from the availability block of `src/ui/screens/bike_detail.rs`, and the
+  key `bike.units.empty` with both of its sentences, from `src/trios/i18n.rs`, deleted outright as
+  ruling #12's fourteen keys were: each deleted line became a comment line, so no line citation
+  into that file moved. Nothing was written in its place. «Наличие уточняет менеджер»
+  (`T_BIKE_AVAILABILITY_UNKNOWN`) stays and now stands alone in that block.
+* **Kept, and open.** Under the same zero the Book control is disabled with the reason «Все байки
+  этой модели заняты» / "Every bike of this model is taken" (`T_BIKE_BOOK_BLOCKED_NO_UNITS`). It
+  reads the same seeded count and says nearly the same thing, but item 5 did not name it, and a
+  disabled control must name its reason (issue #9), so changing it needs an owner-approved
+  sentence. The file may still rule a family out of booking (`FILE_MAY_RULE_OUT`).
+
+`specs/turbobaby/availability.t27` records the answer (`UNITS_EMPTY_LINE_*`, and the open reason
+as `NO_UNITS_BOOK_REASON_*`), `locale_policy.t27` the key count (552 to 551), and
+`tests/catalog_honesty_wiring.rs` guards the source.
+
+## D19 addendum — the 20+ age gate, removed for now, decided 2026-09-25
+
+The owner answered a second numbered list in chat on 2026-09-25, and confirmed its numbering
+the same day: «Тут набираться от 1 до 5 правильная. Просто двойка задвоилась.» Answer 1,
+verbatim: «Пока убираем». It answers whether the checkout keeps its 20+ age gate, which this
+repository records as heritage of the fork rather than a rental decision
+(`specs/turbobaby/checkout_contact.t27`, `AGE_BLOCKER_IS_INHERITED_HERITAGE`). «Пока» makes the
+decision provisional: a later answer may bring the box back, and git history holds all of it.
+Kept at the end of this file, like the entries above, so that no line citation into it moves.
+
+* **Client.** The checkbox «Мне исполнилось 20+» and the notice under it, the trust line
+  «🛡️ Проверка возраста (20+)», the order button's age blocker and the submit handler's age
+  refusal are gone from the checkout, and the order request no longer carries `age_confirmed`.
+  Five keys were deleted from `src/trios/i18n.rs` — those four and the sentence for a body code
+  (`age_not_confirmed`) the server never sent — each line replaced by a comment line, so that
+  no line citation moved. No sentence was written in their place.
+* **Server.** `POST /api/orders` no longer refuses an order whose `age_confirmed` is absent or
+  false; it answered 422. It still accepts the field, because a Mini App bundle cached before
+  the change sends it `true`, and stores it as sent in the orders column (migration 057,
+  default false). No migration was added and no row is written or deleted.
+* **Kept.** A saved checkout draft that carries the field still restores, and the
+  `woody_last_age_confirmed` key in customers' browsers is neither read nor cleared (D19).
+  Every stored order keeps what it recorded.
+
+`specs/turbobaby/checkout_contact.t27` records the decision beside
+`AGE_BLOCKER_IS_INHERITED_HERITAGE` (`AGE_BLOCKER_REMOVED_AT`, `AGE_BLOCKER_REMOVAL_IS_PROVISIONAL`),
+`legacy_retirement.t27` the answer to the question it owned (`AGE_GATE_ANSWER_*`),
+`locale_policy.t27` the key count (552 to 547) and `client_errors.t27` the unmapped body code.
+Gate 3 binds the button's blocker count to the code and holds the orders module to no
+comparison of the field; `tests/integration_create_order.rs` holds the endpoint to it.
+Merged on 2026-09-26 with answer 5 above, whose key also left the file, the count reads 546.
+
+## D19 addendum — stored content out of customers' sight, decided 2026-09-25
+
+The owner answered a second numbered list in chat on 2026-09-25; answer 3, verbatim: «Все
+канабисное аналировать». The operator read it as: analyse all of it and take it out of customers'
+sight, without deleting or rewriting stored data. Kept at the end of this file, like the entries
+above, so that no line citation into it moves. Every change stops SERVING or PRINTING something,
+in code; no row is written and no migration is added.
+
+* **Masked on the server**, so a bundle cached before the change is served the neutral text too.
+  A customer's own order list and detail (`get_user_orders` and `get_order_details`, through
+  `Order::for_customer`) serve a line of the old catalogue — any line that is not a bike line — as
+  «Позиция прежнего каталога» ("Item from the previous catalogue" for an English reader, the
+  operator's wording under the answer) with its quantity and unit price exactly as stored, and
+  nothing else: no id, so no reorder can rebuild the old item. The same two reads withhold an
+  order's shop when it names the previous shop. The server cart serves a line of a retired kind
+  under the neutral name and with no picture. The bonus history serves a stored description only
+  when it is one of the four sentences this repository writes, and a garden-era row with an empty
+  type, so every bundle labels it with the existing generic label («Бонус» / "Bonus").
+* **Guarded on the client**, where it builds the text itself: the order screens print the neutral
+  name in the reader's language, the profile labels a garden row with the generic label, and a
+  cart kept on the device prints the neutral name and draws no stored picture on the cart and the
+  checkout.
+* **Open.** A withheld shop reaches the screens' fallback for an absent shop, which names
+  TurboBaby, so an order the previous shop took reads as placed with this one. No neutral shop
+  wording was given; that line is the owner's to reword.
+* **Analysed and left**, each with its reason in the contract: the stored loyalty tier key, the star
+  history, the reads behind retired surfaces, the abandoned-cart reminder, the referral, quest-scan
+  and game reads, and the referral worker's garden arm.
+* **Unchanged.** The admin reads, which are the archive; every row; every migration. One key was
+  declared (`T_ORDER_LINE_PREVIOUS_CATALOGUE`) and none deleted.
+
+`specs/turbobaby/order_presentation.t27` (`RETIRED_LINE_*`) owns the order line's name and the
+shop, `legacy_retirement.t27` (`OWNER_ANSWER_3_*`) records the answer and the analysis,
+`src/trios/legacy_view.rs` holds the rules and `tests/legacy_view_wiring.rs` holds the handlers and
+screens to them.
+
+## D8/D19 addendum — a cart kept from the previous shop is stored and not served, 2026-09-26
+
+Kept at the end of this file, like the entries above, so that no line citation into it moves.
+The rulings this rests on, verbatim: rental only, 2026-09-24, «Ареда [sic] только пхукет»;
+answer 12 of 2026-09-25, «всё что касается канабиса нигде не должно быть»; and answer 3 of the
+second list the same day, «Все канабисное аналировать» [sic], which the operator reads as:
+analyse all of it and take it out of customers' sight without deleting stored data. Nothing is
+deleted (2026-09-24).
+
+A customer who kept a cart from the previous shop still had its lines in three places, and each
+handed them back with names and pictures: the server's `cart_items` rows (every JSON answer of the
+cart API), the abandoned-cart reminder (a Telegram message naming them), and the Mini App's own
+saved cart on the device (localStorage `wwb_cart` and Telegram CloudStorage `wwb_cart_cloud`, read
+at start-up). D8's amendment kept the four old kinds in `cart_items`' CHECK so that such rows
+would not abort migration 081; the rows stay, and are now not served.
+
+* **One rule, not a new list.** A cart serves a line only of a kind in
+  `trios::pricing::SERVED_CART_KINDS` = `["bike_rental"]`, asked through
+  `trios::pricing::cart_kind_is_served`. That name is the tag of the only deal the checkout admits
+  since 2026-09-24 (`BikeDeal::BikeRental`; a new `bike_sale` line is refused, #63), and the kind
+  D8 gave the cart. A test in `src/db/orders.rs` holds the list to the enum's tag.
+* **Cart API.** `cart_model_to_resp` builds every answer (get, add, merge) from `served_rows`, so a
+  hidden row is neither listed nor summed. PATCH and DELETE of one line by id answer 404 for a
+  hidden row, as for a missing one. `clear_cart` deletes only the served lines. The write gate,
+  `parse_kind`, is unchanged; no row of the old kinds can be written today (083, 085).
+* **Reminder.** The inner join that picks due carts and the query that names their lines both
+  filter on the served kinds. A hidden line is not summed or named, and a cart holding nothing
+  else is never due: no message, and its counter is not spent.
+* **Mini App.** Both reads of a saved cart pass it through `Cart::without_retired_lines`, and
+  `CartItem::from_server` asks the same predicate before it classifies a kind. No `CartItemType`
+  variant is a rental line, so every line of a saved cart is dropped today. The client does
+  rewrite its OWN storage without them: the existing persist effect saves the cart it shows to
+  `wwb_cart` and `wwb_cart_cloud`. That is the customer's device state, not stored shop data, and
+  no write site was added.
+* **Not changed.** No row is deleted or rewritten, no table dropped, no migration added, no
+  sentence written: a kept cart reads as the empty cart the screens already render. Stored order
+  lines and the reorder button are another change's.
+
+`specs/turbobaby/cart_persistence.t27` records the rule (`SERVED_CART_KINDS` and the section dated
+2026-09-26); gate 3 binds its list to the code and counts the reminder's filtered reads;
+`tests/legacy_cart_hidden_wiring.rs` guards the three readers.
+
+## D19 addendum — answer 3 and the kept-cart and held-notification changes reconciled, 2026-09-26
+
+Kept at the end of this file, like the entries above, so that no line citation into it moves.
+Four branches of 2026-09-25 and 2026-09-26 were merged on 2026-09-26 into `t27/owner-answers-2509`:
+answer 3's (stored content out of customers' sight), the kept-cart change and the held
+notification kinds above them. Answer 3's entry above says three things the other two changed.
+The contracts now say one thing:
+
+* **The cart.** Answer 3 served a cart line of a retired kind under the neutral name with no
+  picture, and a cart kept on the device printed the same name. The kept-cart change serves no
+  such line at all. Its rule was kept, and the neutral-name cart path was removed from the cart API,
+  from `src/trios/legacy_view.rs` and from the cart, checkout and `CartItemComponent`. The Mini App's
+  `Cart::add_item` now asks the same `cart_kind_is_served` as the two other ways into its cart, so
+  a reorder or an unmounted screen cannot put such a line there either, and no screen is handed
+  one. `specs/turbobaby/cart_persistence.t27` records it (`RECONCILED_WITH_ANSWER_3_AT`), and
+  `legacy_retirement.t27` points to it (`OWNER_ANSWER_3_CART_RULE_OWNER_ID`).
+* **The reminder.** Answer 3 left it, reasoning that no cart line of a retired kind can be
+  written. A cart kept from before 083 and 085 still holds such lines. The kept-cart change closed
+  it: the reminder reads served lines only.
+* **The garden's notification arm.** Answer 3 left it. The held-kinds change closed it: such a
+  queued row is held unsent (`notification_queue.t27`, `HELD_KINDS_DECIDED_AT`).
+
+No row was written or deleted, no migration was added and no sentence was written.
+
+## D19 addendum — an order of the previous shop shows no shop label, decided 2026-09-26
+
+Kept at the end of this file, like the entries above, so that no line citation into it moves.
+Answer 3's entry above left one item open: a withheld shop reached the order screens' fallback
+for an order with no shop, and that fallback reads «TurboBaby». So an order the previous shop took
+read as placed with TurboBaby, in the list and on the detail's labelled delivery row. The operator
+decided on 2026-09-26, announced it to the owner, and the owner did not object: an order of the
+previous shop must not be shown as TurboBaby's, and such an order shows no shop label at all.
+No wording was needed.
+
+* **Served.** The two customer reads serve a withheld shop as an empty shop, and no longer as no
+  shop (`customer_shop_id`, `WITHHELD_SHOP` in `src/trios/legacy_view.rs`). The row keeps what it
+  stored, and the admin reads are unchanged.
+* **Shown.** Both order screens read the served shop through `shown_shop`. For the empty shop the
+  list prints the date alone, and the detail leaves out its labelled delivery row. An order with
+  TurboBaby's stored shop still prints it. An order naming no shop still prints the fallback. Both
+  are exactly as before. A bundle cached from before prints an empty value for such an order,
+  which is not TurboBaby's name either. The Mini App's checkout never sends an empty shop.
+
+`specs/turbobaby/order_presentation.t27` records it (`RETIRED_SHOP_DECIDED_AT`,
+`RETIRED_SHOP_LABEL_SHOWN`, `RETIRED_SHOP_SERVED_AS`; `RETIRED_SHOP_FALLBACK_NOTE` is closed).
+`tests/legacy_view_wiring.rs` holds the screens to it, and the rules' module has the unit test.

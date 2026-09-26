@@ -25,3 +25,8 @@ pub mod validation;
 
 // Re-export commonly used types
 pub use core::{Error, Lang, QrToken, Result, TelegramId, Timestamp};
+
+// What a customer is shown of the content the previous shop left in storage
+// (owner, 2026-09-25, answer 3). Declared after the re-exports, in a group of
+// its own, so that no line of this file moves.
+pub mod legacy_view;
