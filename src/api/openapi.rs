@@ -1,15 +1,18 @@
 #![allow(dead_code)]
 use utoipa::OpenApi;
 
-/// GET /api/loyalty/leaderboard
+/// GET /api/loyalty/leaderboard -- admin only since 2026-09-26 (R1).
 #[utoipa::path(
     get,
     path = "/api/loyalty/leaderboard",
     responses(
-        (status = 200, description = "Top loyalty leaderboard (top 20 by total spent)", body = serde_json::Value),
+        (status = 200, description = "Top loyalty leaderboard (top 20 by total spent), for an admin", body = serde_json::Value),
+        (status = 401, description = "Unauthorized: an admin only"),
+        (status = 429, description = "Too many failed admin attempts from this address"),
         (status = 500, description = "Internal server error"),
     ),
-    tag = "loyalty"
+    tag = "loyalty",
+    security(("AdminKey" = []))
 )]
 pub(crate) async fn get_leaderboard_doc() {}
 
@@ -62,27 +65,31 @@ pub(crate) async fn get_bonus_history_doc() {}
 )]
 pub(crate) async fn get_sets_doc() {}
 
-/// GET /api/quest-places
+/// GET /api/quest-places -- closed to customers since 2026-09-26 (R2).
 #[utoipa::path(
     get,
     path = "/api/quest-places",
     responses(
-        (status = 200, description = "List of quest places", body = serde_json::Value),
+        (status = 200, description = "List of quest places, for an admin", body = serde_json::Value),
+        (status = 404, description = "Without admin proof: the missing-route answer, as for an unmatched path"),
         (status = 500, description = "Internal server error"),
     ),
-    tag = "quests"
+    tag = "quests",
+    security(("AdminKey" = []))
 )]
 pub(crate) async fn get_quest_places_doc() {}
 
-/// GET /api/treasure-hunts
+/// GET /api/treasure-hunts -- closed to customers since 2026-09-26 (R2).
 #[utoipa::path(
     get,
     path = "/api/treasure-hunts",
     responses(
-        (status = 200, description = "List of active treasure hunts", body = serde_json::Value),
+        (status = 200, description = "List of active treasure hunts, for an admin", body = serde_json::Value),
+        (status = 404, description = "Without admin proof: the missing-route answer, as for an unmatched path"),
         (status = 500, description = "Internal server error"),
     ),
-    tag = "quests"
+    tag = "quests",
+    security(("AdminKey" = []))
 )]
 pub(crate) async fn get_treasure_hunts_doc() {}
 

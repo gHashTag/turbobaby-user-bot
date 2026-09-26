@@ -126,13 +126,13 @@ fn api_routes() -> Router<AppState> {
 /// reads a sentence instead of guessing — the whole point of the change is
 /// that a missing route stops being silent.
 async fn api_not_found(uri: axum::http::Uri) -> (StatusCode, Json<Value>) {
-    (
-        StatusCode::NOT_FOUND,
-        Json(json!({
-            "error": "not_found",
-            "detail": format!("no API route matches {}", uri.path()),
-        })),
-    )
+    // Built by `missing_route` (end of this file) since 2026-09-26, the one
+    // builder of this answer. R2's closed reads (`admin_or_missing_route`)
+    // answer a caller without admin proof with it too (owner: «Закрыть для
+    // клиентов»), so a closed read and a real miss are one answer, byte for
+    // byte, and cannot drift apart. The body keeps its old length, seven
+    // lines, so that no line cited below it moves.
+    missing_route(uri.path())
 }
 
 /// `/api/ping` — dumb liveness probe. Returns 200 as long as the
@@ -490,5 +490,75 @@ mod route_wiring_tests {
              Remove these entries from the allowlist.",
             stale,
         );
+    }
+}
+
+// The closed reads (R2), the owner's answer of 2026-09-26. Appended so that no
+// line cited above moves.
+
+use axum::http::HeaderMap;
+use axum::response::{IntoResponse, Response};
+
+/// The missing-route answer for `path`: `404` and
+/// `{"error":"not_found","detail":"no API route matches <path>"}`. `path` is
+/// the path as the nested `/api` router sees it (prefix stripped), which is
+/// what `api_not_found` and the closed reads both hand it.
+pub(crate) fn missing_route(path: &str) -> (StatusCode, Json<Value>) {
+    (
+        StatusCode::NOT_FOUND,
+        Json(json!({
+            "error": "not_found",
+            "detail": format!("no API route matches {}", path),
+        })),
+    )
+}
+
+/// R2 (owner, 2026-09-26, verbatim): «Закрыть для клиентов». A read no
+/// mounted screen uses answers a caller without admin proof exactly as an
+/// unmatched path does: ANY `check_admin` refusal (401, or 429 once the admin
+/// limiter trips) becomes [`missing_route`] for the request's own path. The
+/// route stays registered, so nobody gets a 405, and a failed attempt still
+/// counts toward the admin limiter, so the route is no password oracle. An
+/// admin's id comes back as `check_admin` returns it (0 for the password
+/// token).
+// The `Err` IS the answer the handler returns, once per request, so boxing it
+// would buy nothing but a `*` at the three call sites.
+#[allow(clippy::result_large_err)]
+pub(crate) fn admin_or_missing_route(
+    headers: &HeaderMap,
+    state: &AppState,
+    uri: &axum::http::Uri,
+) -> Result<i64, Response> {
+    crate::api::auth::check_admin(headers, state)
+        .map_err(|_| missing_route(uri.path()).into_response())
+}
+
+#[cfg(test)]
+mod missing_route_tests {
+    use super::{api_not_found, missing_route};
+    use axum::http::StatusCode;
+    use serde_json::json;
+
+    /// R2's closed reads and the fallback answer with one builder: for any
+    /// path, `missing_route` is exactly what `api_not_found` answers.
+    #[tokio::test]
+    async fn missing_route_is_the_fallbacks_own_answer() {
+        for path in [
+            "/quest-places",
+            "/treasure-hunts",
+            "/loyalty/config",
+            "/no/such/route",
+        ] {
+            let uri: axum::http::Uri = path.parse().expect("a path");
+            let (status, body) = api_not_found(uri).await;
+            let (built_status, built_body) = missing_route(path);
+            assert_eq!(status, StatusCode::NOT_FOUND);
+            assert_eq!(built_status, status);
+            assert_eq!(built_body.0, body.0);
+            assert_eq!(
+                body.0,
+                json!({"error": "not_found", "detail": format!("no API route matches {path}")})
+            );
+        }
     }
 }
