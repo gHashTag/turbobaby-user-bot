@@ -11,11 +11,11 @@ what to do next.
 
 | | measured 2026-09-21 |
 | --- | --- |
-| canonical contracts | **45** (44 under `specs/turbobaby/` + `specs/agents/turbobaby.t27`); **46** on `t27/round5-server` and on the integration branch `t27/round5`, with `referral_credit.t27` (2026-09-26) |
-| assertions executed, all passing | **11 048** on the integration branch `t27/round5` at `b1d900e` (2026-09-26, the review fix of round 5; see "Round 5, review fix" below), **11 033** on the integration branch `t27/round5` at `992077f` (2026-09-26, R1–R3 integrated; see "Round 5, integrated" below), **11 009** on the server lane `t27/round5-server` at `872698b` (2026-09-26, R1–R3; see "Round 5, server lane" below), **10 758** on `t27/round4` at `168892d` after its review (2026-09-26; see "Round 4, review fixes" below; bindings still 256), **10 754** on the integration branch `t27/round4` at `2f801fe` after the owner's answers of 2026-09-26 (see "Round 4, integrated" below), **10 581** on the integration branch `t27/owner-answers-2509` at `41315b2` after the owner's second list of 2026-09-25 and the operator's shop label (2026-09-26; see "The owner's second list of 2026-09-25 and the operator's shop label" below), **10 273** on the integration branch `t27/owner-answers-2509` after the three fixes on top of `69fd4fa` (2026-09-25; see "Three fixes on top of `69fd4fa`" below), **10 246** at `69fd4fa` (the owner's answers of that day; not pushed, not merged) — **9 996** re-measured 2026-09-25 on `f5e6b4f`, after #64, which changed comments only (9 996 after #63 on 2026-09-24, 9 859 after #62, 9 535 earlier that day, 9 514 on 2026-09-23 before that day's money family, 9 038 on 2026-09-22, 8 911 on 2026-09-21) |
+| canonical contracts | **45** (44 under `specs/turbobaby/` + `specs/agents/turbobaby.t27`); **46** on `t27/round5-server` and on the integration branch `t27/round5`, with `referral_credit.t27` (2026-09-26); still **46** on `t27/round6` |
+| assertions executed, all passing | **11 119** on `t27/round6` at `24f43a1` (2026-09-26, the owner's answers on the base of the 10% and the referral top list; see "Round 6" below), **11 048** on the integration branch `t27/round5` at `b1d900e` (2026-09-26, the review fix of round 5; see "Round 5, review fix" below), **11 033** on the integration branch `t27/round5` at `992077f` (2026-09-26, R1–R3 integrated; see "Round 5, integrated" below), **11 009** on the server lane `t27/round5-server` at `872698b` (2026-09-26, R1–R3; see "Round 5, server lane" below), **10 758** on `t27/round4` at `168892d` after its review (2026-09-26; see "Round 4, review fixes" below; bindings still 256), **10 754** on the integration branch `t27/round4` at `2f801fe` after the owner's answers of 2026-09-26 (see "Round 4, integrated" below), **10 581** on the integration branch `t27/owner-answers-2509` at `41315b2` after the owner's second list of 2026-09-25 and the operator's shop label (2026-09-26; see "The owner's second list of 2026-09-25 and the operator's shop label" below), **10 273** on the integration branch `t27/owner-answers-2509` after the three fixes on top of `69fd4fa` (2026-09-25; see "Three fixes on top of `69fd4fa`" below), **10 246** at `69fd4fa` (the owner's answers of that day; not pushed, not merged) — **9 996** re-measured 2026-09-25 on `f5e6b4f`, after #64, which changed comments only (9 996 after #63 on 2026-09-24, 9 859 after #62, 9 535 earlier that day, 9 514 on 2026-09-23 before that day's money family, 9 038 on 2026-09-22, 8 911 on 2026-09-21) |
 | contract-to-contract ownership edges | 203+, **zero dangling** |
 | source lines named by some contract | **73 407 of 80 308 (91.4 %)** |
-| enforced contract-to-source bindings | **286** on the integration branch `t27/round5` at `b1d900e` (2026-09-26; +2 the recorder guard, the review fix of round 5), across 42 of 46 contracts and 88 source files — **284** on the integration branch `t27/round5` at `992077f` (2026-09-26; +2 the Mini App's rate, the client lane added none), across 42 of 46 contracts and 88 source files — **282** on the server lane `t27/round5-server` at `872698b` (2026-09-26; −3 +29, R1–R3), across 42 of 46 contracts and 87 source files — **256** on the integration branch `t27/round4` at `2f801fe` (2026-09-26; +7 the server lane of round 4, +1 its client lane), across 41 of 45 contracts and 84 source files — **248** on the integration branch `t27/owner-answers-2509` at `41315b2` (2026-09-26; +2 answer 1, +4 answer 3, +2 the kept cart, +1 the held notification kinds), across 41 of 45 contracts and 83 source files — **239** on the same branch on 2026-09-25 (the two new rows bind the CLICK 125 redirect to the seed), across the same 41 of 45 contracts and 80 source files — **237**, across 41 of 45 contracts and 80 source files, re-measured 2026-09-25 on `f5e6b4f`, after #64 (237 after #63 on 2026-09-24, 227 after #62, 198 earlier that day, 197 on 2026-09-23, 168 across 40 on 2026-09-22, 66 across 16 on 2026-09-21) |
+| enforced contract-to-source bindings | **288** on `t27/round6` at `24f43a1` (2026-09-26; +2 the referral leaderboard's admin gate), across 42 of 46 contracts and 88 source files — **286** on the integration branch `t27/round5` at `b1d900e` (2026-09-26; +2 the recorder guard, the review fix of round 5), across 42 of 46 contracts and 88 source files — **284** on the integration branch `t27/round5` at `992077f` (2026-09-26; +2 the Mini App's rate, the client lane added none), across 42 of 46 contracts and 88 source files — **282** on the server lane `t27/round5-server` at `872698b` (2026-09-26; −3 +29, R1–R3), across 42 of 46 contracts and 87 source files — **256** on the integration branch `t27/round4` at `2f801fe` (2026-09-26; +7 the server lane of round 4, +1 its client lane), across 41 of 45 contracts and 84 source files — **248** on the integration branch `t27/owner-answers-2509` at `41315b2` (2026-09-26; +2 answer 1, +4 answer 3, +2 the kept cart, +1 the held notification kinds), across 41 of 45 contracts and 83 source files — **239** on the same branch on 2026-09-25 (the two new rows bind the CLICK 125 redirect to the seed), across the same 41 of 45 contracts and 80 source files — **237**, across 41 of 45 contracts and 80 source files, re-measured 2026-09-25 on `f5e6b4f`, after #64 (237 after #63 on 2026-09-24, 227 after #62, 198 earlier that day, 197 on 2026-09-23, 168 across 40 on 2026-09-22, 66 across 16 on 2026-09-21) |
 
 The two re-measured rows come from gates 2 and 3, run on 2026-09-25 on `main` at `f5e6b4f` (#64
 on top of the rental-only change of #63). Both equal the 2026-09-24 readings on #63's tree to the
@@ -804,7 +804,8 @@ citations into `scripts/verify_t27_specs.py` (the manifest grows with every floo
   this branch is merged. *Done on 2026-09-26: see "Round 5, integrated" below.*
 * **Nothing is live** until `main` is deployed; migration 089 runs on the next start.
 * **The owner's open questions** (DECISIONS.md): the gross or net base of the 10%, the public
-  `/api/referrals/leaderboard`, and the admin-facing wording.
+  `/api/referrals/leaderboard`, and the admin-facing wording. *The first two were answered on
+  2026-09-26: see "Round 6" below.*
 * The two locale strings that announced the stopped credits (`referral_friend_ordered`,
   `referral_milestone_bonus` in `src/locales.rs`) are read by nobody and were left, like
   `REFERRAL_WELCOME_BONUS` and the `loyalty_config` keys `referral_bonus` and `milestone_bonus_N`.
@@ -946,7 +947,7 @@ server was stopped with `pg_ctl stop -m fast`, and the data dir is left in place
 * **The owner's open questions** (DECISIONS.md): the 10% on the net charge (as built) or the gross;
   the public `/api/referrals/leaderboard`, which the referrals page's top list still reads and whose
   rows print the frozen `total_bonus_earned` as «{1} заработано»; the admin-facing wording both
-  lanes wrote.
+  lanes wrote. *The first two were answered on 2026-09-26: see "Round 6" below.*
 * Customer copy needed and not given, left out (nine sentences, listed in DECISIONS.md and in
   `referral_credit.t27`).
 * The locale strings, config keys and env variable of the stopped credits stay, read by nobody, as
@@ -1028,6 +1029,168 @@ ignored** (2 filtered out), no compiler warning from this crate; the 17 of
 case). The negative control ran on a second fresh database of the same server; with the fixed file
 copied back, `tests/integration_referral_credit.rs` ran green on a third (17 passed). The server was
 stopped with `pg_ctl stop -m fast`, and the data dir is left in place.
+
+### Round 6, 2026-09-26: the base of the 10% and the referral top list, not yet live
+
+Branch `t27/round6`, cut from `main` at `8000ae8` (#69, round 5 merged). The owner answered two of
+the three open questions of round 5 the same day; his words are verbatim in DECISIONS.md, entry
+«The base of the 10% and the referral top list, the owner's answers of 2026-09-26». **Nothing is
+pushed and nothing is deployed.** No migration, no row written or deleted.
+
+| commit | what |
+| --- | --- |
+| `4d13a4a` | (a) the base: `referral_credit.t27` records «После скидки — 250», the net base as built; gate 1's floor. No code |
+| `843da57` | (b) the referral top: the address admin-only like R1, the list off the Mini App, four keys retired, the `/refstats` label, the tests, five contracts, gate 3's two rows, gate 1's four floors |
+| `3535d6e` | `scripts/build-frontend.sh`: a Trunk hash shorter than 16 digits is zero-padded instead of refused (below) |
+| `24f43a1` | `dist/` rebuilt, bundle `4fa1b87a15ac065a` → `c57e443e55dc3495` |
+| the next commit | DECISIONS.md's entry, this section, the "Where it stands" rows and the contract map |
+
+**(a) The base.** «После скидки — 250» ("after the discount — 250"): 10% of the rental charge after
+the friend's own referral balance applied to that same rental, as built. `credit_for_rental` and
+`record_rental` already computed it, so no code changed; operator decision 3 of round 5 is the
+owner's now. `referral_credit.t27`: `OWNER_BASE_ANSWER_*`, `BASE_IS_THE_OWNERS_DECISION`,
+`BASE_QUESTION_IS_OPEN = false`, `BASE_ANSWER_CHANGED_THE_CODE = false`, the test
+`the_owner_chose_the_net_base` and the invariant `the_base_is_the_owners_net_charge` (148/24 →
+155/26). «250» is the credit of the example the question carried, which the repository does not
+keep, so no assertion restates it.
+
+**(b) The referral top list.** «Убрать топ и закрыть адрес» ("remove the top and close the
+address"). `GET /api/referrals/leaderboard` served anyone the top referrers' Telegram ids, first
+names and point totals frozen before R3; the referral page's list printed each id cut to four
+digits and each total as «{1} заработано».
+
+* **Server.** `get_leaderboard` (`src/api/referrals.rs`) calls `check_admin` as its first
+  statement, exactly as R1's `get_leaderboard` (`src/api/loyalty.rs`). The query string is taken
+  as `Result<Query<LeaderboardQuery>, QueryRejection>` and read after the gate, so a non-admin gets
+  `check_admin`'s 401 (429 once the admin limiter trips) whatever query he sends, never the
+  extractor's 400. An admin is served the rows as before; his malformed query is a bare 400. The
+  route stays registered.
+* **Mini App.** `src/ui/pages/referrals.rs` lost `TopReferrer`, its signal, its fetch, its block
+  and `leaderboard_row`, and nothing else: the link, the three counters, the balance and its two
+  requests and the friends panel stay, in that order. Four keys only the list used are retired one
+  line for one line in `src/trios/i18n.rs` (`referral.top`, `referral.empty_leaderboard`,
+  `referral.id_mask`, `referral.row_meta`): 523 → 519 declarations, naive grep 528 → 524. The admin
+  screen reads no referral top (its Loyalty tab reads R1's leaderboard) and was not touched.
+* **Bot.** `/refstats`' button opens the same page and was labelled «📈 Таблица лидеров» /
+  "📈 Leaderboard". It now carries `referrals_open_app` («Открыть приглашения» / "Open invites"),
+  the label every referral notification already gives that button; `referral_leaderboard` stays in
+  `src/locales.rs`, read by nobody. One line of `src/bot/commands.rs`, no line moved. This is an
+  operator decision, listed in DECISIONS.md for the owner.
+* **Tests.** `tests/referral_credit_wiring.rs`: `the_referral_leaderboard_is_admin_only_like_r1`
+  (the gate first, the query after it, the fallible extractor, R1's shape) and
+  `the_refstats_button_no_longer_promises_a_leaderboard`. `tests/integration_closed_reads.rs`
+  (PostgreSQL, `#[ignore]`): `the_referral_leaderboard_answers_an_admin_only_like_r1` seeds a
+  referrer with five confirmed friends; three kinds of caller without admin proof (nothing, a
+  customer's valid initData, a wrong token) times five query strings get R1's status, content type
+  and bytes, never the id; the password and an admin's initData are served the seeded row; both
+  admins' malformed queries are 400; one limiter trips both routes. `tests/referral_credit_client_wiring.rs`:
+  `the_top_referrers_list_is_gone_and_the_rest_of_the_page_stands`. `tests/ui_endpoints_exist.rs`:
+  `an_admin_only_read_is_fetched_by_the_admin_screen_alone` (R1's and this route, fetched from
+  `admin_screen.rs` only). `src/trios/i18n.rs`: `the_referral_top_list_keys_stay_retired`.
+* **Contracts.** `referral_program.t27` (289/62 → 318/65): `GATE_ADMIN`,
+  `ADMIN_GATED_ROUTE_COUNT` 1, `UNGATED_ROUTE_COUNT` 1 → 0 with the 2026-09-21 readings kept under
+  `_BEFORE_THE_TOP_LIST_ANSWER`, `UNGATED_ROUTE` renamed `LEADERBOARD_ROUTE`, the answer, the
+  witnesses, `TOP_LIST_KEYS_RETIRED`, the `/refstats` label; the header's item 3 marked closed and
+  its two citations re-pinned (`:213-216 (at 8000ae8)`, `:238, :228 at 8000ae8`).
+  `locale_policy.t27` (156/36 → 161/36): 519/524, the header rewritten in place with the same line
+  count. `person_naming.t27` (235/53 → 244/54): the labelled-identifier row and `referral.id_mask`
+  retired, the leaderboard endpoint gated (`GATED_ENDPOINTS_OF_THE_TWO` 1 → 2), the 2026-09-21 census
+  kept and one site noted gone. `request_identity.t27` (161/30 → 164/30): `check_admin`'s census
+  90 → 91, total 121 → 122, 20 modules; lines 313-334, cited from gate 3, edited in place.
+  `runtime_config.t27`: the placeholder link re-pinned `src/ui/pages/referrals.rs:229` → `:225` in
+  three places, comments only.
+
+**Gate 3**, 286 + 2 = **288** rows (`MIN_BINDINGS` 288), no row removed:
+`referral_program.LEADERBOARD_GATE_SITES` (R1's regex plus `query: Result<Query<LeaderboardQuery>,`
+in the signature and `let Query(params) = query` straight after the gate) and
+`referral_program.ADMIN_GATED_ROUTE_COUNT` (the `check_admin` calls of `src/api/referrals.rs`; with
+the two older rows it pins the ungated count at 5 − 4 − 1 = 0). Planted by hand through
+`--source-override`, five copies, **5 of 5 red** in the row that names them: the query read before
+the gate (`contract=1 source=0`), an infallible extractor again (`1/0`), the gate removed (both
+rows `1/0`), a second `check_admin` in `get_my_referrals` (`contract=1 source=2`), the gate commented
+out (both rows `1/0`). The ROUTE_COUNT row's `why` and one citation in the owner census row
+(`:242-; :232- at 8000ae8`) were updated.
+
+**Gates**, on `24f43a1` (the same numbers on `843da57`; `4d13a4a` alone, exported with `git
+archive`: 46 specs, 11 059 assertions, 286 bindings, gate 4 OK), pinned compiler `40003ed`:
+
+```sh
+T27C=<path>/t27c python3 scripts/verify_t27_specs.py --require-compiler
+# OK - 46 manifested specs, 5 generators each (every floor equals the measurement)
+python3 scripts/execute_t27_assertions.py            # WITH the compiler cross-check
+# OK - 46 spec(s), 11119 assert line(s) scanned, 11119 executed, 11119 passed, 0 failed;
+#      10575 declaration name(s) and function bodies agreed with t27c; 2 pinned front-end disagreement(s)
+python3 scripts/verify_t27_against_source.py --require-git-tracked
+# OK - 288 bindings hold across 42 contracts and 88 source files
+python3 scripts/verify_fleet_seed.py -v
+# OK — 14 families (13 offered), 37 units (11 rented, 26 available); ...
+```
+
+**Rust.** `cargo fmt -- --check` clean. The three clippy forms pass with `-D warnings`
+(`--features backend --bin turbobaby-bot-server`, `--features backend`, `--target
+wasm32-unknown-unknown --lib`). `cargo test --features backend -j 2 --no-fail-fast`: 82 result
+lines, **2 602 passed, 0 failed**, 163 ignored (2 596 + the i18n test in the lib and the bin,
+two server wiring tests, one client wiring test, one endpoint test; 162 + the new DB test).
+Negative controls, each planted and restored from a copy: HEAD's page against the client tests
+(`the_top_referrers_list_is_gone_…` and `an_admin_only_read_is_fetched_…` red, the latter naming
+`src/ui/pages/referrals.rs:253`), and an infallible extractor with HEAD's `/refstats` line against
+`tests/referral_credit_wiring.rs` (both new tests red).
+
+**DB-backed.** A fresh private PostgreSQL 18.0 (`initdb -A trust -U postgres -E UTF8 --locale=C`),
+a new data dir `D:/t27work/pgdata-r6-2509`, listening on 127.0.0.1:55440 only,
+`HTTPS_PROXY`/`HTTP_PROXY`/`ALL_PROXY`/`TELOXIDE_PROXY` = `http://127.0.0.1:9`. The DB-backed tests
+of the touched routes, `cargo test --features backend -j 2 --no-fail-fast --test
+integration_closed_reads --test integration_invitees --test integration_invitee_names --test
+integration_share_source -- --include-ignored --test-threads=1`: **9 passed, 0 failed** (R1, R2
+and the new test; the three owner-gated reads of the same module), on a fresh database and again,
+with the seeded referrer, on a second. Negative control on a third: HEAD's ungated handler put back,
+the new test is red at its first comparison (`left: 200, right: 401`, the anonymous answer carrying
+the seeded referrer's id and «Anonymous»); the fixed file was copied back. The whole suite was not
+re-run against the database this round. The server was stopped with `pg_ctl stop -m fast`; the
+data dir is left in place.
+
+**The build script, `3535d6e`.** The first run of `scripts/build-frontend.sh` on `843da57` stopped
+after `trunk build` with "could not find one <target>-<hex hash>.js bundle": Trunk had named the
+bundle `turbobaby-bot-cc17c34144e2629.js`, 15 hex digits, because it writes `{:x}` of a u64 with no
+zero padding (one build in sixteen), and the script matched 16 or more. So do the server's
+`/version.txt` (`extract_trunk_bundle_hash`, "unknown" below 16) and both version checks in
+`index.html`, whose older copies live in customers' WebView caches. The script now accepts 1 to 16
+digits and, below 16, renames the JS and WASM bundles to the zero-padded hash and rewrites their
+references in `dist/index.html` (failing if an unpadded one remains); dry-run on a copy of that
+build's `dist/`, it produced `turbobaby-bot-0cc17c34144e2629.js`/`_bg.wasm` with two references each.
+The script was then run again, so `trunk` ran twice this round: `build.rs` stamps a timestamp into
+`BUILD_VERSION`, the second build hashed to 16 digits, and the padding did not fire.
+
+**`dist/`**, `24f43a1`. Built with `scripts/build-frontend.sh` (trunk 0.21.14, wasm-bindgen
+0.2.122, `CARGO_BUILD_JOBS=2`, the shared target) from `843da57`: bundle `4fa1b87a15ac065a` →
+`c57e443e55dc3495`, no `dist/version.txt.br`, `dist/assets/` still ignored. Read inside the wasm
+(`grep -c -a -F`, old → new): «🏆 Топ рефералов» and "🏆 Top Referrers" 1 → 0, «Пока нет данных —
+будь первым!» and "No data yet — be the first!" 1 → 0, «ID: ⋯{0}» 1 → 0, «{0} приглашён(а) • {1}
+заработано» and "{0} invited • {1} earned" 1 → 0, `/api/referrals/leaderboard` 1 → 0; kept:
+«Реферальный баланс», "Referral balance", the two request buttons and the rule sentence in RU and EN
+1 → 1, `/api/referral-credit/me/` 2 → 2, `/api/referrals/me/` 2 → 2, `/invitees` 1 → 1, and the
+admin screen's `/api/loyalty/leaderboard` 1 → 1. `scripts/predeploy-smoke.sh --no-build`: **SMOKE
+PASS** (the app mounted, no uncaught JS error; one expected 404 of the static serve ignored), and
+`git status` was empty before and after it.
+
+**Citations.** Every `path:N` citation in the tree that points into a file this round changed was
+checked against 8000ae8 by a line map of each file. The ones that moved were re-pinned above: three
+into `src/api/referrals.rs` (two from `referral_program.t27`, one from gate 3's owner-census row)
+and three into `src/ui/pages/referrals.rs` (all from `runtime_config.t27`). The range
+`request_identity.t27:323-333` that gate 3 cites kept its lines; two values inside it changed. Left as they were: `schema_provenance.t27`'s citations into
+`scripts/verify_t27_specs.py`, stale before this round and further out by its floor comments, and the
+handover's own round-4 citations of that file; and gate 3's `locale_policy.t27:107`, which already
+pointed two lines above `PUBLISHED_SET_SOURCE` (:109) before this round.
+
+**What is left.**
+
+* Push, review and merge of `t27/round6`, then a deploy of `main`. Nothing here is live.
+* **The owner's open questions**: the admin-facing wording both lanes of round 5 wrote (question 3
+  of the R1–R3 entry); a password holder off `ADMIN_IDS` recording his own friend's rental, and an
+  admin marking his own payout paid (the review fix's entry); and now the `/refstats` label, the
+  operator's choice above.
+* The referral leaderboard has no OpenAPI stub (it had none); it stays in
+  `tests/api_document_pairing.rs`'s undocumented count.
 
 ```sh
 # 1. structure: module, unique ID, declaration floors, typecheck, five generators.
@@ -1595,6 +1758,10 @@ citations** — unlike a `src/` citation, which gate 3 can check.
 > on top of `405f30e`, verified end to end the same way (see "Round 4, integrated"). It is not
 > pushed. Push it for review before anything else builds on it.
 >
+> *Since then:* round 5 was merged as #69 (`8000ae8`), and `t27/round6` (2026-09-26) carries the
+> owner's answers on the base of the 10% and the referral top list on top of it, verified the same
+> way (see "Round 6"). It is not pushed.
+>
 > The work, in order: fix the seven defects listed under "What is actually left", each with a test
 > that is red before the fix and with the contract that records the defect corrected in the same
 > change; then grow `scripts/verify_t27_against_source.py` beyond its 248 bindings on `main` at
@@ -1630,3 +1797,10 @@ citations** — unlike a `src/` citation, which gate 3 can check.
   on 2026-09-24 each re-pointed `file:line` citations and each moved lines. After every merge, check
   each citation against the tree it was written for and the line it names now. Re-cite by
   declaration, test or function name where you can, because a name does not drift.
+* **No two `dist/` builds are the same bundle, and one in sixteen used to be refused.** `build.rs`
+  stamps `BUILD_VERSION` with a Unix timestamp, and in a worktree `.git` is a file, so its
+  `rerun-if-changed=.git/HEAD` never settles: every build recompiles and hashes differently, even
+  from the same commit. Trunk writes that hash as `{:x}` of a u64, without zero padding, so a
+  leading zero nibble gives a 15-digit name. Measured 2026-09-26: `cc17c34144e2629`, then
+  `c57e443e55dc3495` from the same commit minutes later. Since `3535d6e` the build script pads a
+  short hash to 16 digits; before it, such a build stopped after `trunk build`.

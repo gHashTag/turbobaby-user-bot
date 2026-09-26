@@ -90,7 +90,7 @@ the market's currency, `ride_runtime` names the roster owner whose decisions it 
 | `promo_broadcast.t27` | 832 | ai-assist, availability, bot-surface, deeplink, legacy-retirement, locale-policy, pricing-honesty, rate-limit |
 | `publication.t27` | 667 | BOT (the owner card) |
 | `rate_limit.t27` | 724 | ai-assist, client-errors, events-booking, http-cache, observability, promo-broadcast, request-identity, upload-media |
-| `referral_credit.t27` | 616 | commerce, deposit-tiers, loyalty-ledger, market, notification-queue, order-money, order-status, referral-program, request-identity |
+| `referral_credit.t27` | 651 | commerce, deposit-tiers, loyalty-ledger, market, notification-queue, order-money, order-status, referral-program, request-identity |
 | `referral_program.t27` | 1092 | bot-surface, deeplink, loyalty-ledger, notification-queue, request-identity, star-award |
 | `rental_terms.t27` | 761 | bike-catalog, pricing-honesty |
 | `request_identity.t27` | 831 | cart-persistence, catalog-api |
@@ -105,7 +105,8 @@ the market's currency, `ride_runtime` names the roster owner whose decisions it 
 
 The table keeps the 2026-09-21 measurement, except one row: `referral_credit.t27` was added on
 **2026-09-26** with the owner's R3 answer and is measured on that day (515 lines on the server lane,
-565 after the integration's block the same day, 616 after the review fix's recorder guard). Two
+565 after the integration's block the same day, 616 after the review fix's recorder guard, 651 after
+round 6 recorded the owner's answer on the base of the 10%). Two
 contracts tracked since
 the measurement, `order_presentation.t27` and `person_naming.t27`, are manifested in the gate but
 not yet indexed here.
@@ -138,7 +139,8 @@ of every authenticated call and the DTO mirror. `upload_media` — the only gate
 **Money that is not a price.** `star_award` — the server side of a game payout and its ceiling.
 `loyalty_ledger` — the bonus ledger's structure, without rates the repository does not publish.
 `referral_program` — the code grammar, the self-edge guards, and the milestone ladder and
-welcome credit it paid until the owner stopped them on 2026-09-26 (R3).
+welcome credit it paid until the owner stopped them on 2026-09-26 (R3), and which of its five
+routes stands behind which gate (the referral top, admin-only since the owner's answer that day).
 `referral_credit` — the inviter's 10% of each recorded completed rental of an invited friend, a
 separate THB ledger, and the redeem or payout request a manager resolves by hand.
 `game_score` — the high-score ledger and the discriminator it does not have.

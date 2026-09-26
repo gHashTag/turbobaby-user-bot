@@ -33,17 +33,22 @@
 ;    single value of source, so no arm can ever be compared with another on any outcome.
 ; 3. THE ONE UNGATED ROUTE IS THE ONE THAT PUBLISHES THE ID. Four of the five registrations in
 ;    src/api/referrals.rs:22-43 call check_owner on the request headers (:68, :88, :124, :164)
-;    before touching the graph. The leaderboard handler at src/api/referrals.rs:213-216 takes
-;    State and Query, takes no HeaderMap, and calls no gate; no middleware supplies one, because
+;    before touching the graph. The leaderboard handler at src/api/referrals.rs:213-216 (at
+;    8000ae8) takes State and Query, takes no HeaderMap, and calls no gate; no middleware supplies
+;    one, because
 ;    api_routes at src/api/mod.rs:81-106 applies exactly one layer, a body limit at :105, the nest
 ;    that gives it its /api prefix carries none (src/api/mod.rs:77), and the layers in
 ;    src/main.rs:1157-1205 are alerting, request id, CORS, a response-header override, metrics and
 ;    header policy.
-;    That route serializes TopReferrer whole (src/api/referrals.rs:228), and TopReferrer's first
-;    field is telegram_id (src/db/referrals.rs:22-28). One function away the same module withholds
-;    that same field deliberately: src/db/referrals.rs:529-531 records that the numeric id stays
-;    out of the invitee response, and the invitee route is owner-gated. The field the gated route
-;    protects is published by the ungated one.
+;    That route serializes TopReferrer whole (src/api/referrals.rs:238, :228 at 8000ae8), and
+;    TopReferrer's first field is telegram_id (src/db/referrals.rs:22-28). One function away the
+;    same module withholds that same field deliberately: src/db/referrals.rs:529-531 records that
+;    the numeric id stays out of the invitee response, and the invitee route is owner-gated. The
+;    field the gated route protects is published by the ungated one.
+;    CLOSED 2026-09-26 by the owner's answer ("The referral top list", below): since then the
+;    handler's first statement is check_admin, as the loyalty leaderboard's has been since R1, so a
+;    caller without admin proof never reaches the serialization. The sentences of this item
+;    describe the handler as it stood at 8000ae8, and the item's title is the 2026-09-21 reading.
 ; --
 ; WHERE THE BRIEF IS REFUTED. Four readings, each re-measured against the line it names.
 ; 1. "the migrations that create them (survey points at 029, 035, 046)". 029 is wrong and two are
@@ -698,19 +703,33 @@ pub fn experiment_arm_is_recoverable(arm_written_to_the_event: bool, arm_labelle
 ; --- Who may read the graph ----------------------------------------------------------------------
 pub const GATE_NONE : u8 = 0;
 pub const GATE_OWNER : u8 = 1;
+; The admin gate, which the fifth route has called since the owner's answer of 2026-09-26 ("The
+; referral top list", below). It proves the caller is an admin, not the subject of the rows.
+pub const GATE_ADMIN : u8 = 2;
 pub const ROUTE_COUNT : u8 = 5;
 pub const OWNER_GATED_ROUTE_COUNT : u8 = 4;
-pub const UNGATED_ROUTE_COUNT : u8 = 1;
+; Bound by gate 3 (the check_admin calls of src/api/referrals.rs). With the two rows on ROUTE_COUNT
+; and OWNER_GATED_ROUTE_COUNT it pins the ungated count to 5 - 4 - 1 = 0.
+pub const ADMIN_GATED_ROUTE_COUNT : u8 = 1;
+pub const UNGATED_ROUTE_COUNT : u8 = 0;
+; Until the owner's answer of 2026-09-26 the fifth route called no gate (the header's item 3).
+pub const ADMIN_GATED_ROUTE_COUNT_BEFORE_THE_TOP_LIST_ANSWER : u8 = 0;
+pub const UNGATED_ROUTE_COUNT_BEFORE_THE_TOP_LIST_ANSWER : u8 = 1;
 ; The path as a caller types it, not as the module registers it: src/api/referrals.rs:42 registers
 ; /referrals/leaderboard and src/api/mod.rs:77 nests the whole set under /api. The handler's own
-; doc comment at src/api/referrals.rs:212 spells the joined form.
-pub const UNGATED_ROUTE : str = "GET /api/referrals/leaderboard";
+; doc comment at src/api/referrals.rs:212 spells the joined form. Named UNGATED_ROUTE until
+; 2026-09-26, when the route stopped being ungated.
+pub const LEADERBOARD_ROUTE : str = "GET /api/referrals/leaderboard";
+; Still true: what an admin is served is the row as it was, whole id included.
 pub const LEADERBOARD_ROW_CARRIES_A_TELEGRAM_ID : bool = true;
 pub const INVITEE_ROW_CARRIES_A_TELEGRAM_ID : bool = false;
+; The 2026-09-21 reading: the field the owner-gated route withheld, the ungated one published. Since
+; 2026-09-26 no customer is served it by either route (A_CUSTOMER_IS_SERVED_ANOTHER_ACCOUNT_ID).
 pub const THE_TWO_DECISIONS_AGREE : bool = false;
 ; src/api/referrals.rs:34-41 records a route that was removed for exactly this class of reason: it
 ; took a referrer id from a request body, so an inviter could be named by a number a caller typed.
-; The removal is the precedent that the leaderboard exposure has not yet been measured against.
+; The removal was the precedent that the leaderboard exposure had not been measured against until
+; the owner closed it on 2026-09-26.
 pub const A_ROUTE_WAS_REMOVED_FOR_NAMING_A_PERSON_BY_NUMBER : bool = true;
 
 pub fn route_requires_proof_of_the_subject(gate: u8) bool {
@@ -783,6 +802,59 @@ pub fn points_a_confirmation_credits(before_r3: bool, per_referral: u8, welcome:
   }
   return 0;
 }
+
+; --- The referral top list: the owner's answer of 2026-09-26 -----------------------------------------
+; Open question 2 of the DECISIONS.md entry "R1-R3, the owner's answers of 2026-09-26": GET
+; /api/referrals/leaderboard answered anyone with the top referrers' Telegram ids and their point
+; totals frozen before R3 (total_bonus_earned), and the invite screen's top-referrers list printed
+; them, each id cut to four digits on the client, which withholds nothing (turbobaby/person-naming
+; records why). The owner answered the same day; the Russian is verbatim in DECISIONS.md, "The base
+; of the 10% and the referral top list, the owner's answers of 2026-09-26". In translation: "remove
+; the top and close the address". Enforced as the operator read it:
+;   * THE ADDRESS. get_leaderboard (ROUTE_IMPLEMENTATION) calls check_admin as its first statement,
+;     exactly as the loyalty leaderboard has since R1 (turbobaby/loyalty-ledger,
+;     LEADERBOARD_GATE_SITES), and reads its query string only after the gate, through a fallible
+;     Query extractor: a caller without admin proof gets check_admin's 401, or 429 once the admin
+;     limiter trips, whatever query he sends -- the status, content type and bytes R1's route gives
+;     him, compared on PostgreSQL by LEADERBOARD_GATE_WITNESS, which also shows one limiter behind
+;     both routes. An admin is served as before; his malformed query is a bare 400, as an unknown
+;     period already was. The route stays registered, and no row is read or written differently.
+;   * THE TOP. The referral page (src/ui/pages/referrals.rs) neither fetches the address nor renders
+;     the list, and the four keys only the list used are retired, each line of src/trios/i18n.rs one
+;     for one by a comment line (turbobaby/locale-policy counts them). The rest of the page stands:
+;     the link, the three counters, the referral balance with its two requests, the friends panel.
+;   * THE ADMIN SCREEN reads no referral top: its Loyalty tab reads R1's leaderboard, and its
+;     referral panel reads the four admin routes of turbobaby/referral-credit. Nothing there changed.
+;   * THE BOT'S /refstats BUTTON opens the referral page and was labelled with the locale field
+;     referral_leaderboard, a chart glyph and the word leaderboard, after the list the page no
+;     longer has. It now carries referrals_open_app, the label every referral notification already
+;     gives a button to the same page; no sentence was written. referral_leaderboard stays in both
+;     bot locales, read by nobody, like the other stopped strings (REFSTATS_BUTTON_WITNESS).
+; What an admin is served still carries the whole id and the frozen total; the answer changed who is
+; served, not what. A customer is served no other account's id by any of the five routes now.
+pub const OWNER_TOP_LIST_ANSWER_AT : str = "2026-09-26";
+pub const OWNER_TOP_LIST_ANSWER_WORDS : str = "Remove the top and close the address";
+pub const LEADERBOARD_ROUTE_GATE : u8 = 2;
+; Bound by gate 3: get_leaderboard's first statement is the admin gate, the shape R1's row binds.
+pub const LEADERBOARD_GATE_SITES : u8 = 1;
+pub const LEADERBOARD_ANSWERS_A_NON_ADMIN_AS_R1_DOES : bool = true;
+pub const LEADERBOARD_QUERY_IS_READ_AFTER_THE_GATE : bool = true;
+pub const LEADERBOARD_ROUTE_STAYS_REGISTERED : bool = true;
+pub const LEADERBOARD_ROWS_TOUCHED : u8 = 0;
+pub const A_CUSTOMER_IS_SERVED_ANOTHER_ACCOUNT_ID : bool = false;
+pub const TOP_LIST_READERS_IN_THE_MINI_APP : u8 = 0;
+pub const TOP_LIST_READERS_IN_THE_MINI_APP_BEFORE_THE_ANSWER : u8 = 1;
+pub const ADMIN_SCREEN_READS_THE_REFERRAL_TOP : bool = false;
+pub const TOP_LIST_KEYS_RETIRED : [4]str = ["referral.top", "referral.empty_leaderboard", "referral.id_mask", "referral.row_meta"];
+pub const TOP_LIST_KEYS_RETIRED_WITNESS : str = "src/trios/i18n.rs the_referral_top_list_keys_stay_retired";
+pub const TOP_LIST_CLIENT_WITNESS : str = "tests/referral_credit_client_wiring.rs the_top_referrers_list_is_gone_and_the_rest_of_the_page_stands";
+pub const ADMIN_ONLY_READ_FETCH_WITNESS : str = "tests/ui_endpoints_exist.rs an_admin_only_read_is_fetched_by_the_admin_screen_alone";
+pub const LEADERBOARD_GATE_WIRING_WITNESS : str = "tests/referral_credit_wiring.rs the_referral_leaderboard_is_admin_only_like_r1";
+pub const LEADERBOARD_GATE_WITNESS : str = "tests/integration_closed_reads.rs the_referral_leaderboard_answers_an_admin_only_like_r1";
+pub const REFSTATS_BUTTON_LABEL_FIELD : str = "referrals_open_app";
+pub const REFSTATS_BUTTON_LABEL_FIELD_BEFORE_THE_ANSWER : str = "referral_leaderboard";
+pub const REFSTATS_BUTTON_LABEL_WORDED_FOR_IT : bool = false;
+pub const REFSTATS_BUTTON_WITNESS : str = "tests/referral_credit_wiring.rs the_refstats_button_no_longer_promises_a_leaderboard";
 
 ; --- Tests -----------------------------------------------------------------------------------------
 
@@ -1119,19 +1191,62 @@ test the_arm_is_stable_bounded_and_carries_no_identity {
   assert CONFIGURED_LIST_CAN_BE_EMPTY_IN_PRODUCTION == false;
 }
 
+; The 2026-09-21 reading, kept as it was measured; the fifth route is admin-gated since the owner's
+; answer of 2026-09-26 (the test after this one).
 test four_routes_prove_the_subject_and_the_fifth_publishes_the_id {
   assert ROUTE_COUNT == 5;
   assert OWNER_GATED_ROUTE_COUNT == 4;
-  assert UNGATED_ROUTE_COUNT == 1;
+  assert UNGATED_ROUTE_COUNT_BEFORE_THE_TOP_LIST_ANSWER == 1;
   assert route_requires_proof_of_the_subject(GATE_OWNER) == true;
   assert route_requires_proof_of_the_subject(GATE_NONE) == false;
   assert an_anonymous_caller_can_read_an_account_id(GATE_NONE, LEADERBOARD_ROW_CARRIES_A_TELEGRAM_ID) == true;
   assert an_anonymous_caller_can_read_an_account_id(GATE_OWNER, LEADERBOARD_ROW_CARRIES_A_TELEGRAM_ID) == false;
   assert an_anonymous_caller_can_read_an_account_id(GATE_NONE, INVITEE_ROW_CARRIES_A_TELEGRAM_ID) == false;
   assert THE_TWO_DECISIONS_AGREE == false;
-  assert OWNER_GATED_ROUTE_COUNT + UNGATED_ROUTE_COUNT == ROUTE_COUNT;
-  assert UNGATED_ROUTE == "GET /api/referrals/leaderboard";
+  assert OWNER_GATED_ROUTE_COUNT + ADMIN_GATED_ROUTE_COUNT_BEFORE_THE_TOP_LIST_ANSWER + UNGATED_ROUTE_COUNT_BEFORE_THE_TOP_LIST_ANSWER == ROUTE_COUNT;
+  assert LEADERBOARD_ROUTE == "GET /api/referrals/leaderboard";
   assert A_ROUTE_WAS_REMOVED_FOR_NAMING_A_PERSON_BY_NUMBER == true;
+}
+
+test the_fifth_route_answers_an_admin_only_since_the_owners_answer {
+  assert OWNER_TOP_LIST_ANSWER_AT == "2026-09-26";
+  assert OWNER_TOP_LIST_ANSWER_AT == OWNER_R3_DECIDED_AT;
+  assert OWNER_TOP_LIST_ANSWER_WORDS == "Remove the top and close the address";
+  assert UNGATED_ROUTE_COUNT == 0;
+  assert ADMIN_GATED_ROUTE_COUNT == 1;
+  assert OWNER_GATED_ROUTE_COUNT + ADMIN_GATED_ROUTE_COUNT + UNGATED_ROUTE_COUNT == ROUTE_COUNT;
+  assert ADMIN_GATED_ROUTE_COUNT - ADMIN_GATED_ROUTE_COUNT_BEFORE_THE_TOP_LIST_ANSWER == UNGATED_ROUTE_COUNT_BEFORE_THE_TOP_LIST_ANSWER - UNGATED_ROUTE_COUNT;
+  assert LEADERBOARD_ROUTE_GATE == GATE_ADMIN;
+  assert GATE_ADMIN != GATE_NONE;
+  assert GATE_ADMIN != GATE_OWNER;
+  assert route_requires_proof_of_the_subject(GATE_ADMIN) == false;
+  assert an_anonymous_caller_can_read_an_account_id(LEADERBOARD_ROUTE_GATE, LEADERBOARD_ROW_CARRIES_A_TELEGRAM_ID) == false;
+  assert LEADERBOARD_ROW_CARRIES_A_TELEGRAM_ID == true;
+  assert A_CUSTOMER_IS_SERVED_ANOTHER_ACCOUNT_ID == false;
+  assert LEADERBOARD_GATE_SITES == 1;
+  assert LEADERBOARD_ANSWERS_A_NON_ADMIN_AS_R1_DOES == true;
+  assert LEADERBOARD_QUERY_IS_READ_AFTER_THE_GATE == true;
+  assert LEADERBOARD_ROUTE_STAYS_REGISTERED == true;
+  assert LEADERBOARD_ROWS_TOUCHED == 0;
+  assert REUSES_LOYALTY_LEDGER_ID == "turbobaby/loyalty-ledger";
+}
+
+test the_top_list_left_the_mini_app_with_its_four_keys {
+  assert TOP_LIST_READERS_IN_THE_MINI_APP == 0;
+  assert TOP_LIST_READERS_IN_THE_MINI_APP_BEFORE_THE_ANSWER == 1;
+  assert ADMIN_SCREEN_READS_THE_REFERRAL_TOP == false;
+  assert TOP_LIST_KEYS_RETIRED.len == 4;
+  assert TOP_LIST_KEYS_RETIRED[0] == "referral.top";
+  assert TOP_LIST_KEYS_RETIRED[2] == "referral.id_mask";
+  assert TOP_LIST_KEYS_RETIRED[3] == "referral.row_meta";
+  assert TOP_LIST_KEYS_RETIRED_WITNESS == "src/trios/i18n.rs the_referral_top_list_keys_stay_retired";
+  assert TOP_LIST_CLIENT_WITNESS != ADMIN_ONLY_READ_FETCH_WITNESS;
+  assert LEADERBOARD_GATE_WIRING_WITNESS != LEADERBOARD_GATE_WITNESS;
+  assert LEADERBOARD_CONTENT_CARRIED == false;
+  assert REFSTATS_BUTTON_LABEL_FIELD == "referrals_open_app";
+  assert REFSTATS_BUTTON_LABEL_FIELD != REFSTATS_BUTTON_LABEL_FIELD_BEFORE_THE_ANSWER;
+  assert REFSTATS_BUTTON_LABEL_WORDED_FOR_IT == false;
+  assert REFSTATS_BUTTON_WITNESS != LEADERBOARD_GATE_WIRING_WITNESS;
 }
 
 test the_refusals_are_measured_and_carry_no_invented_number {
@@ -1220,6 +1335,8 @@ invariant a_rung_below_the_confirmed_count_is_reached_and_one_above_is_not
 invariant the_experiment_arm_survives_in_neither_place_it_could
   assert experiment_arm_is_recoverable(ASSIGNED_ARM_IS_WRITTEN_TO_THE_EVENT, FUNNEL_METRIC_CARRIES_THE_ARM) == false
 
+; The 2026-09-21 reading (the function over GATE_NONE); the route has been admin-gated since
+; 2026-09-26, which the invariant after it holds.
 invariant the_one_ungated_route_is_the_one_that_publishes_an_account_id
   assert an_anonymous_caller_can_read_an_account_id(GATE_NONE, LEADERBOARD_ROW_CARRIES_A_TELEGRAM_ID) == true and an_anonymous_caller_can_read_an_account_id(GATE_NONE, INVITEE_ROW_CARRIES_A_TELEGRAM_ID) == false
 
@@ -1246,3 +1363,6 @@ invariant r3_no_credit_of_this_domain_survives
 
 invariant r3_the_edge_is_still_confirmed_and_what_was_paid_stays
   assert CONFIRMATION_KEPT_WITHOUT_MONEY == true and CREDITED_POINTS_KEPT == true and CONFIRMATION_IS_ONE_WAY == true
+
+invariant since_the_owners_answer_no_route_of_the_graph_is_ungated
+  assert UNGATED_ROUTE_COUNT == 0 and LEADERBOARD_ROUTE_GATE == GATE_ADMIN and an_anonymous_caller_can_read_an_account_id(LEADERBOARD_ROUTE_GATE, LEADERBOARD_ROW_CARRIES_A_TELEGRAM_ID) == false and TOP_LIST_READERS_IN_THE_MINI_APP == 0

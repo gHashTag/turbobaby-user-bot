@@ -15,15 +15,20 @@
 //! payout; a manager settles either by hand. This page moves no money. Every
 //! number on it comes off the wire, and the arithmetic of the credit lives in
 //! `crate::trios::referral_credit`, not here.
+//!
+//! The top-referrers list that closed the page is gone too. The owner, of that
+//! list and the public address it read (2026-09-26, verbatim): «Убрать топ и
+//! закрыть адрес». It printed other customers' ids and the point totals frozen
+//! before R3; `/api/referrals/leaderboard` now answers an admin only, and this
+//! page no longer asks it.
 
 use crate::trios::i18n::{
-    t, tf, T_API_ERR_UNKNOWN, T_LOADING, T_REFERRAL_APPLY_TO_RENTAL, T_REFERRAL_BALANCE,
-    T_REFERRAL_COPIED, T_REFERRAL_COPY, T_REFERRAL_EMPTY_LEADERBOARD, T_REFERRAL_ID_MASK,
-    T_REFERRAL_INVITEES_TITLE, T_REFERRAL_INVITEE_JOINED, T_REFERRAL_INVITEE_ORDERED,
-    T_REFERRAL_INVITEE_UNKNOWN, T_REFERRAL_LINK_LABEL, T_REFERRAL_PAYOUT_REQUESTED,
-    T_REFERRAL_REQUEST_PAYOUT, T_REFERRAL_ROW_META, T_REFERRAL_SHARE, T_REFERRAL_STAT_CONFIRMED,
-    T_REFERRAL_STAT_INVITED, T_REFERRAL_STAT_PENDING, T_REFERRAL_SUBTITLE, T_REFERRAL_TITLE,
-    T_REFERRAL_TOP,
+    t, T_API_ERR_UNKNOWN, T_LOADING, T_REFERRAL_APPLY_TO_RENTAL, T_REFERRAL_BALANCE,
+    T_REFERRAL_COPIED, T_REFERRAL_COPY, T_REFERRAL_INVITEES_TITLE, T_REFERRAL_INVITEE_JOINED,
+    T_REFERRAL_INVITEE_ORDERED, T_REFERRAL_INVITEE_UNKNOWN, T_REFERRAL_LINK_LABEL,
+    T_REFERRAL_PAYOUT_REQUESTED, T_REFERRAL_REQUEST_PAYOUT, T_REFERRAL_SHARE,
+    T_REFERRAL_STAT_CONFIRMED, T_REFERRAL_STAT_INVITED, T_REFERRAL_STAT_PENDING,
+    T_REFERRAL_SUBTITLE, T_REFERRAL_TITLE,
 };
 use crate::trios::referral_credit::{
     shown_balance, OpenRequestBody, OpenRequestResponse, ReferralCredit,
@@ -49,13 +54,6 @@ pub struct ReferralMe {
     pub code: String,
     pub invite_link: String,
     pub stats: ReferralStats,
-}
-
-#[derive(Debug, Clone, Deserialize, PartialEq)]
-pub struct TopReferrer {
-    pub telegram_id: i64,
-    pub referral_count: i64,
-    pub total_bonus_earned: f64,
 }
 
 /// One person who followed this user's invite link.
@@ -203,7 +201,6 @@ pub fn Referrals() -> Element {
     let telegram_id = use_telegram_id().unwrap_or(0i64);
     let lang = crate::ui::lang::current_lang();
     let referral_me = use_signal(ReferralMe::default);
-    let leaderboard = use_signal(Vec::<TopReferrer>::new);
     // `None` is "not answered", not "empty". A failed request must leave these
     // panels off the screen rather than render an empty state.
     let invitees = use_signal(|| None::<Vec<Invitee>>);
@@ -216,7 +213,6 @@ pub fn Referrals() -> Element {
 
     {
         let mut me_c = referral_me;
-        let mut board_c = leaderboard;
         let mut invitees_c = invitees;
         let mut credit_c = credit;
         let mut loading_c = loading;
@@ -245,24 +241,6 @@ pub fn Referrals() -> Element {
                     if let Ok(text) = resp.text().await {
                         if let Ok(me) = serde_json::from_str::<ReferralMe>(&text) {
                             me_c.set(me);
-                        }
-                    }
-                }
-
-                if let Ok(resp) = client
-                    .get(&format!("{}/api/referrals/leaderboard?limit=10", base))
-                    .send()
-                    .await
-                {
-                    if let Ok(text) = resp.text().await {
-                        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&text) {
-                            if let Some(arr) = val.get("leaderboard").and_then(|v| v.as_array()) {
-                                let items: Vec<TopReferrer> = arr
-                                    .iter()
-                                    .filter_map(|v| serde_json::from_value(v.clone()).ok())
-                                    .collect();
-                                board_c.set(items);
-                            }
                         }
                     }
                 }
@@ -296,7 +274,6 @@ pub fn Referrals() -> Element {
     let link = me.invite_link.clone();
     let link_for_copy = link.clone();
     let stats = me.stats.clone();
-    let board = leaderboard.read().clone();
     let friends = invitees.read().clone();
     let balance = credit.read().clone();
 
@@ -422,29 +399,6 @@ pub fn Referrals() -> Element {
                 if let Some(list) = friends {
                     if !list.is_empty() {
                         {invitees_panel(lang, list)}
-                    }
-                }
-
-                div {
-                    style: "max-width: 380px; margin: 0 auto; padding: 0 16px;",
-
-                    h2 {
-                        style: "font-size: 13px; font-weight: 700; color: #ffd700; margin-bottom: 12px; text-align: center;",
-                        "{t(lang, T_REFERRAL_TOP)}"
-                    }
-
-                    if board.is_empty() {
-                        div {
-                            style: "text-align: center; color: #555; font-size: 15px; padding: 20px;",
-                            "{t(lang, T_REFERRAL_EMPTY_LEADERBOARD)}"
-                        }
-                    } else {
-                        div {
-                            style: "display: flex; flex-direction: column; gap: 6px;",
-                            for (idx, entry) in board.iter().enumerate() {
-                                {leaderboard_row(lang, idx + 1, entry.telegram_id, entry.referral_count, entry.total_bonus_earned)}
-                            }
-                        }
                     }
                 }
             }
@@ -638,60 +592,6 @@ fn stat_card(icon: &str, label: &str, value: &str) -> Element {
             div { style: "font-size: 14px; margin-bottom: 6px;", "{icon}" }
             div { style: "font-size: 20px; font-weight: 800; color: #ffe600; margin-bottom: 4px;", "{value}" }
             div { style: "font-size: 15px; color: #666;", "{label}" }
-        }
-    }
-}
-
-fn leaderboard_row(
-    lang: crate::trios::core::Lang,
-    rank: usize,
-    telegram_id: i64,
-    referral_count: i64,
-    bonus: f64,
-) -> Element {
-    let medal = match rank {
-        1 => "\u{1F947}",
-        2 => "\u{1F948}",
-        3 => "\u{1F949}",
-        _ => "  ",
-    };
-    let rank_color = match rank {
-        1 => "#ffd700",
-        2 => "#c0c0c0",
-        3 => "#cd7f32",
-        _ => "#555",
-    };
-    let medal = medal.to_string();
-    let safe_bonus = if bonus.is_finite() {
-        bonus.max(0.0)
-    } else {
-        0.0
-    };
-    let id_short = telegram_id % 10000;
-    let id_text = tf(lang, T_REFERRAL_ID_MASK, &[format!("{id_short}")]);
-    let meta_text = tf(
-        lang,
-        T_REFERRAL_ROW_META,
-        &[
-            referral_count.to_string(),
-            crate::trios::pricing::format_baht(safe_bonus),
-        ],
-    );
-    rsx! {
-        div {
-            style: "
-                display: flex; align-items: center; gap: 10px;
-                background: #16213e;
-                border: 4px solid #2a2a4a;
-                box-shadow: 4px 4px 0 #000;
-                padding: 10px 12px;
-            ",
-            span { style: "font-size: 14px; width: 20px; flex-shrink: 0;", "{medal}" }
-            span { style: "font-size: 15px; font-weight: 700; color: {rank_color};", "#{rank}" }
-            div { style: "flex: 1;",
-                div { style: "font-size: 15px; color: #e8e8e8;", "{id_text}" }
-                div { style: "font-size: 15px; color: #555; margin-top: 2px;", "{meta_text}" }
-            }
         }
     }
 }
