@@ -2260,6 +2260,67 @@ impl Order {
         order.shop_id = crate::trios::legacy_view::customer_shop_id(order.shop_id.take());
         order
     }
+
+    /// Whether the customer who placed this stored order is shown it at all,
+    /// by `crate::trios::legacy_view::customer_sees_order` (owner, 2026-09-26):
+    /// an order of the previous shop is neither listed nor answered by id.
+    /// Every customer read of an order asks this before it answers --
+    /// `get_user_orders` through [`Order::newest_shown_to_customer`],
+    /// `get_order_details`, `get_order_status` and `cancel_order` directly, and
+    /// the profile's count through [`Order::shown_count`]. The admin reads do
+    /// not ask it.
+    pub(crate) fn shown_to_customer(m: &crate::db::entities::order::Model) -> bool {
+        crate::trios::legacy_view::customer_sees_order(&m.items, m.shop_id.as_deref())
+    }
+
+    /// The first `limit` rows of `newest_first` that their customer is shown,
+    /// read a page at a time, so that no order of the previous shop takes a
+    /// place in the list and a customer with many of them still gets their
+    /// newest `limit`. The query decides the order; this only skips rows.
+    pub(crate) async fn newest_shown_to_customer(
+        newest_first: sea_orm::Select<crate::db::entities::order::Entity>,
+        orm: &sea_orm::DatabaseConnection,
+        limit: usize,
+    ) -> Result<Vec<crate::db::entities::order::Model>, sea_orm::DbErr> {
+        use sea_orm::PaginatorTrait;
+        let mut pages = newest_first.paginate(orm, limit.max(1) as u64);
+        let mut shown = Vec::new();
+        while shown.len() < limit {
+            let Some(page) = pages.fetch_and_next().await? else {
+                break;
+            };
+            shown.extend(page.into_iter().filter(Self::shown_to_customer));
+        }
+        shown.truncate(limit);
+        Ok(shown)
+    }
+
+    /// How many orders the customer `telegram_id` is shown: the number the
+    /// profile prints beside «My orders». Until 2026-09-26 it counted every
+    /// stored row, the previous shop's included, beside a list that no longer
+    /// shows them. Reads only each row's lines and shop.
+    pub(crate) async fn shown_count(
+        orm: &sea_orm::DatabaseConnection,
+        telegram_id: i64,
+    ) -> Result<i32, sea_orm::DbErr> {
+        use crate::db::entities::order::{Column, Entity};
+        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
+        let rows: Vec<(Value, Option<String>)> = Entity::find()
+            .select_only()
+            .column(Column::Items)
+            .column(Column::ShopId)
+            .filter(Column::TelegramId.eq(telegram_id))
+            .into_tuple()
+            .all(orm)
+            .await?;
+        let shown = rows
+            .iter()
+            .filter(|(items, shop)| {
+                crate::trios::legacy_view::customer_sees_order(items, shop.as_deref())
+            })
+            .count();
+        Ok(i32::try_from(shown).unwrap_or(i32::MAX))
+    }
 }
 
 #[cfg(test)]

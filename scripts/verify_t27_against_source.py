@@ -3797,6 +3797,32 @@ BINDINGS: tuple[dict[str, object], ...] = (
                "row is still served by the calendar, the event page, a booking, a waitlist join "
                "and the promo sweeper's event scans, whatever the admin API may now store",
     },
+    # The owner's answer of 2026-09-26 on the previous shop's orders (a customer does not see
+    # them at all). Measured by hand 2026-09-26: the list asks for 50 shown orders, and three
+    # reads by id -- get_order_status, get_order_details and cancel_order -- answer such an
+    # order exactly as a missing one, on the owner check's own line. Each planted RED once by
+    # hand (51 in the contract; one guard removed from the source).
+    {
+        "name": "order_presentation.PREVIOUS_SHOP_ORDER_LIST_LIMIT ~ orders.rs shown-orders cap",
+        "spec": "specs/turbobaby/order_presentation.t27",
+        "const": "PREVIOUS_SHOP_ORDER_LIST_LIMIT",
+        "source": "src/api/orders.rs",
+        "extract": ("regex", r"Order::newest_shown_to_customer\(newest_first, &state\.db\.orm, (\d+)\)"),
+        "relation": "equal",
+        "why": "the list's cap counts only the orders its customer is shown; read through the "
+               "old `.limit` again and the previous shop's orders would take its places",
+    },
+    {
+        "name": "order_presentation.PREVIOUS_SHOP_ORDER_BY_ID_READS ~ orders.rs owner-check guards",
+        "spec": "specs/turbobaby/order_presentation.t27",
+        "const": "PREVIOUS_SHOP_ORDER_BY_ID_READS",
+        "source": "src/api/orders.rs",
+        "extract": ("regex_count", NOT_IN_A_LINE_COMMENT
+                    + r"\.telegram_id != Some\(tid\) \|\| !Order::shown_to_customer\(&\w+\) \{"),
+        "relation": "equal",
+        "why": "each read by id answers an order of the previous shop as a missing one on the "
+               "owner check's own line; a guard dropped serves that order by id again",
+    },
 )
 
 TREE_EXTRACTORS = (
@@ -3872,7 +3898,10 @@ ONE_GROUP_EXTRACTORS = (
 # DeliverableKind::of with a witness): 240 rows over the same 41 contracts on its own branch,
 # floor 240. Merged 2026-09-26 on the integration branch: 248 rows, floor 248 (the measured
 # table size).
-MIN_BINDINGS = 248
+# Then the owner's answer of 2026-09-26 on the previous shop's orders bound
+# order_presentation.PREVIOUS_SHOP_ORDER_LIST_LIMIT and PREVIOUS_SHOP_ORDER_BY_ID_READS to the
+# order handlers, each planted RED once by hand: 250 rows, floor 250.
+MIN_BINDINGS = 250
 
 
 # ---------------------------------------------------------------------------------

@@ -1337,6 +1337,65 @@ pub fn order_presentation_retired_line_field_count(quantity_stored: bool, price_
   return 1;
 }
 
+; --- An order of the previous shop is not shown at all (owner, 2026-09-26) ----------------------
+; DECIDED 2026-09-26. Asked about the lines served under the neutral name above, the owner asked
+; why they are there at all (verbatim, in Russian, in the rules' module header, RETIRED_LINE_RULE;
+; this file stays ASCII). The operator read it as PREVIOUS_SHOP_ORDER_READ_AS: a customer must not
+; see the previous shop's orders at all. So the rule moved from the LINE to the ORDER. An order is
+; the previous shop's when its stored shop names the previous shop (the test customer_shop_id
+; already makes) or when none of its lines is a bike line -- every line of a retired kind, an empty
+; list, or items that are not a list. The previous shop rented no bikes, the checkout refuses an
+; empty cart, and since migration 085 it can store no other line, so an order this code cannot
+; vouch for is not shown: the same fail-closed reading as every rule above. The rule is
+; customer_sees_order in RETIRED_LINE_RULE, asked through Order::shown_to_customer
+; (PREVIOUS_SHOP_ORDER_SERVER_SITE) by every customer read of an order
+; (PREVIOUS_SHOP_ORDER_CUSTOMER_READS):
+;   * the list skips such an order a page at a time, newest first, so it never takes one of the
+;     list's PREVIOUS_SHOP_ORDER_LIST_LIMIT places and a customer with many still gets their newest
+;     shown orders; the cited serialisation and ordering lines of the list did not move;
+;   * the detail, the status and the customer's own cancel answer 404 for it, exactly as for an
+;     order that does not exist or is someone else's, so the answer says nothing about what is
+;     stored and nothing is written -- a cancel of such an order refunds and changes nothing;
+;   * the profile's order count, printed beside the link to the list, counts only the orders the
+;     list can show; until this decision it counted every stored row.
+; A reorder starts from the list or the detail (every reorder conversion named above reads one of
+; them), so it cannot reach such an order either.
+; MIXED ORDERS. An order holding a bike line AND a line of a retired kind is this shop's -- a rental
+; taken beside the old catalogue before 085 hid it -- and it is shown: its rental is the customer's
+; own booking, and hiding it would hide that. Its other lines keep the neutral name above, which
+; since this decision is served for that case only (PREVIOUS_SHOP_ORDER_MIXED_IS_SHOWN). The shop
+; decides first: an order naming the previous shop is not shown whatever it holds.
+; NOT CHANGED. No row is written or deleted and no migration is added. The admin reads -- the list,
+; one order, the status change and the payment code -- read every row whole: they are the archive.
+; A message the bot sends to a customer when an admin changes such an order's status is the admin's
+; act, not a customer read, and it is unchanged. What production stores was not read.
+pub const PREVIOUS_SHOP_ORDER_DECIDED_AT : str = "2026-09-26";
+pub const PREVIOUS_SHOP_ORDER_DECIDED_BY : str = "owner, read by the operator";
+pub const PREVIOUS_SHOP_ORDER_READ_AS : str = "A customer must not see the previous shop's orders at all.";
+pub const PREVIOUS_SHOP_ORDER_SHOWN : bool = false;
+pub const PREVIOUS_SHOP_ORDER_BY_ID_ANSWERS_AS_MISSING : bool = true;
+pub const PREVIOUS_SHOP_ORDER_BY_ID_STATUS : u16 = 404;
+pub const PREVIOUS_SHOP_ORDER_BY_ID_READS : u8 = 3;
+pub const PREVIOUS_SHOP_ORDER_TAKES_A_LIST_PLACE : bool = false;
+pub const PREVIOUS_SHOP_ORDER_LIST_LIMIT : u8 = 50;
+pub const PREVIOUS_SHOP_ORDER_MIXED_IS_SHOWN : bool = true;
+pub const PREVIOUS_SHOP_ORDER_CUSTOMER_READ_COUNT : u8 = 5;
+pub const PREVIOUS_SHOP_ORDER_CUSTOMER_READS : [5]str = [
+  "get_user_orders", "get_order_details", "get_order_status", "cancel_order", "get_profile",
+];
+pub const PREVIOUS_SHOP_ORDER_ADMIN_READS_CHANGED : bool = false;
+pub const PREVIOUS_SHOP_ORDER_WRITES_A_ROW : bool = false;
+pub const PREVIOUS_SHOP_ORDER_SERVER_SITE : str = "Order::shown_to_customer, src/db/orders.rs";
+
+; Whether a customer is shown a stored order: never one naming the previous shop, and otherwise
+; only one holding a bike line.
+pub fn order_presentation_order_is_shown(names_the_previous_shop: bool, holds_a_bike_line: bool) bool {
+  if (names_the_previous_shop) {
+    return false;
+  }
+  return holds_a_bike_line;
+}
+
 ; --- The live view, and what it promises --------------------------------------------------------
 ; The detail screen polls the status endpoint on a bounded schedule: 360 ticks, ten seconds apart
 ; (src/ui/screens/order_detail_screen.rs:439-446), which is one hour and then silence. A live
@@ -2496,7 +2555,48 @@ test a_withheld_shop_carries_no_shop_label_and_never_reads_as_this_one {
   assert RETIRED_LINE_WITNESS == "tests/legacy_view_wiring.rs";
 }
 
+test an_order_of_the_previous_shop_is_not_shown_at_all {
+  assert PREVIOUS_SHOP_ORDER_DECIDED_AT == "2026-09-26";
+  assert PREVIOUS_SHOP_ORDER_DECIDED_AT == RETIRED_SHOP_DECIDED_AT;
+  assert PREVIOUS_SHOP_ORDER_READ_AS != "";
+  assert PREVIOUS_SHOP_ORDER_SHOWN == false;
+  assert order_presentation_order_is_shown(true, true) == false;
+  assert order_presentation_order_is_shown(true, false) == false;
+  assert order_presentation_order_is_shown(false, false) == false;
+  assert order_presentation_order_is_shown(false, true) == true;
+  assert PREVIOUS_SHOP_ORDER_BY_ID_ANSWERS_AS_MISSING == true;
+  assert PREVIOUS_SHOP_ORDER_BY_ID_STATUS == 404;
+  // the detail, the status and the cancel ask by id; the list and the profile count are the other two
+  assert PREVIOUS_SHOP_ORDER_BY_ID_READS + 2 == PREVIOUS_SHOP_ORDER_CUSTOMER_READ_COUNT;
+  assert PREVIOUS_SHOP_ORDER_TAKES_A_LIST_PLACE == false;
+  assert PREVIOUS_SHOP_ORDER_LIST_LIMIT == 50;
+  assert PREVIOUS_SHOP_ORDER_CUSTOMER_READS.len == PREVIOUS_SHOP_ORDER_CUSTOMER_READ_COUNT;
+  // the two reads that mask a line are the first two that ask the order rule
+  assert PREVIOUS_SHOP_ORDER_CUSTOMER_READS[0] == RETIRED_LINE_CUSTOMER_READS[0];
+  assert PREVIOUS_SHOP_ORDER_CUSTOMER_READS[1] == RETIRED_LINE_CUSTOMER_READS[1];
+  assert PREVIOUS_SHOP_ORDER_CUSTOMER_READS[4] == "get_profile";
+  assert PREVIOUS_SHOP_ORDER_ADMIN_READS_CHANGED == false;
+  assert RETIRED_LINE_ADMIN_READS_KEEP_THE_ROW == true;
+  assert PREVIOUS_SHOP_ORDER_WRITES_A_ROW == false;
+  assert RETIRED_LINE_WRITES_A_ROW == false;
+}
+
+test the_neutral_name_is_served_only_beside_a_rental_line {
+  assert PREVIOUS_SHOP_ORDER_MIXED_IS_SHOWN == true;
+  // a mixed order is shown, and its line of a retired kind keeps the neutral name and figures
+  assert order_presentation_order_is_shown(false, true) == true;
+  assert order_presentation_line_is_retired(false) == true;
+  assert order_presentation_retired_line_field_count(true, true) == RETIRED_LINE_KEPT_FIELD_COUNT + 1;
+  // an order of retired lines alone is not shown, so none of its lines reaches a customer
+  assert order_presentation_order_is_shown(false, false) == false;
+  // naming the previous shop outranks a bike line
+  assert order_presentation_order_is_shown(true, true) == false;
+}
+
 ; --- Invariants -----------------------------------------------------------------------------------
+
+invariant an_order_of_the_previous_shop_is_never_shown_and_nothing_is_written_for_it
+  assert order_presentation_order_is_shown(true, true) == false and order_presentation_order_is_shown(false, false) == false and PREVIOUS_SHOP_ORDER_SHOWN == false and PREVIOUS_SHOP_ORDER_WRITES_A_ROW == false
 
 invariant an_order_of_the_previous_shop_never_reads_as_this_one
   assert RETIRED_SHOP_READS_AS_THIS_SHOP == false and RETIRED_SHOP_LABEL_SHOWN == false and THIS_SHOPS_ORDERS_KEEP_THEIR_LABEL == true
