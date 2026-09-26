@@ -41,7 +41,9 @@ main_js=""
 hash=""
 while IFS= read -r candidate; do
   candidate_name="$(basename "$candidate")"
-  if [[ "$candidate_name" =~ ^.+-([a-f0-9]{16,})\.js$ ]]; then
+  # 1 to 16 digits: Trunk writes the hash as `{:x}` of a u64, with no zero padding
+  # (see the padding step below).
+  if [[ "$candidate_name" =~ ^.+-([a-f0-9]{1,16})\.js$ ]]; then
     if [ -n "$main_js" ]; then
       echo "✖ multiple top-level Trunk bundles found: ${main_js}, ${candidate}" >&2
       exit 1
@@ -58,6 +60,31 @@ fi
 if [ ! -f "${main_js%.js}_bg.wasm" ]; then
   echo "✖ matching WASM bundle is missing for ${main_js}" >&2
   exit 1
+fi
+
+# Trunk names the bundle `<target>-{:x}` of a u64 content hash, so a hash whose
+# leading nibble is zero comes out 15 hex digits long (one build in sixteen), and
+# shorter still with more leading zeros. Every reader downstream wants 16 or more:
+# the server's /version.txt (`extract_trunk_bundle_hash` in src/main.rs answers
+# "unknown" below 16) and both version checks in index.html, the older copies of
+# which sit in customers' WebView caches and cannot be taught anything. So the
+# bundle is renamed here to the zero-padded hash, the same number in the width
+# they all read; nothing else changes. Measured 2026-09-26: the build of 843da57
+# produced turbobaby-bot-cc17c34144e2629.js, 15 digits, and this script refused it.
+if [ "${#hash}" -lt 16 ]; then
+  short="$hash"
+  while [ "${#hash}" -lt 16 ]; do hash="0${hash}"; done
+  echo "▶ padding Trunk's ${#short}-digit hash ${short} to ${hash}"
+  stem="${main_js%-"${short}".js}"
+  mv "${stem}-${short}.js" "${stem}-${hash}.js"
+  mv "${stem}-${short}_bg.wasm" "${stem}-${hash}_bg.wasm"
+  sed_in_place "s#-${short}((_bg)?\.(js|wasm))#-${hash}\1#g" dist/index.html
+  if grep -q -- "-${short}\." dist/index.html; then
+    echo "✖ dist/index.html still names the unpadded bundle ${short}" >&2
+    exit 1
+  fi
+  main_js="${stem}-${hash}.js"
+  echo "  ✓ renamed the JS and WASM bundles and their references in dist/index.html"
 fi
 
 echo "▶ cache-busting snippet imports with ?v=${hash}"
