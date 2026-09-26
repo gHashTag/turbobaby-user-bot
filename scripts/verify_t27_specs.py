@@ -333,8 +333,11 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         # Raised 2026-09-26 by the review of round 5 from 137/22 to the measured 148/24: the
         # recorder guard's two identities (eight declarations, recorder_refused, one test and one
         # invariant).
-        "min_declarations": 148,
-        "min_checks": 24,
+        # Raised 2026-09-26 (round 6) from 148/24 to the measured 155/26: the owner's answer on the
+        # base of the 10% (after the discount, the net base as built), five declarations, one test
+        # and one invariant.
+        "min_declarations": 155,
+        "min_checks": 26,
     },
     "specs/turbobaby/referral_program.t27": {
         "module": "turbobaby-referral-program",
