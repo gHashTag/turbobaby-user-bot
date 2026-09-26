@@ -316,6 +316,123 @@ async fn upload_file(
     }
 }
 
+// ── Reading a local upload back: only what the rental data references ──────
+//
+// Owner, 2026-09-26, asked about the previous shop's media still reachable by
+// a direct link, verbatim: «Зачем они вообще нужны мне?». The operator reads it
+// as: stop serving them. Deleting the files themselves is the owner's own
+// irreversible act and is not done here: nothing below deletes, moves or
+// rewrites a file, and no row is written.
+//
+// The local branch above still writes to this folder whenever no object store
+// is configured, so the read path cannot simply go. Until this change
+// `src/main.rs` served the whole folder, ungated, to anyone who knew a name.
+// Since then a name is served only when a bike's stored `image_url` is exactly
+// `/uploads/<name>` -- the value the local branch returns and the admin's bike
+// form stores. Every other name answers 404, as for a file that does not exist:
+// what the previous shop left on the volume, and anything else nothing in the
+// rental catalogue points at. The object store is not this server's to gate:
+// its objects are fetched from the bucket's own public address, under the same
+// `uploads/` key prefix both shops' code has written since the first commit
+// (`src/s3.rs`), so which of them the previous shop used cannot be told by
+// code. `specs/turbobaby/upload_media.t27` records both halves.
+
+/// The folder the local branch writes to and the only folder
+/// `/uploads/<name>` reads from.
+pub(crate) const LOCAL_UPLOAD_DIR: &str = "/data/uploads";
+
+/// The longest upload name read back: the sanitiser's clamp in `src/s3.rs`.
+const SERVED_UPLOAD_NAME_MAX_CHARS: usize = 255;
+
+/// Whether `name` can be an upload's file name at all: one path segment of
+/// ASCII letters, digits, `.`, `-` and `_`, not starting with a dot. The local
+/// branch writes eight hex digits, a dot and an extension. Anything else --
+/// a separator, a traversal, a hidden file -- is refused before the database
+/// or the disk is asked.
+pub(crate) fn is_servable_upload_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.chars().count() <= SERVED_UPLOAD_NAME_MAX_CHARS
+        && !name.starts_with('.')
+        && !name.contains("..")
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_')
+}
+
+/// The stored reference a bike holds to the local upload `name`: the value the
+/// local branch of [`upload_file`] returns.
+pub(crate) fn local_upload_reference(name: &str) -> String {
+    format!("/uploads/{name}")
+}
+
+/// Whether the rental data references the local upload `name`: some bike's
+/// stored `image_url` is exactly [`local_upload_reference`]. The bikes are the
+/// rental catalogue, and their picture is the one media column a rental row
+/// holds.
+pub(crate) async fn rental_references_upload(
+    orm: &sea_orm::DatabaseConnection,
+    name: &str,
+) -> Result<bool, sea_orm::DbErr> {
+    use sea_orm::{ConnectionTrait, DbBackend, Statement};
+    let row = orm
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT EXISTS (SELECT 1 FROM bikes WHERE image_url = $1) AS referenced",
+            [local_upload_reference(name).into()],
+        ))
+        .await?;
+    Ok(row
+        .and_then(|r| r.try_get::<bool>("", "referenced").ok())
+        .unwrap_or(false))
+}
+
+/// The `/uploads` service `src/main.rs` nests: [`LOCAL_UPLOAD_DIR`], read
+/// back only for a name the rental data references.
+#[allow(dead_code)] // Called from src/main.rs, which compiles its own module tree.
+pub(crate) fn served_uploads(db: std::sync::Arc<crate::db::Database>) -> Router {
+    served_uploads_from(db, LOCAL_UPLOAD_DIR)
+}
+
+/// [`served_uploads`] over `dir`, so a test can point it at a folder of its own.
+/// The folder is served as before, and every request passes
+/// [`only_referenced_uploads`] first.
+pub(crate) fn served_uploads_from(db: std::sync::Arc<crate::db::Database>, dir: &str) -> Router {
+    Router::new()
+        .fallback_service(tower_http::services::ServeDir::new(dir))
+        .layer(axum::middleware::from_fn_with_state(
+            db,
+            only_referenced_uploads,
+        ))
+}
+
+/// The gate in front of the folder: a request reaches it only for a
+/// well-formed name the rental data references, and is otherwise answered
+/// exactly as a missing file is. The path is read as sent, so a name that
+/// needs percent-encoding is refused rather than decoded. A gate in front of
+/// the directory service, rather than a handler of its own, keeps everything
+/// that service already answered for a file it serves: its media type, its
+/// ranges and its conditional requests.
+async fn only_referenced_uploads(
+    State(db): State<std::sync::Arc<crate::db::Database>>,
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    let path = request.uri().path().to_string();
+    let name = path.strip_prefix('/').unwrap_or_default();
+    if !is_servable_upload_name(name) {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    match rental_references_upload(&db.orm, name).await {
+        Ok(true) => next.run(request).await,
+        Ok(false) => StatusCode::NOT_FOUND.into_response(),
+        Err(e) => {
+            tracing::error!("uploads read: reference lookup failed: {e}");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -485,5 +602,121 @@ mod tests {
                 ext
             );
         }
+    }
+
+    // ── Reading a local upload back (owner, 2026-09-26) ─────────────────
+
+    #[test]
+    fn a_name_the_local_branch_writes_can_be_read_back_and_nothing_else_can() {
+        use super::{is_servable_upload_name, local_upload_reference};
+        // Eight hex digits and an extension, as the local branch names a file.
+        for name in [
+            "7f3a9c2e.jpg",
+            "0badf00d.webp",
+            "a1b2c3d4.mp4",
+            "stored_name-2.png",
+        ] {
+            assert!(is_servable_upload_name(name), "{name}");
+            assert_eq!(local_upload_reference(name), format!("/uploads/{name}"));
+        }
+        for name in [
+            "",
+            ".",
+            "..",
+            ".hidden.jpg",
+            "../7f3a9c2e.jpg",
+            "a..b.jpg",
+            "dir/7f3a9c2e.jpg",
+            "dir\\7f3a9c2e.jpg",
+            "7f3a9c2e.jpg%2F",
+            "7f3a9c2e .jpg",
+            "фото.jpg",
+            "nul\0.jpg",
+        ] {
+            assert!(!is_servable_upload_name(name), "{name:?}");
+        }
+        assert!(is_servable_upload_name(&"a".repeat(255)));
+        assert!(!is_servable_upload_name(&"a".repeat(256)));
+    }
+
+    /// Against a real database: a file is served only when a bike's stored
+    /// picture is exactly `/uploads/<name>`; every other name, a file on the
+    /// disk or not, answers 404. Writes two small files under the system temp
+    /// folder (run with `TMP` pointed at a scratch folder) and one bike row,
+    /// which it removes again.
+    #[tokio::test]
+    #[ignore = "needs DATABASE_URL env var; run with --ignored"]
+    async fn only_a_file_a_bike_references_is_served() {
+        use axum::body::Body;
+        use axum::http::Request;
+        use sea_orm::{ConnectionTrait, DbBackend, Statement};
+        let Ok(url) = std::env::var("DATABASE_URL") else {
+            return;
+        };
+        assert!(
+            url.contains("127.0.0.1") || url.contains("localhost") || url.contains("test"),
+            "refusing to run against {url:?}: this test writes a row"
+        );
+        let db = crate::db::Database::connect(&url).await.expect("connect");
+        db.run_migrations().await.expect("migrate");
+        let db = std::sync::Arc::new(db);
+
+        let dir = std::env::temp_dir().join("uploads-read-test");
+        std::fs::create_dir_all(&dir).expect("a scratch folder");
+        let (referenced, stray) = ("5eed0001.jpg", "5eed0002.jpg");
+        std::fs::write(dir.join(referenced), b"rental picture").expect("write");
+        std::fs::write(dir.join(stray), b"stored by nobody we know").expect("write");
+
+        let key = "uploads-read-test";
+        let exec = |sql: &'static str, values: Vec<sea_orm::Value>| {
+            let db = db.clone();
+            async move {
+                db.orm
+                    .execute(Statement::from_sql_and_values(
+                        DbBackend::Postgres,
+                        sql,
+                        values,
+                    ))
+                    .await
+                    .expect(sql);
+            }
+        };
+        exec("DELETE FROM bikes WHERE key = $1", vec![key.into()]).await;
+        exec(
+            "INSERT INTO bikes (key, brand, model, class, body, displacement_cc, offered, image_url) \
+             VALUES ($1, 'Test', 'Upload read', 'scooter', 'scooter', 125, FALSE, $2)",
+            vec![key.into(), format!("/uploads/{referenced}").into()],
+        )
+        .await;
+
+        let get = |name: &str| {
+            let service = super::served_uploads_from(db.clone(), dir.to_str().expect("utf-8"));
+            let request = Request::builder()
+                .uri(format!("/{name}"))
+                .body(Body::empty())
+                .expect("request");
+            async move {
+                tower::ServiceExt::oneshot(service, request)
+                    .await
+                    .expect("answer")
+            }
+        };
+        let served = get(referenced).await;
+        assert_eq!(served.status(), StatusCode::OK);
+        let bytes = http_body_util::BodyExt::collect(served.into_body())
+            .await
+            .expect("body")
+            .to_bytes();
+        assert_eq!(&bytes[..], b"rental picture");
+        // On the disk, referenced by nothing: not served.
+        assert_eq!(get(stray).await.status(), StatusCode::NOT_FOUND);
+        // Referenced by nothing and not on the disk; a traversal; a bad name.
+        for name in ["5eed0003.jpg", "..%2F5eed0001.jpg", ".hidden"] {
+            assert_eq!(get(name).await.status(), StatusCode::NOT_FOUND, "{name}");
+        }
+
+        exec("DELETE FROM bikes WHERE key = $1", vec![key.into()]).await;
+        // With the reference gone, the same file is no longer served.
+        assert_eq!(get(referenced).await.status(), StatusCode::NOT_FOUND);
     }
 }

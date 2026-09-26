@@ -191,7 +191,7 @@ pub fn change_is_expressible(number: u8, is_a_new_file: bool) bool {
 ; src/db/mod.rs, not one: :1141 (every_migration_file_is_included), :1341 (migration_files, shared
 ; by the numbering and wiring tests), :1491 (read_migrations_corpus) and :1652 (migration_tables).
 ; A directory entry survives none of the four, so the duplicate prefix never reaches the guard at
-; :1392 and the collision is latent, not live. tests/retired_table_wiring.rs:97 is a fifth shallow
+; :1392 and the collision is latent, not live. tests/retired_table_wiring.rs:98 (:97 until 2026-09-26) is a fifth shallow
 ; walk, outside the runner module and named separately below.
 ; It does NOT follow that nothing reads the subdirectory, and that correction is the point of the
 ; two constants after the walk list: src/main.rs:2679 collect_files_with_ext recurses at :2687, so
@@ -232,7 +232,7 @@ pub const MIGRATION_DIRECTORY_READER_SITES : [4]str = [
   "src/db/mod.rs:1491",
   "src/db/mod.rs:1652",
 ];
-pub const SHALLOW_WALK_OUTSIDE_THE_RUNNER_MODULE : str = "tests/retired_table_wiring.rs:97";
+pub const SHALLOW_WALK_OUTSIDE_THE_RUNNER_MODULE : str = "tests/retired_table_wiring.rs:98";
 pub const RECURSIVE_READER_SITE : str = "src/main.rs:2679 collect_files_with_ext, recursing at :2687";
 pub const RECURSIVE_READER_ENTRY : str = "src/main.rs:2720 parse_migration_schema";
 pub const RECURSIVE_READER_TESTS : u8 = 4;

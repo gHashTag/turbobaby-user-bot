@@ -12,10 +12,10 @@ what to do next.
 | | measured 2026-09-21 |
 | --- | --- |
 | canonical contracts | **45** (44 under `specs/turbobaby/` + `specs/agents/turbobaby.t27`) |
-| assertions executed, all passing | **10 581** on the integration branch `t27/owner-answers-2509` at `41315b2` after the owner's second list of 2026-09-25 and the operator's shop label (2026-09-26; see "The owner's second list of 2026-09-25 and the operator's shop label" below), **10 273** on the integration branch `t27/owner-answers-2509` after the three fixes on top of `69fd4fa` (2026-09-25; see "Three fixes on top of `69fd4fa`" below), **10 246** at `69fd4fa` (the owner's answers of that day; not pushed, not merged) — **9 996** re-measured 2026-09-25 on `f5e6b4f`, after #64, which changed comments only (9 996 after #63 on 2026-09-24, 9 859 after #62, 9 535 earlier that day, 9 514 on 2026-09-23 before that day's money family, 9 038 on 2026-09-22, 8 911 on 2026-09-21) |
+| assertions executed, all passing | **10 758** on `t27/round4` at `168892d` after its review (2026-09-26; see "Round 4, review fixes" below; bindings still 256), **10 754** on the integration branch `t27/round4` at `2f801fe` after the owner's answers of 2026-09-26 (see "Round 4, integrated" below), **10 581** on the integration branch `t27/owner-answers-2509` at `41315b2` after the owner's second list of 2026-09-25 and the operator's shop label (2026-09-26; see "The owner's second list of 2026-09-25 and the operator's shop label" below), **10 273** on the integration branch `t27/owner-answers-2509` after the three fixes on top of `69fd4fa` (2026-09-25; see "Three fixes on top of `69fd4fa`" below), **10 246** at `69fd4fa` (the owner's answers of that day; not pushed, not merged) — **9 996** re-measured 2026-09-25 on `f5e6b4f`, after #64, which changed comments only (9 996 after #63 on 2026-09-24, 9 859 after #62, 9 535 earlier that day, 9 514 on 2026-09-23 before that day's money family, 9 038 on 2026-09-22, 8 911 on 2026-09-21) |
 | contract-to-contract ownership edges | 203+, **zero dangling** |
 | source lines named by some contract | **73 407 of 80 308 (91.4 %)** |
-| enforced contract-to-source bindings | **248** on the integration branch `t27/owner-answers-2509` at `41315b2` (2026-09-26; +2 answer 1, +4 answer 3, +2 the kept cart, +1 the held notification kinds), across 41 of 45 contracts and 83 source files — **239** on the same branch on 2026-09-25 (the two new rows bind the CLICK 125 redirect to the seed), across the same 41 of 45 contracts and 80 source files — **237**, across 41 of 45 contracts and 80 source files, re-measured 2026-09-25 on `f5e6b4f`, after #64 (237 after #63 on 2026-09-24, 227 after #62, 198 earlier that day, 197 on 2026-09-23, 168 across 40 on 2026-09-22, 66 across 16 on 2026-09-21) |
+| enforced contract-to-source bindings | **256** on the integration branch `t27/round4` at `2f801fe` (2026-09-26; +7 the server lane of round 4, +1 its client lane), across 41 of 45 contracts and 84 source files — **248** on the integration branch `t27/owner-answers-2509` at `41315b2` (2026-09-26; +2 answer 1, +4 answer 3, +2 the kept cart, +1 the held notification kinds), across 41 of 45 contracts and 83 source files — **239** on the same branch on 2026-09-25 (the two new rows bind the CLICK 125 redirect to the seed), across the same 41 of 45 contracts and 80 source files — **237**, across 41 of 45 contracts and 80 source files, re-measured 2026-09-25 on `f5e6b4f`, after #64 (237 after #63 on 2026-09-24, 227 after #62, 198 earlier that day, 197 on 2026-09-23, 168 across 40 on 2026-09-22, 66 across 16 on 2026-09-21) |
 
 The two re-measured rows come from gates 2 and 3, run on 2026-09-25 on `main` at `f5e6b4f` (#64
 on top of the rental-only change of #63). Both equal the 2026-09-24 readings on #63's tree to the
@@ -298,7 +298,7 @@ reconciled the branches and applied an operator decision, one fixed a unit test,
 | 2 | Nothing: the ride game's bird is undecided | Untouched |
 | 3, «Все канабисное аналировать» | Read by the operator as: analyse all the cannabis-era content and take it out of customers' sight without deleting stored data. **Server** (`src/trios/legacy_view.rs`): a customer's own order list and detail serve a line of the old catalogue as «Позиция прежнего каталога» / "Item from the previous catalogue", with its quantity and unit price exactly as stored, and serve no id. The two reads withhold the old shop's name. The bonus history serves only the four sentences this repository writes, and serves a garden-era row with an empty type. **Client**: the order screens print the neutral name in the reader's language, and a garden row carries «Бонус». **The kept cart** (`t27/legacy-cart-hidden`): the cart API, the abandoned-cart reminder and the Mini App serve no line of a retired kind; the rows stay stored. **Held notifications** (`t27/legacy-notifications-held`): the queue never delivers a row of a retired or unknown kind (`friend_watered` included), and the garden's message left `src/locales.rs`. **Docs** (`t27/no-cannabis-docs`): `docs/DESIGN_SYSTEM.md`, `docs/event-share-templates.md` and the `screenshots/` demo pages carry no cannabis content, and every demo render is re-taken and classified (`tests/legacy_vocabulary_wiring.rs`). Gate 3 gained 4 + 2 + 1 bindings | Analysed and left, each with its reason in `legacy_retirement.t27`: the loyalty profile's stored tier key, the star history, the reads behind retired surfaces, and the referral, quest-scan and game reads. The admin reads are the archive and are unchanged. No row, no migration |
 | 4 | Unavailable models were marked in the brain (done outside this repository) | — |
-| 5, «Наверное» | The detail's line «Сейчас все байки этой модели заняты.» is gone, and its key `bike.units.empty` is deleted. Recorded in `availability.t27` (`UNITS_EMPTY_LINE_*`) | The Book control's reason under the same zero, `T_BIKE_BOOK_BLOCKED_NO_UNITS` («Все байки этой модели заняты»), was not named by the answer and stays (question I) |
+| 5, «Наверное» | The detail's line «Сейчас все байки этой модели заняты.» is gone, and its key `bike.units.empty` is deleted. Recorded in `availability.t27` (`UNITS_EMPTY_LINE_*`) | The Book control's reason under the same zero, `T_BIKE_BOOK_BLOCKED_NO_UNITS` («Все байки этой модели заняты»), was not named by the answer and stays (question I; answered 2026-09-26, see "Round 4, integrated") |
 | operator, 2026-09-26 | An order of the previous shop is never shown as TurboBaby's. A withheld shop is served as the empty shop (`WITHHELD_SHOP`), and both order screens read it through `shown_shop`. The list prints the date alone, and the detail leaves out its labelled delivery row. An order with TurboBaby's stored shop, and one naming no shop, print exactly what they printed before. Recorded in `order_presentation.t27` (`RETIRED_SHOP_DECIDED_AT`, `RETIRED_SHOP_LABEL_SHOWN`, `RETIRED_SHOP_SERVED_AS`; `RETIRED_SHOP_FALLBACK_NOTE` closed), guarded by `tests/legacy_view_wiring.rs` and a unit test in `legacy_view.rs` | A bundle cached from before prints an empty value for such an order. That is not TurboBaby's name either |
 
 **Conflicts, and how they were resolved.** Every side was kept.
@@ -401,12 +401,320 @@ place.
 * Answer 1 is provisional. The owner may bring the box back; git history holds all of it.
 * Answer 2, the ride game's bird, is undecided and untouched.
 * Question I: the Book control's reason `T_BIKE_BOOK_BLOCKED_NO_UNITS` under a seeded zero.
+  *Answered on 2026-09-26* («Разрешить бронь, наличие уточнит менеджер»); see "Round 4, integrated".
 * Answer 3's four analysed-and-left reads, with their reasons in `legacy_retirement.t27`: the loyalty
   tier key, the star history, the retired surfaces' reads, and the referral, quest-scan and game
   reads. The legacy HTTP routers behind the seven repointed paths still answer.
 * The cart's write gate, `parse_kind`, still names the old kinds. None of them can write a row
   today, and closing the gate is a separate change (`cart_persistence.t27`).
 * The order card still has no link to the manager (bullet D).
+
+### Round 4, server lane: the owner's answers of 2026-09-26 and the stale fixtures, not yet live
+
+Branch `t27/round4-server`, cut from `main` at `405f30e` (#67). Five commits, one per item, and one
+for the docs; **nothing is pushed and nothing is deployed**. `dist/` was not rebuilt: every change
+is server code, and no client file changed. The owner's words are quoted verbatim in DECISIONS.md
+(the D19 addendum of 2026-09-26) and in the Rust modules; the `.t27` files stay ASCII.
+
+| commit | item | what landed | recorded in |
+| --- | --- | --- | --- |
+| `f3ffc98` | A1, answer «А зачем это вообще там?» | A customer never sees an order of the previous shop: one that names that shop, or holds no bike line, is not listed (the list pages past it, so it takes none of the 50 places), is answered 404 by `get_order_details`, `get_order_status` and `cancel_order` on the owner check's own line, and is not counted in the profile's `orders_count` (the SQL no longer joins orders). A rental beside an old line stays shown, masked. Admin reads unchanged. Every cited line of `src/api/orders.rs` stayed except the list's cap (2502 → 2503, re-pinned) | `order_presentation.t27` `PREVIOUS_SHOP_ORDER_*`, `legacy_retirement.t27` `OWNER_ORDERS_ANSWER_*` |
+| `261a0a9` | A2, answer «Зачем они вообще нужны мне?» | `/uploads` serves only a name a bike's `image_url` references exactly (`/uploads/<name>`), through a gate in front of the same directory service on the same line of `src/main.rs`; everything else answers 404. Nothing deleted. The bucket: not served by this server, and its previous-shop keys cannot be told apart by code (one prefix `uploads/` since `436f56c`), so it **needs a production listing** | `upload_media.t27` `OWNER_MEDIA_ANSWER_*`, `LOCAL_READ_*`, `OBJECT_STORE_*` |
+| `784680e` | A3, critic note 1 | The 24-hour reminder joins public events only; a hidden event is never reminded. Cancellation and refunds unchanged. `REMINDER_KEPT_FOR_SEATS_ALREADY_HELD` reversed by the operator under answer 3 | `events_booking.t27` `REMINDER_REVERSED_*` |
+| `0f35061` | A4, critic note 5 | New welcome credits say "Welcome bonus from a friend's invite" (the garden's words dropped; none of the four existing sentences fits). The bonus history serves it; older rows stay withheld. *Serving it was reversed on review the same day: the words are the lane's, not the owner's, so the sentence is stored and not served (see "Round 4, review fixes" below)* | `legacy_retirement.t27` `WELCOME_CREDIT_SENTENCE`, `WELCOME_SENTENCE_*` |
+| `04f75e9` | A5, critic note 6 | The 17 stale DB-backed tests: create_order ×3 and promo_agent ×4 rewritten on a `bike_rental` line of `nmax-155` and on `bikes` rows; cart_merge ×2 hold the cart race (the merge gate names no rental kind, so the summing moved to an in-crate DB test of the write step); marketing ×1, strain_of_day ×5 → 2 and use_reward ×2 hold the retirement | the test files' headers |
+
+**Gates**, on the docs commit, pinned compiler `40003ed`:
+
+```sh
+T27C=<path>/t27c python3 scripts/verify_t27_specs.py --require-compiler
+# OK - 45 manifested specs, 5 generators each (all 45 floors equal the measurement)
+python3 scripts/execute_t27_assertions.py            # WITH the compiler cross-check
+# OK - 45 spec(s), 10679 assert line(s) scanned, 10679 executed, 10679 passed, 0 failed;
+#      10186 declaration name(s) and function bodies agreed with t27c; 2 pinned front-end disagreement(s)
+python3 scripts/verify_t27_against_source.py --require-git-tracked
+# OK - 255 bindings hold across 41 contracts and 83 source files
+python3 scripts/verify_fleet_seed.py -v
+# OK — 14 families (13 offered), 37 units (11 rented, 26 available); ...
+```
+
+Floors that moved: `order_presentation` 606/77 → 625/80, `legacy_retirement` 299/63 → 320/67,
+`upload_media` 253/50 → 275/53, `events_booking` 326/85 → 338/87. Gate 3 gained 7 bindings (248 →
+255): the list's cap and the three by-id guards, the `/uploads` nest and the bikes lookup, the
+reminder's filtered join, and the welcome sentence in its writer and in its rule; each was planted
+red once by hand and restored. `f3ffc98` left the `order_presentation` floor one below the
+measurement (624 against 625); `261a0a9` closed it.
+
+**Rust.** `cargo fmt -- --check` clean. The three clippy forms passed with `-D warnings`
+(`--features backend --bin turbobaby-bot-server`, `--features backend`, and
+`--target wasm32-unknown-unknown --lib`). `cargo test --features backend -j 2 --no-fail-fast`: 77
+result lines, 2 510 passed, 0 failed, 141 ignored.
+
+**DB-backed.** A fresh private PostgreSQL 18.0 (`initdb -A trust -U postgres -E UTF8 --locale=C`),
+data dir `D:/t27work/pgdata-r4a-2509`, listening on 127.0.0.1:55435 only, a fresh database per run,
+`HTTPS_PROXY`/`HTTP_PROXY`/`ALL_PROXY`/`TELOXIDE_PROXY` = `http://127.0.0.1:9`. The six stale
+targets on base `405f30e`'s tests: 17 failed (the known 17). After the change, the whole suite,
+`cargo test --features backend -j 2 --no-fail-fast -- --include-ignored --test-threads=1` skipping
+the two tests of `tests/https_reaches_telegram.rs`: 77 result lines, **2 649 passed, 0 failed**.
+The new DB tests: `tests/integration_previous_shop_orders.rs`, and in-crate
+`only_a_file_a_bike_references_is_served` (upload.rs),
+`the_reminder_skips_a_hidden_event_and_reminds_a_public_one` (events.rs, against a Telegram stand-in on 127.0.0.1; with the filter removed
+it fails, as it should), `a_new_welcome_credit_names_no_garden_and_is_served` (referrals.rs; `…_and_is_withheld` since the review) and
+`concurrent_upserts_of_one_rental_line_sum_their_quantities` (cart.rs).
+
+**What is left.**
+
+* The bucket's previous-shop objects: a production listing of `uploads/` keys against the keys the
+  rental rows reference, then a bucket read-policy change. Deleting any file is the owner's act.
+* `POST /api/cart/merge` with a line of kind `strain` still reaches the dropped table and answers
+  500 (the known D9 survivor in `tests/retired_table_wiring.rs`), and no merge can write a rental
+  line until `parse_kind` admits `bike_rental` (`cart_persistence.t27`).
+* A message the bot sends to a customer when an admin changes the status of a previous-shop order
+  is the admin's act and was left; so were the referral panel's `has_ordered` flag (a friend's
+  orders, counted whole) and `db.get_strains_of_day`, which no code calls now.
+* The client lane's items of the same round (the Book control under a seeded zero, "Unknown" on
+  bike lines, the unused strings in the wasm) are not in this branch. *Merged beside it on
+  2026-09-26:* see the next section.
+
+### Round 4, integrated: the owner's answers of 2026-09-26, not yet live
+
+Branch `t27/round4`, cut from `main` at `405f30e` (#67). It merges `t27/round4-server` (`dbdb640`,
+the section above) and then `t27/round4-client` (`f1f8517`), both with `--no-ff`, rebuilds `dist/`
+once and adds this section. **Nothing is pushed and nothing is deployed.** No row is deleted or
+rewritten, no migration is added, and no file is removed from a server volume or a bucket.
+
+| commit | what |
+| --- | --- |
+| `581323e` | merge of `t27/round4-server`, no conflict |
+| `d1ddf3d` | merge of `t27/round4-client`; five files conflicted, each resolved to both sides (below) |
+| `2f801fe` | `dist/` rebuilt, bundle `f81e946a9d640a39` → `7143e607a7409c70` |
+| `ca5ce6f` | the test helper the fixture rewrite left unused, removed |
+| the next commit | this section, and the question I notes above and below marked answered |
+
+The owner answered three questions on 2026-09-26. The words are quoted verbatim in DECISIONS.md
+(the entries of that date) and in the Rust modules; the `.t27` files stay ASCII. The rulings in
+force stay: rental only, Phuket only, nothing deleted (2026-09-24); «всё что касается канабиса
+нигде не должно быть» and «Все канабисное аналировать» (2026-09-25).
+
+| question | the owner's words | read as | what changed | recorded in |
+| --- | --- | --- | --- | --- |
+| Q1, the previous shop's order lines shown as «Позиция прежнего каталога» | «А зачем это вообще там?» | The operator's reading: a customer must not see the previous shop's orders at all | Server, `f3ffc98`. The rule is `customer_sees_order` (`src/trios/legacy_view.rs`): an order naming the previous shop, or holding no bike line, is not shown. It is asked through `Order::shown_to_customer` (`src/db/orders.rs`) by the list, which pages past such an order so it takes none of the 50 places; by the detail, the status and the customer's own cancel, which answer 404 exactly as for a missing order; and by the profile's `orders_count` (`Order::shown_count`). An order with a rental line beside a line of the old catalogue is this shop's and stays shown with that line masked, which is now the only case the neutral name is served for, so that key stays in the bundle. The admin reads are the archive and are unchanged | `order_presentation.t27` `PREVIOUS_SHOP_ORDER_*`, `legacy_retirement.t27` `OWNER_ORDERS_ANSWER_*` |
+| Q2 (question I), the Book control disabled with «Все байки этой модели заняты» under the zero the 2026-09-12 seed counts | «Разрешить бронь, наличие уточнит менеджер» | As worded. Removing the «Наличие не подтверждено» arm too is the contract's reading (a manager confirms availability for every family) | Client, `8c85cb3`. `book_block` (`src/ui/screens/catalog_screen.rs`) reads no unit count; `BookBlock` loses `NoUnitsFree` and `UnknownAvailability`, and both keys are deleted. What still disables Book: a closed family (D12), no published rate (D11), a screen with no booking handler. The unmounted `bike_card.rs` no longer needs a free unit to add to cart and prints the manager line instead of the count. `create_order` never refused on the count (`check_bike_lines` only logs a shortfall) and is unchanged, now guarded | `availability.t27` (`NO_UNITS_BOOK_REASON_*`, `UNKNOWN_AVAILABILITY_*`, `customer_may_book`, `UNKNOWN_AVAILABILITY_REMOVAL_IS_THIS_FILES_READING`), `locale_policy.t27` (547 → 545), `tests/catalog_honesty_wiring.rs` |
+| Q3, the previous shop's media still reachable by a direct link | «Зачем они вообще нужны мне?» | The operator's reading: stop serving them. Deleting the files is the owner's own irreversible act and is not done here | Server, `261a0a9`. `/uploads`, on the same nest line of `src/main.rs`, serves a name only when some bike's `image_url` is exactly `/uploads/<name>`; everything else answers 404. The upload's local branch still writes there when no object store is configured, which is why the route stays. The bucket is not served by this server, and both shops wrote the one prefix `uploads/`, so telling the previous shop's objects apart needs a production listing, and stopping them needs a bucket policy change. Neither was done | `upload_media.t27` `OWNER_MEDIA_ANSWER_*`, `LOCAL_READ_*`, `OBJECT_STORE_*` |
+
+The critic's notes on `405f30e`:
+
+| note | what changed | commit | recorded in |
+| --- | --- | --- | --- |
+| 1, the 24-hour event reminder mailed hidden events' stored titles and venues | It now joins public events only. `REMINDER_KEPT_FOR_SEATS_ALREADY_HELD` (operator, 2026-09-25) is reversed by the operator under «Все канабисное аналировать». Cancellation and the Stars refund of a held seat are unchanged | `784680e` | `events_booking.t27` `REMINDER_REVERSED_AT`, `REMINDER_FLAG_FILTERED_JOINS` |
+| 2, cannabis-era strings the public wasm still carried | Nineteen keys deleted, each line replaced by a comment line: the garden's bonus label («Награда из сада» / "Garden reward"), «Хранение» and «Зажигалка» with their chips, the strain card's certificate link (`T_MODAL_CERTIFICATE`, beyond the critic's list), and fifteen keys of the unmounted shop game's farm («Посадить», «Собрать», «Урожай!» and the rest). The farm zone left `src/ui/game/shop_game.rs`. The ride game is untouched (answer 2) | `fb5913b` | `legacy_retirement.t27` `LEFTOVERS_2026_09_26_*`, `locale_policy.t27` (545 → 526), `tests/no_cannabis_client_wiring.rs` |
+| 3, `/uploads` served `/data/uploads` | Q3 above | `261a0a9` | `upload_media.t27` |
+| 4, bike lines printed "Unknown" | `bike_line_name` (`src/trios/order_line.rs`, host-compiled): the bike's stored name when it has text, else its family key; nothing looked up, nothing invented. Used on the order list, the order detail and, beyond the two screens the critic named, the profile's recent orders. The keyless fallback stays on its cited lines | `f1f8517` | `order_presentation.t27` `BIKE_LINE_NAME_*`, `tests/order_presentation_wiring.rs` |
+| 5, a new welcome credit said "…a friend's garden invite" | New rows store "Welcome bonus from a friend's invite". *Since the review: not served, because no owner worded it; every welcome row shows the generic label and the amount, and the wording is a question for the owner* (first version: the bonus history served it) | `0f35061`, review below | `legacy_retirement.t27` `WELCOME_CREDIT_SENTENCE`, `WELCOME_SENTENCE_*` |
+| 6, the 17 DB-backed tests failing on stale fixtures | Rewritten on a `bike_rental` line of `nmax-155` and on `bikes` rows, or as tests of the retirement | `04f75e9` | the test files' headers |
+
+**Readings, each easy to revert.** Q1 and Q3 are the operator's readings of the owner's questions.
+Q1 treats an order with no bike line as the previous shop's, the same fail-closed reading as the
+rules before it. Removing the «Наличие не подтверждено» Book reason goes one step past Q2's words.
+The `bike_card.rs` change is to a component no screen mounts.
+
+**Conflicts, each resolved to both sides** (`d1ddf3d`; the server merge, `581323e`, had none):
+
+* **DECISIONS.md.** The server's addendum first, then the client's two entries (question I, then
+  the leftovers). The server addendum's closing sentence now points at the entry that follows
+  instead of saying the Book question is "not recorded here"; it keeps its two lines.
+* **`legacy_retirement.t27`, `order_presentation.t27`.** Each side's block, test and invariant kept,
+  the server's first. No name is declared twice.
+* **Floors (gate 1).** `legacy_retirement` 320/67 (server) and 317/65 (client) merge to the measured
+  **338/69** (299/63 + 21/4 + 18/2); `order_presentation` 625/80 and 622/79 to the measured
+  **641/82** (606/77 + 19/3 + 16/2). All 45 floors equal the pinned compiler's counts.
+* **Bindings (gate 3).** Every comment paragraph kept; `MIN_BINDINGS` = **256**, the measured table
+  size (248 + 7 server + 1 client), across 41 contracts and 84 source files.
+* **Key count.** The server lane declared and deleted no key, so the client's count stands:
+  565 + 2 − 14 − 1 − 5 − 2 − 19 = **526** declarations, and the naive grep reads **531**
+  (measured on the merged `src/trios/i18n.rs`).
+* No `file:line` citation of one lane points into a file the other lane changed (checked on both
+  diffs).
+
+**Gates**, on `2f801fe` and again, with the same numbers, on `ca5ce6f` and on the commit that adds
+this section; pinned compiler `40003ed`:
+
+```sh
+T27C=<path>/t27c python3 scripts/verify_t27_specs.py --require-compiler
+# OK - 45 manifested specs, 5 generators each (all 45 floors equal the measurement)
+python3 scripts/execute_t27_assertions.py            # WITH the compiler cross-check
+# OK - 45 spec(s), 10754 assert line(s) scanned, 10754 executed, 10754 passed, 0 failed;
+#      10239 declaration name(s) and function bodies agreed with t27c; 2 pinned front-end disagreement(s)
+python3 scripts/verify_t27_against_source.py --require-git-tracked
+# OK - 256 bindings hold across 41 contracts and 84 source files
+python3 scripts/verify_fleet_seed.py -v
+# OK — 14 families (13 offered), 37 units (11 rented, 26 available); ...
+```
+
+**Rust.** `cargo fmt -- --check` clean. The three clippy forms passed with `-D warnings`
+(`--features backend --bin turbobaby-bot-server`, `--features backend`, and
+`--target wasm32-unknown-unknown --lib`). `cargo test --features backend -j 2`: 77 result lines,
+2 526 passed, 0 failed, 141 ignored, doc tests included.
+
+**`dist/`**, `2f801fe`. Built once with `scripts/build-frontend.sh` (trunk 0.21.14, wasm-bindgen
+0.2.122, `CARGO_BUILD_JOBS=2`, the shared target) from `d1ddf3d`: bundle `f81e946a9d640a39` →
+`7143e607a7409c70`, no `dist/version.txt.br`, `dist/assets/` still ignored. Read inside the new wasm
+(`grep -c -a -F`): «Награда из сада», "Garden reward", «Зажигалка», «Хранение», «Посадить»,
+«Собрать», «Урожай!», «Все байки этой модели заняты» and «Наличие не подтверждено» **0 each** (1 each
+in `f81e946a9d640a39`); «Позиция прежнего каталога» 1, kept for a mixed order. The client vocabulary
+of `tests/no_cannabis_client_wiring.rs`, with its farm words, finds nothing in the js and, in the
+wasm and `index.html`, only the internal identifiers the previous bundle had too (the DOM events
+`woody:mainbutton`, `woody:contact`, `woody:telegram-ready` and the compatibility path
+`/sommelier`); the previous bundle's farm hits are gone. `scripts/predeploy-smoke.sh --no-build`:
+**SMOKE PASS** (the app mounted, no uncaught JS error), and `git status` was empty after it.
+
+**DB-backed**, on `2f801fe`. A fresh private PostgreSQL 18.0 (`initdb -A trust -U postgres -E UTF8
+--locale=C`), data dir `D:/t27work/pgdata-r4-2509`, listening on 127.0.0.1:55436 only, one fresh
+database, `HTTPS_PROXY`/`HTTP_PROXY`/`ALL_PROXY`/`TELOXIDE_PROXY` = `http://127.0.0.1:9`. The
+whole suite, `cargo test --features backend -j 2 --no-fail-fast -- --include-ignored
+--test-threads=1` skipping the two tests of `tests/https_reaches_telegram.rs`: 77 result lines,
+**2 665 passed, 0 failed, 0 ignored** (2 filtered out). That is the 2 526 + 141 of the run without
+a database, less the two skipped, so the critic's 17 stale fixtures now pass with everything else.
+The server was stopped with `pg_ctl stop -m fast`, and the data dir is left in place.
+
+The suite's one compiler warning was new in round 4: `04f75e9` left `rand_suffix` in
+`tests/integration_marketing.rs` with no caller. `ca5ce6f` removes it; that binary, re-run on the
+same database, gave 3 passed and no warning.
+
+**What is left.**
+
+* Push, review and merge of `t27/round4`, then a deploy of `main`. Nothing here is live, and the
+  committed `dist/` is what a deploy would serve.
+* The bucket's previous-shop objects: a production listing of the `uploads/` keys against the keys
+  the rental rows reference, then a bucket read-policy change. Deleting any file is the owner's act.
+* `POST /api/cart/merge` with a line of kind `strain` still reaches the dropped table and answers
+  500 (the D9 survivor in `tests/retired_table_wiring.rs`); no merge can write a rental line until
+  `parse_kind` admits `bike_rental` (`cart_persistence.t27`).
+* Left by the server lane, each with its reason in `order_presentation.t27` or the section above:
+  the bot's status message to a customer when an admin changes a previous-shop order, the referral
+  panel's `has_ordered` flag, and `db.get_strains_of_day`, which no code calls now.
+* `catalog_api.t27`'s cursor census (185/183) is a dated reading; 182 was measured at `405f30e`.
+* Answer 2, the ride game's bird, is undecided and untouched. The order card still has no link to
+  the manager (bullet D).
+
+### Round 4, review fixes, 2026-09-26, not yet live
+
+Two demands of the review of `ff822e3`, each verified against the tree before it was applied, on
+the same branch `t27/round4`. **Nothing is pushed and nothing is deployed.** No row is deleted or
+rewritten, no migration is added, no file is removed from a volume or a bucket.
+
+| commit | what |
+| --- | --- |
+| `ac8a10e` | stale `file:line` citations re-pinned in place, each with its old number and the date |
+| `168892d` | the welcome credit's new sentence is stored and NOT served, until the owner words it |
+| the next commit | this section, and the round-4 rows above marked |
+
+**1. Citations the round moved and did not re-pin.** `04f75e9` grew the `get_strains_of_day`
+survivor's reason in `tests/retired_table_wiring.rs` by one line, so everything below its line 75
+moved down by one. The review named seven stale citations into that file and one stale survivor
+reason. Each was checked: the cited line was read at `405f30e` and at `ff822e3`. All eight were
+right, and all were re-pinned:
+
+* `bot_surface.t27`: the survivor entry `:66-75` → `:66-76` (the prose and `LEGACY_SURVIVOR_ENTRY`);
+* `legacy_retirement.t27`: the allowlist `:49-82` → `:49-83` (two sites), the reason floor's
+  assert `:499` → `:500`;
+* `schema_provenance.t27`: the fifth shallow walk `:97` → `:98` (the prose and
+  `SHALLOW_WALK_OUTSIDE_THE_RUNNER_MODULE`; no assertion compares the string);
+* `tests/legacy_vocabulary_wiring.rs`: the `src/db/mod.rs` survivor said an ignored test still
+  calls `get_strains_of_day`. It now says what `retired_table_wiring.rs` says: no test caller
+  since 2026-09-26.
+
+The review's method compared `path:N` citations only. A second pass also followed bare `:N`
+continuations after a named path, over every tracked file that cites into a file the branch
+changed. It found four more that the round had moved:
+
+* `legacy_retirement.t27`: the allowlist's three tests `:450, :476, :495` → `:451, :477, :497`
+  (the last one was already a line short at `405f30e`), and `TABLE_POSITION` `:303` → `:304`.
+* `scripts/verify_t27_against_source.py`: the `UNIT_ROLLUP_QUERY_ROW_CAP` binding's "why" cited
+  `catalog_api.t27:397-401`, and this round's own RE-POINTED note moved that span to `:401-405`.
+* `legacy_retirement.t27`: the shop game's rsx root, `shop_game.rs:679`, is at `:596` since
+  `fb5913b` removed the farm zone.
+* `bot_surface.t27:65`: `:66-75` → `:66-76`.
+
+Two dated re-readings got a dated note: `bot_surface.t27` `(:49-82)` of 2026-09-21, and
+`legacy_retirement.t27`'s refutation "closes at 82". The citing lines this branch wrote itself
+were also checked, 30 of them, each against the cited file as it stood at the citing commit (found
+by `git blame`). None moved. Still stale, and already stale at `405f30e`: `schema_provenance.t27`'s
+citations into `scripts/verify_t27_specs.py` (`:257`, `:313-322`, `:326-330`, `:397-408`, `:418`,
+`:175-184`, `:28-287`, `:310-311`) and `deposit_tiers.t27:14` (`:119-121`). The manifest grows with
+every floor comment. That is its own piece of work and is not changed here. No line was added to
+any contract or to the manifest. No floor, binding or assertion count moved in `ac8a10e`.
+
+**2. The welcome credit's sentence.** The review was right. `0f35061` put `referral_welcome` into
+`DESCRIBED_TX_TYPES` (4 → 5) with an exact-match arm, so the bonus history served "Welcome bonus
+from a friend's invite" in both locales. `profile_screen.rs` prints `tx.description` under the
+label. Before that commit a welcome row showed only the generic label. The critic's note 5 gave
+no wording, and no owner answer or existing key supplies that sentence. The lane trimmed it
+itself, and DECISIONS.md credited it to the operator. Now:
+
+* the writer is unchanged: a new row still stores the trimmed sentence, with no garden words;
+* the read withholds it: `DESCRIBED_TX_TYPES` is four again, and there is no welcome arm. Every
+  welcome row, old or new, reaches a customer as the generic label (`T_PROFILE_BONUS_OTHER`) and
+  the amount, as before the round;
+* `legacy_retirement.t27`: `OWNER_ANSWER_3_DESCRIBED_TX_TYPE_COUNT` is 4 again,
+  `WELCOME_SENTENCE_IS_SERVED` = false, `_WORDED_BY_THE_OWNER` = false, `_CHOSEN_BY` = "lane",
+  and `_AWAITS_THE_OWNER` = true. The floor moved from 338/69 to the measured 341/69;
+* gate 3: the second welcome binding was re-pointed from "served sentence" to "withheld
+  sentence". Both welcome bindings were planted RED once by hand and restored. There are still 256
+  rows;
+* DECISIONS.md records it as the lane's interim choice, with an **open question for the owner:
+  what should an invited customer's welcome bonus say in the bonus history?**
+
+`dist/` was not rebuilt. The bonus-history rule is server-only: `customer_bonus_description` is
+called from `src/api/loyalty.rs` alone. The committed wasm holds neither "friend's invite" nor
+"Referral bonus for new user" (`grep -c -a -F`, 0 and 0), and the client half of
+`legacy_view.rs` (`shown_line_name`, `shown_shop`) did not change. The bundle stays
+`7143e607a7409c70`, so the smoke test of `2f801fe` still covers what a deploy would serve.
+
+**3. The critic's (a), "shown to customers or served by the server".** It found no cannabis-era
+text, and there was nothing to fix. The one borderline item is the `/joke` topic "a motorbike
+sommelier pretending to be fancy" (`JOKE_STYLES` in `src/ai.rs`). That is a prompt, not shown
+copy, and the word is not cannabis-related. The critic left it to the operator, and it is left
+here too.
+
+**Gates** on `168892d`, pinned compiler `40003ed`:
+
+```sh
+T27C=<path>/t27c python3 scripts/verify_t27_specs.py --require-compiler
+# OK - 45 manifested specs, 5 generators each (all 45 floors equal the measurement)
+python3 scripts/execute_t27_assertions.py            # WITH the compiler cross-check
+# OK - 45 spec(s), 10758 assert line(s) scanned, 10758 executed, 10758 passed, 0 failed;
+#      10242 declaration name(s) and function bodies agreed with t27c; 2 pinned front-end disagreement(s)
+python3 scripts/verify_t27_against_source.py --require-git-tracked
+# OK - 256 bindings hold across 41 contracts and 84 source files
+python3 scripts/verify_fleet_seed.py -v
+# OK — 14 families (13 offered), 37 units (11 rented, 26 available); ...
+```
+
+**Rust.** `cargo fmt -- --check` is clean. The three clippy forms pass with `-D warnings`.
+`cargo test --features backend -j 2 --lib --test legacy_view_wiring --test
+legacy_vocabulary_wiring --test promo_report_names_wiring --test retired_table_wiring --test
+t27_gates_run` gave lib 1 072 passed, 7 ignored, then 13, 12, 8, 9 and 3 passed, and 0 failed. The
+full suite was not re-run: no other test reads what changed. The DB-backed
+`chain_tests` of `src/db/referrals.rs` ran on the private PostgreSQL 18.0 of the section above
+(`D:/t27work/pgdata-r4-2509`, 127.0.0.1:55436 only, a fresh database, proxies at
+`http://127.0.0.1:9`): 3 passed, including the renamed
+`a_new_welcome_credit_names_no_garden_and_is_withheld`. The stored row was read back. The server
+was stopped with `pg_ctl stop -m fast`.
+
+**Still open**, from the critic's pass. Each one needs a production read or an owner's call, and no
+contract settles any of them:
+
+* `GET /api/loyalty/leaderboard` has no login: `get_leaderboard` in `src/api/loyalty.rs` takes
+  only the state, and `src/api/mod.rs` adds no auth layer. It returns the top 20's first names,
+  total spend and raw tier. `legacy_retirement.t27` left the raw tier because the admin screen is
+  its only reader. That reason does not cover a public route. This is a privacy question as well
+  as a naming one.
+* `GET /api/quest-places`, `GET /api/treasure-hunts` and `GET /api/loyalty/config` serve stored
+  rows or the stored config as they are. `GET /api/loyalty/tiers` hides only a tier named "woody".
+* The bot's profile as Telegram stores it (commands, description, short description). The code
+  sets only the menu button.
+* The bucket's previous-shop objects, as above.
 
 ## The four gates, and how to run them
 
@@ -894,7 +1202,11 @@ The questions that ruling left open are listed in #63.
   ("probably"), removed that line and deleted its key (DECISIONS.md, the entry of that date;
   `availability.t27` `UNITS_EMPTY_LINE_*`). *Still open:* the Book control's reason under the same
   zero, `T_BIKE_BOOK_BLOCKED_NO_UNITS` ("Every bike of this model is taken"), which says nearly the
-  same thing from the same seeded count and which the answer did not name.
+  same thing from the same seeded count and which the answer did not name. *Answered on
+  2026-09-26:* «Разрешить бронь, наличие уточнит менеджер» ("Allow booking; the manager will confirm
+  availability"). The Book control reads no unit count, both of its count reasons and their keys are
+  gone, and the unmounted `bike_card.rs` no longer hard-codes a count (`availability.t27`; see
+  "Round 4, integrated" above). Round 4 did not touch Admin Add or the brain's `knowledge_base`.
 * **J. Vocabulary and ownership (#62).** Should the nmax-155 rate be owned by pricing-honesty (as
   landed) or by rental-terms? Is a named copy bound by gate 3 accepted in place of an import the
   compiler lacks? New copy is needed for `T_MENU_DESC` / `T_MENU_NO_RESULTS`. The strain-of-day
@@ -967,13 +1279,16 @@ citations** — unlike a `src/` citation, which gate 3 can check.
 > `t27/owner-answers-2509` (at `41315b2` on 2026-09-26) carries both of the owner's lists of
 > 2026-09-25 and the operator's shop-label decision. It is verified end to end: four gates,
 > clippy, `cargo test`, the DB-backed run, `dist/` and the smoke (see "The owner's second list of
-> 2026-09-25 and the operator's shop label"). It is not pushed. Push it for review before
-> anything else builds on it.
+> 2026-09-25 and the operator's shop label"). *It was merged to `main` as #67 (`405f30e`).*
+> `t27/round4` (2026-09-26) carries the owner's answers of 2026-09-26 and the critic's six notes
+> on top of `405f30e`, verified end to end the same way (see "Round 4, integrated"). It is not
+> pushed. Push it for review before anything else builds on it.
 >
 > The work, in order: fix the seven defects listed under "What is actually left", each with a test
 > that is red before the fix and with the contract that records the defect corrected in the same
-> change; then grow `scripts/verify_t27_against_source.py` beyond its 237 bindings on `main` (248
-> on the unmerged integration branch `t27/owner-answers-2509` at `41315b2` on 2026-09-26, 239 on
+> change; then grow `scripts/verify_t27_against_source.py` beyond its 248 bindings on `main` at
+> `405f30e` (256 on the unmerged integration branch `t27/round4` on 2026-09-26; before #67, 237 on
+> `main`, 248 on `t27/owner-answers-2509` at `41315b2` on 2026-09-26, 239 on
 > 2026-09-25; 237 re-measured
 > 2026-09-25 after #64, the same as after #63 on 2026-09-24; 227 after #62, 198 earlier that day,
 > 197 on 2026-09-23, 168 on 2026-09-22, 66 on 2026-09-21), because a contract nothing binds only

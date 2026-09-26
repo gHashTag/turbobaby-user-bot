@@ -44,10 +44,11 @@ use std::fs;
 use std::path::PathBuf;
 use turbobaby_bot::trios::core::Lang;
 use turbobaby_bot::trios::legacy_view::{
-    customer_bonus_description, customer_bonus_tx_type, customer_order_items, customer_shop_id,
-    previous_catalogue_name, shown_line_name, shown_shop, ADMIN_DEDUCTION_SENTENCE,
-    DESCRIBED_TX_TYPES, GARDEN_ERA_TX_TYPES, KEPT_LINE_KEYS, MASKED_LINE_NAME_KEY,
-    REFERRAL_BONUS_SENTENCE, RETIRED_KIND_KEYS, WITHHELD_SHOP, WITHHELD_TX_TYPE,
+    customer_bonus_description, customer_bonus_tx_type, customer_order_items, customer_sees_order,
+    customer_shop_id, previous_catalogue_name, shown_line_name, shown_shop,
+    ADMIN_DEDUCTION_SENTENCE, DESCRIBED_TX_TYPES, GARDEN_ERA_TX_TYPES, KEPT_LINE_KEYS,
+    MASKED_LINE_NAME_KEY, REFERRAL_BONUS_SENTENCE, RETIRED_KIND_KEYS, WELCOME_CREDIT_SENTENCE,
+    WITHHELD_SHOP, WITHHELD_TX_TYPE,
 };
 
 const ORDERS_API: &str = "src/api/orders.rs";
@@ -255,6 +256,70 @@ fn a_bike_line_passes_as_stored_beside_a_masked_one() {
     );
 }
 
+/// Owner, 2026-09-26, asked why the old catalogue's lines are shown at all:
+/// the operator read the answer as "a customer must not see the previous
+/// shop's orders at all". On the stored shapes: every order of the old
+/// catalogue alone, and every order naming a shop the old checkout stored, is
+/// not shown; a rental of this shop is, and so is a rental beside an old line.
+#[test]
+fn an_order_of_the_previous_shop_is_not_shown_to_its_customer() {
+    let bike = json!({
+        "quantity": 1.0, "fulfillment": "pickup",
+        "bike": { "bike_key": "nmax-155", "bike_name": "Yamaha NMAX 155",
+                  "deal": { "kind": "bike_rental", "rental_start": "2026-10-01",
+                            "rental_end": "2026-10-03" } }
+    });
+    // The old catalogue alone: not shown, under any shop or none.
+    let old_lines = stored_lines();
+    for shop in [None, Some(LIVE_SHOP)]
+        .into_iter()
+        .chain(STORED_SHOPS.map(Some))
+    {
+        assert!(!customer_sees_order(&old_lines, shop), "{shop:?}");
+    }
+    for line in old_lines.as_array().expect("a list") {
+        assert!(
+            !customer_sees_order(&json!([line]), Some(LIVE_SHOP)),
+            "{line}"
+        );
+    }
+    // A rental: shown under this shop or none, never under a shop the old checkout stored.
+    let rental = json!([bike.clone()]);
+    assert!(customer_sees_order(&rental, Some(LIVE_SHOP)));
+    assert!(customer_sees_order(&rental, None));
+    for shop in STORED_SHOPS {
+        assert!(!customer_sees_order(&rental, Some(shop)), "{shop}");
+    }
+    // A rental beside an old line is this shop's order: shown, the old line masked.
+    let mixed = json!([bike.clone(), { "accessory_id": STORED_IDS[0],
+        "accessory_name": STORED_NAMES[1], "quantity": 1.0, "unit_price": 500.0 }]);
+    assert!(customer_sees_order(&mixed, Some(LIVE_SHOP)));
+    let served = customer_order_items(&mixed).to_string();
+    assert!(
+        !served.contains(STORED_NAMES[1]) && !served.contains(STORED_IDS[0]),
+        "{served}"
+    );
+    // The contract records it.
+    assert_eq!(
+        spec_value(PRESENTATION_SPEC, "PREVIOUS_SHOP_ORDER_DECIDED_AT"),
+        "2026-09-26"
+    );
+    assert_eq!(
+        spec_value(PRESENTATION_SPEC, "PREVIOUS_SHOP_ORDER_SHOWN"),
+        "false"
+    );
+    assert_eq!(
+        spec_value(PRESENTATION_SPEC, "PREVIOUS_SHOP_ORDER_MIXED_IS_SHOWN"),
+        "true"
+    );
+    assert_eq!(
+        spec_value(RETIREMENT_SPEC, "OWNER_ANSWERS_2026_09_26_AT"),
+        "2026-09-26"
+    );
+    let rules = source(RULES);
+    assert!(rules.contains("«А зачем это вообще там?»"), "{RULES}");
+}
+
 #[test]
 fn every_shop_the_old_checkout_stored_is_withheld_and_this_one_is_kept() {
     for shop in STORED_SHOPS {
@@ -385,16 +450,50 @@ fn the_sentences_the_writers_compose_are_the_ones_the_rule_serves() {
         Some(milestone)
     );
 
-    // The welcome credit's sentence names the garden; it is written today and
-    // withheld on read.
-    assert!(referrals.contains("\"Welcome bonus from a friend's garden invite\""));
+    // The welcome credit's sentence named the garden until 2026-09-26; since
+    // then a new row is written with the garden's words dropped. Those words
+    // are not the owner's, so the sentence is stored and NOT served: a welcome
+    // row, old or new, reaches the customer with no description, under its
+    // generic label, until the owner supplies the wording.
+    const GARDEN_WELCOME_SENTENCE: &str = "Welcome bonus from a friend's garden invite";
+    assert!(referrals.contains(&format!("\"{WELCOME_CREDIT_SENTENCE}\"")));
+    assert!(
+        !referrals.contains(GARDEN_WELCOME_SENTENCE),
+        "{REFERRALS_DB}"
+    );
+    assert_eq!(
+        WELCOME_CREDIT_SENTENCE,
+        GARDEN_WELCOME_SENTENCE.replace("garden ", ""),
+        "only the garden's words were dropped"
+    );
     assert!(!DESCRIBED_TX_TYPES.contains(&"referral_welcome"));
     assert_eq!(
-        served(
-            "referral_welcome",
-            "Welcome bonus from a friend's garden invite".to_string()
-        ),
+        served("referral_welcome", WELCOME_CREDIT_SENTENCE.to_string()),
         None
+    );
+    assert_eq!(
+        served("referral_welcome", GARDEN_WELCOME_SENTENCE.to_string()),
+        None
+    );
+    let rule = body_of(
+        &code_of(&source(RULES)),
+        "fn is_a_sentence_this_code_writes(",
+    );
+    assert!(
+        !rule.contains("\"referral_welcome\""),
+        "{RULES}: the welcome credit's sentence is served again without the owner's wording"
+    );
+    // The writer stores the sentence on the type the rule withholds.
+    let welcome = &referrals[referrals
+        .find("tx_type: Set(\"referral_welcome\".to_string()),")
+        .expect("the welcome credit's row")..];
+    assert!(
+        welcome
+            .chars()
+            .take(300)
+            .collect::<String>()
+            .contains(&format!("\"{WELCOME_CREDIT_SENTENCE}\"")),
+        "{welcome}"
     );
     // A garden row, whatever its description stored.
     for tx in GARDEN_ERA_TX_TYPES {
@@ -456,6 +555,74 @@ fn the_customer_order_reads_go_through_the_rule_and_the_admin_reads_do_not() {
     assert_eq!(production.matches("Order::from").count(), 2, "{ORDERS_API}");
     assert_eq!(production.matches("Order::for_customer").count(), 2);
 
+    // Owner, 2026-09-26: an order of the previous shop is not shown at all.
+    // The list reads only the orders its customer is shown; each read by id
+    // answers such an order on the owner check's own line, as a missing one.
+    let list = body_of(&api, "async fn get_user_orders(");
+    assert!(
+        list.contains("Order::newest_shown_to_customer(newest_first, &state.db.orm, 50)"),
+        "{list}"
+    );
+    assert!(
+        !list.contains(".limit("),
+        "the list reads rows past the rule: {list}"
+    );
+    for (header, guard) in [
+        (
+            "async fn get_order_status(",
+            "if model.telegram_id != Some(tid) || !Order::shown_to_customer(&model) {",
+        ),
+        (
+            "async fn get_order_details(",
+            "if model.telegram_id != Some(tid) || !Order::shown_to_customer(&model) {",
+        ),
+        (
+            "async fn cancel_order(",
+            "if o.telegram_id != Some(tid) || !Order::shown_to_customer(&o) {",
+        ),
+    ] {
+        let body = body_of(&api, header);
+        assert_eq!(body.matches(guard).count(), 1, "{header}");
+        // The guard answers exactly what a missing order answers.
+        let at = body.find(guard).expect("found above");
+        assert!(
+            body[at..].starts_with(&format!(
+                "{guard}\n        return Err(StatusCode::NOT_FOUND);"
+            )),
+            "{header}"
+        );
+    }
+    assert_eq!(production.matches("Order::shown_to_customer(").count(), 3);
+    assert_eq!(
+        production
+            .matches("Order::newest_shown_to_customer(")
+            .count(),
+        1
+    );
+    // The admin reads and the admin's status change never ask it.
+    for header in [
+        "async fn get_orders(",
+        "async fn get_order(",
+        "async fn update_order_status(",
+        "async fn promptpay_qr(",
+    ] {
+        assert!(
+            !body_of(&api, header).contains("shown_to_customer"),
+            "{header}"
+        );
+    }
+    // The profile's order count counts only what the list can show.
+    let loyalty = code_of(&source(LOYALTY_API));
+    let profile = body_of(&loyalty, "async fn get_profile(");
+    assert!(
+        profile.contains(
+            "\"orders_count\": crate::db::orders::Order::shown_count(&state.db.orm, telegram_id)"
+        ),
+        "{profile}"
+    );
+    assert!(!profile.contains("JOIN orders"), "{profile}");
+    assert!(!profile.contains("COUNT(o.id)"), "{profile}");
+
     let db = code_of(&source(ORDERS_DB));
     let view = body_of(&db, "pub(crate) fn for_customer(");
     // The money conversion the contract names (order-presentation's
@@ -467,6 +634,22 @@ fn the_customer_order_reads_go_through_the_rule_and_the_admin_reads_do_not() {
     assert_eq!(view.matches("order.").count(), 4, "{view}");
     assert!(view.contains("customer_order_items(&order.items)"));
     assert!(view.contains("customer_shop_id(order.shop_id.take())"));
+    // The three helpers the reads above ask all apply the one rule.
+    let asks = body_of(&db, "pub(crate) fn shown_to_customer(");
+    assert!(
+        asks.contains("customer_sees_order(&m.items, m.shop_id.as_deref())"),
+        "{asks}"
+    );
+    let pages = body_of(&db, "pub(crate) async fn newest_shown_to_customer(");
+    assert!(
+        pages.contains(".filter(Self::shown_to_customer)"),
+        "{pages}"
+    );
+    let count = body_of(&db, "pub(crate) async fn shown_count(");
+    assert!(
+        count.contains("customer_sees_order(items, shop.as_deref())"),
+        "{count}"
+    );
 }
 
 #[test]
@@ -616,7 +799,8 @@ fn a_garden_era_bonus_row_carries_the_generic_label() {
         "\"garden_harvest\" | \"garden_reward\" => t(lang, T_PROFILE_BONUS_OTHER).to_string(),"
     ));
     assert_eq!(GARDEN_ERA_TX_TYPES, ["garden_harvest", "garden_reward"]);
-    // The garden label is declared and translated, and no screen prints it.
+    // No screen prints the garden label; its key was deleted on 2026-09-26
+    // (tests/no_cannabis_client_wiring.rs holds the key and its copy gone).
     let mut stack = vec![PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/ui")];
     while let Some(dir) = stack.pop() {
         for entry in fs::read_dir(&dir).expect("src/ui is readable").flatten() {
@@ -668,6 +852,14 @@ fn the_contracts_record_what_the_code_does() {
     assert_eq!(
         spec_value(RETIREMENT_SPEC, "OWNER_ANSWER_3_DESCRIBED_TX_TYPE_COUNT"),
         DESCRIBED_TX_TYPES.len().to_string()
+    );
+    assert_eq!(
+        spec_value(RETIREMENT_SPEC, "WELCOME_SENTENCE_IS_SERVED"),
+        DESCRIBED_TX_TYPES.contains(&"referral_welcome").to_string()
+    );
+    assert_eq!(
+        spec_value(RETIREMENT_SPEC, "WELCOME_CREDIT_SENTENCE"),
+        WELCOME_CREDIT_SENTENCE
     );
     assert_eq!(
         spec_value(RETIREMENT_SPEC, "OWNER_ANSWER_3_WITHHELD_TX_TYPE_COUNT"),

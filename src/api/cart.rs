@@ -909,4 +909,61 @@ mod tests {
             "NULL rental dates cannot infer the five-column unique constraint: {sql}"
         );
     }
+
+    /// The merge's write step, against a real database, on the one kind a cart
+    /// serves: two writers of one undated rental line at once both succeed and
+    /// their quantities are summed into one row, which the cart then serves.
+    /// `tests/integration_cart_merge.rs` reached this upsert through an
+    /// accessory until 085 hid every accessory; the merge's gate names no
+    /// rental kind (`parse_kind`), so since 2026-09-26 it is run here directly.
+    #[tokio::test]
+    #[ignore = "needs DATABASE_URL env var; run with --ignored"]
+    async fn concurrent_upserts_of_one_rental_line_sum_their_quantities() {
+        use sea_orm::{ConnectionTrait, DbBackend, Statement};
+        let Ok(url) = std::env::var("DATABASE_URL") else {
+            return;
+        };
+        assert!(
+            url.contains("127.0.0.1") || url.contains("localhost") || url.contains("test"),
+            "refusing to run against {url:?}: this test writes rows"
+        );
+        let db = crate::db::Database::connect(&url).await.expect("connect");
+        db.run_migrations().await.expect("migrate");
+        let tid: i64 = 999_600_000 + i64::from(std::process::id() % 100_000);
+        let cleanup = || {
+            db.orm.execute(Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                "DELETE FROM carts WHERE telegram_id = $1",
+                [tid.into()],
+            ))
+        };
+        cleanup().await.expect("clean slate");
+
+        let cart = get_or_create_cart(&db.orm, tid).await.expect("a cart");
+        let upsert = || {
+            upsert_cart_item(
+                &db.orm,
+                cart.id,
+                "bike_rental",
+                "nmax-155",
+                2,
+                0.0,
+                "Yamaha NMAX 155",
+                None,
+            )
+        };
+        let (a, b) = tokio::join!(upsert(), upsert());
+        assert_eq!(a, Ok(()), "the first writer failed");
+        assert_eq!(b, Ok(()), "the second writer failed");
+
+        let items = load_cart_items(&db.orm, &cart.id).await.expect("lines");
+        assert_eq!(items.len(), 1, "one rental line, not two");
+        assert_eq!(items[0].kind, "bike_rental");
+        assert_eq!(items[0].quantity, 4, "both writers must be applied (2 + 2)");
+        let served = cart_model_to_resp(&cart, &items);
+        assert_eq!(served.items.len(), 1, "a rental line is served");
+        assert_eq!(served.items[0].quantity, 4);
+
+        cleanup().await.expect("clean up");
+    }
 }

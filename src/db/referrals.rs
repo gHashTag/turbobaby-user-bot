@@ -473,7 +473,7 @@ pub(crate) async fn confirm_referral(
             amount: Set(welcome_bonus),
             tx_type: Set("referral_welcome".to_string()),
             description: Set(Some(
-                "Welcome bonus from a friend's garden invite".to_string(),
+                "Welcome bonus from a friend's invite".to_string(), // no garden since 2026-09-26
             )),
             related_order_id: Set(None),
             ..Default::default()
@@ -1123,6 +1123,63 @@ mod chain_tests {
             stats.total_invited, 1,
             "one friend counted {} times",
             stats.total_invited
+        );
+    }
+
+    /// Since 2026-09-26 a new welcome credit is written with a sentence that
+    /// names no garden, and the bonus history's rule still withholds it: the
+    /// words are not the owner's (`crate::trios::legacy_view::WELCOME_CREDIT_SENTENCE`).
+    #[tokio::test]
+    #[ignore]
+    async fn a_new_welcome_credit_names_no_garden_and_is_withheld() {
+        let Some(orm) = db().await else { return };
+        use sea_orm::{ConnectionTrait, DbBackend, Statement};
+        let referrer = 990_021i64;
+        let invitee = 990_022i64;
+        for id in [referrer, invitee] {
+            for sql in [
+                "DELETE FROM referral_events WHERE referrer_id = $1 OR referred_id = $1",
+                "DELETE FROM bonus_transactions WHERE telegram_id = $1",
+                "DELETE FROM loyalty_profiles WHERE telegram_id = $1",
+            ] {
+                let _ = orm
+                    .execute(Statement::from_sql_and_values(
+                        DbBackend::Postgres,
+                        sql,
+                        [id.into()],
+                    ))
+                    .await;
+            }
+        }
+        let code = get_or_create_referral_code(&orm, referrer)
+            .await
+            .expect("code");
+        record_referral(&orm, referrer, invitee, &code, Some("telegram_start"))
+            .await
+            .expect("record");
+        confirm_referral(&orm, invitee, 100.0, 50.0)
+            .await
+            .expect("confirm");
+
+        let row = orm
+            .query_one(Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                "SELECT description FROM bonus_transactions \
+                 WHERE telegram_id = $1 AND tx_type = 'referral_welcome'",
+                [invitee.into()],
+            ))
+            .await
+            .expect("query")
+            .expect("the welcome credit was written");
+        let stored: Option<String> = row.try_get("", "description").expect("a description");
+        assert_eq!(
+            stored.as_deref(),
+            Some(crate::trios::legacy_view::WELCOME_CREDIT_SENTENCE)
+        );
+        assert!(!stored.as_deref().unwrap_or_default().contains("garden"));
+        assert_eq!(
+            crate::trios::legacy_view::customer_bonus_description("referral_welcome", stored),
+            None
         );
     }
 }

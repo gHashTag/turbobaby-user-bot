@@ -1,30 +1,29 @@
 // Woody Shop v0.4 — single-screen mini-app game prototype.
 //
 // v0.1 shop core: customers spawn, order, get served, leave dirty tables.
-// v0.2 planters: plant/water/harvest the kitchen's own greens.
+// v0.2 planters: removed 2026-09-26 with their words (the owner's rulings on
+//      cannabis-era content of 2026-09-25; `legacy_retirement.t27`). The
+//      farm zone, its plots, its growth loop and its random event are gone.
 // v0.3 upgrades: speed, tables, spawn rate.
 // v0.4 DJ zone, grill zone, random events.
 // Pure emoji/CSS visuals inside the existing Dioxus/WASM Telegram Mini App.
+// No route mounts this game since 2026-09-25: `/game` opens the catalog.
 
 use crate::trios::i18n::{
     t, tf, T_GAME_CLEAN, T_GAME_CONFIRM_RESET, T_GAME_EVENT_BIG_TIP, T_GAME_EVENT_DEFAULT,
-    T_GAME_EVENT_DJ_ENERGY, T_GAME_EVENT_GRILL_DEMAND, T_GAME_EVENT_HERB_DELIVERY,
-    T_GAME_EVENT_RUSH_HOUR, T_GAME_FARM_EMPTY, T_GAME_FARM_GROWN, T_GAME_FARM_PLANTED,
-    T_GAME_FARM_TITLE, T_GAME_FARM_WATER, T_GAME_FARM_WATERED, T_GAME_FLOW, T_GAME_GRILL,
-    T_GAME_GRILL_COOK, T_GAME_GRILL_COOKING, T_GAME_GRILL_DESC, T_GAME_GRILL_STOCK,
-    T_GAME_GRILL_TIP, T_GAME_GRILL_TITLE, T_GAME_HARVEST, T_GAME_HARVESTED, T_GAME_LOG_CLEANING,
-    T_GAME_LOG_COOKING_STARTED, T_GAME_LOG_CUSTOMER_LEFT, T_GAME_LOG_FARM_GREW,
-    T_GAME_LOG_GRILLED_LEFT, T_GAME_LOG_HARVEST, T_GAME_LOG_MOVED_TO_TABLE,
-    T_GAME_LOG_NEW_CUSTOMER, T_GAME_LOG_PARTY_STARTED, T_GAME_LOG_PLANTED_SEED,
-    T_GAME_LOG_QUICK_GRILL, T_GAME_LOG_READY_AT_TABLE, T_GAME_LOG_RESET, T_GAME_LOG_SERVING,
-    T_GAME_LOG_TABLE_CLEANED, T_GAME_LOG_TAKING_ORDER, T_GAME_LOG_WATERING, T_GAME_ORDER,
-    T_GAME_PARTY_ON, T_GAME_PARTY_START, T_GAME_PARTY_STATUS_OFF, T_GAME_PARTY_STATUS_ON,
-    T_GAME_PARTY_TIP, T_GAME_PARTY_TITLE, T_GAME_PLANT, T_GAME_RESET, T_GAME_SERVE, T_GAME_SERVED,
-    T_GAME_SHOP_TITLE, T_GAME_SPEED, T_GAME_TABLES, T_GAME_TABLE_DIRTY, T_GAME_TABLE_EATING,
-    T_GAME_TABLE_FREE, T_GAME_TABLE_PREPARING, T_GAME_TABLE_READY, T_GAME_TABLE_WAITING,
-    T_GAME_TAB_DJ, T_GAME_TAB_FARM, T_GAME_TAB_GRILL, T_GAME_TAB_SHOP, T_GAME_TIP, T_GAME_UPGRADES,
-    T_GAME_UPGRADE_FLOW, T_GAME_UPGRADE_LEVEL_COST, T_GAME_UPGRADE_MAX, T_GAME_UPGRADE_SPEED,
-    T_GAME_UPGRADE_TABLES,
+    T_GAME_EVENT_DJ_ENERGY, T_GAME_EVENT_GRILL_DEMAND, T_GAME_EVENT_RUSH_HOUR, T_GAME_FLOW,
+    T_GAME_GRILL, T_GAME_GRILL_COOK, T_GAME_GRILL_COOKING, T_GAME_GRILL_DESC, T_GAME_GRILL_STOCK,
+    T_GAME_GRILL_TIP, T_GAME_GRILL_TITLE, T_GAME_LOG_CLEANING, T_GAME_LOG_COOKING_STARTED,
+    T_GAME_LOG_CUSTOMER_LEFT, T_GAME_LOG_GRILLED_LEFT, T_GAME_LOG_MOVED_TO_TABLE,
+    T_GAME_LOG_NEW_CUSTOMER, T_GAME_LOG_PARTY_STARTED, T_GAME_LOG_QUICK_GRILL,
+    T_GAME_LOG_READY_AT_TABLE, T_GAME_LOG_RESET, T_GAME_LOG_SERVING, T_GAME_LOG_TABLE_CLEANED,
+    T_GAME_LOG_TAKING_ORDER, T_GAME_ORDER, T_GAME_PARTY_ON, T_GAME_PARTY_START,
+    T_GAME_PARTY_STATUS_OFF, T_GAME_PARTY_STATUS_ON, T_GAME_PARTY_TIP, T_GAME_PARTY_TITLE,
+    T_GAME_RESET, T_GAME_SERVE, T_GAME_SERVED, T_GAME_SHOP_TITLE, T_GAME_SPEED, T_GAME_TABLES,
+    T_GAME_TABLE_DIRTY, T_GAME_TABLE_EATING, T_GAME_TABLE_FREE, T_GAME_TABLE_PREPARING,
+    T_GAME_TABLE_READY, T_GAME_TABLE_WAITING, T_GAME_TAB_DJ, T_GAME_TAB_GRILL, T_GAME_TAB_SHOP,
+    T_GAME_TIP, T_GAME_UPGRADES, T_GAME_UPGRADE_FLOW, T_GAME_UPGRADE_LEVEL_COST,
+    T_GAME_UPGRADE_MAX, T_GAME_UPGRADE_SPEED, T_GAME_UPGRADE_TABLES,
 };
 use crate::ui::api::context::api_base_url;
 use crate::ui::telegram::{use_telegram_id, use_telegram_init_data};
@@ -43,9 +42,6 @@ const PREPARE_MS: u32 = 1800;
 const EAT_MS: u32 = 2200;
 const CLEAN_MS: u32 = 700;
 const SERVE_REWARD: u32 = 10;
-const FARM_SLOTS: usize = 4;
-const PLANT_COST: u32 = 15;
-const HARVEST_REWARD: u32 = 45;
 const DJ_PARTY_MS: u32 = 8000;
 const GRILL_COOK_MS: u32 = 2500;
 const EVENT_INTERVAL_MS: u32 = 25000;
@@ -92,14 +88,6 @@ impl TableState {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub enum FarmStage {
-    Empty,
-    Planted,
-    Watered,
-    Grown,
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum WoodyAction {
     Idle,
@@ -112,7 +100,6 @@ pub enum WoodyAction {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ActiveZone {
     Shop,
-    Farm,
     Party,
     Grill,
 }
@@ -170,12 +157,9 @@ impl Upgrades {
 pub struct ShopState {
     pub coins: u32,
     pub served: u32,
-    pub harvested: u32,
     pub woody_table: usize,
     pub woody_action: WoodyAction,
     pub tables: [TableState; MAX_TABLES],
-    pub farm: [FarmStage; FARM_SLOTS],
-    pub farm_watering: [bool; FARM_SLOTS], // visual flag while watering
     pub upgrades: Upgrades,
     pub active_zone: ActiveZone,
     pub party_active: bool,
@@ -188,8 +172,6 @@ pub struct ShopState {
     pub woody_timer_ms: u32,
     #[serde(skip)]
     pub woody_total_ms: u32,
-    #[serde(skip)]
-    pub farm_water_ms: [u32; FARM_SLOTS],
     #[serde(skip)]
     pub event_text: Option<String>,
     #[serde(skip)]
@@ -211,12 +193,9 @@ impl ShopState {
         Self {
             coins: STARTING_COINS,
             served: 0,
-            harvested: 0,
             woody_table: 1,
             woody_action: WoodyAction::Idle,
             tables: [TableState::Empty; MAX_TABLES],
-            farm: [FarmStage::Empty; FARM_SLOTS],
-            farm_watering: [false; FARM_SLOTS],
             upgrades: Upgrades::new(),
             active_zone: ActiveZone::Shop,
             party_active: false,
@@ -227,7 +206,6 @@ impl ShopState {
             grill_timer_ms: 0,
             woody_timer_ms: 0,
             woody_total_ms: 0,
-            farm_water_ms: [0; FARM_SLOTS],
             event_text: None,
             combo_count: 0,
             combo_timer_ms: 0,
@@ -239,8 +217,6 @@ impl ShopState {
     pub fn reset_volatile(&mut self) {
         self.woody_action = WoodyAction::Idle;
         self.woody_table = self.woody_table.min(self.table_count().saturating_sub(1));
-        self.farm_watering = [false; FARM_SLOTS];
-        self.farm_water_ms = [0; FARM_SLOTS];
         self.woody_timer_ms = 0;
         self.woody_total_ms = 0;
         self.grill_cooking = false;
@@ -331,13 +307,14 @@ fn rand_vip() -> bool {
 }
 
 fn rand_event(lang: crate::trios::core::Lang) -> String {
-    let idx = rand_u32() % 5;
+    // Four events since 2026-09-26: the farm's "all plots watered" left with
+    // the farm.
+    let idx = rand_u32() % 4;
     let key = match idx {
         0 => T_GAME_EVENT_RUSH_HOUR,
         1 => T_GAME_EVENT_BIG_TIP,
-        2 => T_GAME_EVENT_HERB_DELIVERY,
-        3 => T_GAME_EVENT_DJ_ENERGY,
-        4 => T_GAME_EVENT_GRILL_DEMAND,
+        2 => T_GAME_EVENT_DJ_ENERGY,
+        3 => T_GAME_EVENT_GRILL_DEMAND,
         _ => T_GAME_EVENT_DEFAULT,
     };
     t(lang, key).to_string()
@@ -378,7 +355,7 @@ pub fn WoodyShop() -> Element {
         });
     }
 
-    // Progress tick loop for timers (woody actions, watering, grill).
+    // Progress tick loop for timers (woody actions, grill, combo).
     {
         let mut state = state;
         use_future(move || async move {
@@ -394,13 +371,6 @@ pub fn WoodyShop() -> Element {
                         s.grill_timer_ms -= 100;
                     } else if s.grill_cooking {
                         s.grill_timer_ms = 0;
-                    }
-                    for ms in s.farm_water_ms.iter_mut() {
-                        if *ms > 100 {
-                            *ms -= 100;
-                        } else {
-                            *ms = 0;
-                        }
                     }
                     if s.combo_timer_ms > 100 {
                         s.combo_timer_ms -= 100;
@@ -436,42 +406,6 @@ pub fn WoodyShop() -> Element {
         });
     }
 
-    // Farm growth loop: watered plots grow over time.
-    {
-        let mut state = state;
-        let mut logs = logs;
-        use_future(move || async move {
-            loop {
-                TimeoutFuture::new(4000).await;
-                let grew = state.with_mut(|s| {
-                    let mut grew = false;
-                    for stage in s.farm.iter_mut() {
-                        *stage = match *stage {
-                            FarmStage::Watered => {
-                                grew = true;
-                                FarmStage::Grown
-                            }
-                            FarmStage::Planted => {
-                                grew = true;
-                                FarmStage::Watered
-                            }
-                            other => other,
-                        };
-                    }
-                    grew
-                });
-                if grew {
-                    logs.with_mut(|l| {
-                        if l.len() > 6 {
-                            l.remove(0);
-                        }
-                        l.push(t(lang, T_GAME_LOG_FARM_GREW).to_string());
-                    });
-                }
-            }
-        });
-    }
-
     // Party timer loop.
     {
         let mut state = state;
@@ -502,7 +436,7 @@ pub fn WoodyShop() -> Element {
                 TimeoutFuture::new(EVENT_INTERVAL_MS).await;
                 let event = rand_event(lang);
                 state.with_mut(|s| {
-                    match rand_u32() % 5 {
+                    match rand_u32() % 4 {
                         0 => {
                             // rush hour: fill empty tables
                             for i in 0..s.table_count() {
@@ -515,13 +449,6 @@ pub fn WoodyShop() -> Element {
                             s.coins += 20;
                         }
                         2 => {
-                            for stage in s.farm.iter_mut() {
-                                if *stage == FarmStage::Planted || *stage == FarmStage::Empty {
-                                    *stage = FarmStage::Watered;
-                                }
-                            }
-                        }
-                        3 => {
                             if s.party_active {
                                 s.party_timer_ms += 3000;
                             }
@@ -563,11 +490,8 @@ pub fn WoodyShop() -> Element {
     // Derived snapshots.
     let coins = state.read().coins;
     let served = state.read().served;
-    let harvested = state.read().harvested;
     let woody_table = state.read().woody_table;
     let tables = state.read().tables;
-    let farm = state.read().farm;
-    let farm_watering = state.read().farm_watering;
     let upgrades = state.read().upgrades;
     let active_zone = state.read().active_zone;
     let party_active = state.read().party_active;
@@ -576,7 +500,6 @@ pub fn WoodyShop() -> Element {
     let grill_timer_ms = state.read().grill_timer_ms;
     let woody_timer_ms = state.read().woody_timer_ms;
     let woody_total_ms = state.read().woody_total_ms;
-    let farm_water_ms = state.read().farm_water_ms;
     let event_text = state.read().event_text.clone();
     let reward = state.read().reward_per_serve();
 
@@ -611,22 +534,16 @@ pub fn WoodyShop() -> Element {
         });
     };
 
-    // Watch served/harvested counters and credit Stars (⭐) for game rewards.
+    // Watch the served counter and credit Stars (⭐) for game rewards. The
+    // farm's harvest credit went with the farm on 2026-09-26.
     {
         let mut prev_served = use_signal(|| state.read().served);
-        let mut prev_harvested = use_signal(|| state.read().harvested);
         use_effect(move || {
             let served = state.read().served;
-            let harvested = state.read().harvested;
             if served > prev_served() {
                 let delta = served - prev_served();
                 prev_served.set(served);
                 credit_stars(delta as i64, "serve".to_string());
-            }
-            if harvested > prev_harvested() {
-                let delta = harvested - prev_harvested();
-                prev_harvested.set(harvested);
-                credit_stars((delta * 3) as i64, "harvest".to_string());
             }
         });
     }
@@ -705,9 +622,6 @@ pub fn WoodyShop() -> Element {
                     div { span { "{t(lang, T_GAME_SERVED)}: " }
                         span { style: "color: #39ff14; font-weight: 700;", "{served}" }
                     }
-                    div { span { "{t(lang, T_GAME_HARVESTED)}: " }
-                        span { style: "color: #b388ff; font-weight: 700;", "{harvested}" }
-                    }
                 }
             }
 
@@ -749,18 +663,6 @@ pub fn WoodyShop() -> Element {
                             woody_timer_ms,
                             woody_total_ms,
                             grill_stock,
-                            on_floater: move |evt: (String, u32)| spawn_floater(evt.0, evt.1),
-                            lang,
-                        }
-                    },
-                    ActiveZone::Farm => rsx! {
-                        FarmZone {
-                            state,
-                            logs,
-                            farm,
-                            farm_watering,
-                            farm_water_ms,
-                            coins,
                             on_floater: move |evt: (String, u32)| spawn_floater(evt.0, evt.1),
                             lang,
                         }
@@ -930,7 +832,6 @@ fn ZoneTabs(
         div {
             style: "display: flex; gap: 6px; margin-bottom: 12px;",
             {make_tab(ActiveZone::Shop, t(lang, T_GAME_TAB_SHOP))}
-            {make_tab(ActiveZone::Farm, t(lang, T_GAME_TAB_FARM))}
             {make_tab(ActiveZone::Party, t(lang, T_GAME_TAB_DJ))}
             {make_tab(ActiveZone::Grill, t(lang, T_GAME_TAB_GRILL))}
         }
@@ -1241,202 +1142,6 @@ fn border_color(woody_here: bool) -> &'static str {
         "#39ff14"
     } else {
         "#2a2a4a"
-    }
-}
-
-// ── Farm zone ─────────────────────────────────────────────────────────────────
-
-#[component]
-fn FarmZone(
-    state: Signal<ShopState>,
-    logs: Signal<Vec<String>>,
-    farm: [FarmStage; FARM_SLOTS],
-    farm_watering: [bool; FARM_SLOTS],
-    farm_water_ms: [u32; FARM_SLOTS],
-    coins: u32,
-    on_floater: EventHandler<(String, u32)>,
-    lang: crate::trios::core::Lang,
-) -> Element {
-    rsx! {
-        div {
-            style: "flex: 1; display: flex; flex-direction: column; gap: 10px;",
-            div {
-                style: "
-                    font-size: 13px; font-weight: 700; letter-spacing: 2px;
-                    color: #39ff14; text-align: center;
-                ",
-                "{t(lang, T_GAME_FARM_TITLE)}"
-            }
-            div {
-                style: "display: grid; grid-template-columns: 1fr 1fr; gap: 10px;",
-                for (idx, stage) in farm.iter().enumerate() {
-                    FarmPlot {
-                        key: "{idx}",
-                        idx,
-                        stage: *stage,
-                        watering: farm_watering[idx],
-                        water_ms: farm_water_ms[idx],
-                        state,
-                        logs,
-                        coins,
-                        on_floater,
-                        lang,
-                    }
-                }
-            }
-        }
-    }
-}
-
-#[component]
-fn FarmPlot(
-    idx: usize,
-    stage: FarmStage,
-    watering: bool,
-    water_ms: u32,
-    state: Signal<ShopState>,
-    logs: Signal<Vec<String>>,
-    coins: u32,
-    on_floater: EventHandler<(String, u32)>,
-    lang: crate::trios::core::Lang,
-) -> Element {
-    let (emoji, label, can_plant, can_water, can_harvest, accent) = match stage {
-        FarmStage::Empty => (
-            "🟫",
-            t(lang, T_GAME_FARM_EMPTY).to_string(),
-            true,
-            false,
-            false,
-            "#2a2a4a",
-        ),
-        FarmStage::Planted => (
-            "🌱",
-            t(lang, T_GAME_FARM_PLANTED).to_string(),
-            false,
-            true,
-            false,
-            "#39ff14",
-        ),
-        FarmStage::Watered => (
-            "🪴",
-            t(lang, T_GAME_FARM_WATERED).to_string(),
-            false,
-            false,
-            false,
-            "#00e5ff",
-        ),
-        FarmStage::Grown => (
-            "🌳",
-            t(lang, T_GAME_FARM_GROWN).to_string(),
-            false,
-            false,
-            true,
-            "#ffe600",
-        ),
-    };
-
-    let plant_emoji = if watering { "💧" } else { emoji };
-
-    rsx! {
-        div {
-            style: "
-                background: rgba(255,255,255,0.04); border: 2px solid {accent};
-                border-radius: 14px; padding: 12px; text-align: center;
-                display: flex; flex-direction: column; align-items: center; gap: 6px;
-                box-shadow: 0 0 12px {accent}20;
-            ",
-            div { style: "font-size: 46px; filter: drop-shadow(0 3px 5px rgba(0,0,0,0.5));", "{plant_emoji}" }
-            div { style: "font-size: 12px; color: {accent}; font-weight: 700;", "{label}" }
-            if watering {
-                ProgressBar { total_ms: 1200, remaining_ms: water_ms, color: "#00e5ff" }
-            }
-            div {
-                style: "display: flex; gap: 6px; width: 100%; margin-top: 8px;",
-                ActionButton {
-                    label: t(lang, T_GAME_PLANT).to_string(),
-                    active: can_plant && coins >= PLANT_COST,
-                    color: "#39ff14",
-                    on_click: {
-                        let mut state = state;
-                        let mut logs = logs;
-                        let on_floater = on_floater;
-                        move |_| {
-                            state.with_mut(|s| {
-                                if s.farm[idx] == FarmStage::Empty && s.coins >= PLANT_COST {
-                                    s.coins -= PLANT_COST;
-                                    s.farm[idx] = FarmStage::Planted;
-                                }
-                            });
-                            on_floater.call((format!("-{PLANT_COST} 🪙"), 260));
-                            logs.with_mut(|l| {
-                                if l.len() > 6 { l.remove(0); }
-                                l.push(tf(lang, T_GAME_LOG_PLANTED_SEED, &[PLANT_COST.to_string()]));
-                            });
-                        }
-                    },
-                }
-                ActionButton {
-                    label: t(lang, T_GAME_FARM_WATER).to_string(),
-                    active: can_water,
-                    color: "#00e5ff",
-                    on_click: {
-                        let mut state = state;
-                        let mut logs = logs;
-                        move |_| {
-                            if state.read().is_busy() { return; }
-                            state.with_mut(|s| {
-                                if s.farm[idx] == FarmStage::Planted && !s.farm_watering[idx] {
-                                    s.farm_watering[idx] = true;
-                                    s.farm_water_ms[idx] = 1200;
-                                }
-                            });
-                            logs.with_mut(|l| {
-                                if l.len() > 6 { l.remove(0); }
-                                l.push(t(lang, T_GAME_LOG_WATERING).to_string());
-                            });
-                            let mut state = state;
-                            spawn(async move {
-                                TimeoutFuture::new(1200).await;
-                                state.with_mut(|s| {
-                                    s.farm_watering[idx] = false;
-                                    s.farm[idx] = FarmStage::Watered;
-                                });
-                                haptic_light();
-                            });
-                        }
-                    },
-                }
-                ActionButton {
-                    label: t(lang, T_GAME_HARVEST).to_string(),
-                    active: can_harvest,
-                    color: "#ffe600",
-                    on_click: {
-                        let mut state = state;
-                        let mut logs = logs;
-                        let on_floater = on_floater;
-                        move |_| {
-                            let mut harvested = false;
-                            state.with_mut(|s| {
-                                if s.farm[idx] == FarmStage::Grown {
-                                    s.farm[idx] = FarmStage::Empty;
-                                    s.coins += HARVEST_REWARD;
-                                    s.harvested += 1;
-                                    harvested = true;
-                                }
-                            });
-                            if harvested {
-                                on_floater.call((format!("+{} 🪙", HARVEST_REWARD), 260));
-                                logs.with_mut(|l| {
-                                    if l.len() > 6 { l.remove(0); }
-                                    l.push(tf(lang, T_GAME_LOG_HARVEST, &[HARVEST_REWARD.to_string()]));
-                                });
-                                haptic_success();
-                            }
-                        }
-                    },
-                }
-            }
-        }
     }
 }
 

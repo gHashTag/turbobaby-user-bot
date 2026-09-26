@@ -21,7 +21,7 @@
 ; files, three of which name THIS file and all three of which are gates, two of them reading a
 ; deposit. WIRING_REMEASURED_NOTE below has the list; still no shipped surface.) The catalog
 ; screen renders deposit_thb as it arrives from the API (the field at
-; src/ui/screens/catalog_screen.rs:123 rendered through money_thb at :822 -- :124 and :834 until
+; src/ui/screens/catalog_screen.rs:123 rendered through money_thb at :821 (:822 until 2026-09-26) -- :124 and :834 until
 ; the 2026-09-24 availability edit -- and the field at src/ui/components/bike_card.rs:115 rendered
 ; through thb_or_dash at :203 (:107 and :195 before the 2026-09-21 published_money edit); all four
 ; addresses re-verified 2026-09-24, and both pairs had drifted from the :126 and :102 this
