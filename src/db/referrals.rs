@@ -1127,11 +1127,11 @@ mod chain_tests {
     }
 
     /// Since 2026-09-26 a new welcome credit is written with a sentence that
-    /// names no garden, and the bonus history's rule serves it
-    /// (`crate::trios::legacy_view::WELCOME_CREDIT_SENTENCE`).
+    /// names no garden, and the bonus history's rule still withholds it: the
+    /// words are not the owner's (`crate::trios::legacy_view::WELCOME_CREDIT_SENTENCE`).
     #[tokio::test]
     #[ignore]
-    async fn a_new_welcome_credit_names_no_garden_and_is_served() {
+    async fn a_new_welcome_credit_names_no_garden_and_is_withheld() {
         let Some(orm) = db().await else { return };
         use sea_orm::{ConnectionTrait, DbBackend, Statement};
         let referrer = 990_021i64;
@@ -1179,7 +1179,7 @@ mod chain_tests {
         assert!(!stored.as_deref().unwrap_or_default().contains("garden"));
         assert_eq!(
             crate::trios::legacy_view::customer_bonus_description("referral_welcome", stored),
-            Some(crate::trios::legacy_view::WELCOME_CREDIT_SENTENCE.to_string())
+            None
         );
     }
 }

@@ -131,15 +131,15 @@ pub const WITHHELD_TX_TYPE: &str = "";
 
 /// The bonus types whose description a customer may still read, because this
 /// repository writes it from a fixed sentence holding no stored name: the
-/// cashback (`src/db/orders.rs`), the three referral credits
+/// cashback (`src/db/orders.rs`), the two referral credits
 /// (`src/db/referrals.rs`) and the admin debit (`src/api/loyalty.rs`). The
-/// welcome credit joined them on 2026-09-26, when its sentence stopped naming
-/// the garden ([`WELCOME_CREDIT_SENTENCE`]); a row written before still stores
-/// the garden's sentence, which is not this one, and stays withheld.
-pub const DESCRIBED_TX_TYPES: [&str; 5] = [
+/// welcome credit is not among them. Its sentence named the garden until
+/// 2026-09-26 and names none since ([`WELCOME_CREDIT_SENTENCE`]), but no owner
+/// has worded it, so a customer is served no description for a welcome row,
+/// old or new: only the generic label, until the owner supplies the wording.
+pub const DESCRIBED_TX_TYPES: [&str; 4] = [
     "order_cashback",
     "referral_bonus",
-    "referral_welcome",
     "referral_milestone",
     "admin_deduction",
 ];
@@ -147,12 +147,13 @@ pub const DESCRIBED_TX_TYPES: [&str; 5] = [
 /// The referral credit's sentence, as `confirm_referral` writes it.
 pub const REFERRAL_BONUS_SENTENCE: &str = "Referral bonus for new user";
 
-/// The welcome credit's sentence, as `confirm_referral` writes it for the
-/// invited customer since 2026-09-26: the sentence it wrote until then with
-/// the garden's words dropped and nothing else changed. None of the four
-/// sentences this repository already wrote fits it: the referral credit's is
-/// the inviter's row ("for new user" there means for the user brought in), and
-/// one sentence meaning two things on two rows is not a neutral one.
+/// The welcome credit's sentence, as `confirm_referral` stores it for the
+/// invited customer since 2026-09-26: the sentence it stored until then with
+/// the garden's words dropped and nothing else changed. It is a stored record
+/// and is NOT served ([`DESCRIBED_TX_TYPES`] leaves the welcome credit out).
+/// The trimmed words are the lane's interim choice, not the owner's, and the
+/// repository writes no customer copy of its own; the wording a customer
+/// reads is a question put to the owner. No row is rewritten.
 pub const WELCOME_CREDIT_SENTENCE: &str = "Welcome bonus from a friend's invite";
 
 /// The admin debit's sentence, as `use_bonus` writes it.
@@ -291,9 +292,10 @@ pub fn customer_bonus_tx_type(stored: &str) -> String {
 /// A bonus row's stored description, as its customer is served it: kept only
 /// when the row is of one of [`DESCRIBED_TX_TYPES`] and the text is that type's
 /// sentence, word for word apart from its figures. Anything else -- a
-/// garden-era row, a welcome credit written with the garden's sentence before
-/// 2026-09-26, a type an admin typed, a type the previous shop's bot wrote --
-/// is withheld, because nothing here can tell its text from the old shop's.
+/// garden-era row, a welcome credit old or new (the new one's sentence awaits
+/// the owner's wording, [`WELCOME_CREDIT_SENTENCE`]), a type an admin typed, a
+/// type the previous shop's bot wrote -- is withheld, because nothing here can
+/// tell its text from the old shop's or vouch for its words.
 pub fn customer_bonus_description(tx_type: &str, stored: Option<String>) -> Option<String> {
     stored.filter(|text| is_a_sentence_this_code_writes(tx_type, text))
 }
@@ -302,7 +304,6 @@ fn is_a_sentence_this_code_writes(tx_type: &str, text: &str) -> bool {
     match tx_type {
         "order_cashback" => is_cashback_sentence(text),
         "referral_bonus" => text == REFERRAL_BONUS_SENTENCE,
-        "referral_welcome" => text == WELCOME_CREDIT_SENTENCE,
         "referral_milestone" => is_milestone_sentence(text),
         "admin_deduction" => text == ADMIN_DEDUCTION_SENTENCE,
         _ => false,
@@ -649,12 +650,6 @@ mod tests {
             served("admin_deduction", ADMIN_DEDUCTION_SENTENCE),
             Some(ADMIN_DEDUCTION_SENTENCE.to_string())
         );
-        // Since 2026-09-26 the welcome credit's sentence names no garden.
-        assert_eq!(
-            served("referral_welcome", WELCOME_CREDIT_SENTENCE),
-            Some(WELCOME_CREDIT_SENTENCE.to_string())
-        );
-        assert!(DESCRIBED_TX_TYPES.contains(&"referral_welcome"));
     }
 
     #[test]
@@ -666,16 +661,12 @@ mod tests {
             assert_eq!(served(tx, STORED_NAME), None);
             assert_eq!(served(tx, REFERRAL_BONUS_SENTENCE), None);
         }
-        // A welcome credit whose text is not today's sentence -- one written
-        // before 2026-09-26 stores the garden's -- whatever it says.
+        // A welcome credit, old or new, whatever it says: the sentence a new
+        // one stores since 2026-09-26 names no garden, but it is not the
+        // owner's wording, so it is withheld too until the owner supplies one.
+        assert!(!DESCRIBED_TX_TYPES.contains(&"referral_welcome"));
+        assert_eq!(served("referral_welcome", WELCOME_CREDIT_SENTENCE), None);
         assert_eq!(served("referral_welcome", STORED_NAME), None);
-        assert_eq!(
-            served(
-                "referral_welcome",
-                "Welcome bonus from a friend's other invite"
-            ),
-            None
-        );
         assert_eq!(served("referral_welcome", REFERRAL_BONUS_SENTENCE), None);
         assert_eq!(served("referral_bonus", WELCOME_CREDIT_SENTENCE), None);
         // A type an admin typed, or one the previous shop's bot wrote.

@@ -3879,10 +3879,12 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "why": "every event is hidden since 088 and each one left is the previous shop's; without "
                "the filter the reminder mails its stored title and venue to a seat holder",
     },
-    # The welcome credit's sentence without the garden's words (operator, 2026-09-26, under
-    # answer 3): the writer and the read-side rule each hold it, and the contract names it.
-    # Measured by hand 2026-09-26. Each planted RED once by hand (the garden's words put back in
-    # the writer; a different sentence in the rule).
+    # The welcome credit's sentence without the garden's words (2026-09-26, critic note 5 under
+    # answer 3): the writer stores it, the read-side rule's module names it as the sentence it
+    # withholds, and the contract names it. Its words are the lane's interim choice, not the
+    # owner's, so it is NOT served (the review of the round, the same day; the second binding was
+    # re-pointed from "served sentence" then). Measured by hand 2026-09-26. Each planted RED once by
+    # hand (the garden's words put back in the writer; a different sentence in the rule's module).
     {
         "name": "legacy_retirement.WELCOME_CREDIT_SENTENCE ~ referrals.rs welcome row",
         "spec": "specs/turbobaby/legacy_retirement.t27",
@@ -3891,18 +3893,18 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "extract": ("regex", r'tx_type: Set\("referral_welcome"\.to_string\(\)\),\s*'
                              r'description: Set\(Some\(\s*("[^"]*")\.to_string\(\)'),
         "relation": "equal",
-        "why": "the sentence every new welcome credit stores; the garden's words back in it put "
-               "the previous shop's mechanic in the bonus history of every invited customer",
+        "why": "the sentence every new welcome credit stores; the garden's words back in it would "
+               "write the previous shop's mechanic into every invited customer's row again",
     },
     {
-        "name": "legacy_retirement.WELCOME_CREDIT_SENTENCE ~ legacy_view.rs served sentence",
+        "name": "legacy_retirement.WELCOME_CREDIT_SENTENCE ~ legacy_view.rs withheld sentence",
         "spec": "specs/turbobaby/legacy_retirement.t27",
         "const": "WELCOME_CREDIT_SENTENCE",
         "source": "src/trios/legacy_view.rs",
         "extract": ("regex", r'pub const WELCOME_CREDIT_SENTENCE: &str = ("[^"]*");'),
         "relation": "equal",
-        "why": "the one welcome sentence the bonus history serves; if it drifts from the writer's, "
-               "every new welcome credit is withheld again",
+        "why": "the stored sentence the rule's tests prove withheld until the owner words one; if it "
+               "drifts from the writer's, those tests hold back a sentence no row stores",
     },
 )
 
@@ -3996,6 +3998,9 @@ ONE_GROUP_EXTRACTORS = (
 # swapped): 249 rows over the same 41 contracts and 84 source files on its own branch, floor 249.
 # Merged 2026-09-26 on the integration branch (round 4): 256 rows, floor 256 (the measured table
 # size: 248 + the server lane's 7 + the client lane's 1).
+# The review of round 4 (2026-09-26) re-pointed the second welcome binding from the sentence the
+# rule served to the sentence it withholds, planted RED once by hand again; none added or dropped:
+# 256 rows, floor 256.
 MIN_BINDINGS = 256
 
 
