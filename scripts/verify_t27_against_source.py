@@ -3823,6 +3823,32 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "why": "each read by id answers an order of the previous shop as a missing one on the "
                "owner check's own line; a guard dropped serves that order by id again",
     },
+    # The owner's answer of 2026-09-26 on the previous shop's media (stop serving it): the local
+    # /uploads read serves only a name a bike's picture references. Measured by hand 2026-09-26:
+    # src/main.rs nests served_uploads, and the reference is read from bikes. Each planted RED
+    # once by hand (the nest put back to ServeDir; the table renamed in the contract).
+    {
+        "name": "upload_media.LOCAL_READ_SERVICE_NESTS ~ main.rs /uploads nest",
+        "spec": "specs/turbobaby/upload_media.t27",
+        "const": "LOCAL_READ_SERVICE_NESTS",
+        "source": "src/main.rs",
+        "extract": ("regex_count", NOT_IN_A_LINE_COMMENT
+                    + r'\.nest_service\("/uploads", api::upload::served_uploads\('),
+        "relation": "equal",
+        "why": "the one line that serves /uploads; put back to a directory service and every "
+               "file on the volume, the previous shop's included, is served to anyone with its name",
+    },
+    {
+        "name": "upload_media.LOCAL_READ_REFERENCE_LOOKUPS_ON_BIKES ~ upload.rs reference lookup",
+        "spec": "specs/turbobaby/upload_media.t27",
+        "const": "LOCAL_READ_REFERENCE_LOOKUPS_ON_BIKES",
+        "source": "src/api/upload.rs",
+        "extract": ("regex_count",
+                    r'"SELECT EXISTS \(SELECT 1 FROM bikes WHERE image_url = \$1\) AS referenced"'),
+        "relation": "equal",
+        "why": "the rental data a served name must be referenced by; another table or column "
+               "would serve what the rental catalogue never points at",
+    },
 )
 
 TREE_EXTRACTORS = (
@@ -3901,7 +3927,11 @@ ONE_GROUP_EXTRACTORS = (
 # Then the owner's answer of 2026-09-26 on the previous shop's orders bound
 # order_presentation.PREVIOUS_SHOP_ORDER_LIST_LIMIT and PREVIOUS_SHOP_ORDER_BY_ID_READS to the
 # order handlers, each planted RED once by hand: 250 rows, floor 250.
-MIN_BINDINGS = 250
+# Then the owner's answer of 2026-09-26 on the previous shop's media bound
+# upload_media.LOCAL_READ_SERVICE_NESTS to the /uploads nest in src/main.rs and
+# LOCAL_READ_REFERENCE_LOOKUPS_ON_BIKES to the reference lookup, each planted RED once by hand: 252 rows,
+# floor 252.
+MIN_BINDINGS = 252
 
 
 # ---------------------------------------------------------------------------------
