@@ -152,8 +152,10 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/events_booking.t27": {
         "module": "turbobaby-events-booking",
         "id": "turbobaby/events-booking",
-        "min_declarations": 326,
-        "min_checks": 85,
+        # Raised 2026-09-26 from 326/85 when the operator reversed the kept 24-hour reminder for
+        # hidden events (REMINDER_REVERSED_AT).
+        "min_declarations": 338,
+        "min_checks": 87,
     },
     "specs/turbobaby/game_score.t27": {
         "module": "turbobaby-game-score",

@@ -2084,9 +2084,9 @@ fn build_event_reminder_body(
     )
 }
 
-/// A3: send one reminder per confirmed booking for events starting
-/// within the next `hours` window and not already reminded.
-/// Returns the number of successfully delivered reminders.
+/// A3: send one reminder per confirmed booking for PUBLIC events starting within
+/// the next `hours` window and not already reminded; a hidden event is never
+/// reminded (operator, 2026-09-26). Returns the number of delivered reminders.
 #[allow(dead_code)]
 pub(crate) async fn send_event_reminders(
     orm: &sea_orm::DatabaseConnection,
@@ -2101,7 +2101,7 @@ pub(crate) async fn send_event_reminders(
             "SELECT b.id AS booking_id, b.telegram_id, e.id AS event_id, e.title, \
                     e.starts_at, e.location_text \
              FROM event_bookings b \
-             JOIN events e ON e.id = b.event_id \
+             JOIN events e ON e.id = b.event_id AND e.is_public = TRUE \
              WHERE b.status = 'confirmed' \
                AND b.reminder_sent_at IS NULL \
                AND e.starts_at > NOW() \
@@ -2541,5 +2541,140 @@ mod tests {
         assert_eq!(update(json!({ "is_public": false })), Some(false));
         // An edit that does not mention the flag leaves the stored one alone.
         assert_eq!(update(json!({})), None);
+    }
+
+    /// Operator, 2026-09-26, under the owner's answer 3 of 2026-09-25: the
+    /// 24-hour reminder sends nothing for an event that is not public -- every
+    /// event is hidden since 088, and each is the previous shop's -- and a
+    /// public event is reminded exactly as before. Against a real database and
+    /// a Telegram stand-in on 127.0.0.1 that answers every call with a sent
+    /// message and records what it was asked; nothing leaves the machine.
+    #[tokio::test]
+    #[ignore = "needs DATABASE_URL env var; run with --ignored"]
+    async fn the_reminder_skips_a_hidden_event_and_reminds_a_public_one() {
+        use sea_orm::{ConnectionTrait, DbBackend, Statement};
+        use std::sync::{Arc, Mutex};
+        let Ok(url) = std::env::var("DATABASE_URL") else {
+            return;
+        };
+        assert!(
+            url.contains("127.0.0.1") || url.contains("localhost") || url.contains("test"),
+            "refusing to run against {url:?}: this test writes rows"
+        );
+        let db = crate::db::Database::connect(&url).await.expect("connect");
+        db.run_migrations().await.expect("migrate");
+
+        // The stand-in: every method answers with one sent message.
+        let asked: Arc<Mutex<Vec<String>>> = Arc::default();
+        let recorder = asked.clone();
+        let stand_in = axum::Router::new().fallback(move |body: String| {
+            let recorder = recorder.clone();
+            async move {
+                recorder.lock().expect("not poisoned").push(body);
+                axum::Json(json!({ "ok": true, "result": {
+                    "message_id": 1, "date": 1_790_000_000,
+                    "chat": { "id": 1, "type": "private", "first_name": "T" },
+                    "from": { "id": 2, "is_bot": true, "first_name": "B" },
+                    "text": "x" } }))
+            }
+        });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("a local port");
+        let address = listener.local_addr().expect("an address");
+        // Served beside the sweep below, not spawned: runtime-config counts every spawn under src/.
+        let stand_in = std::future::IntoFuture::into_future(axum::serve(listener, stand_in));
+        let client = teloxide::net::default_reqwest_settings()
+            .no_proxy()
+            .build()
+            .expect("a client");
+        let bot = teloxide::Bot::with_client("dummy_test_token", client)
+            .set_api_url(format!("http://{address}/").parse().expect("a url"));
+
+        let (hidden, public) = ("reminder-test-hidden", "reminder-test-public");
+        let (hidden_seat, public_seat) = (558_000_001_i64, 558_000_002_i64);
+        let exec = |sql: &'static str, values: Vec<sea_orm::Value>| {
+            let orm = db.orm.clone();
+            async move {
+                orm.execute(Statement::from_sql_and_values(
+                    DbBackend::Postgres,
+                    sql,
+                    values,
+                ))
+                .await
+                .expect(sql);
+            }
+        };
+        for id in [hidden, public] {
+            exec(
+                "DELETE FROM event_bookings WHERE event_id = $1",
+                vec![id.into()],
+            )
+            .await;
+            exec("DELETE FROM events WHERE id = $1", vec![id.into()]).await;
+        }
+        let (hidden_title, public_title) = ("Hidden stored title", "Public event title");
+        for (id, is_public, title) in [(hidden, false, hidden_title), (public, true, public_title)]
+        {
+            exec(
+                "INSERT INTO events (id, title, description, starts_at, max_seats, is_public) \
+                 VALUES ($1, $3, 'reminder test', NOW() + INTERVAL '2 hours', 10, $2)",
+                vec![id.into(), is_public.into(), title.into()],
+            )
+            .await;
+        }
+        for (id, seat) in [(hidden, hidden_seat), (public, public_seat)] {
+            exec(
+                "INSERT INTO event_bookings (id, event_id, telegram_id, seats, status) \
+                 VALUES ($1, $2, $3, 1, 'confirmed')",
+                vec![format!("{id}-seat").into(), id.into(), seat.into()],
+            )
+            .await;
+        }
+
+        let sent = tokio::select! {
+            sent = send_event_reminders(&db.orm, &bot, 24) => sent.expect("the sweep"),
+            stopped = stand_in => panic!("the stand-in stopped: {stopped:?}"),
+        };
+        assert!(sent >= 1, "the public event's seat was not reminded");
+
+        let reminded = |id: &'static str| {
+            let orm = db.orm.clone();
+            async move {
+                orm.query_one(Statement::from_sql_and_values(
+                    DbBackend::Postgres,
+                    "SELECT reminder_sent_at IS NOT NULL AS reminded FROM event_bookings \
+                     WHERE event_id = $1",
+                    [id.into()],
+                ))
+                .await
+                .expect("query")
+                .expect("the booking")
+                .try_get::<bool>("", "reminded")
+                .expect("a flag")
+            }
+        };
+        assert!(
+            !reminded(hidden).await,
+            "a hidden event's seat was reminded"
+        );
+        assert!(
+            reminded(public).await,
+            "a public event's seat was not reminded"
+        );
+        let asked = asked.lock().expect("not poisoned").join("\n");
+        assert!(asked.contains(&public_seat.to_string()), "{asked}");
+        assert!(asked.contains(public_title), "{asked}");
+        assert!(!asked.contains(&hidden_seat.to_string()), "{asked}");
+        assert!(!asked.contains(hidden_title), "{asked}");
+
+        for id in [hidden, public] {
+            exec(
+                "DELETE FROM event_bookings WHERE event_id = $1",
+                vec![id.into()],
+            )
+            .await;
+            exec("DELETE FROM events WHERE id = $1", vec![id.into()]).await;
+        }
     }
 }

@@ -910,6 +910,10 @@ pub const OWNER_ANSWER_3_KEYS_DELETED : u8 = 0;
 ;     (OWNER_MEDIA_ANSWER_*, LOCAL_READ_*): the local read serves only a name a bike's picture
 ;     references, and the bucket, which this server does not serve and whose previous-shop keys no
 ;     code can tell apart, needs a production listing. Nothing is deleted.
+;   * THE EVENT REMINDER (operator, the same day, under this answer 3). turbobaby/events-booking
+;     had kept the 24-hour reminder for seats already held; every event is hidden since 088, so the
+;     reminder mailed the previous shop's stored titles and venues. It now reminds public events
+;     only (REMINDER_REVERSED_AT there); cancellation and refund of a held seat are unchanged.
 pub const OWNER_ANSWERS_2026_09_26_AT : str = "2026-09-26";
 pub const OWNER_MEDIA_ANSWER_OWNER_ID : str = "turbobaby/upload-media";
 pub const OWNER_MEDIA_ANSWER_DELETES_FILES : bool = false;
