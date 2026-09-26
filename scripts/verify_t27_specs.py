@@ -233,7 +233,10 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         # R3 (the referral credit): seven referral keys retired and four declared, named by five
         # declarations, with the two counts before it kept under _BEFORE_2026_09_26_R3 names.
         # Merged 2026-09-26 on the integration branch (t27/round5), both kept: 156/36, measured.
-        "min_declarations": 156,
+        # Raised 2026-09-26 (round 6) to the measured 161/36: the owner's answer on the referral top
+        # list retired the four keys only the list used, named by five declarations with the two
+        # counts before it kept under _BEFORE_THE_TOP_LIST_ANSWER names.
+        "min_declarations": 161,
         "min_checks": 36,
     },
     "specs/turbobaby/loyalty_ledger.t27": {
@@ -294,8 +297,11 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/person_naming.t27": {
         "module": "turbobaby-person-naming",
         "id": "turbobaby/person-naming",
-        "min_declarations": 235,
-        "min_checks": 53,
+        # Raised 2026-09-26 (round 6) from 235/53 to the measured 244/54: the referral top list's
+        # labelled-identifier row and its key retired, the leaderboard endpoint gated (eight
+        # declarations and one test).
+        "min_declarations": 244,
+        "min_checks": 54,
     },
     "specs/turbobaby/pricing_honesty.t27": {
         "module": "pricing-honesty",
@@ -333,15 +339,21 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         # Raised 2026-09-26 by the review of round 5 from 137/22 to the measured 148/24: the
         # recorder guard's two identities (eight declarations, recorder_refused, one test and one
         # invariant).
-        "min_declarations": 148,
-        "min_checks": 24,
+        # Raised 2026-09-26 (round 6) from 148/24 to the measured 155/26: the owner's answer on the
+        # base of the 10% (after the discount, the net base as built), five declarations, one test
+        # and one invariant.
+        "min_declarations": 155,
+        "min_checks": 26,
     },
     "specs/turbobaby/referral_program.t27": {
         "module": "turbobaby-referral-program",
         "id": "turbobaby/referral-program",
         # Raised 2026-09-26 from 264/59 to the measured count (R1-R3, the owner's answers of 2026-09-26): R3: no referral credit of this domain, the ladder kept as history.
-        "min_declarations": 289,
-        "min_checks": 62,
+        # Raised 2026-09-26 (round 6) from 289/62 to the measured 318/65: the owner's answer on the
+        # referral top list (the address admin-only, the list off the Mini App, the /refstats label):
+        # twenty-six declarations, two tests and one invariant.
+        "min_declarations": 318,
+        "min_checks": 65,
     },
     "specs/turbobaby/rental_terms.t27": {
         "module": "rental-terms",
@@ -353,7 +365,9 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         "module": "turbobaby-request-identity",
         "id": "turbobaby/request-identity",
         # Raised 2026-09-26 from 155/30 to the measured count (R1-R3, the owner's answers of 2026-09-26): the gate census re-measured and referral-credit added as a consumer.
-        "min_declarations": 161,
+        # Raised 2026-09-26 (round 6) from 161/30 to the measured 164/30: the census re-measured
+        # after the referral leaderboard's admin gate (three declarations).
+        "min_declarations": 164,
         "min_checks": 30,
     },
     "specs/turbobaby/ride_game.t27": {

@@ -15,7 +15,9 @@
 ; confirmed the rule: when an invited friend completes a rental, the inviter is credited 10% of
 ; that rental's amount, excluding the deposit and delivery, "for each rental of the friend"; the
 ; inviter may spend it on their own rental or ask for a payout, which a manager makes by hand; the
-; friend gets nothing.
+; friend gets nothing. Asked the same day whether the 10% is taken before or after the referral
+; balance the friend applied to that rental, he answered "after the discount -- 250" (the net base
+; as built; OWNER_BASE_ANSWER_* below).
 ; --
 ; WHY A LEDGER OF ITS OWN (measured 2026-09-26 at e39221e). Three facts decide it.
 ; 1. THE SERVER NEVER KNOWS A RENTAL'S AMOUNT. check_full_subtotal in src/api/orders.rs prices a
@@ -69,11 +71,28 @@ pub const CREDIT_PERCENT : u8 = 10;
 pub const CREDIT_ROUNDS_DOWN_TO_WHOLE_BAHT : bool = true;
 pub const BASE_EXCLUDES_DEPOSIT : bool = true;
 pub const BASE_EXCLUDES_DELIVERY : bool = true;
-; Operator's reading: 10% of the cash the shop took, so the referral balance the FRIEND applied to
-; the same rental is taken off the base first. The owner may prefer the gross charge.
+; 10% of the cash the shop took, so the referral balance the FRIEND applied to the same rental is
+; taken off the base first. The operator built it so and asked; the owner confirmed it on
+; 2026-09-26 (the block below). Until then this line read "the owner may prefer the gross charge".
 pub const BASE_IS_NET_OF_THE_APPLIED_REFERRAL_BALANCE : bool = true;
 pub const BASE_IS_RECORDED_BY_A_MANAGER : bool = true;
 pub const BASE_IS_COMPUTED_FROM_A_RATE : bool = false;
+; THE BASE, ANSWERED BY THE OWNER ON 2026-09-26. Open question 1 of the DECISIONS.md entry "R1-R3,
+; the owner's answers of 2026-09-26" asked whether the 10% is taken on the rental charge net of the
+; referral balance the friend applied to that same rental (as built), or on the gross charge. The
+; owner answered the same day; the Russian is verbatim in DECISIONS.md, "The base of the 10% and
+; the referral top list, the owner's answers of 2026-09-26". In translation: "after the discount --
+; 250". The discount is the friend's own referral balance applied to the rental (the owner calls
+; the credit a discount in R3's words), and 250 is the credit of the example the question carried,
+; which this repository does not keep, so no assertion here restates it. So the net base is the
+; owner's decision and no longer the operator's reading: credit_for_rental
+; (IMPLEMENTATION_CORE) and record_rental (IMPLEMENTATION_DB) already compute it, and nothing in
+; the code changed with the answer.
+pub const OWNER_BASE_ANSWER_AT : str = "2026-09-26";
+pub const OWNER_BASE_ANSWER_WORDS : str = "After the discount -- 250";
+pub const BASE_IS_THE_OWNERS_DECISION : bool = true;
+pub const BASE_QUESTION_IS_OPEN : bool = false;
+pub const BASE_ANSWER_CHANGED_THE_CODE : bool = false;
 ; = MAX_ORDER_TOTAL in validate_create_order and 089's BETWEEN; gate 3 binds all three copies.
 pub const MAX_RENTAL_AMOUNT_THB : u32 = 100000000;
 
@@ -589,6 +608,19 @@ test the_recorder_guard_reads_both_admin_identities {
   assert RECORDER_GUARD_FIXED_AT == OWNER_R3_DECIDED_AT;
 }
 
+test the_owner_chose_the_net_base {
+  assert OWNER_BASE_ANSWER_AT == OWNER_R3_DECIDED_AT;
+  assert OWNER_BASE_ANSWER_WORDS == "After the discount -- 250";
+  assert BASE_IS_NET_OF_THE_APPLIED_REFERRAL_BALANCE == true;
+  assert BASE_IS_THE_OWNERS_DECISION == true;
+  assert BASE_QUESTION_IS_OPEN == false;
+  assert BASE_ANSWER_CHANGED_THE_CODE == false;
+  assert credit(1000, 0) == 100;
+  assert credit(1000, 300) == 70;
+  assert credit(1000, 300) < credit(1000, 0);
+  assert credit(1000, 1000) == 0;
+}
+
 ; --- Invariants -----------------------------------------------------------------------------------------
 
 invariant the_credit_never_exceeds_the_owners_rate
@@ -614,3 +646,6 @@ invariant the_order_money_path_is_untouched
 
 invariant no_admin_credits_himself_under_either_identity
   assert RECORDER_MAY_BE_THE_INVITER == false and recorder_refused(true, true, false) == true and recorder_refused(false, false, true) == true
+
+invariant the_base_is_the_owners_net_charge
+  assert BASE_IS_NET_OF_THE_APPLIED_REFERRAL_BALANCE == true and BASE_IS_THE_OWNERS_DECISION == true and BASE_QUESTION_IS_OPEN == false and credit(1000, 300) < credit(1000, 0)

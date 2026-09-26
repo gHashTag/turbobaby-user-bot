@@ -322,16 +322,24 @@ pub fn identity_of_request(proof_ok: bool, user_field_parsed: bool) u8 {
 ; modules are those two files. The readings of 2026-09-20 keep their _BEFORE_2026_09_26 names.
 pub const GATE_NAME_COUNT : u8 = 3;
 pub const GATE_NAMES : [3]str = ["check_admin", "check_owner", "check_owner_lenient"];
-pub const GATE_CALL_SITES_ADMIN : u8 = 90;
+pub const GATE_CALL_SITES_ADMIN : u8 = 91;
 pub const GATE_CALL_SITES_OWNER : u8 = 25;
 pub const GATE_CALL_SITES_OWNER_LENIENT : u8 = 6;
-pub const GATE_CALL_SITES_TOTAL : u8 = 121;
+pub const GATE_CALL_SITES_TOTAL : u8 = 122;
 pub const GATE_CALL_SITE_MODULES : u8 = 20;
 pub const GATE_CALL_SITES_ADMIN_BEFORE_2026_09_26 : u8 = 84;
 pub const GATE_CALL_SITES_OWNER_BEFORE_2026_09_26 : u8 = 23;
 pub const GATE_CALL_SITES_TOTAL_BEFORE_2026_09_26 : u8 = 113;
 pub const GATE_CALL_SITE_MODULES_BEFORE_2026_09_26 : u8 = 18;
 pub const ENDPOINT_TO_GATE_MAP_IS_NOT_OWNED_HERE : bool = true;
+; RE-MEASURED AGAIN 2026-09-26, after the owner's answer on the referral top list ("remove the top
+; and close the address"; turbobaby/referral-program, OWNER_TOP_LIST_ANSWER_*): 122 sites over 20
+; modules. The one new site is check_admin in the first line of get_leaderboard in
+; src/api/referrals.rs, a module the census already counted for its four check_owner calls. The
+; readings after R1-R3, 90 and 121, are kept under _AFTER_R1_R3 names; the paragraph above is theirs.
+pub const GATE_CALL_SITES_ADMIN_AFTER_R1_R3 : u8 = 90;
+pub const GATE_CALL_SITES_TOTAL_AFTER_R1_R3 : u8 = 121;
+pub const GATE_CALL_SITES_ADDED_BY_THE_TOP_LIST_ANSWER : u8 = 1;
 
 ; Precedence inside check_admin (:437). initData is tried first (:448-461). A valid proof of a
 ; non-admin id does NOT end the gate: the code says "Don't return here" and falls through to the
@@ -760,13 +768,16 @@ test refusals_keep_their_two_distinct_meanings {
 }
 
 test the_gate_census_explains_why_no_endpoint_table_lives_here {
-    assert GATE_CALL_SITES_ADMIN == 90;
+    assert GATE_CALL_SITES_ADMIN == 91;
     assert GATE_CALL_SITES_OWNER == 25;
     assert GATE_CALL_SITES_OWNER_LENIENT == 6;
     assert GATE_CALL_SITES_ADMIN + GATE_CALL_SITES_OWNER + GATE_CALL_SITES_OWNER_LENIENT == GATE_CALL_SITES_TOTAL;
     assert GATE_CALL_SITE_MODULES == 20;
     assert GATE_CALL_SITES_ADMIN_BEFORE_2026_09_26 + GATE_CALL_SITES_OWNER_BEFORE_2026_09_26 + GATE_CALL_SITES_OWNER_LENIENT == GATE_CALL_SITES_TOTAL_BEFORE_2026_09_26;
-    assert GATE_CALL_SITES_ADMIN - GATE_CALL_SITES_ADMIN_BEFORE_2026_09_26 == 6;
+    assert GATE_CALL_SITES_ADMIN_AFTER_R1_R3 - GATE_CALL_SITES_ADMIN_BEFORE_2026_09_26 == 6;
+    assert GATE_CALL_SITES_ADMIN - GATE_CALL_SITES_ADMIN_AFTER_R1_R3 == GATE_CALL_SITES_ADDED_BY_THE_TOP_LIST_ANSWER;
+    assert GATE_CALL_SITES_TOTAL - GATE_CALL_SITES_TOTAL_AFTER_R1_R3 == GATE_CALL_SITES_ADDED_BY_THE_TOP_LIST_ANSWER;
+    assert GATE_CALL_SITES_ADDED_BY_THE_TOP_LIST_ANSWER == 1;
     assert GATE_CALL_SITES_OWNER - GATE_CALL_SITES_OWNER_BEFORE_2026_09_26 == 2;
     assert GATE_CALL_SITE_MODULES - GATE_CALL_SITE_MODULES_BEFORE_2026_09_26 == 2;
     assert ENDPOINT_TO_GATE_MAP_IS_NOT_OWNED_HERE == true;

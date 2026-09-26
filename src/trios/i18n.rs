@@ -215,10 +215,10 @@ pub const T_REFERRAL_STAT_INVITED: Key = "referral.stat.invited";
 pub const T_REFERRAL_STAT_CONFIRMED: Key = "referral.stat.confirmed";
 pub const T_REFERRAL_STAT_PENDING: Key = "referral.stat.pending";
 pub const T_REFERRAL_PAYOUT_REQUESTED: Key = "referral.payout_requested";
-pub const T_REFERRAL_TOP: Key = "referral.top";
-pub const T_REFERRAL_EMPTY_LEADERBOARD: Key = "referral.empty_leaderboard";
-pub const T_REFERRAL_ID_MASK: Key = "referral.id_mask";
-pub const T_REFERRAL_ROW_META: Key = "referral.row_meta";
+// referral.top: deleted 2026-09-26 (the referral top list, removed).
+// referral.empty_leaderboard: deleted 2026-09-26 (the referral top list, removed).
+// referral.id_mask: deleted 2026-09-26 (the referral top list, removed).
+// referral.row_meta: deleted 2026-09-26 (the referral top list, removed).
 pub const T_LOADING: Key = "label.loading";
 pub const T_FILTER_ALL: Key = "filter.all";
 
@@ -907,10 +907,10 @@ fn get_ru_translation(key: Key) -> Value {
         T_REFERRAL_STAT_CONFIRMED => "Подтверждено",
         T_REFERRAL_STAT_PENDING => "В ожидании",
         T_REFERRAL_PAYOUT_REQUESTED => "Запрос на выплату отправлен менеджеру",
-        T_REFERRAL_TOP => "🏆 Топ рефералов",
-        T_REFERRAL_EMPTY_LEADERBOARD => "Пока нет данных — будь первым!",
-        T_REFERRAL_ID_MASK => "ID: ⋯{0}",
-        T_REFERRAL_ROW_META => "{0} приглашён(а) • {1} заработано",
+        // referral.top: deleted 2026-09-26 (the referral top list, removed).
+        // referral.empty_leaderboard: deleted 2026-09-26 (the referral top list, removed).
+        // referral.id_mask: deleted 2026-09-26 (the referral top list, removed).
+        // referral.row_meta: deleted 2026-09-26 (the referral top list, removed).
         T_LOADING => "Загрузка...",
         T_FILTER_ALL => "Все",
         // Variant C
@@ -1507,10 +1507,10 @@ fn get_en_translation(key: Key) -> Value {
         T_REFERRAL_STAT_CONFIRMED => "Confirmed",
         T_REFERRAL_STAT_PENDING => "Pending",
         T_REFERRAL_PAYOUT_REQUESTED => "Payout request sent to the manager",
-        T_REFERRAL_TOP => "🏆 Top Referrers",
-        T_REFERRAL_EMPTY_LEADERBOARD => "No data yet — be the first!",
-        T_REFERRAL_ID_MASK => "ID: ⋯{0}",
-        T_REFERRAL_ROW_META => "{0} invited • {1} earned",
+        // referral.top: deleted 2026-09-26 (the referral top list, removed).
+        // referral.empty_leaderboard: deleted 2026-09-26 (the referral top list, removed).
+        // referral.id_mask: deleted 2026-09-26 (the referral top list, removed).
+        // referral.row_meta: deleted 2026-09-26 (the referral top list, removed).
         T_LOADING => "Loading...",
         T_FILTER_ALL => "All",
         // Variant C
@@ -2492,6 +2492,42 @@ mod tests {
             "referral.payout_requested",
         ] {
             assert!(declared.contains(&added), "{added} is not declared");
+        }
+    }
+
+    /// The owner, of the referral top list and its public address (2026-09-26,
+    /// verbatim): «Убрать топ и закрыть адрес». The four keys only that list
+    /// used -- its title, its empty state, the masked id and the row's «{1}
+    /// заработано» -- are retired, each line one for one by a comment line.
+    /// The rest of the referral page keeps its keys.
+    #[test]
+    fn the_referral_top_list_keys_stay_retired() {
+        let declared: Vec<&str> = declared_keys().into_iter().map(|(_, k)| k).collect();
+        for gone in [
+            "referral.top",
+            "referral.empty_leaderboard",
+            "referral.id_mask",
+            "referral.row_meta",
+        ] {
+            assert!(!declared.contains(&gone), "{gone} is declared again");
+            assert!(
+                !has_translation(Lang::Russian, gone),
+                "{gone} has a Russian arm again"
+            );
+            assert!(
+                !has_translation(Lang::English, gone),
+                "{gone} has an English arm again"
+            );
+        }
+        for kept in [
+            "referral.title",
+            "referral.subtitle",
+            "referral.link_label",
+            "referral.stat.invited",
+            "referral.invitees.title",
+            "referral.balance",
+        ] {
+            assert!(declared.contains(&kept), "{kept} is not declared");
         }
     }
 }
