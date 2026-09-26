@@ -2061,7 +2061,7 @@ async fn update_order_status(
         if let Err(e) = crate::db::orders::complete_order_and_update_loyalty(
             &state.db.orm,
             &id,
-            state.config.referral_welcome_bonus,
+            // The welcome amount argument left with the welcome credit (R3, 2026-09-26).
         )
         .await
         {

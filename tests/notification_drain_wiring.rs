@@ -495,9 +495,12 @@ fn written_kinds() -> Vec<String> {
 #[test]
 fn the_drain_the_producers_and_the_contract_name_the_same_kinds() {
     let drain = drain_kinds();
+    // One kind since 2026-09-26: the owner stopped the referral and milestone
+    // bonuses (R3), their producers were deleted, and `friend_ordered` and
+    // `milestone` rows are held like the garden's.
     assert_eq!(
         drain,
-        ["friend_joined", "friend_ordered", "milestone"],
+        ["friend_joined"],
         "the reader lost DeliverableKind::of's arms in {DRAIN}"
     );
     assert_eq!(
@@ -515,7 +518,18 @@ fn the_drain_the_producers_and_the_contract_name_the_same_kinds() {
 
     let held = spec_list("HELD_KINDS_KNOWN");
     assert_eq!(held, ["friend_watered"], "{SPEC} HELD_KINDS_KNOWN");
-    for kind in &held {
+    let stopped = spec_list("HELD_KINDS_SINCE_R3");
+    assert_eq!(
+        stopped,
+        ["friend_ordered", "milestone"],
+        "{SPEC} HELD_KINDS_SINCE_R3"
+    );
+    assert_eq!(
+        spec_list("WRITTEN_KINDS_BEFORE_2026_09_26_R3"),
+        ["friend_joined", "friend_ordered", "milestone"],
+        "{SPEC} WRITTEN_KINDS_BEFORE_2026_09_26_R3"
+    );
+    for kind in held.iter().chain(&stopped) {
         assert!(!drain.contains(kind), "{DRAIN} delivers the held `{kind}`");
         assert!(
             drain_shipped()

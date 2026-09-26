@@ -107,7 +107,7 @@ async fn get_profile(
     let stmt = Statement::from_sql_and_values(
         DbBackend::Postgres,
         // `referral_count` counts friends whose order COMPLETED: it is written
-        // only by `confirm_referral`, which only `complete_order` calls. The
+        // only by `confirm_referral_edge_in`, on a completion or a recorded rental. The
         // profile screen was printing it under "Приглашено друзей", so somebody
         // who invited ten friends who all arrived and browsed saw zero. The
         // sentence and the number were about different things.
@@ -143,10 +143,10 @@ async fn get_profile(
             let tier = r.try_get::<String>("", "tier").unwrap_or_default();
             let cashback_pct = crate::db::orders::cashback_pct_for_tier(&config, &tier);
             let max_bonus_usage_pct = crate::trios::loyalty::max_bonus_usage_pct(&config);
-            // What the shop pays for a friend who orders. On the wire because
-            // the profile screen prints it and must not guess — see
-            // `default_loyalty_config`.
-            let referral_bonus = config_f64(&config, "referral_bonus").max(0.0);
+            // `referral_bonus`, the points the shop paid for a friend who
+            // ordered, was read here and served in `config` until 2026-09-26.
+            // The owner stopped that bonus (R3), and omitting the key hides a
+            // cached bundle's per-friend line before the client redeploys.
 
             let thresholds: Vec<(&str, f64)> = vec![
                 ("bronze", config_f64(&config, "bronze_threshold")),
@@ -182,7 +182,7 @@ async fn get_profile(
                     "max_bonus_usage_pct": max_bonus_usage_pct,
                     "next_tier": next_tier,
                     "next_threshold": next_threshold,
-                    "referral_bonus": referral_bonus,
+                    // "referral_bonus" left this object on 2026-09-26 (R3).
                 }
             })))
         }

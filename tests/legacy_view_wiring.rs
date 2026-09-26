@@ -435,11 +435,30 @@ fn the_sentences_the_writers_compose_are_the_ones_the_rule_serves() {
         orders.contains("\"Cashback {}% for order {}\""),
         "{ORDERS_DB} no longer writes the cashback sentence the rule reads"
     );
-    let referrals = code_of(&source(REFERRALS_DB));
-    assert!(referrals.contains(&format!("\"{REFERRAL_BONUS_SENTENCE}\"")));
-    assert!(referrals.contains("\"Milestone bonus for {} referrals\""));
     let loyalty = code_of(&source(LOYALTY_API));
     assert!(loyalty.contains(&format!("\"{ADMIN_DEDUCTION_SENTENCE}\"")));
+
+    // The referral bonus, the milestone bonus and the welcome credit have no
+    // writer since 2026-09-26 (owner, R3: «Убрать, только скидка 10%»). The
+    // rows they wrote are history: the referral and milestone sentences are
+    // still served for those rows, and the welcome sentence stays withheld.
+    let referrals = code_of(&source(REFERRALS_DB));
+    for sentence in [
+        REFERRAL_BONUS_SENTENCE,
+        "Milestone bonus for {} referrals",
+        WELCOME_CREDIT_SENTENCE,
+    ] {
+        assert!(
+            !referrals.contains(&format!("\"{sentence}\"")),
+            "{REFERRALS_DB} writes `{sentence}` again: a stopped referral credit is back"
+        );
+    }
+    for tx in ["referral_bonus", "referral_welcome", "referral_milestone"] {
+        assert!(
+            !referrals.contains(&format!("tx_type: Set(\"{tx}\"")),
+            "{REFERRALS_DB} composes a `{tx}` row again"
+        );
+    }
 
     let served = |tx: &str, text: String| customer_bonus_description(tx, Some(text.clone()));
     let cashback = format!("Cashback {}% for order {}", 5.0_f64, "ord-7f3a9c2e");
@@ -449,18 +468,18 @@ fn the_sentences_the_writers_compose_are_the_ones_the_rule_serves() {
         served("referral_milestone", milestone.clone()),
         Some(milestone)
     );
-
-    // The welcome credit's sentence named the garden until 2026-09-26; since
-    // then a new row is written with the garden's words dropped. Those words
-    // are not the owner's, so the sentence is stored and NOT served: a welcome
-    // row, old or new, reaches the customer with no description, under its
-    // generic label, until the owner supplies the wording.
-    const GARDEN_WELCOME_SENTENCE: &str = "Welcome bonus from a friend's garden invite";
-    assert!(referrals.contains(&format!("\"{WELCOME_CREDIT_SENTENCE}\"")));
-    assert!(
-        !referrals.contains(GARDEN_WELCOME_SENTENCE),
-        "{REFERRALS_DB}"
+    assert_eq!(
+        served("referral_bonus", REFERRAL_BONUS_SENTENCE.to_string()),
+        Some(REFERRAL_BONUS_SENTENCE.to_string())
     );
+
+    // The welcome credit's sentence named the garden until 2026-09-26; for
+    // the rest of that day a new row was written with the garden's words
+    // dropped. Those words are not the owner's, so the sentence is stored and
+    // NOT served: a welcome row, old or new, reaches the customer with no
+    // description, under its generic label, until the owner supplies the
+    // wording.
+    const GARDEN_WELCOME_SENTENCE: &str = "Welcome bonus from a friend's garden invite";
     assert_eq!(
         WELCOME_CREDIT_SENTENCE,
         GARDEN_WELCOME_SENTENCE.replace("garden ", ""),
@@ -482,18 +501,6 @@ fn the_sentences_the_writers_compose_are_the_ones_the_rule_serves() {
     assert!(
         !rule.contains("\"referral_welcome\""),
         "{RULES}: the welcome credit's sentence is served again without the owner's wording"
-    );
-    // The writer stores the sentence on the type the rule withholds.
-    let welcome = &referrals[referrals
-        .find("tx_type: Set(\"referral_welcome\".to_string()),")
-        .expect("the welcome credit's row")..];
-    assert!(
-        welcome
-            .chars()
-            .take(300)
-            .collect::<String>()
-            .contains(&format!("\"{WELCOME_CREDIT_SENTENCE}\"")),
-        "{welcome}"
     );
     // A garden row, whatever its description stored.
     for tx in GARDEN_ERA_TX_TYPES {

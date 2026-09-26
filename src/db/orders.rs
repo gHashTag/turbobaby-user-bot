@@ -170,18 +170,12 @@ pub(crate) fn cashback_pct_for_tier(config: &serde_json::Value, tier: &str) -> f
 pub struct OrderCompletion {
     pub customer_telegram_id: i64,
     /// Currently unread — kept for analytics / future-caller hooks
-    /// (e.g. "first-order welcome bonus" or signup-completion
-    /// metrics). The cycle-#171 callers use
-    /// `referral_bonus_credited.is_some()` as a stricter predicate
-    /// for the referral-notification path.
+    /// (e.g. signup-completion metrics). Until 2026-09-26 its sibling
+    /// `referral_bonus_credited` carried the referral bonus a first
+    /// order paid; the owner stopped that bonus (R3), so the field went
+    /// with the bot's "🎉 +N ฿" message that read it.
     #[allow(dead_code)]
     pub is_first_order: bool,
-    /// `Some(amount)` if this was a first order from a referred user
-    /// AND `confirm_referral` succeeded. `None` if not-first,
-    /// not-referred, or the credit failed (logged inside the
-    /// function; callers receive `None` and skip downstream side
-    /// effects like referrer notifications).
-    pub referral_bonus_credited: Option<f64>,
     /// `Some((pct, amount))` if the order earned automatic tier-based
     /// cashback. Loop #10: credits `bonus_balance` and writes a
     /// `bonus_transactions` row inside the completion tx.
@@ -192,7 +186,6 @@ pub struct OrderCompletion {
 pub async fn complete_order_and_update_loyalty(
     orm: &sea_orm::DatabaseConnection,
     order_id: &str,
-    referred_welcome_bonus: f64,
 ) -> Result<Option<OrderCompletion>, sea_orm::DbErr> {
     use crate::db::entities::{
         loyalty_profile::{ActiveModel as LpAm, Column as LpCol, Entity as LpEntity},
@@ -404,97 +397,34 @@ pub async fn complete_order_and_update_loyalty(
 
     tx.commit().await?;
 
-    // 7. Cycle #171: referral bonus credit, lifted from the two
-    //    completion callers into the canonical completion function.
-    //    Pre-cycle, only the bot-callback path (`bot/callbacks.rs`)
-    //    called `confirm_referral` — cycle #170 mirrored it in
-    //    `update_order_status`, but a future third completion path
-    //    (payment webhook, batch completion, etc.) could miss it
-    //    again. Lifting closes the bug class.
-    //
-    //    Side-effect chain: read referral_bonus from loyalty_config,
-    //    call confirm_referral (which credits the referrer's
-    //    bonus_balance + writes a `bonus_transactions` ledger row
-    //    + sets `referral_events.status = 'paid'`). Outside the
-    //    completion tx — confirm_referral has its own transaction
-    //    semantics and a failure here shouldn't roll back the order
-    //    completion (the order is already committed; referrals can
-    //    be reconciled).
-    let referral_bonus_credited: Option<f64> = if is_first {
-        let bonus = match orm
-            .query_one(Statement::from_string(
-                DbBackend::Postgres,
-                "SELECT config->>'referral_bonus' AS bonus FROM loyalty_config WHERE id = 1"
-                    .to_string(),
-            ))
-            .await
-        {
-            Ok(Some(row)) => row
-                .try_get::<Option<String>>("", "bonus")
-                .ok()
-                .flatten()
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(200.0),
-            Ok(None) | Err(_) => 200.0,
-        };
-        match crate::db::referrals::confirm_referral(orm, cid, bonus, referred_welcome_bonus).await
-        {
-            Ok(_) => {
-                // Loop #21: award 1/3/5-referral milestones and notify the
-                // referrer that their friend ordered. These are best-effort
-                // after the order tx commits; failures are logged, not fatal.
-                if let Some(referrer_id) = crate::db::referrals::get_referrer_of(orm, cid)
-                    .await
-                    .ok()
-                    .flatten()
-                {
-                    if let Err(e) =
-                        crate::db::referrals::maybe_award_referral_milestones(orm, referrer_id)
-                            .await
-                    {
-                        tracing::warn!(
-                            "complete_order: maybe_award_referral_milestones failed for referrer={}: {}",
-                            referrer_id, e
-                        );
-                    }
-                    let name = crate::db::users::first_name_for(orm, cid)
-                        .await
-                        .unwrap_or_else(|_| "Friend".to_string());
-                    if let Err(e) = crate::db::notifications::enqueue_friend_ordered(
-                        orm,
-                        referrer_id,
-                        &name,
-                        bonus,
-                    )
-                    .await
-                    {
-                        tracing::warn!(
-                            "complete_order: enqueue_friend_ordered failed for referrer={}: {}",
-                            referrer_id,
-                            e
-                        );
-                    }
-                    crate::metrics::referral_invite_funnel("ordered");
-                }
-                Some(bonus)
-            }
-            Err(e) => {
-                tracing::error!(
-                    "complete_order: confirm_referral failed for cid={}: {:?}",
-                    cid,
-                    e
-                );
-                None
-            }
+    // 7. The referral edge. Cycle #171 lifted the referral step from the two
+    //    completion callers into this canonical function, so a future third
+    //    completion path cannot miss it. Until 2026-09-26 this step read
+    //    `referral_bonus` from loyalty_config (200 when unset), credited it to
+    //    the referrer in loyalty points with a welcome credit to the friend,
+    //    awarded the 1/3/5 milestones and queued the `friend_ordered` notice.
+    //    The owner stopped all of it that day (R3: «Убрать, только скидка
+    //    10%»): referral money is the THB credit a manager records per rental
+    //    (`crate::db::referral_credit::record_rental`). What stays is the
+    //    edge's confirmation, pending -> confirmed and `referral_count` + 1,
+    //    with no money, on the friend's first completed order. Outside the
+    //    completion tx, as before: the order is already committed, and a
+    //    failure here is logged rather than rolling the completion back.
+    if is_first {
+        match crate::db::referrals::confirm_referral_edge(orm, cid).await {
+            Ok(Some(_)) => crate::metrics::referral_invite_funnel("ordered"),
+            Ok(None) => {}
+            Err(e) => tracing::error!(
+                "complete_order: confirm_referral_edge failed for cid={}: {:?}",
+                cid,
+                e
+            ),
         }
-    } else {
-        None
-    };
+    }
 
     Ok(Some(OrderCompletion {
         customer_telegram_id: cid,
         is_first_order: is_first,
-        referral_bonus_credited,
         cashback_credited: if cashback_amount > 0.01 {
             Some((cashback_pct, cashback_amount))
         } else {
@@ -2389,5 +2319,39 @@ mod customer_view_tests {
         let customer = Order::for_customer(stored(serde_json::json!([]), Some("TurboBaby")));
         assert_eq!(customer.shop_id.as_deref(), Some("TurboBaby"));
         assert_eq!(customer.items, serde_json::json!([]));
+    }
+}
+
+// The referral credit of 2026-09-26 (R3) records a rental only against an order
+// that holds a rental line. Appended so that no line the contracts cite moves.
+#[cfg(test)]
+mod referral_credit_tag_tests {
+    use super::{BikeDeal, BikeLine};
+    use crate::trios::referral_credit::order_holds_a_rental;
+
+    /// `trios::referral_credit::order_holds_a_rental` reads an order's stored
+    /// `items` JSONB for a `bike.deal.kind` the cart serves. It is not a tag
+    /// of its own: it is the tag the real enum writes, held to it here.
+    #[test]
+    fn the_rental_deal_tag_is_what_order_holds_a_rental_reads() {
+        let order_of = |deal: BikeDeal| {
+            let bike = serde_json::to_value(BikeLine {
+                bike_key: "nmax-155".into(),
+                bike_name: None,
+                deal,
+            })
+            .expect("a bike line serialises");
+            serde_json::json!([{ "quantity": 1.0, "bike": bike }])
+        };
+        let day = |d: u32| chrono::NaiveDate::from_ymd_opt(2026, 9, d).expect("a date");
+        assert!(order_holds_a_rental(&order_of(BikeDeal::BikeRental {
+            rental_start: day(27),
+            rental_end: day(28),
+            rate_thb_day: None,
+            deposit: None,
+        })));
+        assert!(!order_holds_a_rental(&order_of(BikeDeal::BikeSale {
+            price_thb: None
+        })));
     }
 }

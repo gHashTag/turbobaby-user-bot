@@ -1,8 +1,8 @@
 //! Background worker that drains `notification_queue` and sends referrer-facing
 //! Telegram messages.
 //!
-//! Loop #21: referral lifecycle pushes (friend joined, friend ordered, milestone)
-//! are decoupled from the request path. The worker polls every 30 seconds, sends
+//! Loop #21: referral lifecycle pushes (friend joined; friend ordered and
+//! milestone until 2026-09-26) are decoupled from the request path. The worker polls every 30 seconds, sends
 //! up to 50 queued messages per tick, and marks rows `processed_at` on success.
 //! Each pass counts an attempt before the send, so three end a row either way.
 
@@ -166,7 +166,7 @@ async fn process_batch(
                 .unwrap_or_else(|| "en".to_string());
             let locale = get_locale(&lang);
 
-            let text = build_message(deliverable, &payload, &locale, &config.bot_username);
+            let text = build_message(deliverable, &payload, &locale);
             // This button carried `startapp=garden` until D5 removed the screen.
             // Every notification this worker sends is about a friend — joined,
             // ordered — so `referrals` is not a substitute destination, it is the
@@ -353,7 +353,6 @@ fn build_message(
     kind: DeliverableKind,
     payload: &serde_json::Value,
     locale: &crate::locales::Locale,
-    bot_username: &str,
 ) -> String {
     let name = payload
         .get("referred_name")
@@ -366,38 +365,18 @@ fn build_message(
             locale.referral_friend_joined.replace("{name}", name),
             locale.referral_invite_progress_hint
         ),
-        DeliverableKind::FriendOrdered => {
-            let bonus = payload.get("bonus").and_then(|v| v.as_f64()).unwrap_or(0.0);
-            let body = locale
-                .referral_friend_ordered
-                .replace("{name}", name)
-                .replace("{bonus}", &format!("{:.0}", bonus));
-            format!("{}\n\n{}", body, locale.referral_invite_progress_hint)
-        }
-        DeliverableKind::Milestone => {
-            let milestone = payload
-                .get("milestone")
-                .and_then(|v| v.as_i64())
-                .unwrap_or(0);
-            let bonus = payload
-                .get("bonus_amount")
-                .and_then(|v| v.as_f64())
-                .unwrap_or(0.0);
-            locale
-                .referral_milestone_bonus
-                .replace("{milestone}", &milestone.to_string())
-                .replace("{bonus}", &format!("{:.0}", bonus))
-                .replace("{bot}", bot_username)
-        }
+        // The `friend_ordered` and `milestone` arms stood here until
+        // 2026-09-26: they announced the referral bonus and the milestone
+        // bonus the owner stopped that day (R3: «Убрать, только скидка 10%»).
+        // Their producers went with them, so their rows are held (below).
     }
 }
 
 /// The kinds this worker delivers, and the only ones it can render.
 ///
-/// Exactly the kinds a producer writes today: `enqueue_friend_joined`,
-/// `enqueue_friend_ordered` and `enqueue_milestone` in
+/// Exactly the kinds a producer writes today: `enqueue_friend_joined` in
 /// src/db/notifications.rs. A row of any other kind is HELD -- not sent, not
-/// counted, not marked -- and two sorts of row fall there.
+/// counted, not marked -- and three sorts of row fall there.
 ///
 /// * `friend_watered`, the retired garden's report that a friend watered
 ///   their plant. Its writer went with the garden (D5) and its message went
@@ -406,6 +385,10 @@ fn build_message(
 ///   operator as: analyse all of it and take it out of customers' sight,
 ///   deleting nothing). Until then this worker still rendered it for rows
 ///   queued before D5.
+/// * `friend_ordered` and `milestone`, the referral bonus's and the milestone
+///   bonus's announcements. Both bonuses stopped on 2026-09-26 (owner, R3:
+///   «Убрать, только скидка 10%»), their producers were deleted, and a row
+///   queued before that is held rather than announcing money no longer paid.
 /// * A kind nothing here has ever written: this database forked from another
 ///   shop's bot (DECISIONS.md D19). Until 2026-09-26 such a row went out
 ///   through a catch-all arm that showed the customer the raw kind column.
@@ -422,21 +405,17 @@ fn build_message(
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum DeliverableKind {
     FriendJoined,
-    FriendOrdered,
-    Milestone,
 }
 
 impl DeliverableKind {
     /// Every variant, in the order their names are handed to the scan.
-    const ALL: [DeliverableKind; 3] = [Self::FriendJoined, Self::FriendOrdered, Self::Milestone];
+    const ALL: [DeliverableKind; 1] = [Self::FriendJoined];
 
     /// The kind a row carries, when it is one this worker delivers. The
     /// default arm refuses: an unknown kind is held, never rendered.
     fn of(kind: &str) -> Option<Self> {
         match kind {
             "friend_joined" => Some(Self::FriendJoined),
-            "friend_ordered" => Some(Self::FriendOrdered),
-            "milestone" => Some(Self::Milestone),
             _ => None,
         }
     }
@@ -445,13 +424,11 @@ impl DeliverableKind {
     fn name(self) -> &'static str {
         match self {
             Self::FriendJoined => "friend_joined",
-            Self::FriendOrdered => "friend_ordered",
-            Self::Milestone => "milestone",
         }
     }
 
     /// What the scan may hand out: the names of every variant.
-    fn names() -> [&'static str; 3] {
+    fn names() -> [&'static str; 1] {
         Self::ALL.map(Self::name)
     }
 }
@@ -695,6 +672,19 @@ mod tests {
         assert!(!DeliverableKind::names().contains(&"friend_watered"));
     }
 
+    /// The two kinds that announced the stopped referral bonuses are held the
+    /// same way since 2026-09-26 (R3): no variant, no name for the scan.
+    #[test]
+    fn the_stopped_bonus_announcements_are_held_and_never_rendered() {
+        for kind in ["friend_ordered", "milestone"] {
+            assert_eq!(DeliverableKind::of(kind), None, "{kind} would be delivered");
+            assert!(
+                !DeliverableKind::names().contains(&kind),
+                "{kind} would be handed out by the scan"
+            );
+        }
+    }
+
     /// A kind nothing here writes is held too. Until 2026-09-26 it went out
     /// through a catch-all arm that showed the customer the raw kind column;
     /// the refusing default arm of `DeliverableKind::of` is what replaced it.
@@ -729,7 +719,7 @@ mod tests {
     #[test]
     fn the_scan_and_the_loop_accept_the_same_kinds() {
         let names = DeliverableKind::names();
-        assert_eq!(names, ["friend_joined", "friend_ordered", "milestone"]);
+        assert_eq!(names, ["friend_joined"]);
         for kind in DeliverableKind::ALL {
             assert_eq!(DeliverableKind::of(kind.name()), Some(kind));
         }
@@ -754,22 +744,12 @@ mod tests {
         });
         for lang in ["ru", "en"] {
             let locale = crate::locales::get_locale(lang);
-            let mut rendered = Vec::new();
             for kind in DeliverableKind::ALL {
-                let text = build_message(kind, &payload, &locale, "turbobaby_bot");
+                let text = build_message(kind, &payload, &locale);
                 let head = match kind {
                     DeliverableKind::FriendJoined => {
                         locale.referral_friend_joined.replace("{name}", "Ann")
                     }
-                    DeliverableKind::FriendOrdered => locale
-                        .referral_friend_ordered
-                        .replace("{name}", "Ann")
-                        .replace("{bonus}", "50"),
-                    DeliverableKind::Milestone => locale
-                        .referral_milestone_bonus
-                        .replace("{milestone}", "5")
-                        .replace("{bonus}", "100")
-                        .replace("{bot}", "turbobaby_bot"),
                 };
                 assert!(
                     text.starts_with(&head),
@@ -779,15 +759,11 @@ mod tests {
                     !text.contains('{'),
                     "{lang} {kind:?} left a placeholder: {text:?}"
                 );
-                rendered.push(text);
+                assert!(
+                    !text.contains("50") && !text.contains("100"),
+                    "{lang} {kind:?} printed an amount from the payload: {text:?}"
+                );
             }
-            rendered.sort();
-            rendered.dedup();
-            assert_eq!(
-                rendered.len(),
-                DeliverableKind::ALL.len(),
-                "two kinds share one message in {lang}"
-            );
         }
     }
 }

@@ -187,20 +187,9 @@ pub(crate) fn is_self_referral(referrer_id: i64, referred_id: i64) -> bool {
     referrer_id == referred_id
 }
 
-/// Loop #21: read the referring telegram_id for a user, if any.
-pub(crate) async fn get_referrer_of(
-    orm: &sea_orm::DatabaseConnection,
-    telegram_id: i64,
-) -> Result<Option<i64>> {
-    use crate::db::entities::loyalty_profile::{Column as LpCol, Entity as LoyaltyProfileEntity};
-    use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
-    let row = LoyaltyProfileEntity::find()
-        .filter(LpCol::TelegramId.eq(telegram_id))
-        .one(orm)
-        .await
-        .context("get_referrer_of query")?;
-    Ok(row.and_then(|m| m.referred_by))
-}
+// `get_referrer_of` stood here: it read `loyalty_profiles.referred_by` for the
+// milestone award, which stopped on 2026-09-26 (owner, R3: «Убрать, только
+// скидка 10%»). The referral credit reads the edge from `referral_events`.
 
 /// Record a new pending referral event.
 /// Returns the new event UUID.
@@ -221,9 +210,9 @@ pub(crate) async fn record_referral(
     // current caller (bot `/start ref_…` in commands.rs) already guards
     // `referrer_id != user_id`, but the invariant belongs here too —
     // otherwise a future caller (admin tool, new endpoint) could create a
-    // self-referral pending event that `confirm_referral` would later pay
-    // out as a bonus to the user's own balance (financial fraud). Mirrors
-    // `confirm_referral`'s own `bail!` input guards below.
+    // self-referral pending event. Until 2026-09-26 the confirmation paid
+    // such an edge a bonus; since R3 it pays nothing, and the referral credit
+    // refuses a self edge itself (`creditable_inviter`, `SelfEdge`).
     if is_self_referral(referrer_id, referred_id) {
         anyhow::bail!("self-referral rejected: referrer_id == referred_id ({referrer_id})");
     }
@@ -306,91 +295,65 @@ pub(crate) async fn record_referral(
     Ok(id)
 }
 
-/// Confirm a referral (first purchase of `referred_id`).
-/// - Sets status = 'confirmed' + confirmed_at
-/// - Credits `bonus` to referrer's balance via bonus_transactions
-/// - Credits `referred_welcome_bonus` to the referred user's balance (Loop #19)
-/// - Increments referrer's referral_count
+/// Confirm a referral edge: the invited friend's first completed order, or a
+/// creditable rental a manager records for them. Pays nothing.
 ///
-/// Cycle #84: migrated to SeaORM transaction. The `SELECT ... FOR UPDATE`
-/// race guard is preserved via `QuerySelect::lock_exclusive()`. All five
-/// statements run inside `db.begin().await?` and commit atomically; early
-/// `Err` returns auto-rollback via `DatabaseTransaction::drop`.
-pub(crate) async fn confirm_referral(
-    orm: &sea_orm::DatabaseConnection,
+/// - Sets `status = 'confirmed'` and `confirmed_at` on the pending event
+/// - Seeds the referrer's loyalty profile and adds 1 to its `referral_count`
+///
+/// Until 2026-09-26 this was `confirm_referral`, and it also credited the
+/// referrer a fixed `referral_bonus` in loyalty points (with `bonus_paid`
+/// written on the event) and the friend a welcome credit. The owner stopped
+/// both that day (R3: «Убрать, только скидка 10%»): referral money is now the
+/// THB credit of `crate::db::referral_credit`, born only when a manager
+/// records a rental. Points already credited stay where they are. The pending
+/// row is still taken under an exclusive lock (`lock_exclusive`), so two
+/// confirmations count the friend once. Returns the referrer when it flipped a
+/// row, `None` when there was no pending event.
+///
+/// Runs on the caller's connection or transaction: `record_rental` confirms
+/// inside its own transaction, and [`confirm_referral_edge`] wraps it in one.
+pub(crate) async fn confirm_referral_edge_in<C: sea_orm::ConnectionTrait>(
+    conn: &C,
     referred_id: i64,
-    bonus: f64,
-    referred_welcome_bonus: f64,
-) -> Result<()> {
+) -> Result<Option<i64>> {
     use crate::db::entities::{
-        bonus_transaction::{ActiveModel as BonusTxAm, Entity as BonusTxEntity},
         loyalty_profile::{ActiveModel as LpAm, Column as LpCol, Entity as LoyaltyProfileEntity},
         referral_event::{
             ActiveModel as RefEventAm, Column as RefEventCol, Entity as RefEventEntity,
         },
     };
     use sea_orm::sea_query::OnConflict;
-    use sea_orm::{
-        ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter, QuerySelect, TransactionTrait,
-    };
+    use sea_orm::{ActiveValue::Set, ColumnTrait, EntityTrait, QueryFilter, QuerySelect};
 
-    if !bonus.is_finite() || bonus < 0.0 {
-        anyhow::bail!("invalid bonus: {}", bonus);
-    }
-    let welcome_bonus = if referred_welcome_bonus.is_finite() && referred_welcome_bonus > 0.0 {
-        referred_welcome_bonus
-    } else {
-        0.0
-    };
-
-    let tx = orm.begin().await.context("start SeaORM tx")?;
-
-    // 1. Find the pending event with row-level lock (FOR UPDATE) to
-    //    prevent double-credit races. `QuerySelect::lock_exclusive` is
-    //    SeaORM's equivalent of the raw `SELECT ... FOR UPDATE`.
-    let pending = RefEventEntity::find()
+    // 1. The pending event, under a row lock (`SELECT ... FOR UPDATE`).
+    let Some(pending) = RefEventEntity::find()
         .filter(RefEventCol::ReferredId.eq(referred_id))
         .filter(RefEventCol::Status.eq("pending"))
         .lock_exclusive()
-        .one(&tx)
+        .one(conn)
         .await
-        .context("query pending referral_event")?;
-
-    let pending = match pending {
-        Some(m) => m,
-        None => {
-            // No pending event — semantically a no-op. Commit the empty
-            // tx (releases the lock if FOR UPDATE held anything); log on
-            // failure as cycle #76 began doing.
-            if let Err(e) = tx.commit().await {
-                tracing::warn!(
-                    "referrals.confirm_referral: empty-tx commit failed for referred_id={}: {}",
-                    referred_id,
-                    e
-                );
-            }
-            return Ok(());
-        }
+        .context("query pending referral_event")?
+    else {
+        return Ok(None);
     };
     let event_id = pending.id;
     let referrer_id = pending.referrer_id;
 
-    // 2. Mark event confirmed.
+    // 2. Mark it confirmed. No amount is written.
     let mut event_am: RefEventAm = pending.into();
     event_am.status = Set("confirmed".to_string());
     event_am.confirmed_at = Set(Some(chrono::Utc::now().into()));
-    event_am.bonus_paid = Set(bonus);
     RefEventEntity::update_many()
         .set(event_am)
         .filter(RefEventCol::Id.eq(event_id))
-        .exec(&tx)
+        .exec(conn)
         .await
         .context("update referral_event status")?;
 
-    // 3. Ensure referrer loyalty_profile row exists (idempotent upsert).
+    // 3. Ensure the referrer's loyalty profile row exists (idempotent upsert).
     let lp_seed = LpAm {
         telegram_id: Set(referrer_id),
-        bonus_balance: Set(Some(0.0)),
         total_spent: Set(Some(0.0)),
         ..Default::default()
     };
@@ -401,107 +364,41 @@ pub(crate) async fn confirm_referral(
                 .to_owned(),
         )
         .do_nothing()
-        .exec(&tx)
+        .exec(conn)
         .await
         .context("upsert referrer loyalty_profile")?;
 
-    // 4. Append bonus_transactions ledger row.
-    let tx_id = Uuid::new_v4().to_string();
-    let bt_am = BonusTxAm {
-        id: Set(tx_id),
-        telegram_id: Set(referrer_id),
-        amount: Set(bonus),
-        tx_type: Set("referral_bonus".to_string()),
-        description: Set(Some("Referral bonus for new user".to_string())),
-        related_order_id: Set(None),
-        ..Default::default()
-    };
-    BonusTxEntity::insert(bt_am)
-        .exec(&tx)
-        .await
-        .context("insert referral bonus_transaction")?;
-
-    // 5. Credit balance + increment referral_count. We do them as a
-    //    single update_many so the WHERE-clause check fires once.
+    // 4. Count the friend.
     let updated = LoyaltyProfileEntity::update_many()
-        .col_expr(
-            LpCol::BonusBalance,
-            sea_orm::sea_query::Expr::cust_with_values("bonus_balance + $1", [bonus]),
-        )
         .col_expr(
             LpCol::ReferralCount,
             sea_orm::sea_query::Expr::cust("referral_count + 1"),
         )
         .filter(LpCol::TelegramId.eq(referrer_id))
-        .exec(&tx)
+        .exec(conn)
         .await
-        .context("credit referrer bonus + count")?;
+        .context("count the confirmed referral")?;
     if updated.rows_affected == 0 {
-        // tx drops → auto-rollback.
         anyhow::bail!(
-            "confirm_referral: loyalty profile missing for referrer_id={} after upsert (race?)",
+            "confirm_referral_edge: loyalty profile missing for referrer_id={} after upsert (race?)",
             referrer_id
         );
     }
+    Ok(Some(referrer_id))
+}
 
-    // 6. Loop #19: two-sided bonus — credit the newly-referred user a one-time
-    //    welcome bonus. Only applies when the env config enables a positive amount.
-    if welcome_bonus > 0.0 {
-        // Ensure the referred user's profile exists (record_referral already
-        // upserts it, but the row may be missing in legacy data).
-        let referred_seed = LpAm {
-            telegram_id: Set(referred_id),
-            bonus_balance: Set(Some(0.0)),
-            total_spent: Set(Some(0.0)),
-            ..Default::default()
-        };
-        LoyaltyProfileEntity::insert(referred_seed)
-            .on_conflict(
-                OnConflict::column(LpCol::TelegramId)
-                    .do_nothing()
-                    .to_owned(),
-            )
-            .do_nothing()
-            .exec(&tx)
-            .await
-            .context("upsert referred loyalty_profile for welcome bonus")?;
-
-        let welcome_tx_id = Uuid::new_v4().to_string();
-        let welcome_bt_am = BonusTxAm {
-            id: Set(welcome_tx_id),
-            telegram_id: Set(referred_id),
-            amount: Set(welcome_bonus),
-            tx_type: Set("referral_welcome".to_string()),
-            description: Set(Some(
-                "Welcome bonus from a friend's invite".to_string(), // no garden since 2026-09-26
-            )),
-            related_order_id: Set(None),
-            ..Default::default()
-        };
-        BonusTxEntity::insert(welcome_bt_am)
-            .exec(&tx)
-            .await
-            .context("insert referral welcome bonus_transaction")?;
-
-        let referred_updated = LoyaltyProfileEntity::update_many()
-            .col_expr(
-                LpCol::BonusBalance,
-                sea_orm::sea_query::Expr::cust_with_values("bonus_balance + $1", [welcome_bonus]),
-            )
-            .filter(LpCol::TelegramId.eq(referred_id))
-            .exec(&tx)
-            .await
-            .context("credit referred welcome bonus")?;
-        if referred_updated.rows_affected == 0 {
-            anyhow::bail!(
-                "confirm_referral: loyalty profile missing for referred_id={} after upsert (race?)",
-                referred_id
-            );
-        }
-    }
-
+/// [`confirm_referral_edge_in`] in a transaction of its own: the completion
+/// path's step 7 (`complete_order_and_update_loyalty` in src/db/orders.rs),
+/// which runs after the order's own commit.
+pub(crate) async fn confirm_referral_edge(
+    orm: &sea_orm::DatabaseConnection,
+    referred_id: i64,
+) -> Result<Option<i64>> {
+    use sea_orm::TransactionTrait;
+    let tx = orm.begin().await.context("start SeaORM tx")?;
+    let confirmed = confirm_referral_edge_in(&tx, referred_id).await?;
     tx.commit().await.context("commit SeaORM referral tx")?;
-    Ok(())
+    Ok(confirmed)
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -702,18 +599,11 @@ pub(crate) async fn get_invitees(
         .collect())
 }
 
-/// The referral milestone ladder: how many confirmed friends earn a bonus.
-///
-/// One list, because there were three. `maybe_award_referral_milestones`
-/// decided who gets paid, `milestone_bonus_amounts` decided how much, and
-/// `src/api/referrals.rs` told the customer what to aim for — each from its own
-/// hand-written `[1, 3, 5]`. Adding a fourth rung to two of the three would
-/// have promised a bonus nothing awards.
-pub(crate) const MILESTONE_THRESHOLDS: [i32; 3] = [1, 3, 5];
-
-/// What each rung pays when `loyalty_config` says nothing. Tuned to feel
-/// meaningful without cannibalising margin.
-const MILESTONE_DEFAULT_BONUS: [(i32, f64); 3] = [(1, 100.0), (3, 300.0), (5, 500.0)];
+// The milestone ladder (`MILESTONE_THRESHOLDS`, `[1, 3, 5]`) and its compiled
+// amounts (`MILESTONE_DEFAULT_BONUS`) stood here. Nothing awards a milestone
+// since 2026-09-26 (owner, R3: «Убрать, только скидка 10%»), so nothing offers
+// one: `/api/referrals/me/:id/milestones` serves empty `thresholds` and
+// `bonuses`. The rows already awarded stay, and are still read below.
 
 /// Loop #21: return achieved referral milestones and total confirmed count.
 ///
@@ -768,165 +658,12 @@ async fn count_confirmed_referrals(
         .unwrap_or(0))
 }
 
-/// Loop #21: idempotently award 1/3/5 referral milestones. Each milestone is a
-/// single credit to `bonus_balance` + a `bonus_transactions` ledger row. The
-/// unique PK on `(referrer_id, milestone)` guarantees idempotency even if this
-/// runs multiple times.
-pub(crate) async fn maybe_award_referral_milestones(
-    orm: &sea_orm::DatabaseConnection,
-    referrer_id: i64,
-) -> Result<Vec<(i32, f64)>> {
-    use crate::db::entities::{
-        bonus_transaction::{ActiveModel as BonusTxAm, Entity as BonusTxEntity},
-        loyalty_profile::{ActiveModel as LpAm, Column as LpCol, Entity as LoyaltyProfileEntity},
-    };
-    use sea_orm::sea_query::OnConflict;
-    use sea_orm::{
-        ActiveValue::Set, ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter,
-        Statement, TransactionTrait,
-    };
-
-    let amounts = milestone_bonus_amounts(orm).await;
-    let confirmed = count_confirmed_referrals(orm, referrer_id).await?;
-
-    let tx = orm.begin().await.context("start milestone tx")?;
-    let mut awarded: Vec<(i32, f64)> = Vec::new();
-
-    for milestone in MILESTONE_THRESHOLDS {
-        if confirmed < milestone as i64 {
-            continue;
-        }
-        let bonus = *amounts.get(&milestone).copied().get_or_insert(0.0);
-        if bonus <= 0.0 || !bonus.is_finite() {
-            continue;
-        }
-
-        // Try to record the milestone; rows_affected == 0 means already awarded.
-        let insert_res = tx
-            .execute(Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                "INSERT INTO referral_milestones (referrer_id, milestone, bonus_amount) \
-                 VALUES ($1, $2, $3) ON CONFLICT (referrer_id, milestone) DO NOTHING",
-                [referrer_id.into(), milestone.into(), bonus.into()],
-            ))
-            .await
-            .context("insert referral_milestone")?;
-
-        if insert_res.rows_affected() == 0 {
-            continue;
-        }
-
-        // Credit the bonus inside the same tx.
-        let lp_seed = LpAm {
-            telegram_id: Set(referrer_id),
-            bonus_balance: Set(Some(0.0)),
-            total_spent: Set(Some(0.0)),
-            ..Default::default()
-        };
-        LoyaltyProfileEntity::insert(lp_seed)
-            .on_conflict(
-                OnConflict::column(LpCol::TelegramId)
-                    .do_nothing()
-                    .to_owned(),
-            )
-            .do_nothing()
-            .exec(&tx)
-            .await
-            .context("seed loyalty_profile for milestone")?;
-
-        let tx_id = uuid::Uuid::new_v4().to_string();
-        let bt_am = BonusTxAm {
-            id: Set(tx_id),
-            telegram_id: Set(referrer_id),
-            amount: Set(bonus),
-            tx_type: Set("referral_milestone".to_string()),
-            description: Set(Some(format!("Milestone bonus for {} referrals", milestone))),
-            related_order_id: Set(None),
-            ..Default::default()
-        };
-        BonusTxEntity::insert(bt_am)
-            .exec(&tx)
-            .await
-            .context("insert milestone bonus tx")?;
-
-        let updated = LoyaltyProfileEntity::update_many()
-            .col_expr(
-                LpCol::BonusBalance,
-                sea_orm::sea_query::Expr::cust_with_values("bonus_balance + $1", [bonus]),
-            )
-            .filter(LpCol::TelegramId.eq(referrer_id))
-            .exec(&tx)
-            .await
-            .context("credit milestone bonus")?;
-        if updated.rows_affected == 0 {
-            anyhow::bail!(
-                "milestone award: loyalty profile missing for referrer_id={} after upsert",
-                referrer_id
-            );
-        }
-
-        awarded.push((milestone, bonus));
-    }
-
-    tx.commit().await.context("commit milestone tx")?;
-
-    // Queue notifications outside the tx so a Telegram failure can't roll back credits.
-    for (milestone, bonus) in &awarded {
-        crate::metrics::milestone_awarded(*milestone);
-        if let Err(e) =
-            crate::db::notifications::enqueue_milestone(orm, referrer_id, *milestone, *bonus).await
-        {
-            tracing::warn!(
-                "maybe_award_referral_milestones: enqueue failed for {}: {}",
-                referrer_id,
-                e
-            );
-        }
-    }
-
-    Ok(awarded)
-}
-
-/// Read per-milestone bonus amounts from `loyalty_config.config` JSON, falling
-/// back to [`MILESTONE_DEFAULT_BONUS`].
-///
-/// This is what the shop pays *now*, which is what a customer who has not
-/// reached a rung yet should be shown. What an already-awarded rung paid is a
-/// different number and comes from [`get_referral_milestones`].
-pub(crate) async fn milestone_bonus_amounts(
-    orm: &sea_orm::DatabaseConnection,
-) -> std::collections::HashMap<i32, f64> {
-    use sea_orm::{ConnectionTrait, DbBackend, Statement};
-    let mut out: std::collections::HashMap<i32, f64> =
-        MILESTONE_DEFAULT_BONUS.iter().copied().collect();
-
-    let row = orm
-        .query_one(Statement::from_string(
-            DbBackend::Postgres,
-            "SELECT config FROM loyalty_config WHERE id = 1".to_string(),
-        ))
-        .await;
-    let config: serde_json::Value = match row {
-        Ok(Some(r)) => r
-            .try_get::<Option<serde_json::Value>>("", "config")
-            .ok()
-            .flatten()
-            .unwrap_or_else(|| serde_json::json!({})),
-        _ => serde_json::json!({}),
-    };
-
-    for milestone in MILESTONE_THRESHOLDS {
-        let key = format!("milestone_bonus_{}", milestone);
-        if let Some(v) = config
-            .get(&key)
-            .and_then(|v| v.as_f64())
-            .filter(|v| v.is_finite() && *v > 0.0)
-        {
-            out.insert(milestone, v);
-        }
-    }
-    out
-}
+// `maybe_award_referral_milestones` and `milestone_bonus_amounts` stood here:
+// the award credited loyalty points per rung reached, and queued the
+// `milestone` notice; the amounts came from `loyalty_config` or the compiled
+// defaults. Both stopped on 2026-09-26 (owner, R3: «Убрать, только скидка
+// 10%»). Points already credited stay in the ledger, and the stored
+// `loyalty_config.milestone_bonus_N` keys are inert.
 
 // ──────────────────────────────────────────────────────────────────
 // Unit tests (no DB required)
@@ -1126,12 +863,13 @@ mod chain_tests {
         );
     }
 
-    /// Since 2026-09-26 a new welcome credit is written with a sentence that
-    /// names no garden, and the bonus history's rule still withholds it: the
-    /// words are not the owner's (`crate::trios::legacy_view::WELCOME_CREDIT_SENTENCE`).
+    /// Since 2026-09-26 (owner, R3: «Убрать, только скидка 10%») confirming a
+    /// referral pays nobody: the edge is confirmed and counted once, and no
+    /// loyalty point moves for either person -- no referral credit to the
+    /// inviter, no welcome credit to the friend, no `bonus_paid`.
     #[tokio::test]
     #[ignore]
-    async fn a_new_welcome_credit_names_no_garden_and_is_withheld() {
+    async fn a_confirmed_referral_credits_nobody() {
         let Some(orm) = db().await else { return };
         use sea_orm::{ConnectionTrait, DbBackend, Statement};
         let referrer = 990_021i64;
@@ -1157,29 +895,66 @@ mod chain_tests {
         record_referral(&orm, referrer, invitee, &code, Some("telegram_start"))
             .await
             .expect("record");
-        confirm_referral(&orm, invitee, 100.0, 50.0)
-            .await
-            .expect("confirm");
+        let points = |id: i64| {
+            let orm = orm.clone();
+            async move {
+                let row = orm
+                    .query_one(Statement::from_sql_and_values(
+                        DbBackend::Postgres,
+                        "SELECT COALESCE((SELECT bonus_balance::float8 FROM loyalty_profiles \
+                                           WHERE telegram_id = $1), 0) AS balance, \
+                                (SELECT COUNT(*)::bigint FROM bonus_transactions \
+                                  WHERE telegram_id = $1) AS rows",
+                        [id.into()],
+                    ))
+                    .await
+                    .expect("query")
+                    .expect("a row");
+                (
+                    row.try_get::<f64>("", "balance").expect("balance"),
+                    row.try_get::<i64>("", "rows").expect("rows"),
+                )
+            }
+        };
+        let before = (points(referrer).await, points(invitee).await);
+
+        assert_eq!(
+            confirm_referral_edge(&orm, invitee).await.expect("confirm"),
+            Some(referrer),
+            "the pending edge was not flipped"
+        );
+        assert_eq!(
+            confirm_referral_edge(&orm, invitee)
+                .await
+                .expect("confirm again"),
+            None,
+            "a confirmed edge was confirmed twice"
+        );
 
         let row = orm
             .query_one(Statement::from_sql_and_values(
                 DbBackend::Postgres,
-                "SELECT description FROM bonus_transactions \
-                 WHERE telegram_id = $1 AND tx_type = 'referral_welcome'",
+                "SELECT re.status, re.bonus_paid::float8 AS bonus_paid, lp.referral_count \
+                 FROM referral_events re JOIN loyalty_profiles lp ON lp.telegram_id = re.referrer_id \
+                 WHERE re.referred_id = $1",
                 [invitee.into()],
             ))
             .await
             .expect("query")
-            .expect("the welcome credit was written");
-        let stored: Option<String> = row.try_get("", "description").expect("a description");
+            .expect("the edge");
         assert_eq!(
-            stored.as_deref(),
-            Some(crate::trios::legacy_view::WELCOME_CREDIT_SENTENCE)
+            row.try_get::<String>("", "status").expect("status"),
+            "confirmed"
         );
-        assert!(!stored.as_deref().unwrap_or_default().contains("garden"));
         assert_eq!(
-            crate::trios::legacy_view::customer_bonus_description("referral_welcome", stored),
-            None
+            row.try_get::<f64>("", "bonus_paid").expect("bonus_paid"),
+            0.0
+        );
+        assert_eq!(row.try_get::<i32>("", "referral_count").expect("count"), 1);
+        assert_eq!(
+            (points(referrer).await, points(invitee).await),
+            before,
+            "a confirmation moved loyalty points"
         );
     }
 }
