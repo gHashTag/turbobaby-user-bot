@@ -903,7 +903,17 @@ pub const OWNER_ANSWER_3_KEYS_DELETED : u8 = 0;
 ;     2 above now reach only an order holding a rental line beside a line of a retired kind, which
 ;     is this shop's and stays shown with that line masked. No row is written; the admin reads are
 ;     unchanged.
+;   * THE MEDIA (question 3). The previous shop's media were still reachable by a direct link: files
+;     under /uploads on the server's volume, and objects in the bucket. The owner asked what he
+;     needs them for at all. The operator read it as: stop serving them; deleting the files is the
+;     owner's own irreversible act and is not done here. turbobaby/upload-media records it
+;     (OWNER_MEDIA_ANSWER_*, LOCAL_READ_*): the local read serves only a name a bike's picture
+;     references, and the bucket, which this server does not serve and whose previous-shop keys no
+;     code can tell apart, needs a production listing. Nothing is deleted.
 pub const OWNER_ANSWERS_2026_09_26_AT : str = "2026-09-26";
+pub const OWNER_MEDIA_ANSWER_OWNER_ID : str = "turbobaby/upload-media";
+pub const OWNER_MEDIA_ANSWER_DELETES_FILES : bool = false;
+pub const OWNER_MEDIA_ANSWER_BUCKET_NEEDS_A_PRODUCTION_LISTING : bool = true;
 pub const OWNER_ORDERS_ANSWER_READ_BY : str = "operator";
 pub const OWNER_ORDERS_ANSWER_RULE_OWNER_ID : str = "turbobaby/order-presentation";
 pub const OWNER_ORDERS_ANSWER_HIDES_THE_ORDER : bool = true;
@@ -1414,6 +1424,14 @@ test the_orders_answer_of_2026_09_26_hides_the_previous_shops_orders_and_writes_
     assert OWNER_ORDERS_ANSWER_WRITES_ROWS == false;
     assert OWNER_ORDERS_ANSWER_WRITES_ROWS == OWNER_ANSWER_3_WRITES_ROWS;
     assert OWNER_ORDERS_ANSWER_CHANGES_AN_ADMIN_READ == false;
+}
+
+test the_media_answer_of_2026_09_26_stops_serving_and_deletes_nothing {
+    assert OWNER_MEDIA_ANSWER_OWNER_ID == "turbobaby/upload-media";
+    assert OWNER_MEDIA_ANSWER_OWNER_ID != ID;
+    assert OWNER_MEDIA_ANSWER_DELETES_FILES == false;
+    assert OWNER_MEDIA_ANSWER_DELETES_FILES == OWNER_RULING_2026_09_25_DELETES_ROWS;
+    assert OWNER_MEDIA_ANSWER_BUCKET_NEEDS_A_PRODUCTION_LISTING == true;
 }
 
 test the_identity_of_this_contract_is_fixed {
