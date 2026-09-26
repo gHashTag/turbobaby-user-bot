@@ -63,7 +63,8 @@ pub const WIRING_WITNESS : str = "tests/referral_credit_wiring.rs";
 pub const OWNER_R3_DECIDED_AT : str = "2026-09-26";
 pub const OWNER_R3_WORDS : str = "Credited only for someone who rented, a 10% discount. The inviter can take it as a discount on a rental or as money. The referral bonus points: remove them, only the 10% discount. 10% of each completed rental of the invited friend, without deposit and delivery, for each rental of the friend; spent on a rental or paid out by a manager by hand; the friend gets nothing.";
 ; Bound by gate 3 to REFERRAL_CREDIT_PERCENT in the core, to 089's credit CHECK, and to the rule
-; sentence in both bot locales (src/locales.rs).
+; sentence in both bot locales (src/locales.rs); since the integration of 2026-09-26 also to the
+; Mini App's rule sentence in both tables (T_REFERRAL_SUBTITLE in src/trios/i18n.rs).
 pub const CREDIT_PERCENT : u8 = 10;
 pub const CREDIT_ROUNDS_DOWN_TO_WHOLE_BAHT : bool = true;
 pub const BASE_EXCLUDES_DEPOSIT : bool = true;
@@ -178,6 +179,41 @@ pub const COPY_NEEDED_AND_NOT_WORDED : [8]str = [
   "an empty state for the invitees panel",
   "a sentence saying the milestone ladder ended",
 ];
+; INTEGRATED 2026-09-26 (t27/round5: the server lane, then the client lane, both merged). The
+; client lane retired seven keys whose copy promised points, a ladder or an amount per friend, each
+; line of src/trios/i18n.rs replaced by one line. turbobaby/locale-policy counts them
+; (KEYS_DELETED_2026_09_26_R3) and left their names to this file; the unit test named below holds
+; them absent from the declarations and from both tables. The client lane also met a ninth sentence
+; it would have needed and left out, like the eight above: why both buttons are inactive while
+; nothing is available.
+pub const COPY_KEYS_RETIRED_2026_09_26 : [7]str = [
+  "referral.invitees.empty",
+  "referral.milestone.title",
+  "referral.milestone.subtitle",
+  "referral.milestone.awarded",
+  "referral.share_text",
+  "referral.stat.bonus",
+  "profile.earn_per_ref",
+];
+pub const COPY_KEYS_RETIRED_WITNESS : str = "src/trios/i18n.rs the_referral_keys_r3_retired_stay_retired";
+pub const COPY_NEEDED_AND_NOT_WORDED_FOUND_BY_THE_CLIENT_LANE : [1]str = [
+  "a sentence saying why both buttons are inactive while nothing is available",
+];
+; The API's one shape. Both lanes compile against the wire types of IMPLEMENTATION_CORE, so a field
+; cannot drift between the server and the Mini App. The path, the verb, the type a route answers
+; with and the type a screen parses, the body a screen sends and the field names the server's
+; hand-written parsers read are strings and choices, and no compiler compares them. Since the
+; integration, API_SHAPE_WITNESS reads both sides against one table of the six routes, and the
+; in-crate test named by API_SHAPE_BODY_WITNESS runs each shared body, serialized as a screen
+; serializes it, through the server's parser. Eight planted drifts (a client path, a parsed type, a
+; verb on each side, a field name, an answer type, a resolve action, a swapped body) each turned
+; the witness red; tests/ui_endpoints_exist.rs, which only asks that a fetched path is served, went
+; green with the merge.
+pub const API_SHAPE_WITNESS : str = "tests/referral_credit_api_shape_wiring.rs";
+pub const API_SHAPE_BODY_WITNESS : str = "src/api/referral_credit.rs the_bodies_the_screens_serialize_are_what_the_parsers_read";
+pub const CLIENT_WIRING_WITNESS : str = "tests/referral_credit_client_wiring.rs";
+pub const CLIENT_CALLED_ROUTE_COUNT : u8 = 6;
+pub const API_SHAPE_PINNED_AT : str = "2026-09-26";
 
 ; --- Reuse edges, named by ID ------------------------------------------------------------------------------
 pub const REUSES_REFERRAL_PROGRAM_ID : str = "turbobaby/referral-program";
@@ -489,6 +525,20 @@ test the_nine_reuse_edges_are_named_by_id_and_none_is_this_file {
   assert REUSE_EDGES[7] == REUSES_DEPOSIT_TIERS_ID;
   assert REUSE_EDGES[8] == REUSES_NOTIFICATION_QUEUE_ID;
   assert REUSES_REFERRAL_PROGRAM_ID != ID;
+}
+
+test the_integration_pins_one_shape_and_names_the_retired_keys {
+  assert API_SHAPE_WITNESS == "tests/referral_credit_api_shape_wiring.rs";
+  assert API_SHAPE_WITNESS != WIRING_WITNESS;
+  assert CLIENT_WIRING_WITNESS != WIRING_WITNESS;
+  assert CLIENT_CALLED_ROUTE_COUNT == ROUTE_COUNT;
+  assert API_SHAPE_PINNED_AT == OWNER_R3_DECIDED_AT;
+  assert COPY_KEYS_RETIRED_2026_09_26.len == 7;
+  assert COPY_KEYS_RETIRED_2026_09_26[0] == "referral.invitees.empty";
+  assert COPY_KEYS_RETIRED_2026_09_26[6] == "profile.earn_per_ref";
+  assert COPY_KEYS_RETIRED_2026_09_26[5] != COPY_KEYS[0];
+  assert COPY_NEEDED_AND_NOT_WORDED_FOUND_BY_THE_CLIENT_LANE.len == 1;
+  assert COPY_NEEDED_AND_NOT_WORDED.len + COPY_NEEDED_AND_NOT_WORDED_FOUND_BY_THE_CLIENT_LANE.len == 9;
 }
 
 ; --- Invariants -----------------------------------------------------------------------------------------

@@ -1046,3 +1046,110 @@ sight") now concerns old rows only: no welcome row is written since R3, and old 
 (`OWNER_ANSWER_R1_*`, `OWNER_ANSWER_R2_*`), `notification_queue.t27` the held kinds, and
 `order_status.t27` the reject's reversal. The tests are `tests/referral_credit_wiring.rs`,
 `tests/integration_referral_credit.rs` and `tests/integration_closed_reads.rs`.
+
+## R3, the Mini App's half and the integration, 2026-09-26
+
+Kept at the end of this file, like the entries above. The entry before this one is the server
+lane's; this one records the client lane (`t27/round5-client`) and the integration branch
+(`t27/round5`) that merged both. The owner's words are the ones quoted there: «Должно начисляться
+исключительно за то кто арендовал 10% скидка», «Пригласивший и может забрать скидкой за аренду или
+деньгами», «Убрать, только скидка 10%», «с каждой аренды друга».
+
+**What changed in the Mini App.**
+
+* **The referrals page** (`src/ui/pages/referrals.rs`). A balance block: «Реферальный баланс» and
+  `format_baht(shown_balance(balance_thb))`, so a negative balance reads as 0; a failed or
+  unparsable read hides the block instead of printing a zero. Two buttons, «Списать в счёт аренды»
+  and «Запросить выплату», post the shared `OpenRequestBody` to
+  `POST /api/referral-credit/me/:telegram_id/requests` and read the balance again after every
+  request. A held redemption shows "✅ " plus its own label, pressed; a held payout shows «Запрос на
+  выплату отправлен менеджеру». The subtitle is the rule, «10% с каждой аренды приглашённого друга».
+  Gone: the milestone ladder and its `/milestones` fetch, and the fourth stat card «Бонус».
+* **The profile** (`src/ui/screens/profile_screen.rs`). The referral card prints the same rule
+  sentence where «Получайте {0} за друга» stood; `LoyaltyConfigData` no longer reads
+  `referral_bonus`.
+* **The admin screen** (`src/ui/screens/admin_screen.rs`). The Loyalty tab's third sub-tab,
+  «🤝 Рефералы», renders `ReferralCreditPanel`, appended at the end of the file: open requests,
+  invitees with «Записать аренду», recorded rentals with «Сторнировать», and non-zero balances. It
+  calls the four admin routes only, through `AdminAuth`.
+* **Copy** (`src/trios/i18n.rs`), each edit one line for one line: seven keys retired
+  (`referral.invitees.empty`, `referral.milestone.title`, `referral.milestone.subtitle`,
+  `referral.milestone.awarded`, `referral.share_text`, `referral.stat.bonus`,
+  `profile.earn_per_ref`), four declared with the operator's wording (`referral.balance`,
+  `referral.apply_to_rental`, `referral.request_payout`, `referral.payout_requested`), and
+  `referral.subtitle` reworded. 526 → 523 declarations (naive grep 531 → 528).
+
+**The client lane's decisions**, each operator-level and open to the owner:
+
+1. Both buttons are live only while something is available (at least 1 baht) and nothing is held.
+   Why: the server would answer 409 or 422, and no sentence was worded for either.
+2. After a request the page shows the server's state, read again. Only when that read holds no
+   open request after a failure does it print the existing generic error sentence
+   (`T_API_ERR_UNKNOWN`). Why: a lost answer to a request that was opened is not a failure.
+3. The share link is sent bare (`https://t.me/share/url?url=<link>`): the text that rode along
+   promised the friend bonuses, and since R3 the friend gets nothing.
+4. The friends panel is not rendered when empty: its sentence promised the friend bonuses.
+5. The admin sees a negative balance signed («−»); the customer sees 0.
+6. The recording form mints a uuid v4 as its `idempotency_key` when it opens and reuses it on every
+   retry; the form stays open on a refusal or a lost answer, so a retry is the same request. The
+   form previews «10% = ฿N» and, when the customer holds a redemption, the amount applied, from
+   `trios::referral_credit` (`credit_for_rental`, `applied_redemption`); the server decides.
+7. The top-referrers list on the referrals page is unchanged: it still reads the public
+   `/api/referrals/leaderboard`, and each row's «{1} заработано» is the frozen
+   `total_bonus_earned` of the points credited before R3 (open question 2 of the entry above).
+
+**Admin-facing wording the client lane wrote**, not the owner's, listed for rewording (the sub-tab
+«🤝 Рефералы», the amount label «Сумма аренды без депозита и доставки, ฿» and the button labels
+«Записать аренду», «Выплачено», «Отклонить», «Сторнировать» came from the spec):
+
+* The intro: «Начисление пригласившему — с каждой записанной аренды приглашённого друга, от суммы
+  без депозита и доставки, вниз до целого бата. Деньги сами не двигаются: выплату делает менеджер.»
+* Loading and errors: «Не загрузилось: …», «Обновить», «сеть/таймаут», «ответ не разобран: …».
+* The form: «Записать аренду: <клиент>», «ID заказа (необязательно)», «Заметка (необязательно)»,
+  «Записать», «Отмена»; the preview «N% = ฿N», «Списать с реферального баланса клиента: ฿N (к
+  оплате ฿M)», «Пригласившему не начислится: <причина>», «Приглашение не в списке: сервер
+  проверит сам», «Введите сумму: целое число бат, от 1», «Сумма: целое число бат, от 1».
+* Headers and empty states: «Открытые запросы (N)», «Открытых запросов нет», «Приглашённые (N)»,
+  «Приглашений нет», «Записанные аренды (N)», «Записей нет», «Балансы (N)», «Ненулевых балансов
+  нет».
+* Request kinds «Выплата», «В счёт аренды», «Запрос»; invite states «подтверждён», «ожидает»;
+  reasons «нет приглашения», «пригласил сам себя», «приглашение позже заказа», «уже был клиентом до
+  приглашения», «не начисляется».
+* Row text: «баланс», «пригласил: …», «с <дата>», «аренд записано: N · начислено ฿N», «заказ … ·
+  списано с баланса … · пригласивший … · начислено …», «записал <id>», «сторно <дата>», and the ages
+  «N мин назад», «N ч назад», «N дн назад».
+* Confirmations: «Выплата сделана?» / «Отметить выплаченным: баланс уменьшится на сумму запроса.
+  Сначала выплатите вручную.», «Отклонить запрос?» / «Удержание снимется, баланс не изменится.»,
+  «Сторнировать аренду?» / «Начисление пригласившему снимется целиком, списанное с баланса клиента
+  вернётся.»
+* Toasts: «✅ Аренда #N записана · пригласившему ฿N · списано с баланса ฿N (уже была записана)»,
+  «❌ сеть/таймаут: повторите, запрос тот же», «✅ Запрос #RN: выплата отмечена / отклонён (уже
+  было)», «↩️ Аренда #N сторнирована: снято ฿X, возвращено клиенту ฿Y», «Аренда #N уже была
+  сторнирована».
+
+**Customer copy needed and not given, so left out** (nothing was invented): a confirmation
+sentence after «Списать в счёт аренды» (the button shows ✅ and its label instead); a sentence
+saying why both buttons are inactive while nothing is available; wording for a negative balance
+(shown as 0); specific sentences for the 409 and 422 refusals (the page shows the generic one);
+an empty state for the invitees panel (hidden); a share text for the friend (the link goes bare);
+notices to the inviter on an accrual, a payout or a decline; labels for history rows; a sentence
+saying the milestone ladder ended.
+
+**The integration** (`t27/round5`: the server lane merged first, then the client lane, both
+`--no-ff`):
+
+* One conflict, the gate-1 manifest: both lanes raised the floors of `catalog_write.t27` and
+  `locale_policy.t27` for different declarations. Each comment is kept, and each floor is the
+  compiler's measurement of the merged file (160/44 and 156/36).
+* The API has one shape on both sides, pinned by `tests/referral_credit_api_shape_wiring.rs`: the
+  six routes the server registers with their verbs and handlers, the shared type each route
+  answers with, the fields each hand-written body parser reads against the shared body's fields,
+  and, on the screens, the path, the verb, the body sent and the type parsed for each route, plus
+  the request kinds and resolve actions each side admits. The in-crate test
+  `the_bodies_the_screens_serialize_are_what_the_parsers_read` (`src/api/referral_credit.rs`)
+  runs each shared body, serialized as a screen serializes it, through the server's parser. Eight
+  planted drifts each turned the wiring test red.
+* `referral_credit.t27` records the shape's witnesses, and names the seven retired keys (the client
+  lane left their names to it) and the ninth missing sentence the client lane met.
+* Gate 3 binds the rate in the Mini App's rule sentence, RU and EN (`T_REFERRAL_SUBTITLE`), to
+  `CREDIT_PERCENT`: 282 + 2 = 284 rows, `MIN_BINDINGS` 284.
