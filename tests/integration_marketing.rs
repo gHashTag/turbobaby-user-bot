@@ -194,11 +194,3 @@ async fn put_marketing_display_raw(
     };
     Resp { status, body }
 }
-
-fn rand_suffix() -> u32 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.subsec_nanos())
-        .unwrap_or(0)
-}
