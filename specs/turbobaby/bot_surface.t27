@@ -62,7 +62,7 @@
 ; whose variant is at :71 and whose enum closes at :72 -- counting the brief's range yields
 ; fifteen commands. The referral entry is cited as commands.rs:165; :165 is a comment inside the
 ; pre-dispatch preamble that merely mentions referrals, and the grammar is at :188-190. The
-; tripwire is cited as tests/retired_table_wiring.rs:65-73; the survivor entry runs :66-75.
+; tripwire is cited as tests/retired_table_wiring.rs:65-73; the survivor entry runs :66-76 (:66-75 until 2026-09-26).
 ; --
 ; WHAT THIS FILE NEVER DOES. It quotes no message text, in any language: every reply string the
 ; bot sends is Cyrillic and is cited by path only, which is also why the strain-of-day format
@@ -558,7 +558,7 @@ pub const REPO_ESCAPE_GREP_HITS_2026_09_25 : u8 = 45;
 ; one caller is src/bot/callbacks.rs:387, which writes unwrap_or_default() and so turns the query
 ; error into an empty vector. An empty vector makes the index lookup at :388 miss, the arm sends
 ; nothing, and the surface is alive precisely because it fails quietly.
-; tests/retired_table_wiring.rs:66-75 already carries this as one of four declared survivors and
+; tests/retired_table_wiring.rs:66-76 (:66-75 until 2026-09-26) already carries this as one of four declared survivors and
 ; states in its own words that retiring the carousel is a product decision rather than a
 ; consequence of the drop. That ruling belongs to REUSES_LEGACY_RETIREMENT_ID. This file records
 ; only that the wire is still attached, and one thing that file will want:
@@ -580,7 +580,7 @@ pub const LEGACY_DROP_MIGRATION : str = "migrations/083_drop_cannabis_catalog.sq
 ; pair equal, so a divergence fails the gate here instead of being discovered by a reader.
 ; Both were re-read at SOURCE on 2026-09-21, not taken on trust from the owner: migration 083
 ; carries 6 DROP TABLE statements (:82-84 and :88-90) and tests/retired_table_wiring.rs holds 4
-; Survivor entries (:49-82). Owner and source agree, which is what makes the copy safe to keep.
+; Survivor entries (:49-82; :49-83 since 2026-09-26). Owner and source agree, which is what makes the copy safe to keep.
 pub const LEGACY_TABLES_DROPPED_BY_THAT_MIGRATION : u8 = 6;
 pub const DROPPED_TABLE_COUNT_OWNER_ID : str = "turbobaby/legacy-retirement";
 pub const DROPPED_TABLE_COUNT_OWNER_DECLARATION : str = "DROPPED_TABLE_COUNT";
@@ -588,7 +588,7 @@ pub const DROPPED_TABLE_COUNT_OWNERS_VALUE : u8 = 6;
 pub const LEGACY_READER : str = "src/db/mod.rs:1037";
 pub const LEGACY_CALL_SITE : str = "src/bot/callbacks.rs:387";
 pub const LEGACY_ERROR_IS_SWALLOWED : bool = true;
-pub const LEGACY_SURVIVOR_ENTRY : str = "tests/retired_table_wiring.rs:66-75";
+pub const LEGACY_SURVIVOR_ENTRY : str = "tests/retired_table_wiring.rs:66-76";
 pub const LEGACY_SURVIVOR_ENTRY_COUNT : u8 = 4;
 pub const ALLOWLIST_SIZE_OWNER_DECLARATION : str = "ALLOWLIST_SIZE";
 pub const ALLOWLIST_SIZE_OWNERS_VALUE : u8 = 4;
@@ -616,9 +616,9 @@ pub fn legacy_surface_answers_with_content(table_is_live: bool, rows_returned: u
 ; answers the press and does nothing; a press now answers with the rental menu -- the one the menu
 ; command sends, built once by rental_menu in src/bot/commands.rs -- written over the old card when
 ; Telegram still lets the bot edit it and sent as a new message when it does not. That path reads
-; no table. The reader LEGACY_READER names is still compiled: it is public, and the ignored
-; integration test tests/integration_strain_of_day.rs calls it, so its survivor entry stays and the
-; allowlist size this file copies does not move. It has NO production caller any more:
+; no table. The reader LEGACY_READER names is still compiled: it is public (and the ignored test
+; tests/integration_strain_of_day.rs called it until 2026-09-26, when it began to test the retirement
+; instead), so its survivor entry stays and the allowlist size this file copies does not move. It has NO production caller any more:
 ; LEGACY_CALL_SITE, LEGACY_ERROR_IS_SWALLOWED and both LEGACY_BUTTON_PRODUCERS describe code that is
 ; gone and are kept as the 2026-09-21 reading they were. The Rust variant is now
 ; CallbackAction::RetiredCarouselPage and carries no page index; ACTION_STRAIN_OF_DAY_PAGE keeps its

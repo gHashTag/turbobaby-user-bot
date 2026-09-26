@@ -12,8 +12,17 @@
 //! cannot classify all of it. Every rule therefore fails closed: a customer is
 //! served what this code can vouch for, and the rest is replaced or withheld.
 //!
-//! Three reads, and the rules they get:
+//! Four reads, and the rules they get:
 //!
+//! * An ORDER of the previous shop is not shown to its customer at all since
+//!   2026-09-26 ([`customer_sees_order`]). Asked that day about the lines
+//!   shown as «Позиция прежнего каталога», the owner answered, verbatim:
+//!   «А зачем это вообще там?». The operator read it as: a customer must not
+//!   see the previous shop's orders at all. Such an order is neither listed nor
+//!   answered by id; the customer is told what a missing order tells them.
+//!   An order holding a rental line beside a line of a retired kind is this
+//!   shop's, and stays shown with that line masked as below: since that day it
+//!   is the one case the neutral name is still served for.
 //! * An ORDER LINE of a retired kind -- any line that is not a bike line -- is
 //!   served as the neutral name plus its stored quantity and unit price, and
 //!   nothing else ([`customer_order_line`]). The neutral name is the
@@ -124,7 +133,10 @@ pub const WITHHELD_TX_TYPE: &str = "";
 /// repository writes it from a fixed sentence holding no stored name: the
 /// cashback (`src/db/orders.rs`), the two referral credits
 /// (`src/db/referrals.rs`) and the admin debit (`src/api/loyalty.rs`). The
-/// welcome credit is not among them: its sentence names the garden.
+/// welcome credit is not among them. Its sentence named the garden until
+/// 2026-09-26 and names none since ([`WELCOME_CREDIT_SENTENCE`]), but no owner
+/// has worded it, so a customer is served no description for a welcome row,
+/// old or new: only the generic label, until the owner supplies the wording.
 pub const DESCRIBED_TX_TYPES: [&str; 4] = [
     "order_cashback",
     "referral_bonus",
@@ -134,6 +146,15 @@ pub const DESCRIBED_TX_TYPES: [&str; 4] = [
 
 /// The referral credit's sentence, as `confirm_referral` writes it.
 pub const REFERRAL_BONUS_SENTENCE: &str = "Referral bonus for new user";
+
+/// The welcome credit's sentence, as `confirm_referral` stores it for the
+/// invited customer since 2026-09-26: the sentence it stored until then with
+/// the garden's words dropped and nothing else changed. It is a stored record
+/// and is NOT served ([`DESCRIBED_TX_TYPES`] leaves the welcome credit out).
+/// The trimmed words are the lane's interim choice, not the owner's, and the
+/// repository writes no customer copy of its own; the wording a customer
+/// reads is a question put to the owner. No row is rewritten.
+pub const WELCOME_CREDIT_SENTENCE: &str = "Welcome bonus from a friend's invite";
 
 /// The admin debit's sentence, as `use_bonus` writes it.
 pub const ADMIN_DEDUCTION_SENTENCE: &str = "use_bonus by admin";
@@ -198,6 +219,34 @@ pub fn names_the_old_shop(text: &str) -> bool {
     text.to_lowercase().contains(OLD_SHOP_NAME)
 }
 
+/// Whether a customer is shown a stored order at all (owner, 2026-09-26; the
+/// module header quotes the answer).
+///
+/// An order is the previous shop's, and is neither listed nor answered by id,
+/// when its stored shop names the previous shop ([`names_the_old_shop`]) or
+/// when none of its lines is a bike line ([`is_bike_line`]): every line of a
+/// retired kind, an empty list, or items that are not a list at all. The
+/// previous shop rented no bikes, `create_order` refuses an empty cart, and
+/// since migration 085 hid the old catalogue its checkout can store no line
+/// that is not a bike line, so an order this code cannot vouch for is not
+/// shown -- the same fail-closed reading as every rule here.
+///
+/// An order holding a bike line AND a line of a retired kind -- a rental this
+/// shop took beside the old catalogue before 085 -- is this shop's, and is
+/// shown: the rental is the customer's own booking. Its other lines keep the
+/// neutral name ([`customer_order_line`]), which since 2026-09-26 is the one
+/// case the neutral name is served for. The shop rule decides first: an order
+/// naming the previous shop is not shown whatever it holds. Nothing is
+/// written; the row keeps what it stored, and the admin reads show it whole.
+pub fn customer_sees_order(items: &Value, shop_id: Option<&str>) -> bool {
+    if shop_id.is_some_and(names_the_old_shop) {
+        return false;
+    }
+    items
+        .as_array()
+        .is_some_and(|lines| lines.iter().any(is_bike_line))
+}
+
 /// The shop an order names, as its customer is served it: withheld when it
 /// names the previous shop, which is served as [`WITHHELD_SHOP`] since
 /// 2026-09-26, and as stored otherwise. No shop stays no shop. The row keeps
@@ -243,9 +292,10 @@ pub fn customer_bonus_tx_type(stored: &str) -> String {
 /// A bonus row's stored description, as its customer is served it: kept only
 /// when the row is of one of [`DESCRIBED_TX_TYPES`] and the text is that type's
 /// sentence, word for word apart from its figures. Anything else -- a
-/// garden-era row, the welcome credit, a type an admin typed, a type the
-/// previous shop's bot wrote -- is withheld, because nothing here can tell its
-/// text from the old shop's.
+/// garden-era row, a welcome credit old or new (the new one's sentence awaits
+/// the owner's wording, [`WELCOME_CREDIT_SENTENCE`]), a type an admin typed, a
+/// type the previous shop's bot wrote -- is withheld, because nothing here can
+/// tell its text from the old shop's or vouch for its words.
 pub fn customer_bonus_description(tx_type: &str, stored: Option<String>) -> Option<String> {
     stored.filter(|text| is_a_sentence_this_code_writes(tx_type, text))
 }
@@ -482,6 +532,64 @@ mod tests {
         assert_eq!(customer_order_items(&json!([])), json!([]));
     }
 
+    fn bike_line() -> Value {
+        json!({
+            "quantity": 1.0,
+            "bike": { "bike_key": "nmax-155", "deal": { "kind": "bike_rental" } }
+        })
+    }
+
+    /// Owner, 2026-09-26: a customer does not see the previous shop's orders
+    /// at all. An order with no bike line is not shown, whatever it holds.
+    #[test]
+    fn an_order_with_no_bike_line_is_not_shown() {
+        for items in [
+            json!([{ "set_name": STORED_NAME, "quantity": 1 }]),
+            json!([
+                { "strain_id": STORED_ID, "strain_name": STORED_NAME, "quantity": 1 },
+                { "accessory_id": STORED_ID, "quantity": 2 },
+            ]),
+            json!([{ "bike": STORED_NAME, "quantity": 1 }]),
+            json!([STORED_NAME]),
+            json!([]),
+            json!({ "0": STORED_NAME }),
+            json!(STORED_NAME),
+            Value::Null,
+        ] {
+            assert!(!customer_sees_order(&items, None), "{items}");
+            assert!(!customer_sees_order(&items, Some("TurboBaby")), "{items}");
+        }
+    }
+
+    #[test]
+    fn a_rental_order_of_this_shop_is_shown_and_one_naming_the_previous_shop_is_not() {
+        let rental = json!([bike_line()]);
+        assert!(customer_sees_order(&rental, None));
+        assert!(customer_sees_order(&rental, Some("\u{1f3e0} TurboBaby")));
+        assert!(customer_sees_order(&rental, Some("")));
+        for shop in ["\u{1f3e0} Woody Phangan", "WOODY", "the woody one"] {
+            assert!(!customer_sees_order(&rental, Some(shop)), "{shop}");
+        }
+    }
+
+    /// The one case the neutral name is still served for: a rental beside a
+    /// line of the old catalogue is this shop's order, shown with the rental as
+    /// stored and the other line masked.
+    #[test]
+    fn a_mixed_order_is_shown_with_its_retired_line_masked() {
+        let stored = json!([
+            bike_line(),
+            { "accessory_id": STORED_ID, "accessory_name": STORED_NAME, "quantity": 1, "unit_price": 250 },
+        ]);
+        assert!(customer_sees_order(&stored, Some("\u{1f3e0} TurboBaby")));
+        let served = customer_order_items(&stored);
+        assert_eq!(served[0], bike_line());
+        assert_eq!(
+            served[1],
+            json!({ "strain_name": neutral_ru(), "quantity": 1, "unit_price": 250 })
+        );
+    }
+
     #[test]
     fn the_previous_shop_is_withheld_in_any_case_and_this_one_is_kept() {
         let withheld = Some(WITHHELD_SHOP.to_string());
@@ -553,8 +661,14 @@ mod tests {
             assert_eq!(served(tx, STORED_NAME), None);
             assert_eq!(served(tx, REFERRAL_BONUS_SENTENCE), None);
         }
-        // The welcome credit: its sentence names the garden.
+        // A welcome credit, old or new, whatever it says: the sentence a new
+        // one stores since 2026-09-26 names no garden, but it is not the
+        // owner's wording, so it is withheld too until the owner supplies one.
+        assert!(!DESCRIBED_TX_TYPES.contains(&"referral_welcome"));
+        assert_eq!(served("referral_welcome", WELCOME_CREDIT_SENTENCE), None);
         assert_eq!(served("referral_welcome", STORED_NAME), None);
+        assert_eq!(served("referral_welcome", REFERRAL_BONUS_SENTENCE), None);
+        assert_eq!(served("referral_bonus", WELCOME_CREDIT_SENTENCE), None);
         // A type an admin typed, or one the previous shop's bot wrote.
         for tx in ["admin_grant", "manual_grant", "manual", "", "order_bonus"] {
             assert_eq!(served(tx, STORED_NAME), None, "{tx}");
@@ -585,7 +699,7 @@ mod tests {
         assert_eq!(served("admin_deduction", STORED_NAME), None);
         // Nothing stored stays nothing.
         assert_eq!(customer_bonus_description("order_cashback", None), None);
-        assert!(!DESCRIBED_TX_TYPES.contains(&"referral_welcome"));
+        assert_eq!(customer_bonus_description("referral_welcome", None), None);
     }
 
     #[test]

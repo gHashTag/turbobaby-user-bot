@@ -451,7 +451,7 @@ fn the_contracts_sites_land_on_their_code() {
             &["let arm = arm_of(&status);"],
         ),
     ];
-    let arrays: [(&str, &[&str]); 9] = [
+    let arrays: [(&str, &[&str]); 10] = [
         (
             "REORDER_SITES",
             &["if arm.reorder_offered() {", "if is_terminal {"],
@@ -521,6 +521,16 @@ fn the_contracts_sites_land_on_their_code() {
                 "StatusArm::Unresolved => Progress::Unreadable,",
             ],
         ),
+        // The bike line's name (2026-09-26): each screen that prints a line asks the
+        // host-compiled rule first.
+        (
+            "BIKE_LINE_NAME_SITES",
+            &[
+                "crate::trios::order_line::bike_line_name(item.bike.as_ref())",
+                "crate::trios::order_line::bike_line_name(item.bike.as_ref())",
+                "crate::trios::order_line::bike_line_name(item.bike.as_ref())",
+            ],
+        ),
     ];
 
     let mut wrong = Vec::new();
@@ -588,5 +598,111 @@ fn the_exact_reading_rests_on_the_servers_own_reading() {
     assert!(
         !validator.contains("to_lowercase") && !validator.contains("to_ascii_lowercase"),
         "the validator folds case now; the exact reading on the screens is no longer the server's"
+    );
+}
+
+/// A bike line is printed under its bike's name, not "Unknown" (2026-09-26).
+///
+/// Each screen that prints an order line named it from the old catalogue's four
+/// name keys only, and a bike line fills none of them, so every bike line fell
+/// through to the keyless "Unknown". The rule now lives in
+/// `src/trios/order_line.rs` (host-compiled, with its unit tests): the stored
+/// `bike_name`, else the `bike_key`, which is `BikeLine`'s own documented
+/// fallback. This guard holds the three screens to that rule, in that order,
+/// and the rule to the wire it reads.
+#[test]
+fn every_screen_that_prints_a_line_names_a_bike_line_by_its_bike() {
+    const PROFILE_PATH: &str = "src/ui/screens/profile_screen.rs";
+    const RULE_PATH: &str = "src/trios/order_line.rs";
+    const WIRE_PATH: &str = "src/db/orders.rs";
+    let bike_first = "crate::trios::order_line::bike_line_name(item.bike.as_ref())";
+    for (path, name_fn, line_struct) in [
+        (
+            LIST_PATH,
+            "fn item_name(item: &ApiOrderItem) -> String {",
+            "struct ApiOrderItem {",
+        ),
+        (
+            DETAIL_PATH,
+            "fn item_name(item: &ApiOrderItem) -> String {",
+            "struct ApiOrderItem {",
+        ),
+        (
+            PROFILE_PATH,
+            "fn profile_item_name(item: &ProfileOrderItem) -> String {",
+            "struct ProfileOrderItem {",
+        ),
+    ] {
+        let text = source(path);
+        let at = text
+            .find(name_fn)
+            .unwrap_or_else(|| panic!("{path}: `{name_fn}` is gone; this check is blind"));
+        let body = &text[at..];
+        let body = &body[..body.find("\n}\n").expect("the name function closes")];
+        let lines = code_lines(body);
+        // The first statement asks the rule; the old keys and the fallback follow.
+        assert_eq!(
+            lines.get(1).map(|l| l.trim()),
+            Some(bike_first),
+            "{path}: the name function does not ask the bike first:\n{body}"
+        );
+        let order = [
+            bike_first,
+            ".or_else(|| item.strain_name.clone())",
+            ".or_else(|| item.accessory_name.clone())",
+            ".or_else(|| item.tea_name.clone())",
+            ".or_else(|| item.set_name.clone())",
+            ".unwrap_or_else(|| \"Unknown\".to_string())",
+        ];
+        let mut from = 0;
+        for step in order {
+            let found = body[from..]
+                .find(step)
+                .unwrap_or_else(|| panic!("{path}: `{step}` is missing or out of order:\n{body}"));
+            from += found + step.len();
+        }
+        // The line struct carries the bike, typed by the rule's own lenient reader.
+        let st = &text[text.find(line_struct).expect("the line struct is declared")..];
+        let st = &st[..st.find("\n}").expect("the line struct closes")];
+        assert!(
+            st.contains("bike: Option<crate::trios::order_line::OrderLineBike>,"),
+            "{path}: the line struct does not read the bike:\n{st}"
+        );
+    }
+    // The rule reads the two wire fields, stored name first.
+    let rule = source(RULE_PATH);
+    assert!(
+        rule.contains(
+            "pub const BIKE_LINE_NAME_FIELDS: [&str; 2] = [\"bike_name\", \"bike_key\"];"
+        ),
+        "{RULE_PATH} reads other fields than the wire's two"
+    );
+    // And the wire writes them under those names.
+    let wire = source(WIRE_PATH);
+    let bike_line = &wire[wire
+        .find("pub struct BikeLine {")
+        .expect("BikeLine is declared")..];
+    let bike_line = &bike_line[..bike_line.find("\n}\n").expect("BikeLine closes")];
+    let bike_line = code_lines(bike_line).join("\n");
+    assert!(
+        !bike_line.contains("serde(rename"),
+        "{WIRE_PATH}: a BikeLine field is renamed on the wire:\n{bike_line}"
+    );
+    for field in ["pub bike_key: String,", "pub bike_name: Option<String>,"] {
+        assert!(
+            bike_line.contains(field),
+            "{WIRE_PATH}: BikeLine no longer writes `{field}` under that name"
+        );
+    }
+    // The contract says the same.
+    let fields = spec_values(CONTRACT, "BIKE_LINE_NAME_FIELDS");
+    assert_eq!(
+        fields,
+        ["bike_name", "bike_key"],
+        "the contract's field order"
+    );
+    assert!(
+        source(CONTRACT).contains("\npub const BIKE_LINE_PRINTS_UNKNOWN : bool = false;\n"),
+        "the contract no longer says a bike line is named by its bike"
     );
 }

@@ -774,3 +774,103 @@ No wording was needed.
 `specs/turbobaby/order_presentation.t27` records it (`RETIRED_SHOP_DECIDED_AT`,
 `RETIRED_SHOP_LABEL_SHOWN`, `RETIRED_SHOP_SERVED_AS`; `RETIRED_SHOP_FALLBACK_NOTE` is closed).
 `tests/legacy_view_wiring.rs` holds the screens to it, and the rules' module has the unit test.
+
+## D19 addendum — what answer 3 still left in sight, the owner's answers of 2026-09-26 (server)
+
+Kept at the end of this file, like the entries above, so that no line citation into it moves.
+Questions about what answer 3 (2026-09-25) still left in customers' sight were put to the owner on
+2026-09-26. The rulings in force stay: rental only, Phuket only, nothing deleted (2026-09-24);
+«всё что касается канабиса нигде не должно быть» and «Все канабисное аналировать» (2026-09-25).
+Every change below stops SERVING or SENDING something, or changes what a NEW row says; no row is
+deleted or rewritten, no migration is added, and no file is removed from any volume or bucket.
+
+* **The previous shop's orders.** Asked about the lines shown as «Позиция прежнего каталога», the
+  owner answered «А зачем это вообще там?». The operator reads it as: a customer must not see the
+  previous shop's orders at all. An order naming the previous shop, or holding no bike line, is
+  not listed (it takes none of the list's 50 places), is answered 404 by the detail, the status
+  and the customer's own cancel exactly like a missing order, and is not counted in the profile's
+  order count. An order holding a rental line beside a line of the old catalogue is this shop's
+  and stays shown with that line masked, which is now the only case the neutral name is served
+  for. The admin reads are the archive and are unchanged. `order_presentation.t27`
+  (`PREVIOUS_SHOP_ORDER_*`); the rule is `customer_sees_order` in `src/trios/legacy_view.rs`.
+* **The previous shop's media.** Asked about media still reachable by a direct link, the owner
+  answered «Зачем они вообще нужны мне?». The operator reads it as: stop serving them; deleting the
+  files is the owner's own irreversible act and is not done here. The upload's local branch still
+  writes to `/data/uploads` whenever no object store is configured, so `/uploads/<name>` stays and
+  serves a name only when a bike's stored picture is exactly `/uploads/<name>`; everything else
+  answers 404. The bucket is not this server's to gate (its objects are fetched from the bucket's
+  own address), and both shops' code wrote the one key prefix `uploads/`, so telling the previous
+  shop's objects apart needs a production listing and stopping them a bucket policy change: the
+  owner's or the operator's, not done here. `upload_media.t27` (`OWNER_MEDIA_ANSWER_*`,
+  `LOCAL_READ_*`, `OBJECT_STORE_*`).
+* **The 24-hour event reminder** (operator, under «Все канабисное аналировать»). It was kept for
+  seats already held (2026-09-25). Every event is hidden since 088 and each is the previous shop's,
+  so it mailed their stored titles and venues. It now reminds public events only; cancellation and
+  the Stars refund of a held seat are unchanged. `events_booking.t27` (`REMINDER_REVERSED_AT`).
+* **The welcome credit's sentence** (critic note 5, under the rulings of 2026-09-25). A new
+  `referral_welcome` row said "Welcome bonus from a friend's garden invite". None of the four
+  sentences already written fits the invitee's row, so a new row now STORES the same sentence with
+  the garden's words dropped: "Welcome bonus from a friend's invite". Those words are the lane's
+  interim choice, not an owner's or an operator's decision, and this repository invents no
+  customer copy, so the sentence is NOT served: the bonus history withholds the description of
+  every welcome row, old or new, and a customer sees the generic label and the amount, as before
+  this round. **Open question for the owner:** what should an invited customer's welcome bonus say
+  in the bonus history? Until the owner words it, nothing is shown there. A first version of this
+  round served the sentence and recorded it as the operator's; the review of the round reversed
+  that on 2026-09-26. `legacy_retirement.t27` (`WELCOME_CREDIT_SENTENCE`, `WELCOME_SENTENCE_*`).
+
+The second question of that day (the Book control under a seeded zero) is the client's and is
+recorded in the entry that follows. `legacy_retirement.t27` keeps the day's answers together (`OWNER_ANSWERS_2026_09_26_AT`).
+
+## The Book control under a seeded zero: booking allowed, decided 2026-09-26 (question I)
+
+Kept at the end of this file, like the entries above, so that no line citation into it moves.
+
+The entry on the «all taken» line above left one thing open (question I): under the same zero unit
+count, a count seeded on 2026-09-12 and changed only by an admin, the Book control on the bike
+detail stayed disabled with the reason «Все байки этой модели заняты» / "Every bike of this model
+is taken" (`T_BIKE_BOOK_BLOCKED_NO_UNITS`). The owner answered on 2026-09-26, verbatim: «Разрешить
+бронь, наличие уточнит менеджер» ("Allow booking; the manager will confirm availability").
+
+* **Removed.** The arm of `book_block` (`src/ui/screens/catalog_screen.rs`) that disabled the
+  control under a zero, and the arm that disabled it when no count was served, «Наличие не
+  подтверждено» / "Availability not confirmed" (`T_BIKE_BOOK_BLOCKED_UNKNOWN_AVAILABILITY`). The
+  answer names the zero. Removing the second arm is the operator's reading of it: a manager confirms
+  availability for every family, so "not confirmed" is no reason to refuse one. Both keys were
+  deleted from `src/trios/i18n.rs` the way the earlier ones were, each line replaced by a comment
+  line. The unmounted card component (`src/ui/components/bike_card.rs`) stopped gating its
+  add-to-cart on the count and stopped printing it; it prints the manager line.
+* **Unchanged.** The server never refused an order on the count: `check_bike_lines` in
+  `src/api/orders.rs` logs a shortfall for staff and accepts the order. What still disables the Book
+  control reads no count: a closed family (D12), no published rate (D11), and a screen with no
+  booking handler. «Наличие уточняет менеджер» stays on every card and detail, and no sentence was
+  written. The admin screen keeps its count. The CLICK 125 redirect still names only a family with a
+  unit at base, because that decides what is offered instead, not whether a customer may book.
+
+`specs/turbobaby/availability.t27` records the answer (`NO_UNITS_BOOK_REASON_*`,
+`UNKNOWN_AVAILABILITY_*`, `customer_may_book`), `locale_policy.t27` the key count (547 to 545), and
+`tests/catalog_honesty_wiring.rs` holds the client, the card and `create_order` to it.
+
+## D19 addendum — cannabis-era copy the bundle still carried, retired 2026-09-26
+
+Kept at the end of this file, like the entries above, so that no line citation into it moves.
+A review of `405f30e` found copy of the previous shop in the public Mini App bundle that no mounted
+screen printed: every arm of `src/trios/i18n.rs` ships in the wasm, used or not. Under the owner's
+rulings of 2026-09-25, «всё что касается канабиса нигде не должно быть» (#12) and «Все канабисное
+аналировать» (answer 3), the operator had it retired on 2026-09-26.
+
+* **Deleted, nineteen keys**, each line replaced by a comment line so that no line citation moved:
+  the garden's bonus label «Награда из сада» / "Garden reward"; the accessories screen's last two
+  paraphernalia categories «Хранение» / «Зажигалка» with their chips; the strain card's
+  lab-certificate link «📄 Сертификат»; and fifteen keys of the unmounted shop game's farm («Посадить»,
+  «Собрать», «Урожай!» and the rest). The dead code that used them went too: the farm zone of
+  `src/ui/game/shop_game.rs` and two chips of `src/ui/screens/accessories_screen.rs`. Git keeps it.
+* **Kept.** The ride game (answer 2). Both unmounted screens stay compiled and exported, as answer 7
+  left them. Generic words (clothing, souvenir, the cafe and grill game, the old sort labels) carry
+  nothing cannabis-related. The tea fold list's CBD label is not in the bundle and hides that word
+  rather than showing it.
+* **Unchanged.** Every row, every migration. No sentence was written.
+
+`specs/turbobaby/legacy_retirement.t27` records it (`LEFTOVERS_2026_09_26_*`), `locale_policy.t27`
+the key count (545 to 526), and `tests/no_cannabis_client_wiring.rs` keeps the keys, their copy and
+the farm's words out of the tables and out of every string literal under `src/ui`.

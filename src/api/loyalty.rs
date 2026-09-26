@@ -119,7 +119,7 @@ async fn get_profile(
         // being fixed.
         "SELECT lp.telegram_id, lp.total_spent::float8 AS total_spent, lp.bonus_balance::float8 AS bonus_balance, lp.tier, lp.referral_code, lp.referred_by, lp.referral_count, \
                 (SELECT COUNT(*)::int4 FROM referral_events re WHERE re.referrer_id = lp.telegram_id) AS invited_count, \
-                lp.first_purchase_at, lp.manager_telegram_id, lp.is_blocked, COUNT(o.id)::int4 AS orders_count FROM loyalty_profiles lp LEFT JOIN orders o ON o.telegram_id = lp.telegram_id WHERE lp.telegram_id = $1 GROUP BY lp.telegram_id",
+                lp.first_purchase_at, lp.manager_telegram_id, lp.is_blocked FROM loyalty_profiles lp WHERE lp.telegram_id = $1",
         [telegram_id.into()],
     );
     let row = state.db.orm.query_one(stmt).await.map_err(|e| {
@@ -173,7 +173,7 @@ async fn get_profile(
                 "first_purchase_at": r.try_get::<Option<chrono::DateTime<chrono::Utc>>>("", "first_purchase_at").ok().flatten(),
                 "manager_telegram_id": r.try_get::<Option<i64>>("", "manager_telegram_id").ok().flatten(),
                 "is_blocked": r.try_get::<bool>("", "is_blocked").unwrap_or(false),
-                "orders_count": r.try_get::<i32>("", "orders_count").unwrap_or(0),
+                "orders_count": crate::db::orders::Order::shown_count(&state.db.orm, telegram_id).await.map_err(|e| { tracing::error!("get_profile orders_count: {e}"); StatusCode::INTERNAL_SERVER_ERROR })?,
             });
             Ok(Json(json!({
                 "profile": profile,

@@ -1881,7 +1881,7 @@ async fn get_order_status(
     let Some(model) = model else {
         return Err(StatusCode::NOT_FOUND);
     };
-    if model.telegram_id != Some(tid) {
+    if model.telegram_id != Some(tid) || !Order::shown_to_customer(&model) {
         return Err(StatusCode::NOT_FOUND);
     }
 
@@ -1953,7 +1953,7 @@ async fn get_order_details(
     let Some(model) = model else {
         return Err(StatusCode::NOT_FOUND);
     };
-    if model.telegram_id != Some(tid) {
+    if model.telegram_id != Some(tid) || !Order::shown_to_customer(&model) {
         return Err(StatusCode::NOT_FOUND);
     }
 
@@ -2329,7 +2329,7 @@ async fn cancel_order(
     let Some(o) = locked else {
         return Err(StatusCode::NOT_FOUND);
     };
-    if o.telegram_id != Some(tid) {
+    if o.telegram_id != Some(tid) || !Order::shown_to_customer(&o) {
         return Err(StatusCode::NOT_FOUND);
     }
     if o.status != "pending" {
@@ -2491,16 +2491,16 @@ async fn get_user_orders(
     validate_telegram_id_param(telegram_id)?;
     crate::api::auth::check_owner(&headers, &state, telegram_id)?;
     check_not_blocked(&state, telegram_id).await?;
-    // Cycle #85 Part 1: SeaORM filter + order + limit.
+    // Cycle #85 Part 1: SeaORM filter + order + limit. Since 2026-09-26 the limit counts only
+    // the orders the customer is shown (`Order::shown_to_customer`): the previous shop's are
+    // skipped, a page at a time, and never take a place among the 50.
     use crate::db::entities::order::{Column as OrderCol, Entity as OrderEntity};
-    use sea_orm::{
-        ColumnTrait, EntityTrait, Order as SortOrder, QueryFilter, QueryOrder, QuerySelect,
-    };
-    let models = OrderEntity::find()
+    use sea_orm::{ColumnTrait, EntityTrait, Order as SortOrder, QueryFilter, QueryOrder};
+    let newest_first = OrderEntity::find()
         .filter(OrderCol::TelegramId.eq(telegram_id))
         .order_by(OrderCol::CreatedAt, SortOrder::Desc)
-        .limit(50)
-        .all(&state.db.orm)
+        .order_by(OrderCol::Id, SortOrder::Desc);
+    let models = Order::newest_shown_to_customer(newest_first, &state.db.orm, 50)
         .await
         .map_err(|e| {
             tracing::error!("get_user_orders SeaORM error: {:?}", e);

@@ -42,11 +42,11 @@ struct ApiOrderItem {
     quantity: f64,
     #[serde(default)]
     unit_price: Option<f64>,
+    bike: Option<crate::trios::order_line::OrderLineBike>,
 }
-
 fn item_name(item: &ApiOrderItem) -> String {
-    item.strain_name
-        .clone()
+    crate::trios::order_line::bike_line_name(item.bike.as_ref())
+        .or_else(|| item.strain_name.clone())
         .or_else(|| item.accessory_name.clone())
         .or_else(|| item.tea_name.clone())
         .or_else(|| item.set_name.clone())

@@ -91,8 +91,8 @@ struct ProfileOrderItem {
     quantity: f64,
     #[serde(default)]
     unit_price: Option<f64>,
+    bike: Option<crate::trios::order_line::OrderLineBike>,
 }
-
 #[derive(Debug, Clone, Deserialize)]
 struct ProfileOrder {
     id: String,
@@ -367,8 +367,8 @@ fn profile_order_item_to_cart_item(item: &ProfileOrderItem) -> Option<CartItem> 
 }
 
 fn profile_item_name(item: &ProfileOrderItem) -> String {
-    item.strain_name
-        .clone()
+    crate::trios::order_line::bike_line_name(item.bike.as_ref())
+        .or_else(|| item.strain_name.clone())
         .or_else(|| item.accessory_name.clone())
         .or_else(|| item.tea_name.clone())
         .or_else(|| item.set_name.clone())
