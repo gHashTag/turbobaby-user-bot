@@ -38,7 +38,7 @@
 ; unreachable test endpoint counts as a completed retirement is not re-decided here, and
 ; COMPLETED_RETIREMENT_COUNT is unchanged. The correction is recorded above the HTTP counts.)
 ; --
-; The sharpest single measurement is the allowlist. tests/retired_table_wiring.rs:49-82 holds
+; The sharpest single measurement is the allowlist. tests/retired_table_wiring.rs:49-83 (:49-82 until 2026-09-26) holds
 ; four entries excusing shipped code that still reads a table 083 dropped. All four name the
 ; SAME table, strains -- so one of the six dropped tables carries every surviving reader and
 ; the other five carry none. That is the third state: the table is gone, the reader is not,
@@ -51,7 +51,7 @@
 ;   2. "/game renders a cannabis-era shop title to any customer who opens it (src/ui/game/
 ;      shop_game.rs:1)" does not survive its own citation. Line 1 of that file is a SOURCE
 ;      COMMENT, which no customer can see. The component's rsx root at src/ui/game/
-;      shop_game.rs:679 opens with a coin HUD and declares no title node at all, and the one
+;      shop_game.rs:679 (:596 since the farm zone left that file on 2026-09-26) opens with a coin HUD and declares no title node at all, and the one
 ;      title key the repository defines for this screen family, T_GAME_TITLE at
 ;      src/trios/i18n.rs:345, resolves to a TurboBaby string in both locales (:1010 and :1610,
 ;      re-pinned 2026-09-25 after a key declared above them moved both rows) and is
@@ -63,7 +63,7 @@
 ;      planters game render to any customer who opens the path. The surface is the defect; the
 ;      title was not.
 ;   3. "tests/retired_table_wiring.rs, survey :49-81" is :49-82 -- the const opens at 49 and
-;      closes at 82. The size, 4, is what this file pins, not the span.
+;      closes at 82 (at 83 since 2026-09-26, when a survivor's reason grew a line). The size, 4, is what this file pins, not the span.
 ;   4. "about 9523 LOC across 26 of the 181 src/*.rs files". 181 was right: every .rs file under
 ;      src/ counted to 181 on 2026-09-21 (corrected 2026-09-22: 182 since src/trios/order_status_view.rs was added that day). 9523 across 26 does not reproduce -- no TRACKED file in the tree
 ;      carries the number 9523, and no nameable file list sums to it. This file therefore pins
@@ -218,11 +218,11 @@ pub const DROPPED_TABLE_COUNT_COPIED_BY_ID : str = "turbobaby/bot-surface";
 pub const DROPPED_TABLE_COUNT_COPY_DECLARATION : str = "LEGACY_TABLES_DROPPED_BY_THAT_MIGRATION";
 
 ; --- The allowlist, as the mechanism D19 and epic #26 require ------------------------------------
-; Four entries at tests/retired_table_wiring.rs:49-82, each a path, a table and a prose reason.
+; Four entries at tests/retired_table_wiring.rs:49-83 (:49-82 until 2026-09-26), each a path, a table and a prose reason.
 ; Its SIZE and its RULE are pinned; its contents are not, because the contents are a to-do list
 ; that shrinks and the rule is the contract -- a small reviewed list, no global replacement.
-; Three of that file's nine tests guard the list (:450, :476, :495); the other six pin what its
-; detector sees -- 3 module-reference shapes (:569), 5 table-position keywords (:303).
+; Three of that file's nine tests guard the list (:451, :477, :497; :450, :476 and :495 until 2026-09-26, the last one line short); the other six pin what its
+; detector sees -- 3 module-reference shapes (:569), 5 table-position keywords (:304; :303 until 2026-09-26).
 ; THIS FILE OWNS THIS NUMBER TOO, on the same terms: turbobaby/bot-surface carries it as the
 ; marked copy LEGACY_SURVIVOR_ENTRY_COUNT under its own drift invariant. The allowlist is a
 ; to-do list that shrinks, so this is the number most likely to move, and it moves here first.
@@ -271,7 +271,7 @@ pub const SPECS_DECLARING_THE_RETIREMENT_DISTINCTION_2026_09_22 : u8 = 0;
 pub const THE_WORD_IS_SHARED_THE_SUBJECT_IS_NOT : bool = true;
 
 ; The reason floor is read from the witness itself: every_survivor_carries_a_reason asserts a
-; reason longer than 40 characters at tests/retired_table_wiring.rs:499, so exactly 40 fails.
+; reason longer than 40 characters at tests/retired_table_wiring.rs:500 (:499 until 2026-09-26), so exactly 40 fails.
 pub fn allowlist_entry_is_valid(names_path: bool, names_table: bool, reason_chars: u16, still_matches: bool) bool {
     if (reason_chars <= ALLOWLIST_REASON_MIN_CHARS) {
         return false;

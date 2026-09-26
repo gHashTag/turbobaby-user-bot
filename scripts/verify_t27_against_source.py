@@ -2359,7 +2359,7 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "extract": ("regex", r"const UNIT_QUERY_LIMIT:\s*u64\s*=\s*([0-9_]+)\s*;"),
         "relation": "equal",
         "why": "the row cap on one family's unit rollup behind GET /api/bikes/:key "
-               "(catalog_api.t27:397-401); lowered under a family's unit count it would "
+               "(catalog_api.t27:401-405, :397-401 until 2026-09-26); lowered under a family's unit count it would "
                "under-report that family's units with no error anywhere",
     },
     {

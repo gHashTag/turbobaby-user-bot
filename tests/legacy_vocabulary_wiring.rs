@@ -313,8 +313,8 @@ const SURVIVORS: &[Survivor] = &[
         path: "src/db/mod.rs",
         hits: 6,
         reason: "`mod strains` and its re-export, and `get_strains_of_day`, the query the \
-                 retired carousel read. No production caller since 2026-09-25; the ignored \
-                 integration test still calls it (tests/retired_table_wiring.rs).",
+                 retired carousel read. No production caller since 2026-09-25 and no test \
+                 caller since 2026-09-26 (tests/retired_table_wiring.rs).",
     },
     Survivor {
         path: "src/ui/api/types.rs",
