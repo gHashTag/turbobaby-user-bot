@@ -37,6 +37,8 @@ AGENT_CARD = "specs/agents/turbobaby.t27"
 # notification_queue 270 -> 306 declarations and 52 -> 54 checks, locale_policy 136 -> 139 and 35 -> 36.
 # Re-measured 2026-09-26 for the owner's answer to question I (booking allowed under a seeded zero):
 # availability 141 -> 154 declarations and 37 -> 38 checks, locale_policy 144 -> 146 declarations.
+# Re-measured 2026-09-26 again for the nineteen cannabis-era keys retired from the bundle:
+# legacy_retirement 299 -> 317 declarations and 63 -> 65 checks, locale_policy 146 -> 148.
 SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     AGENT_CARD: {
         "module": "turbobaby-agent",
@@ -189,8 +191,10 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         # content out of customers' sight) was recorded; merged 2026-09-26, the measured 289/61.
         # 299/63 once answer 3 was reconciled the same day with the kept-cart and held-kind
         # changes (its cart path gave way to the kept-cart rule; two left reads closed).
-        "min_declarations": 299,
-        "min_checks": 63,
+        # 317/65 on 2026-09-26, when the cannabis-era copy the bundle still carried was retired
+        # (sixteen LEFTOVERS_2026_09_26_* declarations, one test and one invariant).
+        "min_declarations": 317,
+        "min_checks": 65,
     },
     "specs/turbobaby/locale_policy.t27": {
         "module": "turbobaby-locale-policy",
@@ -207,8 +211,9 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         # queue's held kinds took the retired garden message's field (two declarations and one
         # test); merged 2026-09-26 on the integration branch, 144/36.
         # 146/36 on 2026-09-26: question I deleted the Book control's two count reasons, named
-        # by two declarations.
-        "min_declarations": 146,
+        # by two declarations. 148/36 the same day: nineteen cannabis-era keys no mounted screen
+        # printed were deleted, named by two declarations.
+        "min_declarations": 148,
         "min_checks": 36,
     },
     "specs/turbobaby/loyalty_ledger.t27": {
