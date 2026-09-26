@@ -199,8 +199,8 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         # 312/66 with the answer on its media, 320/67 with the welcome credit's sentence.
         # 317/65 on its own branch the same day, when the cannabis-era copy the bundle still
         # carried was retired (sixteen LEFTOVERS_2026_09_26_* declarations, one test and one
-        # invariant). Merged 2026-09-26 on the integration branch (round 4), the measured 338/69.
-        "min_declarations": 338,
+        # invariant). Merged 2026-09-26 on the integration branch (round 4), the measured 338/69; 341/69 after its review (the welcome sentence stored, not served: +4 WELCOME_SENTENCE_* flags, -1 count).
+        "min_declarations": 341,
         "min_checks": 69,
     },
     "specs/turbobaby/locale_policy.t27": {

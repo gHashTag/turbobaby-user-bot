@@ -807,11 +807,17 @@ deleted or rewritten, no migration is added, and no file is removed from any vol
   seats already held (2026-09-25). Every event is hidden since 088 and each is the previous shop's,
   so it mailed their stored titles and venues. It now reminds public events only; cancellation and
   the Stars refund of a held seat are unchanged. `events_booking.t27` (`REMINDER_REVERSED_AT`).
-* **The welcome credit's sentence** (operator, the same reading). A new `referral_welcome` row said
-  "Welcome bonus from a friend's garden invite". None of the four sentences already written fits
-  the invitee's row, so the garden's words were dropped: "Welcome bonus from a friend's invite".
-  The bonus history serves the new sentence; a row written before keeps the old one and stays
-  withheld. `legacy_retirement.t27` (`WELCOME_CREDIT_SENTENCE`, `WELCOME_SENTENCE_*`).
+* **The welcome credit's sentence** (critic note 5, under the rulings of 2026-09-25). A new
+  `referral_welcome` row said "Welcome bonus from a friend's garden invite". None of the four
+  sentences already written fits the invitee's row, so a new row now STORES the same sentence with
+  the garden's words dropped: "Welcome bonus from a friend's invite". Those words are the lane's
+  interim choice, not an owner's or an operator's decision, and this repository invents no
+  customer copy, so the sentence is NOT served: the bonus history withholds the description of
+  every welcome row, old or new, and a customer sees the generic label and the amount, as before
+  this round. **Open question for the owner:** what should an invited customer's welcome bonus say
+  in the bonus history? Until the owner words it, nothing is shown there. A first version of this
+  round served the sentence and recorded it as the operator's; the review of the round reversed
+  that on 2026-09-26. `legacy_retirement.t27` (`WELCOME_CREDIT_SENTENCE`, `WELCOME_SENTENCE_*`).
 
 The second question of that day (the Book control under a seeded zero) is the client's and is
 recorded in the entry that follows. `legacy_retirement.t27` keeps the day's answers together (`OWNER_ANSWERS_2026_09_26_AT`).

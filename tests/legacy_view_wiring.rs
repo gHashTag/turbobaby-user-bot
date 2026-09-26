@@ -451,8 +451,10 @@ fn the_sentences_the_writers_compose_are_the_ones_the_rule_serves() {
     );
 
     // The welcome credit's sentence named the garden until 2026-09-26; since
-    // then a new row is written with the garden's words dropped, and served.
-    // A row written before keeps the garden's sentence and stays withheld.
+    // then a new row is written with the garden's words dropped. Those words
+    // are not the owner's, so the sentence is stored and NOT served: a welcome
+    // row, old or new, reaches the customer with no description, under its
+    // generic label, until the owner supplies the wording.
     const GARDEN_WELCOME_SENTENCE: &str = "Welcome bonus from a friend's garden invite";
     assert!(referrals.contains(&format!("\"{WELCOME_CREDIT_SENTENCE}\"")));
     assert!(
@@ -464,16 +466,24 @@ fn the_sentences_the_writers_compose_are_the_ones_the_rule_serves() {
         GARDEN_WELCOME_SENTENCE.replace("garden ", ""),
         "only the garden's words were dropped"
     );
-    assert!(DESCRIBED_TX_TYPES.contains(&"referral_welcome"));
+    assert!(!DESCRIBED_TX_TYPES.contains(&"referral_welcome"));
     assert_eq!(
         served("referral_welcome", WELCOME_CREDIT_SENTENCE.to_string()),
-        Some(WELCOME_CREDIT_SENTENCE.to_string())
+        None
     );
     assert_eq!(
         served("referral_welcome", GARDEN_WELCOME_SENTENCE.to_string()),
         None
     );
-    // The writer names the type the rule serves the sentence under.
+    let rule = body_of(
+        &code_of(&source(RULES)),
+        "fn is_a_sentence_this_code_writes(",
+    );
+    assert!(
+        !rule.contains("\"referral_welcome\""),
+        "{RULES}: the welcome credit's sentence is served again without the owner's wording"
+    );
+    // The writer stores the sentence on the type the rule withholds.
     let welcome = &referrals[referrals
         .find("tx_type: Set(\"referral_welcome\".to_string()),")
         .expect("the welcome credit's row")..];
@@ -842,6 +852,14 @@ fn the_contracts_record_what_the_code_does() {
     assert_eq!(
         spec_value(RETIREMENT_SPEC, "OWNER_ANSWER_3_DESCRIBED_TX_TYPE_COUNT"),
         DESCRIBED_TX_TYPES.len().to_string()
+    );
+    assert_eq!(
+        spec_value(RETIREMENT_SPEC, "WELCOME_SENTENCE_IS_SERVED"),
+        DESCRIBED_TX_TYPES.contains(&"referral_welcome").to_string()
+    );
+    assert_eq!(
+        spec_value(RETIREMENT_SPEC, "WELCOME_CREDIT_SENTENCE"),
+        WELCOME_CREDIT_SENTENCE
     );
     assert_eq!(
         spec_value(RETIREMENT_SPEC, "OWNER_ANSWER_3_WITHHELD_TX_TYPE_COUNT"),
