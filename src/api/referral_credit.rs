@@ -656,4 +656,57 @@ mod tests {
             "{redeem}"
         );
     }
+
+    /// Round 5's integration (2026-09-26): the two lanes met here. The screens
+    /// send the shared body structs serialized by serde
+    /// (`src/ui/pages/referrals.rs`, `src/ui/screens/admin_screen.rs`); this
+    /// module reads them field by field by hand, and no compiler compares the
+    /// two. Each body, serialized exactly as a screen serializes it, comes back
+    /// out of its parser unchanged. `tests/referral_credit_api_shape_wiring.rs`
+    /// pins the paths, verbs and answer types from both sides' source.
+    #[test]
+    fn the_bodies_the_screens_serialize_are_what_the_parsers_read() {
+        use crate::trios::referral_credit::{OpenRequestBody, ResolveBody, ReverseBody};
+        let full = RecordRentalBody {
+            customer_telegram_id: 20,
+            rental_amount_thb: 1239,
+            order_id: Some("3f1c9b1e-0a4b-4a5e-9d2f-7c1e2a3b4c5d".into()),
+            note: Some("cash at the office".into()),
+            idempotency_key: "0b5a7c1e-2d3f-4a5b-8c6d-7e8f9a0b1c2d".into(),
+        };
+        let bare = RecordRentalBody {
+            order_id: None,
+            note: None,
+            ..full.clone()
+        };
+        for body in [full, bare] {
+            let wire = serde_json::to_vec(&body).expect("json");
+            assert_eq!(parse_record_body(&wire), Ok(body));
+        }
+        for kind in crate::trios::referral_credit::REQUEST_KINDS {
+            let body = OpenRequestBody {
+                kind: kind.to_string(),
+            };
+            let wire = serde_json::to_vec(&body).expect("json");
+            assert_eq!(parse_request_kind(&wire).as_deref(), Some(kind));
+        }
+        for (action, note) in [("paid", Some("cash")), ("declined", None)] {
+            let body = ResolveBody {
+                action: action.to_string(),
+                note: note.map(str::to_string),
+            };
+            let wire = serde_json::to_vec(&body).expect("json");
+            assert_eq!(
+                parse_resolve_body(&wire),
+                Ok((action, note.map(str::to_string)))
+            );
+        }
+        for note in [Some("wrong amount"), None] {
+            let body = ReverseBody {
+                note: note.map(str::to_string),
+            };
+            let wire = serde_json::to_vec(&body).expect("json");
+            assert_eq!(parse_reverse_body(&wire), Ok(note.map(str::to_string)));
+        }
+    }
 }

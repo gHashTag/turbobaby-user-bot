@@ -4118,6 +4118,29 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "relation": "equal",
         "why": "the same two hints in English",
     },
+    # Round 5's integration (2026-09-26): the Mini App's copy of the same rule sentence, which the
+    # client lane put on the referrals page's subtitle and on the profile's referral card. One arm
+    # per table, so each row matches exactly once. Both planted RED once by hand (the rate in the
+    # arm set to 15 through --source-override) and restored.
+    {
+        "name": "referral_credit.CREDIT_PERCENT ~ i18n.rs RU T_REFERRAL_SUBTITLE",
+        "spec": "specs/turbobaby/referral_credit.t27",
+        "const": "CREDIT_PERCENT",
+        "source": "src/trios/i18n.rs",
+        "extract": ("regex", r'T_REFERRAL_SUBTITLE => "(\d+)% с каждой аренды приглашённого друга"'),
+        "relation": "equal",
+        "why": "the referrals page and the profile's referral card state the rate to the customer; "
+               "the operator's sentence and the rate paid must be one number",
+    },
+    {
+        "name": "referral_credit.CREDIT_PERCENT ~ i18n.rs EN T_REFERRAL_SUBTITLE",
+        "spec": "specs/turbobaby/referral_credit.t27",
+        "const": "CREDIT_PERCENT",
+        "source": "src/trios/i18n.rs",
+        "extract": ("regex", r'T_REFERRAL_SUBTITLE => "(\d+)% of every rental your invited friend completes"'),
+        "relation": "equal",
+        "why": "the same sentence in the English table",
+    },
     {
         "name": "referral_program.REFERRAL_TX_TYPE_WRITERS_SINCE_2026_09_26 ~ src/ referral_ rows",
         "spec": "specs/turbobaby/referral_program.t27",
@@ -4285,7 +4308,11 @@ ONE_GROUP_EXTRACTORS = (
 # closed-read sites and R1's leaderboard gate. Each added row was measured by hand on both sides
 # and planted RED once by hand: 256 - 3 + 29 = 282 rows over 42 contracts, floor 282. A removal
 # in the same change that moves this floor is caught only by a reviewer reading the diff.
-MIN_BINDINGS = 282
+# Merged 2026-09-26 on the integration branch (t27/round5; the client lane added no row): the rate
+# in the Mini App's rule sentence, RU and EN (T_REFERRAL_SUBTITLE in src/trios/i18n.rs), each
+# planted RED once by hand: 282 + 2 = 284 rows over the same 42 contracts, floor 284 (the measured
+# table size). No row removed.
+MIN_BINDINGS = 284
 
 
 # ---------------------------------------------------------------------------------

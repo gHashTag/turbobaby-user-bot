@@ -327,8 +327,11 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         "id": "turbobaby/referral-credit",
         # New 2026-09-26 (R3, the owner's answer of that day): the referral credit, 10% of every
         # completed rental of an invited friend, in THB. Floors are the measured counts.
-        "min_declarations": 128,
-        "min_checks": 21,
+        # Raised 2026-09-26 on the integration branch (t27/round5) from 128/21 to the measured
+        # 137/22: the API's one shape pinned by its witnesses (five declarations), the seven
+        # retired keys and the ninth sentence the client lane met (three), and one test.
+        "min_declarations": 137,
+        "min_checks": 22,
     },
     "specs/turbobaby/referral_program.t27": {
         "module": "turbobaby-referral-program",
