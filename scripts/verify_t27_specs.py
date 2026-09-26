@@ -184,8 +184,9 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         # content out of customers' sight) was recorded; merged 2026-09-26, the measured 289/61.
         # 299/63 once answer 3 was reconciled the same day with the kept-cart and held-kind
         # changes (its cart path gave way to the kept-cart rule; two left reads closed).
-        "min_declarations": 299,
-        "min_checks": 63,
+        # 308/65 on 2026-09-26 when the owner's answer on the previous shop's orders was recorded.
+        "min_declarations": 308,
+        "min_checks": 65,
     },
     "specs/turbobaby/locale_policy.t27": {
         "module": "turbobaby-locale-policy",
@@ -240,9 +241,10 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         "id": "turbobaby/order-presentation",
         # Raised 2026-09-25 from 570/73 when the owner's answer 3 gave a line of the old
         # catalogue its neutral name and withheld the previous shop's name. Raised 2026-09-26
-        # to 606/77 when the operator decided such an order shows no shop label at all.
-        "min_declarations": 606,
-        "min_checks": 77,
+        # to 606/77 when the operator decided such an order shows no shop label at all. Raised
+        # 2026-09-26 to 624/80 when the owner's answer hid the previous shop's orders altogether.
+        "min_declarations": 624,
+        "min_checks": 80,
     },
     "specs/turbobaby/order_status.t27": {
         "module": "turbobaby-order-status",

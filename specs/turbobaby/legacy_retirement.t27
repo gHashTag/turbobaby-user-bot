@@ -891,6 +891,26 @@ pub const OWNER_ANSWER_3_CHANGES_AN_ADMIN_READ : bool = false;
 pub const OWNER_ANSWER_3_KEYS_ADDED : u8 = 1;
 pub const OWNER_ANSWER_3_KEYS_DELETED : u8 = 0;
 
+; --- The owner's answers of 2026-09-26 on what answer 3 left in sight -------------------------------
+; Questions about what answer 3 above still left in customers' sight were put to the owner on
+; 2026-09-26. Each answer is quoted verbatim, in Russian, beside the code it moved, and this file
+; stays ASCII.
+;   * THE ORDERS (question 1). Read 1 above served a line of a retired kind under the neutral name.
+;     Asked about those lines, the owner asked why they are there at all. The operator read it as:
+;     a customer must not see the previous shop's orders at all. turbobaby/order-presentation
+;     records the rule (PREVIOUS_SHOP_ORDER_*): an order naming the previous shop, or holding no
+;     bike line, is neither listed, nor answered by id, nor counted on the profile. So reads 1 and
+;     2 above now reach only an order holding a rental line beside a line of a retired kind, which
+;     is this shop's and stays shown with that line masked. No row is written; the admin reads are
+;     unchanged.
+pub const OWNER_ANSWERS_2026_09_26_AT : str = "2026-09-26";
+pub const OWNER_ORDERS_ANSWER_READ_BY : str = "operator";
+pub const OWNER_ORDERS_ANSWER_RULE_OWNER_ID : str = "turbobaby/order-presentation";
+pub const OWNER_ORDERS_ANSWER_HIDES_THE_ORDER : bool = true;
+pub const OWNER_ORDERS_ANSWER_KEEPS_A_MIXED_ORDER : bool = true;
+pub const OWNER_ORDERS_ANSWER_WRITES_ROWS : bool = false;
+pub const OWNER_ORDERS_ANSWER_CHANGES_AN_ADMIN_READ : bool = false;
+
 ; --- Tests -----------------------------------------------------------------------------------------
 
 test the_three_partial_states_are_named_and_the_value_set_is_closed {
@@ -1380,6 +1400,22 @@ test the_answer_3_cart_path_gave_way_to_the_kept_cart_rule {
     assert OWNER_ANSWER_3_WRITES_ROWS == false;
 }
 
+test the_orders_answer_of_2026_09_26_hides_the_previous_shops_orders_and_writes_nothing {
+    assert OWNER_ANSWERS_2026_09_26_AT == "2026-09-26";
+    assert OWNER_ANSWERS_2026_09_26_AT != OWNER_ANSWER_3_AT;
+    assert OWNER_ORDERS_ANSWER_READ_BY == OWNER_ANSWER_3_READ_BY;
+    assert OWNER_ORDERS_ANSWER_RULE_OWNER_ID == OWNER_ANSWER_3_LINE_RULE_OWNER_ID;
+    assert OWNER_ORDERS_ANSWER_RULE_OWNER_ID != ID;
+    assert OWNER_ORDERS_ANSWER_HIDES_THE_ORDER == true;
+    assert OWNER_ORDERS_ANSWER_KEEPS_A_MIXED_ORDER == true;
+    // reads 1 and 2 of answer 3 stay declared: they now reach mixed orders only
+    assert OWNER_ANSWER_3_SERVER_READS[0] == "order_lines";
+    assert OWNER_ANSWER_3_SERVER_READS[1] == "order_shop";
+    assert OWNER_ORDERS_ANSWER_WRITES_ROWS == false;
+    assert OWNER_ORDERS_ANSWER_WRITES_ROWS == OWNER_ANSWER_3_WRITES_ROWS;
+    assert OWNER_ORDERS_ANSWER_CHANGES_AN_ADMIN_READ == false;
+}
+
 test the_identity_of_this_contract_is_fixed {
     assert ID == "turbobaby/legacy-retirement";
     assert KIND == "retirement-contract";
@@ -1473,3 +1509,6 @@ invariant the_answer_3_hides_what_it_reads_and_writes_nothing
 
 invariant the_answer_3_renames_no_cart_line
     assert OWNER_ANSWER_3_RENAMES_A_CART_LINE == false and OWNER_ANSWER_3_CLIENT_GUARD_COUNT + OWNER_ANSWER_3_CART_GUARDS_REMOVED.len == OWNER_ANSWER_3_CLIENT_GUARD_COUNT_ON_ITS_BRANCH
+
+invariant the_orders_answer_of_2026_09_26_hides_orders_and_writes_nothing
+    assert OWNER_ORDERS_ANSWER_HIDES_THE_ORDER == true and OWNER_ORDERS_ANSWER_WRITES_ROWS == false and OWNER_ORDERS_ANSWER_CHANGES_AN_ADMIN_READ == false

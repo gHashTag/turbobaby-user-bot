@@ -12,8 +12,17 @@
 //! cannot classify all of it. Every rule therefore fails closed: a customer is
 //! served what this code can vouch for, and the rest is replaced or withheld.
 //!
-//! Three reads, and the rules they get:
+//! Four reads, and the rules they get:
 //!
+//! * An ORDER of the previous shop is not shown to its customer at all since
+//!   2026-09-26 ([`customer_sees_order`]). Asked that day about the lines
+//!   shown as «Позиция прежнего каталога», the owner answered, verbatim:
+//!   «А зачем это вообще там?». The operator read it as: a customer must not
+//!   see the previous shop's orders at all. Such an order is neither listed nor
+//!   answered by id; the customer is told what a missing order tells them.
+//!   An order holding a rental line beside a line of a retired kind is this
+//!   shop's, and stays shown with that line masked as below: since that day it
+//!   is the one case the neutral name is still served for.
 //! * An ORDER LINE of a retired kind -- any line that is not a bike line -- is
 //!   served as the neutral name plus its stored quantity and unit price, and
 //!   nothing else ([`customer_order_line`]). The neutral name is the
@@ -196,6 +205,34 @@ pub fn customer_order_items(stored: &Value) -> Value {
 /// Whether a stored text names the previous shop, in any case.
 pub fn names_the_old_shop(text: &str) -> bool {
     text.to_lowercase().contains(OLD_SHOP_NAME)
+}
+
+/// Whether a customer is shown a stored order at all (owner, 2026-09-26; the
+/// module header quotes the answer).
+///
+/// An order is the previous shop's, and is neither listed nor answered by id,
+/// when its stored shop names the previous shop ([`names_the_old_shop`]) or
+/// when none of its lines is a bike line ([`is_bike_line`]): every line of a
+/// retired kind, an empty list, or items that are not a list at all. The
+/// previous shop rented no bikes, `create_order` refuses an empty cart, and
+/// since migration 085 hid the old catalogue its checkout can store no line
+/// that is not a bike line, so an order this code cannot vouch for is not
+/// shown -- the same fail-closed reading as every rule here.
+///
+/// An order holding a bike line AND a line of a retired kind -- a rental this
+/// shop took beside the old catalogue before 085 -- is this shop's, and is
+/// shown: the rental is the customer's own booking. Its other lines keep the
+/// neutral name ([`customer_order_line`]), which since 2026-09-26 is the one
+/// case the neutral name is served for. The shop rule decides first: an order
+/// naming the previous shop is not shown whatever it holds. Nothing is
+/// written; the row keeps what it stored, and the admin reads show it whole.
+pub fn customer_sees_order(items: &Value, shop_id: Option<&str>) -> bool {
+    if shop_id.is_some_and(names_the_old_shop) {
+        return false;
+    }
+    items
+        .as_array()
+        .is_some_and(|lines| lines.iter().any(is_bike_line))
 }
 
 /// The shop an order names, as its customer is served it: withheld when it
@@ -480,6 +517,64 @@ mod tests {
         assert_eq!(customer_order_items(&json!(STORED_NAME)), Value::Null);
         assert_eq!(customer_order_items(&Value::Null), Value::Null);
         assert_eq!(customer_order_items(&json!([])), json!([]));
+    }
+
+    fn bike_line() -> Value {
+        json!({
+            "quantity": 1.0,
+            "bike": { "bike_key": "nmax-155", "deal": { "kind": "bike_rental" } }
+        })
+    }
+
+    /// Owner, 2026-09-26: a customer does not see the previous shop's orders
+    /// at all. An order with no bike line is not shown, whatever it holds.
+    #[test]
+    fn an_order_with_no_bike_line_is_not_shown() {
+        for items in [
+            json!([{ "set_name": STORED_NAME, "quantity": 1 }]),
+            json!([
+                { "strain_id": STORED_ID, "strain_name": STORED_NAME, "quantity": 1 },
+                { "accessory_id": STORED_ID, "quantity": 2 },
+            ]),
+            json!([{ "bike": STORED_NAME, "quantity": 1 }]),
+            json!([STORED_NAME]),
+            json!([]),
+            json!({ "0": STORED_NAME }),
+            json!(STORED_NAME),
+            Value::Null,
+        ] {
+            assert!(!customer_sees_order(&items, None), "{items}");
+            assert!(!customer_sees_order(&items, Some("TurboBaby")), "{items}");
+        }
+    }
+
+    #[test]
+    fn a_rental_order_of_this_shop_is_shown_and_one_naming_the_previous_shop_is_not() {
+        let rental = json!([bike_line()]);
+        assert!(customer_sees_order(&rental, None));
+        assert!(customer_sees_order(&rental, Some("\u{1f3e0} TurboBaby")));
+        assert!(customer_sees_order(&rental, Some("")));
+        for shop in ["\u{1f3e0} Woody Phangan", "WOODY", "the woody one"] {
+            assert!(!customer_sees_order(&rental, Some(shop)), "{shop}");
+        }
+    }
+
+    /// The one case the neutral name is still served for: a rental beside a
+    /// line of the old catalogue is this shop's order, shown with the rental as
+    /// stored and the other line masked.
+    #[test]
+    fn a_mixed_order_is_shown_with_its_retired_line_masked() {
+        let stored = json!([
+            bike_line(),
+            { "accessory_id": STORED_ID, "accessory_name": STORED_NAME, "quantity": 1, "unit_price": 250 },
+        ]);
+        assert!(customer_sees_order(&stored, Some("\u{1f3e0} TurboBaby")));
+        let served = customer_order_items(&stored);
+        assert_eq!(served[0], bike_line());
+        assert_eq!(
+            served[1],
+            json!({ "strain_name": neutral_ru(), "quantity": 1, "unit_price": 250 })
+        );
     }
 
     #[test]
