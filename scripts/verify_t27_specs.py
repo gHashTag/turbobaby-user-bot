@@ -187,9 +187,9 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         # 299/63 once answer 3 was reconciled the same day with the kept-cart and held-kind
         # changes (its cart path gave way to the kept-cart rule; two left reads closed).
         # 308/65 on 2026-09-26 when the owner's answer on the previous shop's orders was recorded,
-        # 312/66 with the answer on its media.
-        "min_declarations": 312,
-        "min_checks": 66,
+        # 312/66 with the answer on its media, 320/67 with the welcome credit's sentence.
+        "min_declarations": 320,
+        "min_checks": 67,
     },
     "specs/turbobaby/locale_policy.t27": {
         "module": "turbobaby-locale-policy",

@@ -3862,6 +3862,31 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "why": "every event is hidden since 088 and each one left is the previous shop's; without "
                "the filter the reminder mails its stored title and venue to a seat holder",
     },
+    # The welcome credit's sentence without the garden's words (operator, 2026-09-26, under
+    # answer 3): the writer and the read-side rule each hold it, and the contract names it.
+    # Measured by hand 2026-09-26. Each planted RED once by hand (the garden's words put back in
+    # the writer; a different sentence in the rule).
+    {
+        "name": "legacy_retirement.WELCOME_CREDIT_SENTENCE ~ referrals.rs welcome row",
+        "spec": "specs/turbobaby/legacy_retirement.t27",
+        "const": "WELCOME_CREDIT_SENTENCE",
+        "source": "src/db/referrals.rs",
+        "extract": ("regex", r'tx_type: Set\("referral_welcome"\.to_string\(\)\),\s*'
+                             r'description: Set\(Some\(\s*("[^"]*")\.to_string\(\)'),
+        "relation": "equal",
+        "why": "the sentence every new welcome credit stores; the garden's words back in it put "
+               "the previous shop's mechanic in the bonus history of every invited customer",
+    },
+    {
+        "name": "legacy_retirement.WELCOME_CREDIT_SENTENCE ~ legacy_view.rs served sentence",
+        "spec": "specs/turbobaby/legacy_retirement.t27",
+        "const": "WELCOME_CREDIT_SENTENCE",
+        "source": "src/trios/legacy_view.rs",
+        "extract": ("regex", r'pub const WELCOME_CREDIT_SENTENCE: &str = ("[^"]*");'),
+        "relation": "equal",
+        "why": "the one welcome sentence the bonus history serves; if it drifts from the writer's, "
+               "every new welcome credit is withheld again",
+    },
 )
 
 TREE_EXTRACTORS = (
@@ -3946,7 +3971,10 @@ ONE_GROUP_EXTRACTORS = (
 # floor 252.
 # Then the operator's reversal of 2026-09-26 bound events_booking.REMINDER_FLAG_FILTERED_JOINS to
 # the reminder's join, planted RED once by hand: 253 rows, floor 253.
-MIN_BINDINGS = 253
+# Then the welcome credit's sentence of 2026-09-26 bound legacy_retirement.WELCOME_CREDIT_SENTENCE
+# to its writer in src/db/referrals.rs and to the rule in src/trios/legacy_view.rs, each planted
+# RED once by hand: 255 rows, floor 255.
+MIN_BINDINGS = 255
 
 
 # ---------------------------------------------------------------------------------
