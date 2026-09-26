@@ -12,10 +12,10 @@ what to do next.
 | | measured 2026-09-21 |
 | --- | --- |
 | canonical contracts | **45** (44 under `specs/turbobaby/` + `specs/agents/turbobaby.t27`); **46** on `t27/round5-server` and on the integration branch `t27/round5`, with `referral_credit.t27` (2026-09-26) |
-| assertions executed, all passing | **11 033** on the integration branch `t27/round5` at `992077f` (2026-09-26, R1–R3 integrated; see "Round 5, integrated" below), **11 009** on the server lane `t27/round5-server` at `872698b` (2026-09-26, R1–R3; see "Round 5, server lane" below), **10 758** on `t27/round4` at `168892d` after its review (2026-09-26; see "Round 4, review fixes" below; bindings still 256), **10 754** on the integration branch `t27/round4` at `2f801fe` after the owner's answers of 2026-09-26 (see "Round 4, integrated" below), **10 581** on the integration branch `t27/owner-answers-2509` at `41315b2` after the owner's second list of 2026-09-25 and the operator's shop label (2026-09-26; see "The owner's second list of 2026-09-25 and the operator's shop label" below), **10 273** on the integration branch `t27/owner-answers-2509` after the three fixes on top of `69fd4fa` (2026-09-25; see "Three fixes on top of `69fd4fa`" below), **10 246** at `69fd4fa` (the owner's answers of that day; not pushed, not merged) — **9 996** re-measured 2026-09-25 on `f5e6b4f`, after #64, which changed comments only (9 996 after #63 on 2026-09-24, 9 859 after #62, 9 535 earlier that day, 9 514 on 2026-09-23 before that day's money family, 9 038 on 2026-09-22, 8 911 on 2026-09-21) |
+| assertions executed, all passing | **11 048** on the integration branch `t27/round5` at `b1d900e` (2026-09-26, the review fix of round 5; see "Round 5, review fix" below), **11 033** on the integration branch `t27/round5` at `992077f` (2026-09-26, R1–R3 integrated; see "Round 5, integrated" below), **11 009** on the server lane `t27/round5-server` at `872698b` (2026-09-26, R1–R3; see "Round 5, server lane" below), **10 758** on `t27/round4` at `168892d` after its review (2026-09-26; see "Round 4, review fixes" below; bindings still 256), **10 754** on the integration branch `t27/round4` at `2f801fe` after the owner's answers of 2026-09-26 (see "Round 4, integrated" below), **10 581** on the integration branch `t27/owner-answers-2509` at `41315b2` after the owner's second list of 2026-09-25 and the operator's shop label (2026-09-26; see "The owner's second list of 2026-09-25 and the operator's shop label" below), **10 273** on the integration branch `t27/owner-answers-2509` after the three fixes on top of `69fd4fa` (2026-09-25; see "Three fixes on top of `69fd4fa`" below), **10 246** at `69fd4fa` (the owner's answers of that day; not pushed, not merged) — **9 996** re-measured 2026-09-25 on `f5e6b4f`, after #64, which changed comments only (9 996 after #63 on 2026-09-24, 9 859 after #62, 9 535 earlier that day, 9 514 on 2026-09-23 before that day's money family, 9 038 on 2026-09-22, 8 911 on 2026-09-21) |
 | contract-to-contract ownership edges | 203+, **zero dangling** |
 | source lines named by some contract | **73 407 of 80 308 (91.4 %)** |
-| enforced contract-to-source bindings | **284** on the integration branch `t27/round5` at `992077f` (2026-09-26; +2 the Mini App's rate, the client lane added none), across 42 of 46 contracts and 88 source files — **282** on the server lane `t27/round5-server` at `872698b` (2026-09-26; −3 +29, R1–R3), across 42 of 46 contracts and 87 source files — **256** on the integration branch `t27/round4` at `2f801fe` (2026-09-26; +7 the server lane of round 4, +1 its client lane), across 41 of 45 contracts and 84 source files — **248** on the integration branch `t27/owner-answers-2509` at `41315b2` (2026-09-26; +2 answer 1, +4 answer 3, +2 the kept cart, +1 the held notification kinds), across 41 of 45 contracts and 83 source files — **239** on the same branch on 2026-09-25 (the two new rows bind the CLICK 125 redirect to the seed), across the same 41 of 45 contracts and 80 source files — **237**, across 41 of 45 contracts and 80 source files, re-measured 2026-09-25 on `f5e6b4f`, after #64 (237 after #63 on 2026-09-24, 227 after #62, 198 earlier that day, 197 on 2026-09-23, 168 across 40 on 2026-09-22, 66 across 16 on 2026-09-21) |
+| enforced contract-to-source bindings | **286** on the integration branch `t27/round5` at `b1d900e` (2026-09-26; +2 the recorder guard, the review fix of round 5), across 42 of 46 contracts and 88 source files — **284** on the integration branch `t27/round5` at `992077f` (2026-09-26; +2 the Mini App's rate, the client lane added none), across 42 of 46 contracts and 88 source files — **282** on the server lane `t27/round5-server` at `872698b` (2026-09-26; −3 +29, R1–R3), across 42 of 46 contracts and 87 source files — **256** on the integration branch `t27/round4` at `2f801fe` (2026-09-26; +7 the server lane of round 4, +1 its client lane), across 41 of 45 contracts and 84 source files — **248** on the integration branch `t27/owner-answers-2509` at `41315b2` (2026-09-26; +2 answer 1, +4 answer 3, +2 the kept cart, +1 the held notification kinds), across 41 of 45 contracts and 83 source files — **239** on the same branch on 2026-09-25 (the two new rows bind the CLICK 125 redirect to the seed), across the same 41 of 45 contracts and 80 source files — **237**, across 41 of 45 contracts and 80 source files, re-measured 2026-09-25 on `f5e6b4f`, after #64 (237 after #63 on 2026-09-24, 227 after #62, 198 earlier that day, 197 on 2026-09-23, 168 across 40 on 2026-09-22, 66 across 16 on 2026-09-21) |
 
 The two re-measured rows come from gates 2 and 3, run on 2026-09-25 on `main` at `f5e6b4f` (#64
 on top of the rental-only change of #63). Both equal the 2026-09-24 readings on #63's tree to the
@@ -951,6 +951,83 @@ server was stopped with `pg_ctl stop -m fast`, and the data dir is left in place
   `referral_credit.t27`).
 * The locale strings, config keys and env variable of the stopped credits stay, read by nobody, as
   the section above lists.
+
+### Round 5, review fix, 2026-09-26: the recorder guard and the password token, not yet live
+
+One demand of the review of `t27/round5` at `1419dc1`, verified against the tree before it was
+applied, on the same branch. **Nothing is pushed and nothing is deployed.** No migration, no row
+deleted or rewritten, no client file touched, so `dist/` was not rebuilt (bundle
+`4fa1b87a15ac065a` unchanged) and the smoke test of `fa03a3b` still covers what a deploy serves.
+
+| commit | what |
+| --- | --- |
+| `b1d900e` | the guard in code, the contract's qualification, gate 1's floor, gate 3's two rows, two tests |
+| the next commit | DECISIONS.md's entry, this section, the "Where it stands" rows, the contract map's row (565 → 616 lines) |
+
+**The demand, verified.** `check_admin` (`src/api/auth.rs`) answers `Ok(0)` for a valid
+`X-Admin-Token`, including when initData is missing, fails the strict check or names a non-admin;
+`post_rental` passed that 0 on; `record_rental` refused only `admin_id != 0 && admin_id == inviter`.
+`referral_credit.t27` said `RECORDER_MAY_BE_THE_INVITER = false` with no qualifier, and neither it
+nor DECISIONS.md named the password path. The only test of the refusal (`refusals`) used initData.
+Measured by planting the old guard back and running the new test on a fresh private database: the
+password record of the admin's friend answered **200**, and the admin's ledger held one accrual of
+100 THB on a record with `recorded_by = 0`.
+
+**The fix.** `post_rental` hands the ledger `state.config.admin_ids`, and `record_rental` refuses
+through `recorder_is_the_inviter` (`src/db/referral_credit.rs`): a named recorder when he is the
+inviter, a password record when the inviter is on the admin list. Same 422 `recorder_is_inviter`,
+nothing written. Still open and said so in the contract and in DECISIONS.md (owner's call): a person
+who knows the password and is not on `ADMIN_IDS`, and `recorded_by = 0` naming nobody; also an admin
+marking his own payout paid.
+
+* `referral_credit.t27`: both identities and the open gap in prose, eight declarations,
+  `recorder_refused`, the test `the_recorder_guard_reads_both_admin_identities` and the invariant
+  `no_admin_credits_himself_under_either_identity`; floor 137/22 → **148/24**, measured.
+* Gate 3, 284 → **286** rows (`MIN_BINDINGS` 286): `RECORDER_GUARD_ADMIN_LIST_READS` (the one
+  `admin_ids.contains(&inviter)` in the ledger, with a witness pinning the guard to the record's
+  creditable arm) and `RECORDER_GUARD_ADMIN_LIST_HANDED_TO_THE_RECORD` (the one call in
+  `post_rental` that passes `&state.config.admin_ids`). Planted RED through `--source-override`, one
+  copy each: the read replaced by `false` (`contract=1 source=0`), the old guard restored (the
+  witness matched nothing), the list replaced by `&[]` (`contract=1 source=0`).
+* Tests: in-crate `the_recorder_guard_reads_both_admin_identities` (no database) and
+  `a_password_record_of_a_listed_admins_friend_is_refused` in `tests/integration_referral_credit.rs`:
+  the token alone, initData signed with another bot's token beside the token, and a linked completed
+  order each answer 422 and leave no record, no ledger row and the edge pending; a named admin
+  records another inviter's friend under his own id; the password records an outsider's friend as
+  0. Against the planted old guard it is **red** at its first assertion (`left: (200, Null)`), and
+  `refusals` stays green, which is why the old suite never saw the gap.
+
+**Gates** on `b1d900e`, pinned compiler `40003ed`:
+
+```sh
+T27C=<path>/t27c python3 scripts/verify_t27_specs.py --require-compiler
+# OK - 46 manifested specs, 5 generators each (every floor equals the measurement)
+python3 scripts/execute_t27_assertions.py            # WITH the compiler cross-check
+# OK - 46 spec(s), 11048 assert line(s) scanned, 11048 executed, 11048 passed, 0 failed;
+#      10522 declaration name(s) and function bodies agreed with t27c; 2 pinned front-end disagreement(s)
+python3 scripts/verify_t27_against_source.py --require-git-tracked
+# OK - 286 bindings hold across 42 contracts and 88 source files
+python3 scripts/verify_fleet_seed.py -v
+# OK — 14 families (13 offered), 37 units (11 rented, 26 available); ...
+```
+
+**Rust.** `cargo fmt -- --check` clean. Clippy with `-D warnings` passes on `--features backend
+--bin turbobaby-bot-server` and `--features backend`; the wasm form was not re-run, because
+`src/db/` and `src/api/` are not compiled for wasm32 and no client file changed. `cargo test
+--features backend -j 2 --no-fail-fast`: 82 result lines, **2 596 passed, 0 failed**, 162 ignored
+(2 594 + the new unit test in the lib and the bin; 161 + the new integration test).
+
+**DB-backed.** A fresh private PostgreSQL 18.0 (`initdb -A trust -U postgres -E UTF8 --locale=C`),
+a new data dir `D:/t27work/pgdata-r5f-2509`, listening on 127.0.0.1:55439 only, a fresh database,
+`HTTPS_PROXY`/`HTTP_PROXY`/`ALL_PROXY`/`TELOXIDE_PROXY` = `http://127.0.0.1:9`. The whole suite,
+`cargo test --features backend -j 2 --no-fail-fast -- --include-ignored --test-threads=1` skipping
+the two tests of `tests/https_reaches_telegram.rs`: 82 result lines, **2 756 passed, 0 failed, 0
+ignored** (2 filtered out), no compiler warning from this crate; the 17 of
+`tests/integration_referral_credit.rs` among them. Read back afterwards: two edges from the admin id
+42, both still pending, no record of either friend, no ledger row of 42, one record by 42 (the named
+case). The negative control ran on a second fresh database of the same server; with the fixed file
+copied back, `tests/integration_referral_credit.rs` ran green on a third (17 passed). The server was
+stopped with `pg_ctl stop -m fast`, and the data dir is left in place.
 
 ```sh
 # 1. structure: module, unique ID, declaration floors, typecheck, five generators.

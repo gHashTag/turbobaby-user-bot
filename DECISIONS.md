@@ -944,7 +944,9 @@ owner:
 7. Not creditable: a self edge (including the backfill of migration 007); an edge created after the
    linked order; an existing customer (`first_purchase_at`, or an earlier recorded rental, before
    the edge); and a recording admin who is the inviter (422). Why: `/start ref_` records an edge
-   with no new-user check, so old customers could otherwise be attributed.
+   with no new-user check, so old customers could otherwise be attributed. *The recorder half held
+   only for an admin named by Telegram until the review fix of 2026-09-26 (the last entry of this
+   file); since then a password record of a listed admin's friend is refused too.*
 8. No retroactive credit. A record linked to an order created before migration 089 was applied
    (`_schema_migrations.applied_at`) is refused with 409. By manager policy, offline rentals from
    before the deploy are not to be recorded.
@@ -1153,3 +1155,52 @@ saying the milestone ladder ended.
   lane left their names to it) and the ninth missing sentence the client lane met.
 * Gate 3 binds the rate in the Mini App's rule sentence, RU and EN (`T_REFERRAL_SUBTITLE`), to
   `CREDIT_PERCENT`: 282 + 2 = 284 rows, `MIN_BINDINGS` 284.
+
+## R3 review fix, 2026-09-26: the recorder guard reads the password token too
+
+Kept at the end of this file, like the entries above. The review of `t27/round5` found that the
+server lane's decision 7 («a recording admin who is the inviter (422)», in the entry «R1–R3, the
+owner's answers of 2026-09-26») held only for an admin named by Telegram. The owner's words are
+unchanged: «Должно начисляться исключительно за то кто арендовал 10% скидка», «Пригласивший и
+может забрать скидкой за аренду или деньгами».
+
+**What was wrong.** `check_admin` (`src/api/auth.rs`) answers the admin's own id when initData
+proves an admin, and 0 for a valid `X-Admin-Token`: also when initData is missing, fails the
+strict check, or belongs to a non-admin. `record_rental` refused only
+`admin_id != 0 && admin_id == inviter`. So an admin who invited a friend could record that
+friend's rentals under the password token and credit his own balance, up to 10% of 100 000 000 THB
+per record, then ask for a payout; the record stored `recorded_by = 0`, which names nobody. The
+admin screen sends both headers, so an admin whose WebView fails the strict check was recorded as
+0 without knowing it. `referral_credit.t27` said `RECORDER_MAY_BE_THE_INVITER = false` with no
+qualifier, and nothing here mentioned the gap.
+
+**What changed** (operator decision, 2026-09-26):
+
+* `post_rental` hands the ledger `state.config.admin_ids` with `check_admin`'s answer, and
+  `record_rental` refuses through `recorder_is_the_inviter` (`src/db/referral_credit.rs`): a named
+  recorder when he is the inviter, as before, and a password record (0) when the inviter is on the
+  admin list. Why: the password names nobody, and any admin on the list may be the one holding it.
+  The answer is the same 422 `recorder_is_inviter`, and nothing is written.
+* A named admin still records the friend of another admin, and the password still records the
+  friend of anyone off the list.
+* `referral_credit.t27` qualifies the rule: both identities, what stays open, the function
+  `recorder_refused`, one test and one invariant (floor 137/22 → 148/24). Gate 3 binds the list's
+  one read and the one call that hands it over (284 → 286 rows, each planted red once).
+* Tests: in-crate `the_recorder_guard_reads_both_admin_identities` (no database), and
+  `a_password_record_of_a_listed_admins_friend_is_refused` (`tests/integration_referral_credit.rs`,
+  PostgreSQL). The token alone, initData that fails the strict check beside the token, and a linked
+  completed order each get 422 and write no record, no ledger row and no edge confirmation.
+
+**Still open, for the owner.**
+
+1. A person who knows the admin password and is not on `ADMIN_IDS` can still record the rentals of
+   a friend he invited and credit himself. Nothing on the request tells him apart from a manager,
+   and every password record stores `recorded_by = 0`, so the ledger cannot say who recorded it.
+   Closing this means refusing the password token on `POST /api/admin/referral-credit/rentals` and
+   accepting only an admin Telegram names. That would also refuse an admin whose WebView fails the
+   strict initData check (the failure `check_owner`'s comment records in production), who today
+   falls back to the password. Keep the password on this route, or require a named admin?
+2. `resolve_request` has no guard of this kind: an admin may mark his own payout request paid. It
+   creates no credit (the balance it pays out came from a record, which the guard above checks,
+   short of the gap in 1), and the payout itself is made by hand. Listed, not changed: a second person on a payout is the
+   owner's call.
