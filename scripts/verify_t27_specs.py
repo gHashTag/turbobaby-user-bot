@@ -39,6 +39,8 @@ AGENT_CARD = "specs/agents/turbobaby.t27"
 # availability 141 -> 154 declarations and 37 -> 38 checks, locale_policy 144 -> 146 declarations.
 # Re-measured 2026-09-26 again for the nineteen cannabis-era keys retired from the bundle:
 # legacy_retirement 299 -> 317 declarations and 63 -> 65 checks, locale_policy 146 -> 148.
+# Re-measured 2026-09-26 once more for the bike line's name on the order screens:
+# order_presentation 606 -> 622 declarations and 77 -> 79 checks.
 SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     AGENT_CARD: {
         "module": "turbobaby-agent",
@@ -253,8 +255,11 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         # Raised 2026-09-25 from 570/73 when the owner's answer 3 gave a line of the old
         # catalogue its neutral name and withheld the previous shop's name. Raised 2026-09-26
         # to 606/77 when the operator decided such an order shows no shop label at all.
-        "min_declarations": 606,
-        "min_checks": 77,
+        # Raised 2026-09-26 again to 622/79: a bike line is named by its bike instead of
+        # "Unknown" (thirteen BIKE_LINE_* declarations and the source function, one test and
+        # one invariant).
+        "min_declarations": 622,
+        "min_checks": 79,
     },
     "specs/turbobaby/order_status.t27": {
         "module": "turbobaby-order-status",
