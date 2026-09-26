@@ -874,3 +874,175 @@ rulings of 2026-09-25, «всё что касается канабиса ниг�
 `specs/turbobaby/legacy_retirement.t27` records it (`LEFTOVERS_2026_09_26_*`), `locale_policy.t27`
 the key count (545 to 526), and `tests/no_cannabis_client_wiring.rs` keeps the keys, their copy and
 the farm's words out of the tables and out of every string literal under `src/ui`.
+
+## R1–R3, the owner's answers of 2026-09-26
+
+Kept at the end of this file, like the entries above, so that no line citation into it moves.
+Three questions left open by round 4 were put to the owner on 2026-09-26. He answered, verbatim:
+
+* **R1**, `GET /api/loyalty/leaderboard`, which had no login and served the top 20's first names,
+  total spend and raw tier: «Только для админа» ("Only for the admin").
+* **R2**, `GET /api/quest-places`, `GET /api/treasure-hunts` and `GET /api/loyalty/config`, which
+  served stored rows and the stored config as they are: «Закрыть для клиентов» ("Close it to
+  customers").
+* **R3**, the referral programme: «Должно начисляться исключительно за то кто арендовал 10% скидка»,
+  «Пригласивший и может забрать скидкой за аренду или деньгами», and, of the referral points, the
+  milestone ladder and the welcome credit, «Убрать, только скидка 10%»; the 10% is taken «с каждой
+  аренды друга». In short: the inviter gets 10% of each rental an invited friend completes, and may
+  take it off a rental or as money; the points go.
+
+The rulings in force stay: rental only, Phuket only, nothing deleted (2026-09-24). No row is deleted
+or rewritten. Migration 089 (`089_referral_credit.sql`) only creates three tables and their indexes.
+
+**What changed.**
+
+* **R1.** `get_leaderboard` in `src/api/loyalty.rs` calls `check_admin` as its first statement. A
+  non-admin gets its 401, or 429 when rate-limited, like every admin route. The admin screen, the
+  only reader, is unchanged.
+* **R2.** The three GETs call `admin_or_missing_route` (`src/api/mod.rs`) first. A caller without
+  admin proof gets the missing-route answer: status 404 with the same body `api_not_found` builds
+  for an unmatched path, from one shared builder, `missing_route`; a rate-limited caller gets the
+  same 404. Admins are still served. A failed attempt still counts toward the admin limiter. The routes stay registered, because unregistering
+  a GET would answer 405 and so say the path exists. The writes were already admin-only.
+* **R3, what stopped.** The referral points to the inviter on a friend's first completed order, the
+  milestone ladder and its award, and the welcome credit to the invitee. Their code is deleted from
+  `src/db/referrals.rs` and from `complete_order_and_update_loyalty` (`src/db/orders.rs`), and so
+  are the two queue producers that announced them. Edge confirmation stays, with no money: pending
+  becomes confirmed and `referral_count` goes up by one on the friend's first completed order
+  (`confirm_referral_edge`), and also on a creditable recorded rental.
+* **R3, what started.** A separate THB ledger, `referral_ledger`. A manager records a completed
+  rental of an invited friend (`POST /api/admin/referral-credit/rentals`), and the direct inviter is
+  credited 10% of it, rounded down to whole baht. The inviter can ask for the balance off a rental
+  («Списать в счёт аренды») or paid out («Запросить выплату»). A manager resolves each request by
+  hand. The code is `src/db/referral_credit.rs`, `src/api/referral_credit.rs` and the shared
+  arithmetic `src/trios/referral_credit.rs`. The contract is
+  `specs/turbobaby/referral_credit.t27`.
+
+**The operator's decisions**, recorded with the answer they implement. Each can be revisited by the
+owner:
+
+1. Referral money is a new THB ledger (`referral_ledger`), separate from
+   `loyalty_profiles.bonus_balance`. Its balance is the sum of its rows; no balance column is
+   stored. Holds are derived from open requests. Why: points cannot pay a rental (`bonus_used` is
+   at most the subtotal, which is 0), a payout from `bonus_balance` would pay out cashback, and a
+   stored balance can drift, which is the defect `loyalty_ledger.t27` measures.
+2. Credit is born only when a manager records a completed rental, through
+   `POST /api/admin/referral-credit/rentals`. Nothing credits automatically when an order completes.
+   Why: no order carries a rental amount (`check_full_subtotal` prices bike lines at 0, D11), and
+   no shipped client creates rental orders.
+3. The base is the rental charge the manager took, in whole THB, without deposit and delivery, net
+   of any referral balance applied to that same rental. The credit is floor((R − applied) × 10 / 100).
+   Why: the credit never exceeds 10% of the cash actually received. This is the conservative
+   reading; the owner may prefer the gross charge (open question 1 below).
+4. Rounding is down to whole baht, with integer THB (BIGINT) everywhere. A rental whose credit
+   rounds to 0 is still recorded, with no ledger row.
+5. Every recorded rental credits: no cap, no expiry, no minimum payout, no fee and no cooldown. An
+   extension paid separately may be recorded as its own rental. Why: «с каждой аренды друга», and
+   no number may be invented.
+6. Only the direct inviter is credited (one level); the friend gets nothing. The edge is read from
+   `referral_events` (first-touch, any status), never from `loyalty_profiles.referred_by`.
+7. Not creditable: a self edge (including the backfill of migration 007); an edge created after the
+   linked order; an existing customer (`first_purchase_at`, or an earlier recorded rental, before
+   the edge); and a recording admin who is the inviter (422). Why: `/start ref_` records an edge
+   with no new-user check, so old customers could otherwise be attributed.
+8. No retroactive credit. A record linked to an order created before migration 089 was applied
+   (`_schema_migrations.applied_at`) is refused with 409. By manager policy, offline rentals from
+   before the deploy are not to be recorded.
+9. «Списать в счёт аренды» is a customer request that holds the whole available balance. At the
+   customer's next recorded rental the manager's record applies min(hold, rental, balance)
+   automatically; the manager may decline the request instead. It is not a checkout field this
+   round. Why: no checkout can carry a rental line, and a hold inside `create_order` would edit the
+   most sensitive money path for a feature no one can reach.
+10. «Запросить выплату» holds the whole available balance. The manager pays by hand and marks it
+    paid, or declines. There are no partial payouts, and "paid" is refused if the ledger is below
+    the amount. Nothing moves money automatically.
+11. At most one open request per person (a partial unique index). A second tap of the same kind
+    returns the open one (200, `already_open`); a request of the other kind gets 409.
+12. Clawback is automatic only in the bot's `RejectOrder`, the one path that can un-complete an
+    order. It runs in the same transaction, fail-closed, and is a no-op when there is no live record.
+    Every other refund or correction is the admin's whole reversal; a correction is a reversal plus
+    a new record. Rows are appended or marked, never deleted.
+13. A reversal may make a balance negative. The customer is shown 0 (no approved copy explains a
+    debt). It is never collected, and it blocks requests until later credits net it out.
+14. Customer routes use `check_owner`, with its lenient fallback, plus `check_not_blocked`. There is
+    no strict HMAC gate. Why: a request moves no money, and the reconstructed-initData cohort relies
+    on the fallback. A blocked customer's credits are still recorded.
+15. An admin record carries a required `idempotency_key` in the JSON body, compared with the payload
+    (409 on reuse with a different payload). Why: the existing `post_json_admin_full` helper sends no
+    custom header, and a new helper would move `webapp_bridge` counts.
+16. Advisory locks use the two-int4 key space (`hashtext('referral_credit')`, `hashtext(tid)`). Each
+    transaction takes at most one person lock. The global order is: the order row, then the person
+    lock, then the referral rows.
+17. R1: a non-admin gets `check_admin`'s 401 (429 when rate-limited), like every admin route. R2:
+    only the three GETs answer non-admins with the byte-identical `api_not_found` body, through one
+    shared builder. Admins are still served, failed attempts count toward the admin limiter, and the
+    routes stay registered.
+18. The stopped credits' code is deleted (the points to the inviter, the milestones and the welcome
+    credit). Edge confirmation is kept without money, on the first completed order and on a
+    creditable recorded rental.
+19. Queued `friend_ordered` and `milestone` notification rows are held, not delivered, because
+    their producers are removed. Why: `notification_queue.t27`'s rule and
+    `tests/notification_drain_wiring.rs` keep producers, renderers and both kind lists equal (the
+    `friend_watered` precedent). The queue drains within a tick, so few rows or none are affected.
+    No queued row is deleted.
+20. `REFERRAL_WELCOME_BONUS` stays parsed into `Config` and is read by nobody (the
+    `Config::delivery_zones` precedent). The `loyalty_config` keys `referral_bonus` and
+    `milestone_bonus_N` stay stored and inert, and `validate_loyalty_config_body` still requires
+    `referral_bonus`.
+21. Server switches for cached bundles: `/api/referrals/me/:telegram_id/milestones` serves empty
+    `thresholds` and `bonuses`, and `/api/loyalty/:telegram_id` omits `config.referral_bonus`. The old ladder and the old
+    per-friend line vanish before the client redeploys.
+22. Customer copy uses approved wording only. The rule sentence «10% с каждой аренды приглашённого
+    друга» / "10% of every rental your invited friend completes" goes on the bot's `/invite` hint and
+    on the friend-joined notice's hint (`src/locales.rs`, `referral_share_hint` and
+    `referral_invite_progress_hint`), and, in the client lane, on the referrals subtitle and the
+    profile's former per-friend line. `/refstats` shows «Реферальный баланс» / "Referral balance"
+    (`referral_bonus_earned`) with the shown balance, and leaves the line out when the balance
+    cannot be read. The friend-facing share text is dropped, the empty invitees panel is hidden, and
+    a redeem in progress shows "✅ " plus the button's own label (client lane).
+23. The customer response carries the balance, the hold, the available amount and the open request
+    only: no entries, no friend ids, no order ids.
+24. The admin view is a third Loyalty sub-tab, «Рефералы» (client lane). Admin-facing labels and the
+    English Telegram notices to admins are written by the lane and listed below for rewording.
+25. `/api/referrals/leaderboard` is left unchanged, although it is public, publishes `telegram_id`
+    and shows frozen point totals: R1 names only `/api/loyalty/leaderboard` (open question 2).
+
+**Admin-facing wording the server lane wrote**, not the owner's, listed for rewording:
+
+* The notice to admins when a customer opens a request (`request_notice` in
+  `src/api/referral_credit.rs`, sent after the commit): the head «💸 Referral payout request» or
+  «🏍 Referral balance to apply to a rental», then the customer's first name, @username and
+  `id <telegram_id>`, the amount (`format_baht`), `#R<request id>`, and «Admin → Лояльность →
+  Рефералы».
+* The note stored on the reversal the bot's reject makes: "order rejected in the bot"
+  (`BOT_REJECT_NOTE` in `src/db/referral_credit.rs`).
+* The refusal codes the admin routes answer with, machine words rather than sentences:
+  `order_not_found`, `order_of_another_customer`, `order_has_no_rental_line`,
+  `order_not_completed`, `order_before_program`, `order_already_recorded`,
+  `idempotency_key_reused`, `recorder_is_inviter`, `no_referral_effect` (with the reason
+  `no_edge`, `self_edge`, `edge_after_order` or `existing_customer`), `request_open`,
+  `nothing_available`, `rental_not_found`, `request_not_found`, `request_not_open`,
+  `redeem_cannot_be_paid`, `balance_below_request`, and the body validators' `invalid_customer`,
+  `invalid_rental_amount`, `invalid_order_id`, `invalid_note`, `invalid_idempotency_key`,
+  `invalid_kind` and `invalid_action`.
+* The OpenAPI descriptions of the six new routes and of the R1/R2 responses (`src/api/openapi.rs`).
+
+**Left as it is.** The `bonus_transactions` rows and `referral_milestones` rows the stopped credits
+wrote, and every balance they moved. The two locale strings that announced them
+(`referral_friend_ordered`, `referral_milestone_bonus` in `src/locales.rs`) are read by nobody. The
+earlier open question about the welcome credit's sentence (the entry "what answer 3 still left in
+sight") now concerns old rows only: no welcome row is written since R3, and old ones stay withheld.
+
+**Open questions for the owner.**
+
+1. Is the 10% taken on the rental charge net of the referral balance applied to it (as built), or
+   on the gross charge?
+2. `/api/referrals/leaderboard` is public and publishes `telegram_id` and frozen point totals.
+   Close it like R1, or leave it?
+3. The admin-facing wording above: keep it, or reword it?
+
+`specs/turbobaby/referral_credit.t27` owns the credit. `referral_program.t27` records what stopped,
+`loyalty_ledger.t27` R1, `legacy_retirement.t27` the answers of R1 and R2
+(`OWNER_ANSWER_R1_*`, `OWNER_ANSWER_R2_*`), `notification_queue.t27` the held kinds, and
+`order_status.t27` the reject's reversal. The tests are `tests/referral_credit_wiring.rs`,
+`tests/integration_referral_credit.rs` and `tests/integration_closed_reads.rs`.
