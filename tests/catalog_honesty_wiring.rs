@@ -45,11 +45,23 @@
 //!    answer 5), the owner answered «Наверное» ("probably"). The line and its
 //!    key are gone, and nothing was written in their place.
 //!
-//! What stays, on purpose: a zero count may still RULE a family out, through
-//! the Book control's reason (`BookBlock::NoUnitsFree`), because the contract
-//! allows the file to rule out (`FILE_MAY_RULE_OUT = true`) and forbids it only
-//! to confirm. Answer 5 named the line, not that reason, so the reason stays;
-//! `availability.t27` records it as open (`NO_UNITS_BOOK_REASON_WAS_ANSWERED`).
+//! 4. **A seeded zero refused a booking** (added 2026-09-26). Answer 5 named the
+//!    line, not the Book control, so under the same zero the control stayed
+//!    disabled with «Все байки этой модели заняты» / "Every bike of this model
+//!    is taken" (`T_BIKE_BOOK_BLOCKED_NO_UNITS`), and with «Наличие не
+//!    подтверждено» / "Availability not confirmed"
+//!    (`T_BIKE_BOOK_BLOCKED_UNKNOWN_AVAILABILITY`) when no count was served.
+//!    Asked on 2026-09-26 (question I), the owner answered: «Разрешить бронь,
+//!    наличие уточнит менеджер» ("Allow booking; the manager will confirm
+//!    availability"). No booking decision reads the count now, on the client
+//!    or on the server (which never refused on it), both keys are deleted, and
+//!    the manager line is what every card and detail says about availability.
+//!    `availability.t27` records it (`NO_UNITS_BOOK_REASON_*`); the second
+//!    reason's removal is that contract's reading of the answer, and says so.
+//!
+//! The file may still rule a family out of being offered INSTEAD of CLICK 125
+//! (`FILE_MAY_RULE_OUT = true`, the redirect guard above); it rules nobody out
+//! of booking.
 //!
 //! This file imports nothing from the crate on purpose: it compiles against any
 //! tree, so on a tree where a screen still prints the count it fails by CONTENT.
@@ -63,6 +75,29 @@ const ADMIN: &str = "src/ui/screens/admin_screen.rs";
 const SEED: &str = "data/fleet_seed.json";
 const AVAILABILITY_SPEC: &str = "specs/turbobaby/availability.t27";
 const I18N: &str = "src/trios/i18n.rs";
+const BIKE_CARD: &str = "src/ui/components/bike_card.rs";
+const ORDERS_API: &str = "src/api/orders.rs";
+
+/// The Book control's two reasons that read the seeded count, deleted
+/// 2026-09-26 (question I), as (constant, literal, Russian arm, English arm).
+/// None of them may come back without the owner.
+const RETIRED_BOOK_REASONS: [(&str, &str, &str, &str); 2] = [
+    (
+        "T_BIKE_BOOK_BLOCKED_NO_UNITS",
+        "\"bike.book.blocked.no_units\"",
+        "Все байки этой модели заняты",
+        "Every bike of this model is taken",
+    ),
+    (
+        "T_BIKE_BOOK_BLOCKED_UNKNOWN_AVAILABILITY",
+        "\"bike.book.blocked.unknown_availability\"",
+        "Наличие не подтверждено",
+        "Availability not confirmed",
+    ),
+];
+
+/// The `BookBlock` arms that read the count, gone with their keys.
+const RETIRED_BOOK_ARMS: [&str; 2] = ["NoUnitsFree", "UnknownAvailability"];
 
 /// The key of the detail's «all taken» line, deleted 2026-09-25, and the two
 /// sentences it carried. None of the three may come back without the owner.
@@ -555,8 +590,8 @@ fn the_detail_prints_no_all_taken_line_and_its_key_is_gone() {
     );
     assert!(
         !detail.contains("units_available == Some(0)"),
-        "{DETAIL} branches on a seeded zero again; the one zero branch left is \
-         book_block's, whose reason sits beside the disabled Book control"
+        "{DETAIL} branches on a seeded zero again; since 2026-09-26 no customer \
+         decision reads the count (availability.t27, question I)"
     );
     let i18n = code(&source(I18N));
     assert!(
@@ -593,33 +628,156 @@ fn the_detail_prints_no_all_taken_line_and_its_key_is_gone() {
     );
 }
 
+// -- A seeded count refuses no booking (owner, 2026-09-26) --------------------
+
 #[test]
-fn a_seeded_zero_still_rules_booking_out_with_its_reason_named() {
-    // What answer 5 did not name stays: the file may rule a family out.
+fn the_book_control_reads_no_unit_count() {
+    // Question I, 2026-09-26: «Разрешить бронь, наличие уточнит менеджер».
     let catalog = code(&source(CATALOG));
     let body = fn_body(&catalog, "pub fn book_block(");
-    assert!(
-        body.contains("Some(_) => return Some(BookBlock::NoUnitsFree)"),
-        "book_block no longer blocks a seeded zero:\n{body}"
-    );
-    assert!(
-        catalog.contains("Self::NoUnitsFree => T_BIKE_BOOK_BLOCKED_NO_UNITS"),
-        "the no-units block lost its named reason (issue #9)"
-    );
+    for field in ["units_available", "units_total"] {
+        assert!(
+            !body.contains(field),
+            "book_block reads `{field}` again; the owner allowed booking whatever the seeded \
+             count says (availability.t27 CUSTOMER_BOOKING_READS_THE_FILE = false):\n{body}"
+        );
+    }
+    // D16: the function still decides something, so "reads no count" is not
+    // true of an empty body. The three arms left are the offer, the rate and
+    // the handler.
+    for arm in [
+        "return Some(BookBlock::NotOffered)",
+        "return Some(BookBlock::NoPublishedRate)",
+        "return Some(BookBlock::NotWired)",
+    ] {
+        assert!(
+            body.contains(arm),
+            "book_block lost `{arm}`; this check is blind"
+        );
+    }
+    for arm in RETIRED_BOOK_ARMS {
+        assert!(
+            !has_identifier(&catalog, arm),
+            "{CATALOG} declares BookBlock::{arm} again"
+        );
+    }
     let detail = code(&source(DETAIL));
     assert!(
         detail.contains("book_block(&bike, on_book.is_some())")
             && detail.contains("reason.reason_key()"),
         "{DETAIL} no longer renders the Book control's reason; this check is blind"
     );
+}
+
+#[test]
+fn the_retired_book_reasons_are_gone_with_their_keys() {
+    let i18n = code(&source(I18N));
+    for (constant, literal, ru, en) in RETIRED_BOOK_REASONS {
+        assert!(
+            !has_identifier(&i18n, constant) && !i18n.contains(literal),
+            "{I18N} declares {constant} again; locale_policy.t27 counts it as deleted"
+        );
+        for path in [I18N, CATALOG, DETAIL, BIKE_CARD] {
+            let text = code(&source(path));
+            assert!(
+                !has_identifier(&text, constant),
+                "{path} uses {constant} again"
+            );
+            for sentence in [ru, en] {
+                assert!(
+                    !text.contains(sentence),
+                    "{path} carries the retired sentence {sentence:?} again"
+                );
+            }
+        }
+    }
+    // D16: the three reasons that stay are still declared and still named by
+    // their arms, so a parser that stopped matching would fail here first.
+    for kept in [
+        "T_BIKE_BOOK_BLOCKED_NOT_OFFERED",
+        "T_BIKE_BOOK_BLOCKED_NO_RATE",
+        "T_BIKE_BOOK_BLOCKED_NOT_WIRED",
+    ] {
+        assert!(
+            i18n.contains(&format!("pub const {kept}: Key = ")),
+            "{I18N} no longer declares {kept}; this check is blind"
+        );
+    }
+}
+
+#[test]
+fn the_card_component_reads_no_unit_count_either() {
+    // No screen mounts it, and it gated its add-to-cart on the same count and
+    // printed it as «Свободно: N» / «Все в аренде» until 2026-09-26.
+    let card = code(&source(BIKE_CARD));
+    assert_eq!(
+        card.matches("units_available").count(),
+        1,
+        "{BIKE_CARD} reads the seeded count again; its only mention is the field itself"
+    );
+    assert!(
+        card.contains("pub units_available: u32,"),
+        "{BIKE_CARD} no longer declares the field; this check is blind"
+    );
+    assert!(
+        has_identifier(&card, MANAGER_CONFIRMS_KEY),
+        "{BIKE_CARD} no longer prints the manager line"
+    );
+    for gone in ["Все в аренде", "All rented out", "Свободно:", "Available:"] {
+        assert!(!card.contains(gone), "{BIKE_CARD} prints {gone:?} again");
+    }
+}
+
+#[test]
+fn create_order_does_not_refuse_on_the_unit_count() {
+    // The server never refused on it, and must not start: a count of what is
+    // at base today says nothing about a booking weeks out.
+    let orders = code(&source(ORDERS_API));
+    let body = fn_body(&orders, "async fn check_bike_lines(");
+    let guard = "if listing.units_available < units.ceil() as i64 {";
+    let at = body.find(guard).unwrap_or_else(|| {
+        panic!("check_bike_lines no longer compares the count; re-read it:\n{body}")
+    });
+    let block = &body[at..];
+    let block = &block[..block
+        .find("\n        }\n")
+        .expect("the shortfall block closes at its own indentation")];
+    assert!(
+        block.contains("tracing::info!") && !block.contains("return"),
+        "check_bike_lines refuses on the unit count:\n{block}"
+    );
+    // No refusal variant names the count either.
+    let refusals = fn_body(&orders, "pub(crate) enum BikeLineCheck {");
+    for word in ["Unit", "Available", "Stock"] {
+        assert!(
+            !refusals.contains(word),
+            "BikeLineCheck gained a count refusal ({word}):\n{refusals}"
+        );
+    }
+}
+
+#[test]
+fn the_contract_records_the_owners_answer_to_question_i() {
     let spec = source(AVAILABILITY_SPEC);
     assert!(
-        spec_bool(&spec, "NO_UNITS_BOOK_REASON_IS_SHOWN") && spec_bool(&spec, "FILE_MAY_RULE_OUT"),
-        "availability.t27 no longer records the Book control's no-units reason as shown"
+        spec.contains("pub const NO_UNITS_BOOK_REASON_DECIDED_ON : str = \"2026-09-26\";"),
+        "availability.t27 no longer dates the owner's answer to question I"
     );
-    assert!(
-        !spec_bool(&spec, "NO_UNITS_BOOK_REASON_WAS_ANSWERED"),
-        "availability.t27 says the owner answered for the Book reason; record that answer \
-         where it is dated before flipping this flag"
-    );
+    for (flag, want) in [
+        ("NO_UNITS_BOOK_REASON_WAS_ANSWERED", true),
+        ("NO_UNITS_BOOK_REASON_IS_SHOWN", false),
+        ("UNKNOWN_AVAILABILITY_BOOK_REASON_IS_SHOWN", false),
+        ("UNKNOWN_AVAILABILITY_REMOVAL_IS_THIS_FILES_READING", true),
+        ("CUSTOMER_BOOKING_READS_THE_FILE", false),
+        ("SERVER_REFUSES_ON_THE_COUNT", false),
+        // What the file may still do: rule a redirect out, never confirm.
+        ("FILE_MAY_RULE_OUT", true),
+        ("FILE_MAY_CONFIRM", false),
+    ] {
+        assert_eq!(
+            spec_bool(&spec, flag),
+            want,
+            "availability.t27 `{flag}` disagrees with the code this file reads"
+        );
+    }
 }

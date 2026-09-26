@@ -813,5 +813,58 @@ deleted or rewritten, no migration is added, and no file is removed from any vol
   The bonus history serves the new sentence; a row written before keeps the old one and stays
   withheld. `legacy_retirement.t27` (`WELCOME_CREDIT_SENTENCE`, `WELCOME_SENTENCE_*`).
 
-The second question of that day (the Book control under a seeded zero) is the client's and is not
-recorded here. `legacy_retirement.t27` keeps the day's answers together (`OWNER_ANSWERS_2026_09_26_AT`).
+The second question of that day (the Book control under a seeded zero) is the client's and is
+recorded in the entry that follows. `legacy_retirement.t27` keeps the day's answers together (`OWNER_ANSWERS_2026_09_26_AT`).
+
+## The Book control under a seeded zero: booking allowed, decided 2026-09-26 (question I)
+
+Kept at the end of this file, like the entries above, so that no line citation into it moves.
+
+The entry on the «all taken» line above left one thing open (question I): under the same zero unit
+count, a count seeded on 2026-09-12 and changed only by an admin, the Book control on the bike
+detail stayed disabled with the reason «Все байки этой модели заняты» / "Every bike of this model
+is taken" (`T_BIKE_BOOK_BLOCKED_NO_UNITS`). The owner answered on 2026-09-26, verbatim: «Разрешить
+бронь, наличие уточнит менеджер» ("Allow booking; the manager will confirm availability").
+
+* **Removed.** The arm of `book_block` (`src/ui/screens/catalog_screen.rs`) that disabled the
+  control under a zero, and the arm that disabled it when no count was served, «Наличие не
+  подтверждено» / "Availability not confirmed" (`T_BIKE_BOOK_BLOCKED_UNKNOWN_AVAILABILITY`). The
+  answer names the zero. Removing the second arm is the operator's reading of it: a manager confirms
+  availability for every family, so "not confirmed" is no reason to refuse one. Both keys were
+  deleted from `src/trios/i18n.rs` the way the earlier ones were, each line replaced by a comment
+  line. The unmounted card component (`src/ui/components/bike_card.rs`) stopped gating its
+  add-to-cart on the count and stopped printing it; it prints the manager line.
+* **Unchanged.** The server never refused an order on the count: `check_bike_lines` in
+  `src/api/orders.rs` logs a shortfall for staff and accepts the order. What still disables the Book
+  control reads no count: a closed family (D12), no published rate (D11), and a screen with no
+  booking handler. «Наличие уточняет менеджер» stays on every card and detail, and no sentence was
+  written. The admin screen keeps its count. The CLICK 125 redirect still names only a family with a
+  unit at base, because that decides what is offered instead, not whether a customer may book.
+
+`specs/turbobaby/availability.t27` records the answer (`NO_UNITS_BOOK_REASON_*`,
+`UNKNOWN_AVAILABILITY_*`, `customer_may_book`), `locale_policy.t27` the key count (547 to 545), and
+`tests/catalog_honesty_wiring.rs` holds the client, the card and `create_order` to it.
+
+## D19 addendum — cannabis-era copy the bundle still carried, retired 2026-09-26
+
+Kept at the end of this file, like the entries above, so that no line citation into it moves.
+A review of `405f30e` found copy of the previous shop in the public Mini App bundle that no mounted
+screen printed: every arm of `src/trios/i18n.rs` ships in the wasm, used or not. Under the owner's
+rulings of 2026-09-25, «всё что касается канабиса нигде не должно быть» (#12) and «Все канабисное
+аналировать» (answer 3), the operator had it retired on 2026-09-26.
+
+* **Deleted, nineteen keys**, each line replaced by a comment line so that no line citation moved:
+  the garden's bonus label «Награда из сада» / "Garden reward"; the accessories screen's last two
+  paraphernalia categories «Хранение» / «Зажигалка» with their chips; the strain card's
+  lab-certificate link «📄 Сертификат»; and fifteen keys of the unmounted shop game's farm («Посадить»,
+  «Собрать», «Урожай!» and the rest). The dead code that used them went too: the farm zone of
+  `src/ui/game/shop_game.rs` and two chips of `src/ui/screens/accessories_screen.rs`. Git keeps it.
+* **Kept.** The ride game (answer 2). Both unmounted screens stay compiled and exported, as answer 7
+  left them. Generic words (clothing, souvenir, the cafe and grill game, the old sort labels) carry
+  nothing cannabis-related. The tea fold list's CBD label is not in the bundle and hides that word
+  rather than showing it.
+* **Unchanged.** Every row, every migration. No sentence was written.
+
+`specs/turbobaby/legacy_retirement.t27` records it (`LEFTOVERS_2026_09_26_*`), `locale_policy.t27`
+the key count (545 to 526), and `tests/no_cannabis_client_wiring.rs` keeps the keys, their copy and
+the farm's words out of the tables and out of every string literal under `src/ui`.

@@ -374,6 +374,10 @@ pub const CURSOR_WORD_LINES_IN_SRC : u16 = 185;
 pub const CURSOR_WORD_LINES_AS_CSS_PROPERTY : u16 = 183;
 pub const CURSOR_WORD_LINES_AS_CSS_IDENTIFIER : u16 = 2;
 pub const CURSOR_WORD_LINES_AS_PAGINATION : u16 = 0;
+; RE-POINTED 2026-09-26, not re-measured: cursor_style, cited twice above at
+; src/ui/game/shop_game.rs:1710, stands at :1415 since the shop game's farm left that file on that
+; date (legacy_retirement.t27, LEFTOVERS_2026_09_26_*); the function itself did not change. The
+; three counts above keep the reading of the tree they were taken on.
 
 ; REFUTED 2026-09-21: this file used to assert that no shipped ladder agrees with the budget it
 ; chose, and offered that as the proof the budget was not derived. One does, and it agrees on all

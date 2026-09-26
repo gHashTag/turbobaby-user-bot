@@ -789,7 +789,8 @@ fn a_garden_era_bonus_row_carries_the_generic_label() {
         "\"garden_harvest\" | \"garden_reward\" => t(lang, T_PROFILE_BONUS_OTHER).to_string(),"
     ));
     assert_eq!(GARDEN_ERA_TX_TYPES, ["garden_harvest", "garden_reward"]);
-    // The garden label is declared and translated, and no screen prints it.
+    // No screen prints the garden label; its key was deleted on 2026-09-26
+    // (tests/no_cannabis_client_wiring.rs holds the key and its copy gone).
     let mut stack = vec![PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/ui")];
     while let Some(dir) = stack.pop() {
         for entry in fs::read_dir(&dir).expect("src/ui is readable").flatten() {

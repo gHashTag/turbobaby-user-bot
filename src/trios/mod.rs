@@ -30,3 +30,7 @@ pub use core::{Error, Lang, QrToken, Result, TelegramId, Timestamp};
 // (owner, 2026-09-25, answer 3). Declared after the re-exports, in a group of
 // its own, so that no line of this file moves.
 pub mod legacy_view;
+
+// The name a bike line is printed under on the customer's order screens
+// (2026-09-26). Appended, like the group above, so that no line of this file moves.
+pub mod order_line;

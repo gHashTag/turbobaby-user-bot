@@ -181,7 +181,7 @@ fn no_live_customer_surface_navigates_to_a_retired_screen() {
 /// `garden_harvest` and `garden_reward` rows it labelled are *still in the live
 /// bonus ledger*, and no receipt was rewritten. Since answer 3 of 2026-09-25 a
 /// customer reads them under the generic label, amount and date intact; the key
-/// stays declared and no screen prints it (`tests/legacy_view_wiring.rs`).
+/// was deleted 2026-09-26 (`tests/legacy_view_wiring.rs`, `no_cannabis_client_wiring.rs`).
 const RETIRED_GARDEN_IDENTIFIERS: [&str; 10] = [
     "Route::Garden",
     "Target::Garden",

@@ -1446,6 +1446,23 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "why": "only the quantity and the unit price may pass as stored; a key added here would "
                "serve a stored id or name of the old catalogue to its customer again",
     },
+    # The name of a bike line (2026-09-26): the contract names the two wire fields the rule
+    # reads, in the order it tries them, and the rule reads them from its own list. Measured by
+    # hand 2026-09-26: [bike_name, bike_key].
+    {
+        "name": "order_presentation.BIKE_LINE_NAME_FIELDS ~ order_line.rs BIKE_LINE_NAME_FIELDS",
+        "spec": "specs/turbobaby/order_presentation.t27",
+        "const": "BIKE_LINE_NAME_FIELDS",
+        "source": "src/trios/order_line.rs",
+        "extract": (
+            "regex_list",
+            r"pub const BIKE_LINE_NAME_FIELDS: \[&str; \d+\] = \[([^\]]*)\];",
+        ),
+        "relation": "list_equal",
+        "why": "the stored name before the family key is BikeLine's own documented fallback; "
+               "another order, or a third field, would name a bike line by something the line "
+               "does not say",
+    },
     {
         "name": "legacy_retirement.OWNER_ANSWER_3_DESCRIBED_TX_TYPE_COUNT ~ legacy_view.rs",
         "spec": "specs/turbobaby/legacy_retirement.t27",
@@ -3974,7 +3991,12 @@ ONE_GROUP_EXTRACTORS = (
 # Then the welcome credit's sentence of 2026-09-26 bound legacy_retirement.WELCOME_CREDIT_SENTENCE
 # to its writer in src/db/referrals.rs and to the rule in src/trios/legacy_view.rs, each planted
 # RED once by hand: 255 rows, floor 255.
-MIN_BINDINGS = 255
+# Then the bike line's name of 2026-09-26 bound order_presentation.BIKE_LINE_NAME_FIELDS to the
+# rule's own list in src/trios/order_line.rs, planted RED once by hand (the contract's two fields
+# swapped): 249 rows over the same 41 contracts and 84 source files on its own branch, floor 249.
+# Merged 2026-09-26 on the integration branch (round 4): 256 rows, floor 256 (the measured table
+# size: 248 + the server lane's 7 + the client lane's 1).
+MIN_BINDINGS = 256
 
 
 # ---------------------------------------------------------------------------------

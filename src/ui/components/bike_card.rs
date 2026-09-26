@@ -1,5 +1,5 @@
 // Bike Card Component for the Catalog
-use crate::trios::i18n::{t, T_ADD_TO_CART, T_MENU_SOLD_OUT};
+use crate::trios::i18n::{t, T_ADD_TO_CART, T_BIKE_AVAILABILITY_UNKNOWN, T_MENU_SOLD_OUT};
 use crate::ui::components::{Button, ButtonVariant};
 use crate::ui::lang;
 use dioxus::prelude::*;
@@ -104,7 +104,7 @@ pub struct BikeCardData {
     pub variant_label: Option<String>,
     pub displacement_cc: Option<u32>,
     pub class: BikeClass,
-    /// Units of this family free to rent right now.
+    /// The seeded count of free units. Read by nothing here since 2026-09-26.
     pub units_available: u32,
     /// Client-facing day rate, already resolved by the caller.
     ///
@@ -145,9 +145,9 @@ impl BikeCardData {
         published(self.rate_thb_day)
     }
 
-    /// Rentable now: offered, and at least one unit free.
+    /// Rentable: offered. The seeded count decides nothing (owner, 2026-09-26).
     pub fn is_available(&self) -> bool {
-        self.offered && self.units_available > 0
+        self.offered
     }
 
     /// Addable to a cart.
@@ -208,14 +208,10 @@ pub fn BikeCard(props: BikeCardProps) -> Element {
     let displacement_line = bike
         .displacement_cc
         .map(|cc| format!("{cc} {}", lang::localized("см³", Some("cc"))));
+    // Neither the count nor an "all rented out" line: a manager confirms
+    // availability, as the mounted catalog says (owner, 2026-09-26).
     let availability_line = if is_available {
-        format!(
-            "{} {}",
-            lang::localized("Свободно:", Some("Available:")),
-            bike.units_available
-        )
-    } else if bike.offered {
-        lang::localized("Все в аренде", Some("All rented out"))
+        t(lang, T_BIKE_AVAILABILITY_UNKNOWN).to_string()
     } else {
         lang::localized("Сейчас не сдаём", Some("Not rented at the moment"))
     };
