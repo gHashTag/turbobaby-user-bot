@@ -562,13 +562,33 @@ pub(crate) async fn handle_command(
                     pending: 0,
                     total_bonus_earned: 0.0,
                 });
+            // The 💰 line is the referral balance since 2026-09-26 (owner, R3),
+            // «Реферальный баланс», shown as a customer sees it
+            // (`shown_balance`: a negative balance reads 0). Left out, never
+            // printed as 0, when the balance cannot be read (D9).
+            let balance_line =
+                match crate::db::referral_credit::credit_summary(&db.orm, user_id).await {
+                    Ok(credit) => format!(
+                        "\n💰 {}: <b>{} ฿</b>",
+                        locale.referral_bonus_earned,
+                        crate::trios::referral_credit::shown_balance(credit.balance_thb),
+                    ),
+                    Err(e) => {
+                        tracing::warn!(
+                            "/refstats: the referral balance of {} is unread: {}",
+                            user_id,
+                            e
+                        );
+                        String::new()
+                    }
+                };
             let text = format!(
-                "📊 <b>{}</b>\n━━━━━━━━━━━━━━━━\n👥 {}: <b>{}</b>\n✅ {}: <b>{}</b>\n⏳ {}: <b>{}</b>\n💰 {}: <b>{:.0} ฿</b>",
+                "📊 <b>{}</b>\n━━━━━━━━━━━━━━━━\n👥 {}: <b>{}</b>\n✅ {}: <b>{}</b>\n⏳ {}: <b>{}</b>{}",
                 locale.referral_title,
                 locale.referral_invited_count, stats.total_invited,
                 locale.referral_confirmed,    stats.confirmed,
                 locale.referral_pending,      stats.pending,
-                locale.referral_bonus_earned, stats.total_bonus_earned,
+                balance_line,
             );
             bot.send_message(msg.chat.id, text)
                 .parse_mode(teloxide::types::ParseMode::Html)

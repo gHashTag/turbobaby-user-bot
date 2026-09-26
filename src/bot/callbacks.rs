@@ -730,6 +730,26 @@ pub(crate) async fn handle_callback(
                                 }
                             }
                         }
+                        // R3 (2026-09-26): a referral credit recorded against
+                        // this order is reversed whole in this transaction,
+                        // before the flip. A no-op without a live record; an
+                        // error rolls the whole reject back (fail closed).
+                        if refund_ok {
+                            if let Err(e) = crate::db::referral_credit::reverse_rental_for_order(
+                                &tx,
+                                _order_id,
+                                q.from.id.0 as i64,
+                            )
+                            .await
+                            {
+                                tracing::error!(
+                                    "callback: reject referral reversal error order_id={} err={}",
+                                    _order_id,
+                                    e
+                                );
+                                refund_ok = false;
+                            }
+                        }
                         if refund_ok {
                             match tx
                                 .execute(Statement::from_sql_and_values(

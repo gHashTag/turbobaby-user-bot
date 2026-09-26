@@ -92,6 +92,7 @@ fn api_routes() -> Router<AppState> {
         .merge(happy_hour::routes())
         .merge(game::routes())
         .merge(client_errors::routes())
+        .merge(referral_credit::routes())
         .merge(referrals::routes())
         .merge(stars::routes())
         .merge(tech_tree::routes())
@@ -106,13 +107,12 @@ fn api_routes() -> Router<AppState> {
 
     // An unmatched `/api/...` path must 404, and it must say so in JSON.
     //
-    // Without this it inherited the *outer* router's SPA fallback and answered
-    // **200 with `index.html`**. A path is a string, not a symbol: no compiler,
-    // no `dead_code` lint and no clippy pass can see that a route was never
-    // registered. So the miss surfaced at runtime as a `serde_json::from_str`
-    // failing on `<!DOCTYPE html>`, the screen's error branch rendering for
-    // ever, and — because the writes are optimistic-first — a green "✅"
-    // toast over a row that had never been saved. That is exactly how nine
+    // Without this it inherited the *outer* router's SPA fallback and answered **200 with
+    // `index.html`**. A path is a string, not a symbol: no compiler, no `dead_code` lint
+    // and no clippy pass can see that a route was never registered. So the miss surfaced
+    // at runtime as a `serde_json::from_str` failing on `<!DOCTYPE html>`, the screen's
+    // error branch rendering for ever, and — because the writes are optimistic-first — a
+    // green "✅" toast over a row that had never been saved. That is exactly how nine
     // calls in the fleet admin screen went to endpoints nobody had written.
     //
     // Set last, after every merge: a fallback set before a `merge` loses to
@@ -493,8 +493,9 @@ mod route_wiring_tests {
     }
 }
 
-// The closed reads (R2), the owner's answer of 2026-09-26. Appended so that no
-// line cited above moves.
+// The referral credit (R3) and the closed reads (R2), owner's answers of
+// 2026-09-26. Appended so that no line cited above moves.
+pub(crate) mod referral_credit;
 
 use axum::http::HeaderMap;
 use axum::response::{IntoResponse, Response};

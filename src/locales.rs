@@ -210,9 +210,9 @@ fn ru() -> Locale {
         referral_invited_count: "Приглашено".into(),
         referral_confirmed: "Подтверждено".into(),
         referral_pending: "Ожидает".into(),
-        referral_bonus_earned: "Заработано бонусов".into(),
+        referral_bonus_earned: "Реферальный баланс".into(),
         referral_share_button: "Поделиться".into(),
-        referral_share_hint: "Поделитесь ссылкой и получите бонус за каждого нового друга!".into(),
+        referral_share_hint: "10% с каждой аренды приглашённого друга".into(),
         referral_leaderboard: "Таблица лидеров".into(),
         referrals_open_app: "Открыть приглашения".into(),
         cart_abandonment_reminder: "🛒 Вы не завершили оформление заказа. Товары ждут вас в корзине — вернитесь и заберите их одним касанием.".into(),
@@ -223,7 +223,7 @@ fn ru() -> Locale {
         referral_friend_joined: "🎉 {name} присоединился по вашей ссылке!".into(),
         // garden_friend_watered_legacy left on 2026-09-26 (see the struct).
         referral_friend_ordered: "🎉 {name} сделал первый заказ! Вам начислено {bonus} бонусных баллов.".into(),
-        referral_invite_progress_hint: "Приглашайте больше друзей — получайте бонусы за их активность.".into(),
+        referral_invite_progress_hint: "10% с каждой аренды приглашённого друга".into(),
         referral_milestone_bonus: "🏆 Поздравляем! Вы достигли рубежа {milestone} друзей и получили {bonus} бонусных баллов от @{bot}.".into(),
     }
 }
@@ -299,9 +299,9 @@ fn en() -> Locale {
         referral_invited_count: "Invited".into(),
         referral_confirmed: "Confirmed".into(),
         referral_pending: "Pending".into(),
-        referral_bonus_earned: "Bonus earned".into(),
+        referral_bonus_earned: "Referral balance".into(),
         referral_share_button: "Share".into(),
-        referral_share_hint: "Share your link and earn a bonus for every new friend!".into(),
+        referral_share_hint: "10% of every rental your invited friend completes".into(),
         referral_leaderboard: "Leaderboard".into(),
         referrals_open_app: "Open invites".into(),
         cart_abandonment_reminder: "🛒 You didn't finish your order. Your items are still in the cart — come back and grab them with one tap.".into(),
@@ -312,7 +312,7 @@ fn en() -> Locale {
         referral_friend_joined: "🎉 {name} joined via your link!".into(),
         // garden_friend_watered_legacy left on 2026-09-26 (see the struct).
         referral_friend_ordered: "🎉 {name} placed their first order! You earned {bonus} bonus points.".into(),
-        referral_invite_progress_hint: "Invite more friends — earn bonuses for their activity.".into(),
+        referral_invite_progress_hint: "10% of every rental your invited friend completes".into(),
         referral_milestone_bonus: "🏆 Congrats! You hit the {milestone} friends milestone and received {bonus} bonus points from @{bot}.".into(),
     }
 }
