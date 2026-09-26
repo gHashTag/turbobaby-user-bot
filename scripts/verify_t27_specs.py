@@ -105,7 +105,10 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         "module": "turbobaby-catalog-write",
         "id": "turbobaby/catalog-write",
         # Raised 2026-09-26 from 158/44 to the measured count (R1-R3, the owner's answers of 2026-09-26): src/main.rs, the second largest file, grew by four lines.
-        "min_declarations": 159,
+        # 159 on 2026-09-26 (R3, client lane): the admin screen's length re-measured after the
+        # Loyalty tab's referral sub-tab, the 5910 kept under ADMIN_SCREEN_LINES_BEFORE_2026_09_26.
+        # Merged 2026-09-26 on the integration branch (t27/round5), both kept: 160/44, measured.
+        "min_declarations": 160,
         "min_checks": 44,
     },
     "specs/turbobaby/checkout_contact.t27": {
@@ -226,7 +229,11 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         # by two declarations. 148/36 the same day: nineteen cannabis-era keys no mounted screen
         # printed were deleted, named by two declarations.
         # Raised 2026-09-26 from 148/36 to the measured count (R1-R3, the owner's answers of 2026-09-26): migration 089 re-counted in the migration copy.
-        "min_declarations": 149,
+        # 155/36 the same day on the client lane of
+        # R3 (the referral credit): seven referral keys retired and four declared, named by five
+        # declarations, with the two counts before it kept under _BEFORE_2026_09_26_R3 names.
+        # Merged 2026-09-26 on the integration branch (t27/round5), both kept: 156/36, measured.
+        "min_declarations": 156,
         "min_checks": 36,
     },
     "specs/turbobaby/loyalty_ledger.t27": {
