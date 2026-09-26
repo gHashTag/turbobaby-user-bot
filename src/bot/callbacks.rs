@@ -558,87 +558,41 @@ pub(crate) async fn handle_callback(
                 .text("📦 Completed!")
                 .await?;
 
-            // Atomically complete order, update loyalty profile,
-            // recalculate tier, plant garden seed, and credit
-            // referral bonus (cycle #171 lifted the referral credit
-            // INTO complete_order_and_update_loyalty — this callsite
-            // only owns the user-facing Telegram notification now).
-            let completion = match crate::db::orders::complete_order_and_update_loyalty(
-                &db.orm,
-                order_id,
-                config.referral_welcome_bonus,
-            )
-            .await
-            {
-                Ok(Some(c)) => c,
-                Ok(None) => {
-                    // No customer attribution or already completed — nothing more to do.
-                    if let Some(msg) = q.message.as_ref().and_then(|m| match m {
-                        teloxide::types::MaybeInaccessibleMessage::Regular(msg) => Some(msg),
-                        _ => None,
-                    }) {
-                        bot.edit_message_reply_markup(msg.chat.id, msg.id)
-                            .reply_markup(
-                                InlineKeyboardMarkup::new::<Vec<Vec<InlineKeyboardButton>>>(vec![]),
-                            )
-                            .await
-                            .ok();
-                    }
-                    return Ok(());
-                }
-                Err(e) => {
-                    tracing::error!("callback: complete_order_and_update_loyalty error: {}", e);
-                    return Ok(());
-                }
-            };
-
-            // Notify referrer if the bonus was credited inside the
-            // completion function. Cycle #171: the lookup + credit
-            // happens in db/orders.rs; this branch only fires when
-            // the credit succeeded (Some(bonus)).
-            if let Some(bonus) = completion.referral_bonus_credited {
-                use sea_orm::{ConnectionTrait, DbBackend, Statement};
-                // Look up referrer_id from referral_events for the
-                // notification target. Cycle #76: differentiate
-                // "no row" from "query failed".
-                let event_row = match db
-                    .orm
-                    .query_one(Statement::from_sql_and_values(
-                        DbBackend::Postgres,
-                        "SELECT referrer_id FROM referral_events WHERE referred_id = $1",
-                        [completion.customer_telegram_id.into()],
-                    ))
-                    .await
+            // Atomically complete order, update loyalty profile and
+            // recalculate tier; the referral edge is confirmed inside
+            // complete_order_and_update_loyalty (cycle #171), and since
+            // 2026-09-26 (R3) that confirmation pays nobody — this callsite
+            // only owns the user-facing Telegram notification.
+            let completion =
+                match crate::db::orders::complete_order_and_update_loyalty(&db.orm, order_id).await
                 {
-                    Ok(row) => row,
+                    Ok(Some(c)) => c,
+                    Ok(None) => {
+                        // No customer attribution or already completed — nothing more to do.
+                        if let Some(msg) = q.message.as_ref().and_then(|m| match m {
+                            teloxide::types::MaybeInaccessibleMessage::Regular(msg) => Some(msg),
+                            _ => None,
+                        }) {
+                            bot.edit_message_reply_markup(msg.chat.id, msg.id)
+                                .reply_markup(InlineKeyboardMarkup::new::<
+                                    Vec<Vec<InlineKeyboardButton>>,
+                                >(vec![]))
+                                .await
+                                .ok();
+                        }
+                        return Ok(());
+                    }
                     Err(e) => {
-                        tracing::warn!(
-                            "callbacks: referral_events lookup failed for cid={}: {}",
-                            completion.customer_telegram_id,
-                            e
-                        );
-                        None
+                        tracing::error!("callback: complete_order_and_update_loyalty error: {}", e);
+                        return Ok(());
                     }
                 };
-                if let Some(ev) = event_row {
-                    let referrer_id: i64 = ev.try_get("", "referrer_id").unwrap_or(0);
-                    if referrer_id != 0 {
-                        if let Err(e) = bot
-                            .send_message(
-                                teloxide::types::ChatId(referrer_id),
-                                format!("🎉 {} +{:.0} ฿", locale.referral_bonus, bonus),
-                            )
-                            .await
-                        {
-                            tracing::warn!(
-                                "referral bonus notify failed for referrer_id={}: {}",
-                                referrer_id,
-                                e
-                            );
-                        }
-                    }
-                }
-            }
+
+            // The referrer's "🎉 +N ฿" message stood here, sent when the
+            // completion credited a referral bonus. The owner stopped that
+            // bonus on 2026-09-26 (R3: «Убрать, только скидка 10%»), so there
+            // is nothing to announce: the referral credit is recorded by a
+            // manager per rental (`crate::db::referral_credit`).
 
             if let Some(msg) = q.message.as_ref().and_then(|m| match m {
                 MaybeInaccessibleMessage::Regular(msg) => Some(msg),
@@ -774,6 +728,26 @@ pub(crate) async fn handle_callback(
                                         }
                                     }
                                 }
+                            }
+                        }
+                        // R3 (2026-09-26): a referral credit recorded against
+                        // this order is reversed whole in this transaction,
+                        // before the flip. A no-op without a live record; an
+                        // error rolls the whole reject back (fail closed).
+                        if refund_ok {
+                            if let Err(e) = crate::db::referral_credit::reverse_rental_for_order(
+                                &tx,
+                                _order_id,
+                                q.from.id.0 as i64,
+                            )
+                            .await
+                            {
+                                tracing::error!(
+                                    "callback: reject referral reversal error order_id={} err={}",
+                                    _order_id,
+                                    e
+                                );
+                                refund_ok = false;
                             }
                         }
                         if refund_ok {

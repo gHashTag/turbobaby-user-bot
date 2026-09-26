@@ -54,7 +54,19 @@ pub(crate) struct QuestPlaceRequest {
     pub is_available: Option<bool>,
 }
 
-async fn get_quest_places(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
+/// `GET /api/quest-places`, which no mounted screen reads. R2 (owner,
+/// 2026-09-26, verbatim): «Закрыть для клиентов». A caller without admin proof
+/// is answered exactly as an unmatched `/api` path is
+/// (`crate::api::admin_or_missing_route`); an admin is served as before, and
+/// no row is read or written differently.
+async fn get_quest_places(
+    headers: HeaderMap,
+    uri: axum::http::Uri,
+    State(state): State<AppState>,
+) -> Result<Response, StatusCode> {
+    if let Err(miss) = crate::api::admin_or_missing_route(&headers, &state, &uri) {
+        return Ok(miss);
+    }
     // Wave 3: полный row mapping. После миграции 020 lat/lon — DOUBLE PRECISION,
     // но оставляем ::float8 на SELECT для совместимости со старыми инстансами.
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
@@ -100,7 +112,7 @@ async fn get_quest_places(State(state): State<AppState>) -> Result<Json<Value>, 
         })
         .collect();
 
-    Ok(Json(json!({ "quest_places": items })))
+    Ok(Json(json!({ "quest_places": items })).into_response())
 }
 
 fn validate_quest_place_request(req: &QuestPlaceRequest) -> Result<(), StatusCode> {
@@ -238,7 +250,17 @@ pub(crate) struct TreasureHuntRequest {
     pub start_name: String,
 }
 
-async fn get_treasure_hunts(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
+/// `GET /api/treasure-hunts`, which no mounted screen reads. R2 (owner,
+/// 2026-09-26, verbatim): «Закрыть для клиентов». Closed to customers exactly
+/// as `get_quest_places` is.
+async fn get_treasure_hunts(
+    headers: HeaderMap,
+    uri: axum::http::Uri,
+    State(state): State<AppState>,
+) -> Result<Response, StatusCode> {
+    if let Err(miss) = crate::api::admin_or_missing_route(&headers, &state, &uri) {
+        return Ok(miss);
+    }
     // Cycle #93: SeaORM via Statement. SeaORM's `try_get("", "col")`
     // takes column *name*, not positional index — switch from `try_get(N)`
     // to `try_get("", "col_name")`.
@@ -280,7 +302,7 @@ async fn get_treasure_hunts(State(state): State<AppState>) -> Result<Json<Value>
             })
         })
         .collect();
-    Ok(Json(json!({ "treasure_hunts": items })))
+    Ok(Json(json!({ "treasure_hunts": items })).into_response())
 }
 
 fn validate_treasure_hunt_request(req: &TreasureHuntRequest) -> Result<(), StatusCode> {
@@ -1095,3 +1117,7 @@ mod tests {
         );
     }
 }
+
+// The response types of the closed reads (R2, the owner's answer of 2026-09-26).
+// Imported at the end of the file so that no line cited above moves.
+use axum::response::{IntoResponse, Response};

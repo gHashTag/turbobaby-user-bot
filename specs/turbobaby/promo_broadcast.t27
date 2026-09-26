@@ -470,7 +470,7 @@ pub fn opt_out_changes_the_answer_on_the_button_path() bool {
 ; The button rides in both messages a promotion travels in -- the owner's draft
 ; (src/promo.rs:623-626) and the customer's broadcast (:858-861) -- because an opt-out a reader
 ; has to go looking for is not an opt-out. The reverse command is deliberately not admin-gated
-; (src/bot/commands.rs:665-677).
+; (src/bot/commands.rs:685-697).
 ;
 ; CORRECTED BY REVIEW 2026-09-21. The two reads of that one table fail in OPPOSITE directions,
 ; and a single "fails open" constant hid it behind the more alarming of the two. The owner's

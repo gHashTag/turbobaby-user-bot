@@ -107,7 +107,7 @@ async fn get_profile(
     let stmt = Statement::from_sql_and_values(
         DbBackend::Postgres,
         // `referral_count` counts friends whose order COMPLETED: it is written
-        // only by `confirm_referral`, which only `complete_order` calls. The
+        // only by `confirm_referral_edge_in`, on a completion or a recorded rental. The
         // profile screen was printing it under "Приглашено друзей", so somebody
         // who invited ten friends who all arrived and browsed saw zero. The
         // sentence and the number were about different things.
@@ -143,10 +143,10 @@ async fn get_profile(
             let tier = r.try_get::<String>("", "tier").unwrap_or_default();
             let cashback_pct = crate::db::orders::cashback_pct_for_tier(&config, &tier);
             let max_bonus_usage_pct = crate::trios::loyalty::max_bonus_usage_pct(&config);
-            // What the shop pays for a friend who orders. On the wire because
-            // the profile screen prints it and must not guess — see
-            // `default_loyalty_config`.
-            let referral_bonus = config_f64(&config, "referral_bonus").max(0.0);
+            // `referral_bonus`, the points the shop paid for a friend who
+            // ordered, was read here and served in `config` until 2026-09-26.
+            // The owner stopped that bonus (R3), and omitting the key hides a
+            // cached bundle's per-friend line before the client redeploys.
 
             let thresholds: Vec<(&str, f64)> = vec![
                 ("bronze", config_f64(&config, "bronze_threshold")),
@@ -182,7 +182,7 @@ async fn get_profile(
                     "max_bonus_usage_pct": max_bonus_usage_pct,
                     "next_tier": next_tier,
                     "next_threshold": next_threshold,
-                    "referral_bonus": referral_bonus,
+                    // "referral_bonus" left this object on 2026-09-26 (R3).
                 }
             })))
         }
@@ -640,7 +640,15 @@ async fn get_bonus_history(
     Ok(Json(json!({ "transactions": transactions })))
 }
 
-async fn get_leaderboard(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
+/// `GET /api/loyalty/leaderboard`: the top 20 by total spend, with first name
+/// and tier. R1 (owner, 2026-09-26, verbatim): «Только для админа». An admin
+/// only: anyone else gets `check_admin`'s 401 (429 once the admin limiter
+/// trips), like every admin route; the admin's answer is unchanged.
+async fn get_leaderboard(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+) -> Result<Json<Value>, StatusCode> {
+    check_admin(&headers, &state)?;
     // SeaORM-версия: обходит все проблемы с NUMERIC ↔ f64,
     // потому что sqlx из коробки умеет читать numeric в f64.
     use sea_orm::{ConnectionTrait, DbBackend, Statement};
@@ -675,7 +683,20 @@ async fn get_leaderboard(State(state): State<AppState>) -> Result<Json<Value>, S
     Ok(Json(json!({ "leaderboard": leaderboard })))
 }
 
-async fn get_loyalty_config(State(state): State<AppState>) -> Result<Json<Value>, StatusCode> {
+/// `GET /api/loyalty/config`, which no mounted screen reads. R2 (owner,
+/// 2026-09-26, verbatim): «Закрыть для клиентов». A caller without admin proof
+/// is answered exactly as an unmatched `/api` path is
+/// (`crate::api::admin_or_missing_route`); an admin is served as before, and
+/// the stored config is untouched. The route stays registered, because the
+/// admin POST shares its path and an unregistered GET would answer 405.
+async fn get_loyalty_config(
+    headers: HeaderMap,
+    uri: axum::http::Uri,
+    State(state): State<AppState>,
+) -> Result<Response, StatusCode> {
+    if let Err(miss) = crate::api::admin_or_missing_route(&headers, &state, &uri) {
+        return Ok(miss);
+    }
     // Cycle #92: SeaORM via the existing `loyalty_config` entity
     // (cycle #82). `find_by_id(1)` for the singleton row.
     use crate::db::entities::loyalty_config::Entity as LoyaltyConfigEntity;
@@ -688,8 +709,8 @@ async fn get_loyalty_config(State(state): State<AppState>) -> Result<Json<Value>
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
     match model {
-        Some(m) => Ok(Json(json!({ "config": m.config }))),
-        None => Ok(Json(json!({ "config": null }))),
+        Some(m) => Ok(Json(json!({ "config": m.config })).into_response()),
+        None => Ok(Json(json!({ "config": null })).into_response()),
     }
 }
 
@@ -1120,3 +1141,7 @@ mod retired_tier_tests {
         }
     }
 }
+
+// The response types of the closed config read (R2, the owner's answer of
+// 2026-09-26). Imported at the end of the file so that no line cited above moves.
+use axum::response::{IntoResponse, Response};

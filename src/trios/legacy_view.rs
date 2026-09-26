@@ -144,12 +144,12 @@ pub const DESCRIBED_TX_TYPES: [&str; 4] = [
     "admin_deduction",
 ];
 
-/// The referral credit's sentence, as `confirm_referral` writes it.
+/// The referral bonus's sentence, as `confirm_referral` wrote it until R3.
 pub const REFERRAL_BONUS_SENTENCE: &str = "Referral bonus for new user";
 
-/// The welcome credit's sentence, as `confirm_referral` stores it for the
-/// invited customer since 2026-09-26: the sentence it stored until then with
-/// the garden's words dropped and nothing else changed. It is a stored record
+/// The welcome credit's sentence, as `confirm_referral` stored it for the
+/// invited customer on 2026-09-26 until R3 stopped the credit that same day:
+/// the older sentence with the garden's words dropped. It is a stored record
 /// and is NOT served ([`DESCRIBED_TX_TYPES`] leaves the welcome credit out).
 /// The trimmed words are the lane's interim choice, not the owner's, and the
 /// repository writes no customer copy of its own; the wording a customer
@@ -323,7 +323,7 @@ fn is_cashback_sentence(text: &str) -> bool {
 }
 
 /// `Milestone bonus for {n} referrals`, as `maybe_award_referral_milestones`
-/// writes it.
+/// wrote it until R3 (2026-09-26); the rows it wrote are history, still served.
 fn is_milestone_sentence(text: &str) -> bool {
     text.strip_prefix("Milestone bonus for ")
         .and_then(|rest| rest.strip_suffix(" referrals"))
