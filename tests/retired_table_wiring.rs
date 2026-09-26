@@ -68,10 +68,11 @@ const SURVIVORS: &[Survivor] = &[
         table: "strains",
         reason: "`get_strains_of_day`. No production caller since 2026-09-25, \
                  when the carousel's buttons began to answer with the rental menu \
-                 (owner: nothing cannabis-related anywhere). It stays compiled: it \
-                 is public, and the #[ignore]d tests/integration_strain_of_day.rs \
-                 calls it. Removing the pair deletes that test file, a separate \
-                 change.",
+                 (owner: nothing cannabis-related anywhere), and no test caller \
+                 since 2026-09-26, when tests/integration_strain_of_day.rs was \
+                 rewritten to hold the carousel's retirement instead of its cap. \
+                 It stays compiled because it is public; removing it is a \
+                 separate change.",
     },
     Survivor {
         path: "src/db/strains.rs",

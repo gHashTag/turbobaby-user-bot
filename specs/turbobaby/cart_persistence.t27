@@ -353,8 +353,9 @@ pub fn abandonment_inferred(reminder_count: u8, minutes_since_updated_at: u32, h
 
 ; --- Exhaustion: the ladder is spent once, per row, for ever -------------------------------------
 ; The counter is incremented at src/cart_abandonment.rs:201 and :259 and decremented or zeroed
-; nowhere. No statement in src/ deletes a carts row -- the single DELETE FROM carts in the
-; repository is fixture cleanup at tests/integration_cart_merge.rs:193, which no deployment runs --
+; nowhere. No shipped statement deletes a carts row -- each DELETE FROM carts in the repository is
+; fixture cleanup, at tests/integration_cart_merge.rs:212 and (since 2026-09-26) in src/api/cart.rs's
+; test module, which no deployment runs --
 ; and the clear endpoint deletes lines only, so a row that has spent both rungs can never qualify
 ; again. The count below is therefore scoped to shipped code, and says so.
 pub const REMINDER_COUNT_RESET_SITES : u8 = 0;

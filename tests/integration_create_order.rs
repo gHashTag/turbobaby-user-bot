@@ -9,17 +9,22 @@
 //! DATABASE_URL=postgres://... cargo test --features backend -- --ignored
 //! ```
 //!
-//! Test flow:
-//!   1. Seed a fresh `strains` row with a known `price_per_gram = 100.0`
-//!      so the server-side price authority recompute has a deterministic
-//!      target.
-//!   2. POST an anonymous order (no telegram_id → skips owner check;
-//!      anon rate-limit isolated by client_ip header) with one strain
-//!      item, quantity 2.5, subtotal = total = 250.
-//!   3. Assert 200 + order_id + no replay flag.
-//!   4. POST the same body with the same idempotency key. Assert 200 +
+//! REWRITTEN 2026-09-26 on the rental catalogue. Until then these tests seeded
+//! a `strains` row, a table migration 083 dropped, and three of them failed on
+//! every database migrated to today's schema. The checkout takes rental lines
+//! only since the owner's ruling of 2026-09-24 (rental only, Phuket only), so
+//! the order is now one `bike_rental` line of the seeded `nmax-155` family
+//! (migration 082), dated ten days ahead. What each test is FOR is unchanged.
+//!
+//! Test flow of the idempotency test:
+//!   1. POST an anonymous order (no telegram_id → skips owner check;
+//!      anon rate-limit isolated by client_ip header) with one rental line.
+//!      A rental is quoted at the door, so a cart of rental lines claims a
+//!      subtotal and total of 0 (`check_full_subtotal`).
+//!   2. Assert 200 + order_id + no replay flag.
+//!   3. POST the same body with the same idempotency key. Assert 200 +
 //!      same order_id + `idempotent_replay: true`.
-//!   5. DB assertion: exactly one row in `orders` for this `customer_name`.
+//!   4. DB assertion: exactly one row in `orders` for this `customer_name`.
 //!      Catches a regression where the replay branch double-inserts.
 
 #![cfg(feature = "backend")]
@@ -29,11 +34,48 @@ mod common;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use http_body_util::BodyExt;
-use sea_orm::{ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter, Statement};
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde_json::json;
 use tower::ServiceExt;
 
 use turbobaby_bot::db::entities::order::{Column as OrderCol, Entity as OrderEntity};
+
+/// The family every test books: offered, with a published rate (449 THB a
+/// day) and deposit (3000 THB) in `migrations/082_bikes_seed.sql`.
+const FAMILY: &str = "nmax-155";
+
+/// One rental line of [`FAMILY`], from ten days ahead for `days` days, with
+/// the given deposit (none agreed when `null`).
+fn rental_line(days: i64, deposit: serde_json::Value) -> serde_json::Value {
+    let start = chrono::Utc::now().date_naive() + chrono::Duration::days(10);
+    let end = start + chrono::Duration::days(days - 1);
+    json!({
+        "quantity": 1.0,
+        "fulfillment": "pickup",
+        "bike": {
+            "bike_key": FAMILY,
+            "bike_name": "Yamaha NMAX 155",
+            "deal": {
+                "kind": "bike_rental",
+                "rental_start": start.to_string(),
+                "rental_end": end.to_string(),
+                "rate_thb_day": null,
+                "deposit": deposit,
+            }
+        }
+    })
+}
+
+async fn orders_for(db: &turbobaby_bot::db::Database, customer_name: &str) -> Vec<String> {
+    OrderEntity::find()
+        .filter(OrderCol::CustomerName.eq(customer_name.to_string()))
+        .all(&db.orm)
+        .await
+        .expect("orders query")
+        .into_iter()
+        .map(|o| o.id)
+        .collect()
+}
 
 #[tokio::test]
 #[ignore = "needs DATABASE_URL env var; run with --ignored"]
@@ -43,49 +85,22 @@ async fn create_order_idempotent_replay_returns_same_order_id() {
         return;
     };
 
-    // Seed a fresh strain so the server-side price-authority recompute
-    // has a row to look at. Unique name per run prevents UNIQUE clashes
-    // with seed migration 008 entries.
-    let strain_id = uuid::Uuid::new_v4().to_string();
-    let suffix = rand_suffix();
-    let strain_name = format!("integration-test-strain-{}", suffix);
-    let price_per_gram = 100.0_f64;
-    db.orm
-        .execute(Statement::from_sql_and_values(
-            DbBackend::Postgres,
-            "INSERT INTO strains (id, name, price_per_gram, is_available) \
-             VALUES ($1, $2, $3, TRUE)",
-            [
-                strain_id.clone().into(),
-                strain_name.clone().into(),
-                price_per_gram.into(),
-            ],
-        ))
-        .await
-        .expect("seed strain INSERT");
-
     // Unique customer_name lets us count rows for THIS test run only —
     // multiple `--ignored` invocations against the same DB don't collide.
+    let suffix = rand_suffix();
     let customer_name = format!("integration-test-customer-{}", suffix);
     let idem_key = uuid::Uuid::new_v4().to_string();
-    let quantity = 2.5_f64;
-    let expected_total = price_per_gram * quantity;
 
     let body = json!({
         "telegram_id": null,  // anonymous path — skips check_owner
         "customer_name": customer_name,
         "customer_phone": "+66000000000",
         "customer_telegram": null,
-        "items": [{
-            "strain_id": strain_id,
-            "strain_name": strain_name,
-            "quantity": quantity,
-        }],
-        "subtotal": expected_total,
+        "items": [rental_line(3, serde_json::Value::Null)],
+        "subtotal": 0.0,
         "bonus_used": 0.0,
-        "total": expected_total,
+        "total": 0.0,
         "shop_id": null,
-        "age_confirmed": true,
         "delivery_zone_id": null,
     });
 
@@ -126,21 +141,12 @@ async fn create_order_idempotent_replay_returns_same_order_id() {
 
     // DB assertion: exactly one row in `orders` for this test customer.
     // A regression that double-inserts on replay would show 2 rows.
-    let rows = OrderEntity::find()
-        .filter(OrderCol::CustomerName.eq(customer_name.clone()))
-        .all(&db.orm)
-        .await
-        .expect("orders query");
+    let rows = orders_for(&db, &customer_name).await;
     assert_eq!(
-        rows.len(),
-        1,
-        "expected exactly 1 order row for {}, got {}",
-        customer_name,
-        rows.len()
-    );
-    assert_eq!(
-        rows[0].id, first_order_id,
-        "the lone order row must match the returned order_id"
+        rows,
+        [first_order_id],
+        "expected exactly 1 order row for {}",
+        customer_name
     );
 }
 
@@ -159,27 +165,7 @@ async fn create_order_accepts_local_phone_and_pickup_without_address() {
         return;
     };
 
-    let strain_id = uuid::Uuid::new_v4().to_string();
-    let suffix = rand_suffix();
-    let strain_name = format!("integration-pickup-strain-{}", suffix);
-    let price_per_gram = 100.0_f64;
-    db.orm
-        .execute(Statement::from_sql_and_values(
-            DbBackend::Postgres,
-            "INSERT INTO strains (id, name, price_per_gram, is_available) \
-             VALUES ($1, $2, $3, TRUE)",
-            [
-                strain_id.clone().into(),
-                strain_name.clone().into(),
-                price_per_gram.into(),
-            ],
-        ))
-        .await
-        .expect("seed strain INSERT");
-
-    let customer_name = format!("integration-pickup-customer-{}", suffix);
-    let quantity = 1.0_f64;
-    let expected_total = price_per_gram * quantity;
+    let customer_name = format!("integration-pickup-customer-{}", rand_suffix());
 
     let body = json!({
         "telegram_id": null,
@@ -187,18 +173,14 @@ async fn create_order_accepts_local_phone_and_pickup_without_address() {
         // Local Thai mobile, exactly as a customer's own phone shows it.
         "customer_phone": "081 234 5678",
         "customer_telegram": null,
-        "items": [{
-            "strain_id": strain_id,
-            "strain_name": strain_name,
-            "quantity": quantity,
-        }],
-        "subtotal": expected_total,
+        // Collected at the office: the rental line says so.
+        "items": [rental_line(1, serde_json::Value::Null)],
+        "subtotal": 0.0,
         "bonus_used": 0.0,
-        "total": expected_total,
+        "total": 0.0,
         "shop_id": null,
         "fulfillment": "pickup",
         // No delivery_address at all — this is a collect-in-store order.
-        "age_confirmed": true,
         "delivery_zone_id": null,
     });
 
@@ -272,8 +254,15 @@ async fn create_order_does_not_require_age_confirmation() {
     }
 }
 
-/// A client that under-reports the total must not get a cheap order: the
-/// server recomputes from DB prices and rejects the mismatch.
+/// A client that claims money the server did not compute must not get an
+/// order: the server holds every line to its own figures and refuses the
+/// mismatch before anything is stored.
+///
+/// On the rental catalogue that is two figures. A rental is quoted at the
+/// door, so the cart's own subtotal is 0 and a client that sums the day rate
+/// into it (449 × 3 here) is refused; and a rental's money deposit must be the
+/// family's published one, so a client that under-reports it (1 000 against
+/// the published 3 000) is refused too. Neither leaves an order row.
 #[tokio::test]
 #[ignore = "needs DATABASE_URL env var; run with --ignored"]
 async fn create_order_rejects_client_supplied_wrong_total() {
@@ -282,46 +271,54 @@ async fn create_order_rejects_client_supplied_wrong_total() {
         return;
     };
 
-    let strain_id = uuid::Uuid::new_v4().to_string();
     let suffix = rand_suffix();
-    let strain_name = format!("integration-fraud-strain-{}", suffix);
-    db.orm
-        .execute(Statement::from_sql_and_values(
-            DbBackend::Postgres,
-            "INSERT INTO strains (id, name, price_per_gram, is_available) \
-             VALUES ($1, $2, $3, TRUE)",
-            [
-                strain_id.clone().into(),
-                strain_name.clone().into(),
-                100.0_f64.into(),
-            ],
-        ))
-        .await
-        .expect("seed strain INSERT");
-
-    let body = json!({
-        "telegram_id": null,
-        "customer_name": format!("integration-fraud-customer-{}", suffix),
-        "customer_phone": "+66812345678",
-        "items": [{
-            "strain_id": strain_id,
-            "strain_name": strain_name,
-            "quantity": 10.0,
-        }],
-        // Real price is 10 × 100 = 1000.
-        "subtotal": 1.0,
-        "bonus_used": 0.0,
-        "total": 1.0,
-        "age_confirmed": true,
+    let claimed = 449.0 * 3.0;
+    let under_reported_deposit = json!({
+        "form": "money", "amount": 1000.0, "currency": "THB", "method": "cash THB"
     });
+    for (case, items, subtotal, client_ip) in [
+        (
+            "the day rate summed into the subtotal",
+            json!([rental_line(3, serde_json::Value::Null)]),
+            claimed,
+            "127.0.0.4",
+        ),
+        (
+            "a deposit under the published one",
+            json!([rental_line(3, under_reported_deposit)]),
+            0.0,
+            "127.0.0.7",
+        ),
+    ] {
+        let customer_name = format!("integration-fraud-customer-{suffix}-{client_ip}");
+        let body = json!({
+            "telegram_id": null,
+            "customer_name": customer_name,
+            "customer_phone": "+66812345678",
+            "items": items,
+            "subtotal": subtotal,
+            "bonus_used": 0.0,
+            "total": subtotal,
+        });
 
-    let resp = post_order(app, &uuid::Uuid::new_v4().to_string(), &body, "127.0.0.4").await;
-    assert_ne!(
-        resp.status,
-        StatusCode::OK,
-        "a mismatched subtotal must not create an order, body: {}",
-        resp.body
-    );
+        let resp = post_order(
+            app.clone(),
+            &uuid::Uuid::new_v4().to_string(),
+            &body,
+            client_ip,
+        )
+        .await;
+        assert_eq!(
+            resp.status,
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "{case}: the server's figure must win, body: {}",
+            resp.body
+        );
+        assert!(
+            orders_for(&db, &customer_name).await.is_empty(),
+            "{case}: a refused order was stored"
+        );
+    }
 }
 
 struct OrderResp {
