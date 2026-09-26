@@ -101,7 +101,9 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/catalog_write.t27": {
         "module": "turbobaby-catalog-write",
         "id": "turbobaby/catalog-write",
-        "min_declarations": 158,
+        # 159 on 2026-09-26 (R3, client lane): the admin screen's length re-measured after the
+        # Loyalty tab's referral sub-tab, the 5910 kept under ADMIN_SCREEN_LINES_BEFORE_2026_09_26.
+        "min_declarations": 159,
         "min_checks": 44,
     },
     "specs/turbobaby/checkout_contact.t27": {

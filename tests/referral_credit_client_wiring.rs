@@ -19,7 +19,17 @@ use std::path::{Path, PathBuf};
 
 const PAGE: &str = "src/ui/pages/referrals.rs";
 const PROFILE: &str = "src/ui/screens/profile_screen.rs";
+const ADMIN: &str = "src/ui/screens/admin_screen.rs";
 const I18N: &str = "src/trios/i18n.rs";
+
+/// The admin panel and its helpers: everything from its first type to the end
+/// of `admin_screen.rs`, where it was appended so that no cited line moved.
+fn admin_panel_region(admin_code: &str) -> &str {
+    let start = admin_code
+        .find("struct ReferralRentalForm")
+        .expect("the referral panel's form type is in admin_screen.rs");
+    &admin_code[start..]
+}
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).to_path_buf()
@@ -268,24 +278,34 @@ fn the_empty_friends_panel_is_not_rendered() {
 
 /// No screen computes the credit: the rate and the rounding live in
 /// `crate::trios::referral_credit` alone. A client copy of the rate is right
-/// until the day the owner changes it.
+/// until the day the owner changes it. The admin preview may PRINT the rate
+/// (`{REFERRAL_CREDIT_PERCENT}% = ฿N`), but no line that names it may multiply
+/// or divide, and neither the page nor the panel may spell a tenth of its own.
 #[test]
 fn no_percent_arithmetic_outside_the_shared_core() {
     let mut offences = Vec::new();
+    let mut rate_readers = 0;
     for (path, text) in rust_sources("src/ui") {
         for (n, line) in code_of(&text).lines().enumerate() {
             if line.contains("REFERRAL_CREDIT_PERCENT") {
-                offences.push(format!("{path}:{}: {}", n + 1, line.trim()));
+                rate_readers += 1;
+                if line.contains('*') || line.contains(" / ") {
+                    offences.push(format!("{path}:{}: {}", n + 1, line.trim()));
+                }
             }
         }
     }
     let page = code_of(&source(PAGE));
-    for (n, line) in page.lines().enumerate() {
-        // Spellings of a tenth: `* 10 / 100`, `/ 10`, `* 0.1`. (`0.15` in a
-        // colour is not one, so the bare `0.1` is not a needle.)
-        for arithmetic in ["/ 100", "* 10", "/ 10", "* 0."] {
-            if line.contains(arithmetic) {
-                offences.push(format!("{PAGE}:{}: {}", n + 1, line.trim()));
+    let admin = code_of(&source(ADMIN));
+    let panel = admin_panel_region(&admin);
+    for (name, text) in [(PAGE, page.as_str()), (ADMIN, panel)] {
+        for (n, line) in text.lines().enumerate() {
+            // Spellings of a tenth: `* 10 / 100`, `/ 10`, `* 0.1`. (`0.15` in
+            // a colour is not one, so the bare `0.1` is not a needle.)
+            for arithmetic in ["/ 100", "* 10", "/ 10", "* 0."] {
+                if line.contains(arithmetic) {
+                    offences.push(format!("{name} (+{}): {}", n + 1, line.trim()));
+                }
             }
         }
     }
@@ -294,6 +314,14 @@ fn no_percent_arithmetic_outside_the_shared_core() {
         "the credit is computed outside trios::referral_credit:\n  {}",
         offences.join("\n  ")
     );
+    // The preview prints the rate from the one constant, and the credit and
+    // the redemption come from the shared functions.
+    assert!(
+        rate_readers >= 1,
+        "the admin preview no longer names the rate"
+    );
+    assert!(panel.contains("credit_for_rental(rental, applied)"));
+    assert!(panel.contains("applied_redemption(r.amount_thb, rental, r.balance_thb)"));
 }
 
 /// The profile's referral card prints the rule, not an amount per friend: the
@@ -336,4 +364,85 @@ fn the_rule_sentence_is_the_operators_in_both_tables() {
     }
     let core = source("src/trios/referral_credit.rs");
     assert!(core.contains("pub const REFERRAL_CREDIT_PERCENT: i64 = 10;"));
+}
+
+/// The admin view is the Loyalty tab's third sub-tab, and its panel reaches
+/// the four admin routes of the spec's shared API through `AdminAuth` (init
+/// data, the admin token, the admin's id) and nothing else.
+#[test]
+fn the_admin_panel_calls_the_four_admin_paths_through_admin_auth() {
+    let admin = code_of(&source(ADMIN));
+    let tab = body_of(&admin, "fn LoyaltyTab(");
+    for needle in [
+        "active_sub.set(\"referrals\".into())",
+        "\"🤝 Рефералы\"",
+        "ReferralCreditPanel {}",
+    ] {
+        assert!(tab.contains(needle), "LoyaltyTab lost `{needle}`");
+    }
+
+    let panel = admin_panel_region(&admin);
+    for path in [
+        "\"{}/api/admin/referral-credit/overview\"",
+        "\"{}/api/admin/referral-credit/rentals\"",
+        "\"{}/api/admin/referral-credit/rentals/{}/reverse\"",
+        "\"{}/api/admin/referral-credit/requests/{}/resolve\"",
+    ] {
+        assert_eq!(panel.matches(path).count(), 1, "the panel's call to {path}");
+    }
+    assert_eq!(
+        panel.matches("crate::ui::api::http::AdminAuth {").count(),
+        2,
+        "the overview read and the one POST helper each build the admin auth"
+    );
+    assert!(panel.contains("crate::ui::api::http::fetch_text_admin(&url, &auth)"));
+    assert!(panel.contains("crate::ui::api::http::post_json_admin_full(&url, &auth, &body)"));
+    assert_eq!(
+        panel
+            .matches("referral_admin_post(url, json, telegram_id, init)")
+            .count(),
+        2,
+        "the record and the confirmation both post through the helper"
+    );
+    for other in ["HTTP_CLIENT", ".header(", "post_json_authed"] {
+        assert!(
+            !panel.contains(other),
+            "the panel reaches the server some other way: {other}"
+        );
+    }
+    // Appended at the end, so no line cited above it moved.
+    let helper = admin
+        .find("async fn admin_add_failure_reason(")
+        .expect("the Add helper is in admin_screen.rs");
+    assert!(admin.find("fn ReferralCreditPanel(").expect("the panel") > helper);
+}
+
+/// The recording form: the key minted when the form opens and reused by every
+/// retry, the shared body type, and the operator-facing amount label saying
+/// what the amount excludes. «Выплачено» is offered for a payout only.
+#[test]
+fn the_admin_form_records_through_the_shared_body_with_a_minted_key() {
+    let admin = code_of(&source(ADMIN));
+    let panel = admin_panel_region(&admin);
+    for needle in [
+        "idempotency_key: uuid::Uuid::new_v4().to_string()",
+        "idempotency_key: current.idempotency_key.clone()",
+        "crate::trios::referral_credit::RecordRentalBody {",
+        "crate::trios::referral_credit::ResolveBody {",
+        "crate::trios::referral_credit::ReverseBody { note }",
+        "\"Сумма аренды без депозита и доставки, ฿\"",
+        "action: \"paid\"",
+        "action: \"declined\"",
+    ] {
+        assert!(panel.contains(needle), "the referral panel lost `{needle}`");
+    }
+    // The key is minted in exactly one place: when the form opens.
+    assert_eq!(panel.matches("uuid::Uuid::new_v4()").count(), 1);
+    // «Выплачено» sits in the payout branch only (the button is the label's
+    // last occurrence; the confirmation's own button text comes first).
+    let paid = panel.rfind("\"Выплачено\"").expect("the paid button");
+    let branch = panel[..paid]
+        .rfind("if is_payout {")
+        .expect("the paid button is inside the payout branch");
+    assert!(!panel[branch..paid].contains("} else {"));
 }
