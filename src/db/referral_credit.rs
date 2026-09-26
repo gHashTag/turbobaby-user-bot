@@ -432,6 +432,24 @@ async fn check_order<C: ConnectionTrait>(
     Ok(())
 }
 
+/// Whether a record would credit the admin who records it
+/// (`RECORDER_MAY_BE_THE_INVITER = false` in `referral_credit.t27`).
+///
+/// `check_admin` answers the recorder's own id when Telegram names him, and
+/// 0 for the shared password token, which names nobody. A named recorder is
+/// refused when he is the inviter. A password record is refused when the
+/// inviter is on `admin_ids`, since any admin on the list may be the one
+/// holding the password. Not caught (review of 2026-09-26, DECISIONS.md): a
+/// person who knows the password and is not on the list, recording a friend
+/// he invited; nothing on the request tells him apart from a manager.
+fn recorder_is_the_inviter(recorder: i64, inviter: i64, admin_ids: &[i64]) -> bool {
+    if recorder != 0 {
+        recorder == inviter
+    } else {
+        admin_ids.contains(&inviter)
+    }
+}
+
 /// A UNIQUE violation on the record's insert is a concurrent twin: the key
 /// under another payload, or a second live record of one order.
 fn insert_refusal(e: DbErr) -> CreditError {
@@ -452,10 +470,14 @@ fn insert_refusal(e: DbErr) -> CreditError {
 /// In one transaction: an open «Списать в счёт аренды» of the customer is
 /// settled against this rental (`applied`), and the customer's creditable
 /// inviter is credited `floor(10% × (charge − applied))`. A record that
-/// neither credits nor settles anything is refused and writes nothing.
+/// neither credits nor settles anything is refused and writes nothing, and
+/// so is one that would credit its own recorder ([`recorder_is_the_inviter`]:
+/// `admin_id` is `check_admin`'s answer, 0 for the password token, and
+/// `admin_ids` the configured admin list).
 pub(crate) async fn record_rental(
     orm: &DatabaseConnection,
     admin_id: i64,
+    admin_ids: &[i64],
     body: &RecordRentalBody,
 ) -> CreditResult<RecordRentalResponse> {
     let customer = body.customer_telegram_id;
@@ -548,7 +570,7 @@ pub(crate) async fn record_rental(
         customer_before_edge,
     );
     let inviter = match creditable {
-        Ok(inviter) if admin_id != 0 && admin_id == inviter => {
+        Ok(inviter) if recorder_is_the_inviter(admin_id, inviter, admin_ids) => {
             return refuse(Refusal::RecorderIsInviter);
         }
         Ok(inviter) => Some(inviter),
@@ -1056,7 +1078,7 @@ mod tests {
                 note: None,
                 idempotency_key: uuid::Uuid::new_v4().to_string(),
             };
-            let recorded = record_rental(&orm, 0, &body).await.expect("record");
+            let recorded = record_rental(&orm, 0, &[], &body).await.expect("record");
             assert_eq!(recorded.credit.as_ref().map(|c| c.credit_thb), Some(123));
             assert_eq!(balance_thb(&orm, inviter).await.expect("balance"), 123);
 
@@ -1111,5 +1133,29 @@ mod tests {
             .expect("count")
             .expect("a row");
         assert_eq!(reversed.try_get::<i64>("", "n").expect("n"), 2);
+    }
+}
+
+#[cfg(test)]
+mod recorder_tests {
+    //! The recorder guard with no database (review of 2026-09-26): both
+    //! identities `check_admin` answers with, and the gap that stays open.
+    use super::recorder_is_the_inviter;
+
+    #[test]
+    fn the_recorder_guard_reads_both_admin_identities() {
+        let admins = [42, 43];
+        // An admin named by Telegram is refused only as the inviter himself.
+        assert!(recorder_is_the_inviter(42, 42, &admins));
+        assert!(!recorder_is_the_inviter(42, 43, &admins));
+        assert!(!recorder_is_the_inviter(42, 7, &admins));
+        // The password token (0) names nobody, so every listed admin's
+        // friend is refused to it.
+        assert!(recorder_is_the_inviter(0, 42, &admins));
+        assert!(recorder_is_the_inviter(0, 43, &admins));
+        // A friend of someone off the list is recorded: the case a password
+        // holder off the list cannot be told apart from.
+        assert!(!recorder_is_the_inviter(0, 7, &admins));
+        assert!(!recorder_is_the_inviter(0, 42, &[]));
     }
 }
