@@ -774,3 +774,32 @@ No wording was needed.
 `specs/turbobaby/order_presentation.t27` records it (`RETIRED_SHOP_DECIDED_AT`,
 `RETIRED_SHOP_LABEL_SHOWN`, `RETIRED_SHOP_SERVED_AS`; `RETIRED_SHOP_FALLBACK_NOTE` is closed).
 `tests/legacy_view_wiring.rs` holds the screens to it, and the rules' module has the unit test.
+
+## The Book control under a seeded zero: booking allowed, decided 2026-09-26 (question I)
+
+Kept at the end of this file, like the entries above, so that no line citation into it moves.
+
+The entry on the «all taken» line above left one thing open (question I): under the same zero unit
+count, a count seeded on 2026-09-12 and changed only by an admin, the Book control on the bike
+detail stayed disabled with the reason «Все байки этой модели заняты» / "Every bike of this model
+is taken" (`T_BIKE_BOOK_BLOCKED_NO_UNITS`). The owner answered on 2026-09-26, verbatim: «Разрешить
+бронь, наличие уточнит менеджер» ("Allow booking; the manager will confirm availability").
+
+* **Removed.** The arm of `book_block` (`src/ui/screens/catalog_screen.rs`) that disabled the
+  control under a zero, and the arm that disabled it when no count was served, «Наличие не
+  подтверждено» / "Availability not confirmed" (`T_BIKE_BOOK_BLOCKED_UNKNOWN_AVAILABILITY`). The
+  answer names the zero. Removing the second arm is the operator's reading of it: a manager confirms
+  availability for every family, so "not confirmed" is no reason to refuse one. Both keys were
+  deleted from `src/trios/i18n.rs` the way the earlier ones were, each line replaced by a comment
+  line. The unmounted card component (`src/ui/components/bike_card.rs`) stopped gating its
+  add-to-cart on the count and stopped printing it; it prints the manager line.
+* **Unchanged.** The server never refused an order on the count: `check_bike_lines` in
+  `src/api/orders.rs` logs a shortfall for staff and accepts the order. What still disables the Book
+  control reads no count: a closed family (D12), no published rate (D11), and a screen with no
+  booking handler. «Наличие уточняет менеджер» stays on every card and detail, and no sentence was
+  written. The admin screen keeps its count. The CLICK 125 redirect still names only a family with a
+  unit at base, because that decides what is offered instead, not whether a customer may book.
+
+`specs/turbobaby/availability.t27` records the answer (`NO_UNITS_BOOK_REASON_*`,
+`UNKNOWN_AVAILABILITY_*`, `customer_may_book`), `locale_policy.t27` the key count (547 to 545), and
+`tests/catalog_honesty_wiring.rs` holds the client, the card and `create_order` to it.

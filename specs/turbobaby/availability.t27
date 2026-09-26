@@ -494,8 +494,59 @@ pub const UNITS_EMPTY_LINE_WAS_SHOWN_BEFORE_2026_09_25 : bool = true;
 pub const UNITS_EMPTY_KEY_IS_DECLARED : bool = false;
 pub const UNITS_EMPTY_REPLACEMENT_SENTENCES : u8 = 0;
 pub const NO_UNITS_BOOK_REASON_KEY : str = "T_BIKE_BOOK_BLOCKED_NO_UNITS";
-pub const NO_UNITS_BOOK_REASON_IS_SHOWN : bool = true;
-pub const NO_UNITS_BOOK_REASON_WAS_ANSWERED : bool = false;
+pub const NO_UNITS_BOOK_REASON_IS_SHOWN : bool = false;
+pub const NO_UNITS_BOOK_REASON_WAS_ANSWERED : bool = true;
+
+; DECIDED 2026-09-26, question I, by the owner. The paragraph above left the Book control's
+; no-units reason open, and the two flags just above said so (shown, not answered) until this
+; date; they are kept under _BEFORE_2026_09_26 names below. Asked on 2026-09-26 whether a family
+; the seed counts at zero should keep its Book control disabled with that reason, the owner
+; answered, in translation: "Allow booking; the manager will confirm availability." The Russian
+; original is in DECISIONS.md, in the entry of that date on question I. The answer is not hedged,
+; and it is read as written: the seeded count takes no part in whether a customer may book.
+;   * src/ui/screens/catalog_screen.rs, book_block: the arm that disabled the control under a zero
+;     (BookBlock::NoUnitsFree, NO_UNITS_BOOK_REASON_KEY) is gone. So is the arm that disabled it
+;     when the count was not served at all (BookBlock::UnknownAvailability,
+;     UNKNOWN_AVAILABILITY_BOOK_REASON_KEY, "Availability not confirmed"). The answer names the
+;     zero; removing the second arm is THIS FILE'S READING of it
+;     (UNKNOWN_AVAILABILITY_REMOVAL_IS_THIS_FILES_READING): a manager confirms availability for
+;     every family, so "not confirmed" is every family's state and no reason to refuse one. Both
+;     keys were deleted outright, their declarations and all four arms each becoming a comment
+;     line, so no src/trios/i18n.rs line moved; turbobaby/locale-policy owns the count. No sentence
+;     was written in their place: CUSTOMER_AVAILABILITY_KEY, the manager line, already says who
+;     confirms, on every card and on the detail.
+;   * src/ui/components/bike_card.rs, the card component no screen mounts, gated its add-to-cart
+;     on the same count and printed it as "free: N" or "all rented out". It now reads the offer
+;     and the rate only, and prints the manager line.
+;   * The server never refused on the count (SERVER_REFUSES_ON_THE_COUNT). check_bike_lines in
+;     src/api/orders.rs logs a shortfall for staff and accepts the order, and says why beside it:
+;     a count of what is at base today says nothing about a booking weeks out. create_order is
+;     unchanged, and tests/catalog_honesty_wiring.rs now holds it to that.
+;   * What still disables the control reads no count: a closed family (D12), no published rate
+;     (D11), and a screen with no booking handler (NotWired). customer_may_book below is that rule.
+;     is_bookable above stays the file's own predicate, which the CLICK 125 redirect and the ride
+;     game read (turbobaby/ride-game, RIDE_BOOKABILITY_INPUT); this answer moves neither of them.
+; FILE_MAY_RULE_OUT stays true as a statement of what the file may do, because the redirect still
+; uses it: a family with no unit at base is not offered INSTEAD of CLICK 125. What changed is that
+; no customer booking decision reads the file any more (CUSTOMER_BOOKING_READS_THE_FILE).
+pub const NO_UNITS_BOOK_REASON_DECIDED_ON : str = "2026-09-26";
+pub const NO_UNITS_BOOK_REASON_WAS_ANSWERED_BEFORE_2026_09_26 : bool = false;
+pub const NO_UNITS_BOOK_REASON_WAS_SHOWN_BEFORE_2026_09_26 : bool = true;
+pub const UNKNOWN_AVAILABILITY_BOOK_REASON_KEY : str = "T_BIKE_BOOK_BLOCKED_UNKNOWN_AVAILABILITY";
+pub const UNKNOWN_AVAILABILITY_BOOK_REASON_IS_SHOWN : bool = false;
+pub const UNKNOWN_AVAILABILITY_REMOVAL_IS_THIS_FILES_READING : bool = true;
+pub const BOOK_REASON_KEYS_DELETED_2026_09_26 : u8 = 2;
+pub const BOOK_REASON_REPLACEMENT_SENTENCES : u8 = 0;
+pub const CUSTOMER_BOOKING_READS_THE_FILE : bool = false;
+pub const CUSTOMER_BOOKING_READ_THE_FILE_BEFORE_2026_09_26 : bool = true;
+pub const SERVER_REFUSES_ON_THE_COUNT : bool = false;
+
+; The Book control's rule since 2026-09-26. The count is a parameter so that a test can show it
+; changes nothing; booking_wired, the third thing the control asks, is the screen's and not a
+; fleet fact, so it is not modelled here.
+pub fn customer_may_book(offered: bool, has_published_rate: bool, units_available: u8) bool {
+    return offered and has_published_rate;
+}
 
 ; --- Fixtures -------------------------------------------------------------------------------
 ; Not pub: the surface of this spec is the status set, the table and the functions. The slot
@@ -746,7 +797,9 @@ test the_customer_screens_no_longer_confirm_from_the_file {
     assert FILE_MAY_RULE_OUT == true;
 }
 
-test a_seeded_zero_is_no_longer_printed_as_occupancy_and_still_rules_booking_out {
+; The record of 2026-09-25, as it stood that day. What it left open was answered on 2026-09-26, and
+; the test after it holds the answer; the flags of that day are read under their _BEFORE_ names.
+test a_seeded_zero_stopped_printing_occupancy_on_2026_09_25_and_the_book_reason_stayed_open {
     // the owner's second list of 2026-09-25, answer 5, hedged ("probably")
     assert UNITS_EMPTY_LINE_DECIDED_ON == "2026-09-25";
     assert UNITS_EMPTY_LINE_REMOVAL_IS_HEDGED == true;
@@ -764,11 +817,49 @@ test a_seeded_zero_is_no_longer_printed_as_occupancy_and_still_rules_booking_out
     // what the answer did not name: the Book control's reason, from the same zero
     assert NO_UNITS_BOOK_REASON_KEY == "T_BIKE_BOOK_BLOCKED_NO_UNITS";
     assert NO_UNITS_BOOK_REASON_KEY != UNITS_EMPTY_KEY;
-    assert NO_UNITS_BOOK_REASON_WAS_ANSWERED == false;
-    assert NO_UNITS_BOOK_REASON_IS_SHOWN == true;
+    assert NO_UNITS_BOOK_REASON_WAS_ANSWERED_BEFORE_2026_09_26 == false;
+    assert NO_UNITS_BOOK_REASON_WAS_SHOWN_BEFORE_2026_09_26 == true;
     assert FILE_MAY_RULE_OUT == true;
     assert FILE_MAY_CONFIRM == false;
     assert unbookable_reason(true, 0) == REASON_NO_UNITS;
+}
+
+test the_owner_allowed_booking_whatever_the_seeded_count_says {
+    // question I, answered 2026-09-26: allow booking, the manager confirms availability
+    assert NO_UNITS_BOOK_REASON_DECIDED_ON == "2026-09-26";
+    assert NO_UNITS_BOOK_REASON_WAS_ANSWERED == true;
+    assert NO_UNITS_BOOK_REASON_WAS_ANSWERED != NO_UNITS_BOOK_REASON_WAS_ANSWERED_BEFORE_2026_09_26;
+    assert NO_UNITS_BOOK_REASON_IS_SHOWN == false;
+    assert NO_UNITS_BOOK_REASON_IS_SHOWN != NO_UNITS_BOOK_REASON_WAS_SHOWN_BEFORE_2026_09_26;
+    // the absent-count reason went with it, on this file's reading, and it is a different key
+    assert UNKNOWN_AVAILABILITY_BOOK_REASON_IS_SHOWN == false;
+    assert UNKNOWN_AVAILABILITY_REMOVAL_IS_THIS_FILES_READING == true;
+    assert UNKNOWN_AVAILABILITY_BOOK_REASON_KEY != NO_UNITS_BOOK_REASON_KEY;
+    assert BOOK_REASON_KEYS_DELETED_2026_09_26 == 2;
+    assert BOOK_REASON_REPLACEMENT_SENTENCES == 0;
+    assert CUSTOMER_BOOKING_READS_THE_FILE == false;
+    assert CUSTOMER_BOOKING_READ_THE_FILE_BEFORE_2026_09_26 == true;
+    assert SERVER_REFUSES_ON_THE_COUNT == false;
+    // what a customer reads about availability instead: the manager line, unchanged
+    assert CUSTOMER_AVAILABILITY_KEY == "T_BIKE_AVAILABILITY_UNKNOWN";
+    // the two offered families the seed counts at zero may be booked now ...
+    assert FAMILY_KEYS[4] == OFFERED_OUT_ON_CONTRACT_KEYS[0];
+    assert FAMILY_KEYS[5] == OFFERED_OUT_ON_CONTRACT_KEYS[1];
+    assert customer_may_book(true, true, FAMILY_AVAILABLE[4]) == true;
+    assert customer_may_book(true, true, FAMILY_AVAILABLE[5]) == true;
+    // ... though the file's own predicate still finds no unit at base for them
+    assert is_bookable(true, FAMILY_AVAILABLE[4]) == false;
+    assert unbookable_reason(true, FAMILY_AVAILABLE[5]) == REASON_NO_UNITS;
+    // what still refuses reads no count
+    assert customer_may_book(false, true, 5) == false;
+    assert customer_may_book(true, false, 5) == false;
+    assert customer_may_book(true, true, 0) == customer_may_book(true, true, MAX_UNITS_PER_FAMILY);
+    // the closed family stays closed whatever its count (D12)
+    assert customer_may_book(false, true, FAMILY_AVAILABLE[0]) == false;
+    // the file may still rule a family out of being offered instead of CLICK 125
+    assert FILE_MAY_RULE_OUT == true;
+    assert FILE_MAY_CONFIRM == false;
+    assert usable_click_redirect_count() == CLICK_125_REDIRECTS.len;
 }
 
 test the_capacity_is_scanned_from_the_table_and_not_quoted {
@@ -824,10 +915,12 @@ invariant confirmation_requires_a_live_check
 invariant customer_screens_follow_file_may_confirm
     assert CUSTOMER_SCREENS_CONFIRM_FROM_THE_FILE == FILE_MAY_CONFIRM and CONFIRMING_KEY_LINES_IN_UI == 0
 
-; Since 2026-09-25 (the owner's second list, answer 5) a seeded zero prints no occupancy line and
-; still rules booking out: the removal took the sentence, not the direction FILE_MAY_RULE_OUT allows.
-invariant a_seeded_zero_prints_no_occupancy_line_and_still_rules_booking_out
-    assert UNITS_EMPTY_LINE_IS_SHOWN == false and UNITS_EMPTY_KEY_IS_DECLARED == false and NO_UNITS_BOOK_REASON_IS_SHOWN == FILE_MAY_RULE_OUT
+; Since 2026-09-25 (the owner's second list, answer 5) a seeded zero prints no occupancy line, and
+; since 2026-09-26 (question I) it decides no booking either. Until 2026-09-26 this invariant held
+; the Book reason to FILE_MAY_RULE_OUT; the owner's answer took the file out of the booking
+; decision, and the file's permission itself, which the redirect still uses, did not move.
+invariant a_seeded_zero_prints_nothing_and_decides_no_booking
+    assert UNITS_EMPTY_LINE_IS_SHOWN == false and UNITS_EMPTY_KEY_IS_DECLARED == false and NO_UNITS_BOOK_REASON_IS_SHOWN == false and CUSTOMER_BOOKING_READS_THE_FILE == false and customer_may_book(true, true, 0) == true
 
 ; What the closed family points to is only what the bookability predicate lets through.
 invariant the_shown_click_redirect_is_bookable

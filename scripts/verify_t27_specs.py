@@ -35,6 +35,8 @@ AGENT_CARD = "specs/agents/turbobaby.t27"
 # cart_persistence 213 -> 266 declarations and 43 -> 52 checks.
 # Re-measured 2026-09-26 for the two contracts the notification queue's held kinds changed:
 # notification_queue 270 -> 306 declarations and 52 -> 54 checks, locale_policy 136 -> 139 and 35 -> 36.
+# Re-measured 2026-09-26 for the owner's answer to question I (booking allowed under a seeded zero):
+# availability 141 -> 154 declarations and 37 -> 38 checks, locale_policy 144 -> 146 declarations.
 SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     AGENT_CARD: {
         "module": "turbobaby-agent",
@@ -60,8 +62,11 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         # Raised 2026-09-25 from 120/34 to the measured count when the bot's /start catalog
         # line lost CLICK 125 (8 declarations and 1 test), and again when answer 5 of the
         # owner's second list removed the detail's all-taken line (12 declarations and 2 tests).
-        "min_declarations": 141,
-        "min_checks": 37,
+        # Raised 2026-09-26 from 141/37 when the owner's answer to question I (allow booking; a
+        # manager confirms availability) took the unit count out of the Book control (12
+        # declarations, customer_may_book and 1 test).
+        "min_declarations": 154,
+        "min_checks": 38,
     },
     "specs/turbobaby/bike_catalog.t27": {
         "module": "bike-catalog",
@@ -201,7 +206,9 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         # Raised 2026-09-26 to 139/36 on its own branch: the struct surface re-counted after the
         # queue's held kinds took the retired garden message's field (two declarations and one
         # test); merged 2026-09-26 on the integration branch, 144/36.
-        "min_declarations": 144,
+        # 146/36 on 2026-09-26: question I deleted the Book control's two count reasons, named
+        # by two declarations.
+        "min_declarations": 146,
         "min_checks": 36,
     },
     "specs/turbobaby/loyalty_ledger.t27": {

@@ -36,8 +36,8 @@
 //!   (`availability.t27` `FILE_MAY_CONFIRM = false`). Since 2026-09-25 a zero
 //!   count no longer prints an "every bike of this model is busy" line here
 //!   either: the owner answered "probably" to removing it (second list of that
-//!   day, answer 5), and the key is gone. The Book control's no-units reason,
-//!   which that answer did not name, is the one place a zero still shows.
+//!   day, answer 5), and the key is gone. Since 2026-09-26 the Book control
+//!   ignores it too: the owner allowed booking, a manager confirms (question I).
 //! - the ladder comes from `GET /api/rental-terms`, one document for the whole
 //!   shop, fetched here alongside the family. A ladder that fails to load
 //!   degrades to no ladder section at all rather than to a table of dashes —
@@ -56,8 +56,8 @@
 //! this screen renders the Book control **disabled with the reason named**
 //! (`BookBlock::NotWired`) rather than a button that looks bookable and does
 //! nothing. The same state machine covers the honest refusals: a family
-//! that is closed (D12), one with no published rate (D11), and one with no
-//! free unit.
+//! that is closed (D12) and one with no published rate (D11); a seeded unit
+//! count refuses nothing since 2026-09-26.
 //!
 //! # What is deliberately absent (D6, D14, issue #9)
 //!
