@@ -709,12 +709,12 @@ pub const T_BIKE_ASK_MANAGER: Key = "bike.ask_manager";
 pub const T_BIKE_NOT_OFFERED_TITLE: Key = "bike.not_offered.title";
 /// `{0}` = the families offered instead, already joined with ` · ` (D12).
 pub const T_BIKE_NOT_OFFERED_ALTERNATIVES: Key = "bike.not_offered.alternatives";
-// The five `BookBlock` arms. Issue #9: a family that cannot be booked shows the
+// The `BookBlock` arms (three since 2026-09-26). Issue #9: a family that cannot be booked shows the
 // specs and a disabled control **with the reason named**, never a dead button.
 pub const T_BIKE_BOOK_BLOCKED_NOT_OFFERED: Key = "bike.book.blocked.not_offered";
 pub const T_BIKE_BOOK_BLOCKED_NO_RATE: Key = "bike.book.blocked.no_rate";
-pub const T_BIKE_BOOK_BLOCKED_NO_UNITS: Key = "bike.book.blocked.no_units";
-pub const T_BIKE_BOOK_BLOCKED_UNKNOWN_AVAILABILITY: Key = "bike.book.blocked.unknown_availability";
+// bike.book.blocked.no_units: deleted 2026-09-26 (question I, the owner's answer).
+// bike.book.blocked.unknown_availability: deleted 2026-09-26 (question I).
 pub const T_BIKE_BOOK_BLOCKED_NOT_WIRED: Key = "bike.book.blocked.not_wired";
 
 /// Get translation for a key and language
@@ -1323,8 +1323,8 @@ fn get_ru_translation(key: Key) -> Value {
         T_BIKE_NOT_OFFERED_ALTERNATIVES => "Вместо неё: {0}",
         T_BIKE_BOOK_BLOCKED_NOT_OFFERED => "Модель закрыта для новых броней",
         T_BIKE_BOOK_BLOCKED_NO_RATE => "Цена не опубликована — бронь оформляет менеджер",
-        T_BIKE_BOOK_BLOCKED_NO_UNITS => "Все байки этой модели заняты",
-        T_BIKE_BOOK_BLOCKED_UNKNOWN_AVAILABILITY => "Наличие не подтверждено",
+        // bike.book.blocked.no_units: deleted 2026-09-26 (question I, the owner's answer).
+        // bike.book.blocked.unknown_availability: deleted 2026-09-26 (question I).
         T_BIKE_BOOK_BLOCKED_NOT_WIRED => "Бронь из приложения ещё не включена — напишите менеджеру",
 
         _ => key,
@@ -1923,8 +1923,8 @@ fn get_en_translation(key: Key) -> Value {
         T_BIKE_NOT_OFFERED_ALTERNATIVES => "Offered instead: {0}",
         T_BIKE_BOOK_BLOCKED_NOT_OFFERED => "Closed to new rentals",
         T_BIKE_BOOK_BLOCKED_NO_RATE => "No published price — a manager takes this booking",
-        T_BIKE_BOOK_BLOCKED_NO_UNITS => "Every bike of this model is taken",
-        T_BIKE_BOOK_BLOCKED_UNKNOWN_AVAILABILITY => "Availability not confirmed",
+        // bike.book.blocked.no_units: deleted 2026-09-26 (question I, the owner's answer).
+        // bike.book.blocked.unknown_availability: deleted 2026-09-26 (question I).
         T_BIKE_BOOK_BLOCKED_NOT_WIRED => "In-app booking is not live yet — message the manager",
 
         _ => key,
