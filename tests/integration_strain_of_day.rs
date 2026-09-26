@@ -1,15 +1,22 @@
-//! Integration tests for the strain-of-day carousel cap.
+//! The strain-of-day carousel is retired, and this file holds the retirement.
 //!
-//! Regression: the owner could not pick a strain of the day at all. Every
-//! `PUT /api/strains/:id/strain-of-day` answered 409 `sotd_limit` while
-//! `GET /api/strains/strain-of-day` returned an empty list — so the message
-//! "at most 3, unset one" named a set the owner could not see anywhere.
+//! Until 2026-09-26 this file held five tests of the carousel's cap (cycle
+//! #52: off-sale strains holding slots invisibly, so the owner could not pick
+//! a strain of the day at all). Each seeded `strains` rows, and migration 083
+//! dropped that table with the rest of the old catalogue, so all five failed
+//! on every database migrated to today's schema. The feature went with the
+//! table: the owner's rulings of 2026-09-24 (rental only, Phuket only) and
+//! 2026-09-25 («всё что касается канабиса нигде не должно быть») retired it,
+//! no router merges the strain routes (`src/api/mod.rs`), and the bot's
+//! strain-of-day buttons answer with the rental menu (`src/bot/callbacks.rs`).
+//! The rental catalogue has no carousel of its own for a cap to guard.
 //!
-//! Cause: the write-side cap counted `is_strain_of_day = true` only, while
-//! the read side (`Database::get_strains_of_day`) also requires
-//! `is_available = true`. Strains flagged as strain-of-day and later taken
-//! off sale therefore held carousel slots invisibly. Three of them
-//! deadlocked the feature permanently.
+//! So the five tests of the cap were removed (git keeps them: 6580911 wrote
+//! them), and what is tested instead is that the retired thing cannot be
+//! reached: the write the admin screen used and the read the carousel used
+//! both answer the API's JSON not-found, and the table they read and wrote is
+//! gone. `db.get_strains_of_day` still exists in `src/db/mod.rs` and reads that
+//! table; nothing routed calls it, and it is not exercised here.
 //!
 //! Marked `#[ignore]` — runs with:
 //!
@@ -28,285 +35,90 @@ use sea_orm::{ConnectionTrait, DbBackend, Statement};
 use serde_json::json;
 use tower::ServiceExt;
 
-/// Seed a strain and return its id.
-async fn seed_strain(db: &turbobaby_bot::db::Database, name: &str, available: bool) -> String {
-    let id = uuid::Uuid::new_v4().to_string();
-    db.orm
-        .execute(Statement::from_sql_and_values(
-            DbBackend::Postgres,
-            "INSERT INTO strains (id, name, price_per_gram, is_available) \
-             VALUES ($1, $2, $3, $4)",
-            [
-                id.clone().into(),
-                name.into(),
-                100.0_f64.into(),
-                available.into(),
-            ],
-        ))
-        .await
-        .expect("seed strain INSERT");
-    id
-}
-
-/// Flag a strain as strain-of-day directly in the DB, bypassing the API —
-/// this is the state the owner's database was already in.
-async fn flag_as_sotd(db: &turbobaby_bot::db::Database, id: &str) {
-    db.orm
-        .execute(Statement::from_sql_and_values(
-            DbBackend::Postgres,
-            "UPDATE strains SET is_strain_of_day = TRUE, strain_of_day_set_at = NOW() \
-             WHERE id = $1",
-            [id.into()],
-        ))
-        .await
-        .expect("flag strain-of-day UPDATE");
-}
-
-/// Clear every strain-of-day flag so each test starts from a known carousel.
-async fn clear_all_sotd(db: &turbobaby_bot::db::Database) {
-    db.orm
-        .execute(Statement::from_string(
-            DbBackend::Postgres,
-            "UPDATE strains SET is_strain_of_day = FALSE",
-        ))
-        .await
-        .expect("clear strain-of-day UPDATE");
-}
-
 fn admin_token() -> String {
     turbobaby_bot::api::auth::generate_admin_token("test_password", "dummy_test_token")
 }
 
-struct Resp {
-    status: StatusCode,
-    body: serde_json::Value,
-}
-
-async fn set_sotd(app: axum::Router, id: &str, enabled: bool, discount: f64) -> Resp {
-    let request = Request::builder()
-        .method("PUT")
-        .uri(format!("/api/strains/{id}/strain-of-day"))
-        .header("content-type", "application/json")
-        .header("X-Admin-Token", admin_token())
-        .body(Body::from(
-            serde_json::to_vec(&json!({
-                "is_strain_of_day": enabled,
-                "discount": discount,
-            }))
-            .unwrap(),
-        ))
+async fn call(
+    app: axum::Router,
+    method: &str,
+    uri: &str,
+    body: Option<serde_json::Value>,
+) -> (StatusCode, serde_json::Value) {
+    let mut request = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("X-Admin-Token", admin_token());
+    if body.is_some() {
+        request = request.header("content-type", "application/json");
+    }
+    let request = request
+        .body(match body {
+            Some(b) => Body::from(serde_json::to_vec(&b).unwrap()),
+            None => Body::empty(),
+        })
         .unwrap();
     let response = app.oneshot(request).await.expect("router.oneshot");
     let status = response.status();
     let bytes = response.into_body().collect().await.unwrap().to_bytes();
-    let body = if bytes.is_empty() {
-        serde_json::Value::Null
-    } else {
-        serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null)
-    };
-    Resp { status, body }
+    (
+        status,
+        serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null),
+    )
 }
 
-/// The exact production deadlock: three flagged-but-unavailable strains must
-/// not consume carousel slots, because the carousel never shows them.
+/// The admin's pick and the carousel's read: neither is served.
 #[tokio::test]
 #[ignore = "needs DATABASE_URL env var; run with --ignored"]
-async fn unavailable_featured_strains_do_not_block_a_new_pick() {
-    let Some((app, db)) = common::make_app_with_db().await else {
+async fn the_strain_of_day_routes_are_not_served() {
+    let Some(app) = common::make_app().await else {
         eprintln!("DATABASE_URL not set — skipping integration test");
         return;
     };
-    clear_all_sotd(&db).await;
 
-    let suffix = rand_suffix();
-    for i in 0..3 {
-        let id = seed_strain(&db, &format!("sotd-offsale-{suffix}-{i}"), false).await;
-        flag_as_sotd(&db, &id).await;
-    }
-
-    // The carousel is empty — nothing the owner could possibly unset.
-    let shown = db.get_strains_of_day().await.expect("read side");
-    assert!(
-        shown.is_empty(),
-        "off-sale strains must not appear in the carousel, got {shown:?}"
-    );
-
-    let target = seed_strain(&db, &format!("sotd-target-{suffix}"), true).await;
-    let resp = set_sotd(app, &target, true, 15.0).await;
-    assert_eq!(
-        resp.status,
-        StatusCode::OK,
-        "an invisible off-sale strain must not hold a slot, body: {}",
-        resp.body
-    );
-
-    let shown = db.get_strains_of_day().await.expect("read side");
-    assert_eq!(shown.len(), 1, "the new pick must reach the carousel");
-    assert_eq!(shown[0].id, target);
-}
-
-/// The cap still applies to strains that really do occupy the carousel, and
-/// the refusal names them so the owner knows what to unset.
-#[tokio::test]
-#[ignore = "needs DATABASE_URL env var; run with --ignored"]
-async fn three_available_featured_strains_still_cap_the_carousel() {
-    let Some((app, db)) = common::make_app_with_db().await else {
-        eprintln!("DATABASE_URL not set — skipping integration test");
-        return;
-    };
-    clear_all_sotd(&db).await;
-
-    let suffix = rand_suffix();
-    let mut expected = Vec::new();
-    for i in 0..3 {
-        let name = format!("sotd-onsale-{suffix}-{i}");
-        let id = seed_strain(&db, &name, true).await;
-        flag_as_sotd(&db, &id).await;
-        expected.push(name);
-    }
-
-    let target = seed_strain(&db, &format!("sotd-fourth-{suffix}"), true).await;
-    let resp = set_sotd(app, &target, true, 10.0).await;
-    assert_eq!(
-        resp.status,
-        StatusCode::CONFLICT,
-        "a fourth featured strain must be refused, body: {}",
-        resp.body
-    );
-    assert_eq!(resp.body["error"], "sotd_limit");
-
-    // The owner must be told which three are holding the slots.
-    let current: Vec<String> = resp.body["current"]
-        .as_array()
-        .expect("409 must list the current strains")
-        .iter()
-        .map(|v| v.as_str().unwrap_or_default().to_string())
-        .collect();
-    for name in &expected {
-        assert!(
-            current.contains(name),
-            "{name} occupies a slot but is missing from the 409 payload: {current:?}"
+    let pick = json!({ "is_strain_of_day": true, "discount": 15.0 });
+    for (method, uri, body) in [
+        (
+            "PUT",
+            "/api/strains/stored-item-4p/strain-of-day",
+            Some(pick.clone()),
+        ),
+        (
+            "PUT",
+            "/api/strains/stored-item-4p/strain-of-day",
+            Some(json!({ "is_strain_of_day": false, "discount": 0.0 })),
+        ),
+        ("GET", "/api/strains/strain-of-day", None),
+        ("GET", "/api/strains", None),
+    ] {
+        let (status, body) = call(app.clone(), method, uri, body).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{method} {uri}: {body}");
+        assert_eq!(
+            body["error"], "not_found",
+            "{method} {uri}: the API's own miss: {body}"
         );
     }
 }
 
-/// Re-picking a strain that is already featured must not count itself out.
+/// And there is nothing left for them to read or write.
 #[tokio::test]
 #[ignore = "needs DATABASE_URL env var; run with --ignored"]
-async fn updating_an_already_featured_strain_is_allowed_at_the_cap() {
-    let Some((app, db)) = common::make_app_with_db().await else {
+async fn the_table_the_carousel_read_is_gone() {
+    let Some((_app, db)) = common::make_app_with_db().await else {
         eprintln!("DATABASE_URL not set — skipping integration test");
         return;
     };
-    clear_all_sotd(&db).await;
-
-    let suffix = rand_suffix();
-    let mut ids = Vec::new();
-    for i in 0..3 {
-        let id = seed_strain(&db, &format!("sotd-self-{suffix}-{i}"), true).await;
-        flag_as_sotd(&db, &id).await;
-        ids.push(id);
-    }
-
-    // Changing the discount on one of the three is not a fourth pick.
-    let resp = set_sotd(app, &ids[0], true, 42.0).await;
-    assert_eq!(
-        resp.status,
-        StatusCode::OK,
-        "editing an existing pick must not hit the cap, body: {}",
-        resp.body
-    );
-
-    let shown = db.get_strains_of_day().await.expect("read side");
-    let updated = shown
-        .iter()
-        .find(|s| s.id == ids[0])
-        .expect("the edited strain must still be featured");
-    assert_eq!(
-        updated.strain_of_day_discount, 42.0,
-        "the new discount must be persisted"
-    );
-}
-
-/// Unsetting is always allowed — it is the owner's only way out of a full
-/// carousel, so it must never be gated by the cap.
-#[tokio::test]
-#[ignore = "needs DATABASE_URL env var; run with --ignored"]
-async fn unsetting_is_always_allowed() {
-    let Some((app, db)) = common::make_app_with_db().await else {
-        eprintln!("DATABASE_URL not set — skipping integration test");
-        return;
-    };
-    clear_all_sotd(&db).await;
-
-    let suffix = rand_suffix();
-    let mut ids = Vec::new();
-    for i in 0..3 {
-        let id = seed_strain(&db, &format!("sotd-unset-{suffix}-{i}"), true).await;
-        flag_as_sotd(&db, &id).await;
-        ids.push(id);
-    }
-
-    let resp = set_sotd(app, &ids[0], false, 0.0).await;
-    assert_eq!(
-        resp.status,
-        StatusCode::OK,
-        "unsetting must always succeed, body: {}",
-        resp.body
-    );
-
-    let shown = db.get_strains_of_day().await.expect("read side");
+    let row = db
+        .orm
+        .query_one(Statement::from_string(
+            DbBackend::Postgres,
+            "SELECT to_regclass('public.strains') IS NULL AS gone".to_string(),
+        ))
+        .await
+        .expect("query")
+        .expect("one row");
     assert!(
-        !shown.iter().any(|s| s.id == ids[0]),
-        "the unset strain must leave the carousel"
+        row.try_get::<bool>("", "gone").expect("a flag"),
+        "migration 083 dropped the table"
     );
-}
-
-/// The write cap and the read query must agree about what "featured" means.
-/// They disagreed for `is_available`, which is what caused the deadlock.
-#[tokio::test]
-#[ignore = "needs DATABASE_URL env var; run with --ignored"]
-async fn cap_and_carousel_agree_on_what_occupies_a_slot() {
-    let Some((app, db)) = common::make_app_with_db().await else {
-        eprintln!("DATABASE_URL not set — skipping integration test");
-        return;
-    };
-    clear_all_sotd(&db).await;
-
-    let suffix = rand_suffix();
-    // Two visible + two invisible: only the visible pair holds slots, so a
-    // third pick must still be accepted.
-    for i in 0..2 {
-        let id = seed_strain(&db, &format!("sotd-mix-on-{suffix}-{i}"), true).await;
-        flag_as_sotd(&db, &id).await;
-    }
-    for i in 0..2 {
-        let id = seed_strain(&db, &format!("sotd-mix-off-{suffix}-{i}"), false).await;
-        flag_as_sotd(&db, &id).await;
-    }
-
-    let visible = db.get_strains_of_day().await.expect("read side").len();
-    assert_eq!(visible, 2, "only available strains occupy the carousel");
-
-    let target = seed_strain(&db, &format!("sotd-mix-third-{suffix}"), true).await;
-    let resp = set_sotd(app, &target, true, 5.0).await;
-    assert_eq!(
-        resp.status,
-        StatusCode::OK,
-        "the third visible pick must be accepted, body: {}",
-        resp.body
-    );
-    assert_eq!(
-        db.get_strains_of_day().await.expect("read side").len(),
-        3,
-        "carousel must now hold exactly three"
-    );
-}
-
-fn rand_suffix() -> u32 {
-    use std::time::{SystemTime, UNIX_EPOCH};
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.subsec_nanos())
-        .unwrap_or(0)
 }

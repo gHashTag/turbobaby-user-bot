@@ -932,7 +932,7 @@ async fn main() -> Result<()> {
         .nest_service("/styles", ServeDir::new("styles"))
         .nest_service("/assets", ServeDir::new("assets"))
         .nest_service("/images", ServeDir::new("assets"))
-        .nest_service("/uploads", ServeDir::new("/data/uploads"))
+        .nest_service("/uploads", api::upload::served_uploads(db.clone()))
         .layer(assets_cache_layer())
         .layer(nosniff_layer());
 

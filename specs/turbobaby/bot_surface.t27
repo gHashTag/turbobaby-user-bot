@@ -616,9 +616,9 @@ pub fn legacy_surface_answers_with_content(table_is_live: bool, rows_returned: u
 ; answers the press and does nothing; a press now answers with the rental menu -- the one the menu
 ; command sends, built once by rental_menu in src/bot/commands.rs -- written over the old card when
 ; Telegram still lets the bot edit it and sent as a new message when it does not. That path reads
-; no table. The reader LEGACY_READER names is still compiled: it is public, and the ignored
-; integration test tests/integration_strain_of_day.rs calls it, so its survivor entry stays and the
-; allowlist size this file copies does not move. It has NO production caller any more:
+; no table. The reader LEGACY_READER names is still compiled: it is public (and the ignored test
+; tests/integration_strain_of_day.rs called it until 2026-09-26, when it began to test the retirement
+; instead), so its survivor entry stays and the allowlist size this file copies does not move. It has NO production caller any more:
 ; LEGACY_CALL_SITE, LEGACY_ERROR_IS_SWALLOWED and both LEGACY_BUTTON_PRODUCERS describe code that is
 ; gone and are kept as the 2026-09-21 reading they were. The Rust variant is now
 ; CallbackAction::RetiredCarouselPage and carries no page index; ACTION_STRAIN_OF_DAY_PAGE keeps its

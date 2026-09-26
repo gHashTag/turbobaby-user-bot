@@ -774,3 +774,44 @@ No wording was needed.
 `specs/turbobaby/order_presentation.t27` records it (`RETIRED_SHOP_DECIDED_AT`,
 `RETIRED_SHOP_LABEL_SHOWN`, `RETIRED_SHOP_SERVED_AS`; `RETIRED_SHOP_FALLBACK_NOTE` is closed).
 `tests/legacy_view_wiring.rs` holds the screens to it, and the rules' module has the unit test.
+
+## D19 addendum — what answer 3 still left in sight, the owner's answers of 2026-09-26 (server)
+
+Kept at the end of this file, like the entries above, so that no line citation into it moves.
+Questions about what answer 3 (2026-09-25) still left in customers' sight were put to the owner on
+2026-09-26. The rulings in force stay: rental only, Phuket only, nothing deleted (2026-09-24);
+«всё что касается канабиса нигде не должно быть» and «Все канабисное аналировать» (2026-09-25).
+Every change below stops SERVING or SENDING something, or changes what a NEW row says; no row is
+deleted or rewritten, no migration is added, and no file is removed from any volume or bucket.
+
+* **The previous shop's orders.** Asked about the lines shown as «Позиция прежнего каталога», the
+  owner answered «А зачем это вообще там?». The operator reads it as: a customer must not see the
+  previous shop's orders at all. An order naming the previous shop, or holding no bike line, is
+  not listed (it takes none of the list's 50 places), is answered 404 by the detail, the status
+  and the customer's own cancel exactly like a missing order, and is not counted in the profile's
+  order count. An order holding a rental line beside a line of the old catalogue is this shop's
+  and stays shown with that line masked, which is now the only case the neutral name is served
+  for. The admin reads are the archive and are unchanged. `order_presentation.t27`
+  (`PREVIOUS_SHOP_ORDER_*`); the rule is `customer_sees_order` in `src/trios/legacy_view.rs`.
+* **The previous shop's media.** Asked about media still reachable by a direct link, the owner
+  answered «Зачем они вообще нужны мне?». The operator reads it as: stop serving them; deleting the
+  files is the owner's own irreversible act and is not done here. The upload's local branch still
+  writes to `/data/uploads` whenever no object store is configured, so `/uploads/<name>` stays and
+  serves a name only when a bike's stored picture is exactly `/uploads/<name>`; everything else
+  answers 404. The bucket is not this server's to gate (its objects are fetched from the bucket's
+  own address), and both shops' code wrote the one key prefix `uploads/`, so telling the previous
+  shop's objects apart needs a production listing and stopping them a bucket policy change: the
+  owner's or the operator's, not done here. `upload_media.t27` (`OWNER_MEDIA_ANSWER_*`,
+  `LOCAL_READ_*`, `OBJECT_STORE_*`).
+* **The 24-hour event reminder** (operator, under «Все канабисное аналировать»). It was kept for
+  seats already held (2026-09-25). Every event is hidden since 088 and each is the previous shop's,
+  so it mailed their stored titles and venues. It now reminds public events only; cancellation and
+  the Stars refund of a held seat are unchanged. `events_booking.t27` (`REMINDER_REVERSED_AT`).
+* **The welcome credit's sentence** (operator, the same reading). A new `referral_welcome` row said
+  "Welcome bonus from a friend's garden invite". None of the four sentences already written fits
+  the invitee's row, so the garden's words were dropped: "Welcome bonus from a friend's invite".
+  The bonus history serves the new sentence; a row written before keeps the old one and stays
+  withheld. `legacy_retirement.t27` (`WELCOME_CREDIT_SENTENCE`, `WELCOME_SENTENCE_*`).
+
+The second question of that day (the Book control under a seeded zero) is the client's and is not
+recorded here. `legacy_retirement.t27` keeps the day's answers together (`OWNER_ANSWERS_2026_09_26_AT`).

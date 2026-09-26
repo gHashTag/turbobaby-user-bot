@@ -408,6 +408,72 @@ place.
   today, and closing the gate is a separate change (`cart_persistence.t27`).
 * The order card still has no link to the manager (bullet D).
 
+### Round 4, server lane: the owner's answers of 2026-09-26 and the stale fixtures, not yet live
+
+Branch `t27/round4-server`, cut from `main` at `405f30e` (#67). Five commits, one per item, and one
+for the docs; **nothing is pushed and nothing is deployed**. `dist/` was not rebuilt: every change
+is server code, and no client file changed. The owner's words are quoted verbatim in DECISIONS.md
+(the D19 addendum of 2026-09-26) and in the Rust modules; the `.t27` files stay ASCII.
+
+| commit | item | what landed | recorded in |
+| --- | --- | --- | --- |
+| `f3ffc98` | A1, answer «А зачем это вообще там?» | A customer never sees an order of the previous shop: one that names that shop, or holds no bike line, is not listed (the list pages past it, so it takes none of the 50 places), is answered 404 by `get_order_details`, `get_order_status` and `cancel_order` on the owner check's own line, and is not counted in the profile's `orders_count` (the SQL no longer joins orders). A rental beside an old line stays shown, masked. Admin reads unchanged. Every cited line of `src/api/orders.rs` stayed except the list's cap (2502 → 2503, re-pinned) | `order_presentation.t27` `PREVIOUS_SHOP_ORDER_*`, `legacy_retirement.t27` `OWNER_ORDERS_ANSWER_*` |
+| `261a0a9` | A2, answer «Зачем они вообще нужны мне?» | `/uploads` serves only a name a bike's `image_url` references exactly (`/uploads/<name>`), through a gate in front of the same directory service on the same line of `src/main.rs`; everything else answers 404. Nothing deleted. The bucket: not served by this server, and its previous-shop keys cannot be told apart by code (one prefix `uploads/` since `436f56c`), so it **needs a production listing** | `upload_media.t27` `OWNER_MEDIA_ANSWER_*`, `LOCAL_READ_*`, `OBJECT_STORE_*` |
+| `784680e` | A3, critic note 1 | The 24-hour reminder joins public events only; a hidden event is never reminded. Cancellation and refunds unchanged. `REMINDER_KEPT_FOR_SEATS_ALREADY_HELD` reversed by the operator under answer 3 | `events_booking.t27` `REMINDER_REVERSED_*` |
+| `0f35061` | A4, critic note 5 | New welcome credits say "Welcome bonus from a friend's invite" (the garden's words dropped; none of the four existing sentences fits). The bonus history serves it; older rows stay withheld | `legacy_retirement.t27` `WELCOME_CREDIT_SENTENCE`, `WELCOME_SENTENCE_*` |
+| `04f75e9` | A5, critic note 6 | The 17 stale DB-backed tests: create_order ×3 and promo_agent ×4 rewritten on a `bike_rental` line of `nmax-155` and on `bikes` rows; cart_merge ×2 hold the cart race (the merge gate names no rental kind, so the summing moved to an in-crate DB test of the write step); marketing ×1, strain_of_day ×5 → 2 and use_reward ×2 hold the retirement | the test files' headers |
+
+**Gates**, on the docs commit, pinned compiler `40003ed`:
+
+```sh
+T27C=<path>/t27c python3 scripts/verify_t27_specs.py --require-compiler
+# OK - 45 manifested specs, 5 generators each (all 45 floors equal the measurement)
+python3 scripts/execute_t27_assertions.py            # WITH the compiler cross-check
+# OK - 45 spec(s), 10679 assert line(s) scanned, 10679 executed, 10679 passed, 0 failed;
+#      10186 declaration name(s) and function bodies agreed with t27c; 2 pinned front-end disagreement(s)
+python3 scripts/verify_t27_against_source.py --require-git-tracked
+# OK - 255 bindings hold across 41 contracts and 83 source files
+python3 scripts/verify_fleet_seed.py -v
+# OK — 14 families (13 offered), 37 units (11 rented, 26 available); ...
+```
+
+Floors that moved: `order_presentation` 606/77 → 625/80, `legacy_retirement` 299/63 → 320/67,
+`upload_media` 253/50 → 275/53, `events_booking` 326/85 → 338/87. Gate 3 gained 7 bindings (248 →
+255): the list's cap and the three by-id guards, the `/uploads` nest and the bikes lookup, the
+reminder's filtered join, and the welcome sentence in its writer and in its rule; each was planted
+red once by hand and restored. `f3ffc98` left the `order_presentation` floor one below the
+measurement (624 against 625); `261a0a9` closed it.
+
+**Rust.** `cargo fmt -- --check` clean. The three clippy forms passed with `-D warnings`
+(`--features backend --bin turbobaby-bot-server`, `--features backend`, and
+`--target wasm32-unknown-unknown --lib`). `cargo test --features backend -j 2 --no-fail-fast`: 77
+result lines, 2 510 passed, 0 failed, 141 ignored.
+
+**DB-backed.** A fresh private PostgreSQL 18.0 (`initdb -A trust -U postgres -E UTF8 --locale=C`),
+data dir `D:/t27work/pgdata-r4a-2509`, listening on 127.0.0.1:55435 only, a fresh database per run,
+`HTTPS_PROXY`/`HTTP_PROXY`/`ALL_PROXY`/`TELOXIDE_PROXY` = `http://127.0.0.1:9`. The six stale
+targets on base `405f30e`'s tests: 17 failed (the known 17). After the change, the whole suite,
+`cargo test --features backend -j 2 --no-fail-fast -- --include-ignored --test-threads=1` skipping
+the two tests of `tests/https_reaches_telegram.rs`: 77 result lines, **2 649 passed, 0 failed**.
+The new DB tests: `tests/integration_previous_shop_orders.rs`, and in-crate
+`only_a_file_a_bike_references_is_served` (upload.rs),
+`the_reminder_skips_a_hidden_event_and_reminds_a_public_one` (events.rs, against a Telegram stand-in on 127.0.0.1; with the filter removed
+it fails, as it should), `a_new_welcome_credit_names_no_garden_and_is_served` (referrals.rs) and
+`concurrent_upserts_of_one_rental_line_sum_their_quantities` (cart.rs).
+
+**What is left.**
+
+* The bucket's previous-shop objects: a production listing of `uploads/` keys against the keys the
+  rental rows reference, then a bucket read-policy change. Deleting any file is the owner's act.
+* `POST /api/cart/merge` with a line of kind `strain` still reaches the dropped table and answers
+  500 (the known D9 survivor in `tests/retired_table_wiring.rs`), and no merge can write a rental
+  line until `parse_kind` admits `bike_rental` (`cart_persistence.t27`).
+* A message the bot sends to a customer when an admin changes the status of a previous-shop order
+  is the admin's act and was left; so were the referral panel's `has_ordered` flag (a friend's
+  orders, counted whole) and `db.get_strains_of_day`, which no code calls now.
+* The client lane's items of the same round (the Book control under a seeded zero, "Unknown" on
+  bike lines, the unused strings in the wasm) are not in this branch.
+
 ## The four gates, and how to run them
 
 ```sh
