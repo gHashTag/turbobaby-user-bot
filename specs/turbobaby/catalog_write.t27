@@ -803,3 +803,72 @@ invariant the_sender_of_a_write_is_never_this_files_subject
 
 invariant every_gap_this_file_found_is_named_rather_than_filled
   assert BODY_VOCABULARY_GUARD_IS_NOT_SHIPPED == true and DISPLACEMENT_FLOOR_AGREEMENT_IS_NOT_SHIPPED == true and LONGEST_SUBMITTED_TEXT_IS_NOT_MEASURED == true
+
+; --- The image address a family write may store (added 2026-09-30) ---------------------------------
+; Appended at the end of the file so that no line citation into it moves.
+; WHY (measured 2026-09-30 in the working tree over 55a6664, where src/ is unchanged; every citation
+; below was opened that day). The review of round 7 found this write-side fact declared in
+; turbobaby/ui-kit, the READ-side kit contract, and attributed there to the wrong owner. What an
+; admin write may produce is this file's, so the fact lives here and the kit reads it by name.
+; After the 2048-character ceiling above (WRITE_IMAGE_URL_MAX_CHARS, a count of characters), the
+; family validator hands the trimmed address to validate_url (src/api/bikes.rs:1047), defined at
+; src/api/mod.rs:49-71. It admits an absent address (:50, :70) and an empty one (:51-53), refuses one
+; longer than 2048 BYTES (:54-56) and a protocol-relative one (:58-60), and admits exactly five
+; prefixes (:61-65): http://, https://, /, data:image/ and data:video/. Anything else is refused
+; (:66-68), and the family validator turns every refusal into one sentence about the address
+; (src/api/bikes.rs:1047), whether the cause was a prefix or the byte length. Its own unit tests pin
+; both data: prefixes as admitted (src/api/mod.rs:208 and :213).
+; So a family write may store a data: URL. Which stored address a primitive then SHOWS is the read
+; side, turbobaby/ui-kit's media predicate, and is not restated here; that the two disagree on data:
+; is recorded there, from this declaration.
+; validate_url has twenty more call sites outside its tests: the previous shop's catalog writes
+; (src/api/catalog.rs, eight), the events writes (src/api/events.rs, six), the quest writes
+; (src/api/quest.rs, four) and the broadcast photo (src/api/admin.rs, two). They are not this file's
+; subject and are not classified here.
+pub const WRITE_IMAGE_URL_GATE : str = "src/api/mod.rs:49-71 validate_url (at 55a6664)";
+pub const WRITE_IMAGE_URL_GATE_CALL_SITE : str = "src/api/bikes.rs:1047 (at 55a6664)";
+pub const WRITE_IMAGE_URL_GATE_MEASURED_AT : str = "2026-09-30";
+; Bound by gate 3: the prefixes validate_url admits, in the order it tests them.
+pub const WRITE_IMAGE_URL_ADMITTED_PREFIXES : [5]str = ["http://", "https://", "/", "data:image/", "data:video/"];
+pub const WRITE_IMAGE_URL_REFUSED_PREFIX : str = "//";
+pub const WRITE_IMAGE_URL_ADMITS_A_DATA_URL : bool = true;
+pub const WRITE_IMAGE_URL_GATE_BYTE_CAP : u16 = 2048;
+pub const WRITE_IMAGE_URL_GATE_COUNTS_BYTES : bool = true;
+pub const WRITE_IMAGE_URL_READ_SIDE_OWNER : str = "turbobaby/ui-kit media_url_is_shown";
+
+; The address a family write may store: absent, or within both ceilings and admitted by a prefix and
+; not protocol-relative. The prefix answer arrives as a boolean; the list above is what it is read
+; against.
+pub fn image_url_write_admitted(absent: bool, chars_within_ceiling: bool, bytes_within_cap: bool, has_an_admitted_prefix: bool, is_protocol_relative: bool) bool {
+    if (absent) {
+        return true;
+    }
+    return chars_within_ceiling and bytes_within_cap and has_an_admitted_prefix and !is_protocol_relative;
+}
+
+test a_family_write_may_store_a_data_url_and_never_a_protocol_relative_one {
+    assert WRITE_IMAGE_URL_GATE == "src/api/mod.rs:49-71 validate_url (at 55a6664)";
+    assert WRITE_IMAGE_URL_GATE_CALL_SITE == "src/api/bikes.rs:1047 (at 55a6664)";
+    assert WRITE_IMAGE_URL_GATE_MEASURED_AT == "2026-09-30";
+    assert WRITE_IMAGE_URL_ADMITTED_PREFIXES.len == 5;
+    assert WRITE_IMAGE_URL_ADMITTED_PREFIXES[3] == "data:image/";
+    assert WRITE_IMAGE_URL_ADMITTED_PREFIXES[4] == "data:video/";
+    assert WRITE_IMAGE_URL_ADMITS_A_DATA_URL == true;
+    assert WRITE_IMAGE_URL_REFUSED_PREFIX != WRITE_IMAGE_URL_ADMITTED_PREFIXES[2];
+    assert image_url_write_admitted(false, true, true, true, false) == true;
+    assert image_url_write_admitted(false, true, true, true, true) == false;
+    assert image_url_write_admitted(false, true, true, false, false) == false;
+    assert image_url_write_admitted(true, false, false, false, false) == true;
+}
+
+; Two ceilings on one field, one in characters and one in bytes, both 2048: an address of 2048
+; characters that needs more than 2048 bytes passes the first and is refused by the second.
+test the_image_address_has_a_character_ceiling_and_a_byte_cap_of_the_same_number {
+    assert WRITE_IMAGE_URL_GATE_BYTE_CAP == WRITE_IMAGE_URL_MAX_CHARS;
+    assert WRITE_IMAGE_URL_GATE_COUNTS_BYTES == true;
+    assert TEXT_CEILING_COUNTS_CHARACTERS == true;
+    assert image_url_write_admitted(false, true, false, true, false) == false;
+}
+
+invariant a_protocol_relative_image_address_is_never_stored
+  assert image_url_write_admitted(false, true, true, true, true) == false and WRITE_IMAGE_URL_ADMITS_A_DATA_URL == true

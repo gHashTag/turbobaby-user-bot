@@ -144,7 +144,18 @@ pub const REUSES_NOTIFICATION_QUEUE_ID : str = "turbobaby/notification-queue";
 ; inference can fire -- not decided again. If the two ever disagree, the literal is right and both
 ; copies are stale.
 pub const REUSES_RUNTIME_CONFIG_ID : str = "turbobaby/runtime-config";
-pub const REUSE_EDGE_COUNT : u8 = 8;
+; Added 2026-09-30 at the review of round 7, for the line renderer at the end of this file. The
+; turbobaby/ui-kit contract owns the media URL predicate (media_url_is_shown), the census of its
+; hand copies (MEDIA_PREDICATE_SITES, of which src/ui/components/cart_item.rs:20 is one) and the
+; Button primitive whose default handler does nothing (BUTTON_ONCLICK_DEFAULT_DOES_NOTHING). The
+; turbobaby/webapp-bridge contract owns the wasm32 gate (WASM_GATE_SITE,
+; HOST_SUITE_COMPILES_THIS_HALF). The renderer's section had restated all three in its own words;
+; it now reads them by these names. CORRECTED 2026-09-30: REUSE_EDGE_COUNT was 8, and 8 stays as
+; REUSE_EDGE_COUNT_BEFORE_2026_09_30; the eight above are unchanged.
+pub const REUSES_UI_KIT_ID : str = "turbobaby/ui-kit";
+pub const REUSES_WEBAPP_BRIDGE_ID : str = "turbobaby/webapp-bridge";
+pub const REUSE_EDGE_COUNT : u8 = 10;
+pub const REUSE_EDGE_COUNT_BEFORE_2026_09_30 : u8 = 8;
 
 ; The size of the corpus this file's refutations were measured against, re-read at review on
 ; 2026-09-21 by opening the ID line of every .t27 file rather than by counting a handed list.
@@ -800,7 +811,8 @@ test the_reuse_edges_name_owners_and_restate_nothing {
   assert REUSES_LOYALTY_LEDGER_ID == "turbobaby/loyalty-ledger";
   assert REUSES_NOTIFICATION_QUEUE_ID == "turbobaby/notification-queue";
   assert REUSES_RUNTIME_CONFIG_ID == "turbobaby/runtime-config";
-  assert REUSE_EDGE_COUNT == 8;
+  assert REUSE_EDGE_COUNT_BEFORE_2026_09_30 == 8;
+  assert REUSE_EDGE_COUNT == REUSE_EDGE_COUNT_BEFORE_2026_09_30 + 2;
   assert NOTIFICATION_QUEUE_EDGE_IS_DECLARED == true;
   assert RUNTIME_CONFIG_EDGE_IS_DECLARED == true;
   assert SPEC_IDS_READ_AT_REVIEW == 43;
@@ -1163,3 +1175,138 @@ test one_rule_for_a_kept_cart_after_the_merge_with_answer_3 {
 
 invariant every_way_into_the_mini_app_cart_asks_the_served_kind
   assert CLIENT_CART_WAYS_IN_ASKING_THE_PREDICATE == CLIENT_CART_WAYS_IN and CART_LINES_SERVED_UNDER_A_NEUTRAL_NAME == 0 and ANSWER_3_CART_RULE_KEPT == false
+
+; --- The line renderer nothing mounts: src/ui/components/cart_item.rs (2026-09-29) ----------------
+; Appended at the end of the file so that no line citation into it moves.
+; WHY (measured 2026-09-29 at 55a6664, every citation below opened that day). The reconciliation
+; above names CartItemComponent as one of the three client readers that print a cart line as it
+; is, and until this date no contract named the file it lives in.
+; src/ui/components/cart_item.rs (71 lines) is compiled for the browser only (the ui half sits behind
+; turbobaby/webapp-bridge's WASM_GATE_SITE; inside it src/ui/mod.rs:12 -> src/ui/components/mod.rs:15,
+; re-exported at :51) and is mounted by nothing:
+; under src/ its name occurs at its declaration (:12) and its re-export and nowhere else, and tests/
+; never names it. The other two printers of a line are routed screens (src/ui/routes.rs:46 Cart,
+; :48 Checkout), so two of the three are reachable and this one is not.
+; WHAT IT WOULD PRINT. The line's own name (:35, :39); the line's own picture, drawn when
+; turbobaby/ui-kit's media_url_is_shown admits the address -- the rule at :16-20 is one of that
+; owner's MEDIA_PREDICATE_SITES, with an emptiness test in front (:17) that changes no answer, since
+; an empty address starts with none of the admitted prefixes -- and fetched with a ?v=2 suffix
+; (:34); the price through thb_or_dash (:26), with
+; T_BIKE_PRICE_ON_REQUEST beside it when the line is not priced (:27, citing D9 and D11); and the
+; quantity (:55). How an absent price renders is turbobaby/pricing-honesty's and is not restated.
+; It asks no served-kind question -- the file names none of is_served, served_kind or
+; cart_kind_is_served -- and it does not need to: every way a line enters the Mini App's cart
+; already asks (CLIENT_CART_WAYS_IN_ASKING_THE_PREDICATE equals CLIENT_CART_WAYS_IN above), so any
+; line it could be handed is a served line.
+; WHAT ITS CONTROLS DO: NOTHING. It draws three Buttons -- minus (:50), plus (:56) and remove (:63)
+; -- and none is given a handler: the file contains no onclick at all, and Button defaults the
+; prop to a handler that does nothing (turbobaby/ui-kit's BUTTON_ONCLICK_DEFAULT_DOES_NOTHING).
+; Mounted as it stands, it would show a line whose quantity cannot be changed and which cannot be
+; removed from that row. Recorded, not fixed; nothing mounts it, so no customer meets it today.
+; CORRECTED 2026-09-30 (review of round 7): this section restated three facts it does not own --
+; the wasm32 gate, by its lines in src/lib.rs; the media predicate's three clauses, modelled here as
+; cart_line_image_is_drawn over three prefix flags; and Button's default handler, by its lines in
+; src/ui/components/button.rs. Each is now read from its owner by name (REUSES_UI_KIT_ID,
+; REUSES_WEBAPP_BRIDGE_ID above), and the model is dropped (RESTATEMENT_DROPPED_ON_2026_09_30). What
+; stays this file's is the line's own: the ?v=2 suffix, the emptiness test that changes nothing, the
+; price note and the handler-less controls.
+pub const CART_LINE_COMPONENT_SOURCE : str = "src/ui/components/cart_item.rs";
+pub const CART_LINE_COMPONENT_SOURCE_LINES : u8 = 71;
+pub const CART_LINE_COMPONENT : str = "CartItemComponent";
+pub const CART_LINE_COMPONENT_MEASURED_AT : str = "2026-09-29";
+pub const CART_LINE_COMPONENT_IS_COMPILED_FOR_THE_BROWSER : bool = true;
+pub const CART_LINE_COMPONENT_MOUNT_SITES : u8 = 0;
+pub const CLIENT_LINE_PRINTERS : u8 = 3;
+pub const CLIENT_LINE_PRINTERS_ROUTED : u8 = 2;
+pub const CART_LINE_COMPONENT_BUTTONS : u8 = 3;
+pub const CART_LINE_COMPONENT_BUTTONS_WITH_A_HANDLER : u8 = 0;
+pub const CART_LINE_COMPONENT_ASKS_THE_SERVED_KIND : bool = false;
+pub const CART_LINE_COMPONENT_PRICE_NOTE_KEY : str = "T_BIKE_PRICE_ON_REQUEST";
+pub const CART_LINE_COMPONENT_IMAGE_SUFFIX : str = "?v=2";
+pub const CART_LINE_COMPONENT_BUILD_PREMISE_OWNER_DECLS : [2]str = ["WASM_GATE_SITE", "HOST_SUITE_COMPILES_THIS_HALF"];
+pub const CART_LINE_IMAGE_RULE_SITE : str = "src/ui/components/cart_item.rs:16-20 (at 55a6664)";
+pub const CART_LINE_IMAGE_RULE_OWNER_DECLS : [2]str = ["media_url_is_shown", "MEDIA_PREDICATE_SITES"];
+pub const CART_LINE_IMAGE_RULE_ADDS_AN_EMPTINESS_TEST : bool = true;
+pub const CART_LINE_IMAGE_EMPTINESS_TEST_CHANGES_AN_ANSWER : bool = false;
+pub const CART_LINE_BUTTON_DEFAULT_OWNER_DECL : str = "BUTTON_ONCLICK_DEFAULT_DOES_NOTHING";
+; The copy goes and the owner stays: the three-flag model of the predicate that stood here on
+; 2026-09-29 is listed by name, so a grep for it lands on this line.
+pub const RESTATEMENT_DROPPED_ON_2026_09_30 : [1]str = ["cart_line_image_is_drawn"];
+
+; A control changes the cart only when it has a handler AND the component is on a screen. Neither
+; holds today, and either alone is not enough.
+pub fn cart_line_control_changes_the_cart(control_has_a_handler: bool, component_is_mounted: bool) bool {
+  return control_has_a_handler and component_is_mounted;
+}
+
+; Every line a printer can be handed came in through a way that asks the predicate, when every way
+; in asks it. That is what lets this printer skip the question.
+pub fn every_printed_line_was_asked(ways_in: u8, ways_in_asking: u8) bool {
+  return ways_in_asking == ways_in;
+}
+
+test the_line_renderer_is_compiled_and_mounted_by_nothing {
+  assert CART_LINE_COMPONENT_SOURCE == "src/ui/components/cart_item.rs";
+  assert CART_LINE_COMPONENT_SOURCE_LINES == 71;
+  assert CART_LINE_COMPONENT == "CartItemComponent";
+  assert CART_LINE_COMPONENT_MEASURED_AT == "2026-09-29";
+  assert CART_LINE_COMPONENT_IS_COMPILED_FOR_THE_BROWSER == true;
+  assert CART_LINE_COMPONENT_MOUNT_SITES == 0;
+  assert CLIENT_LINE_PRINTERS == 3;
+  assert CLIENT_LINE_PRINTERS_ROUTED + 1 == CLIENT_LINE_PRINTERS;
+  assert CLIENT_LINE_PRINTERS - CLIENT_LINE_PRINTERS_ROUTED == CART_LINE_COMPONENT_MOUNT_SITES + 1;
+}
+
+test its_three_controls_have_no_handler_and_change_nothing {
+  assert CART_LINE_COMPONENT_BUTTONS == 3;
+  assert CART_LINE_COMPONENT_BUTTONS_WITH_A_HANDLER == 0;
+  assert CART_LINE_COMPONENT_BUTTONS_WITH_A_HANDLER < CART_LINE_COMPONENT_BUTTONS;
+  assert cart_line_control_changes_the_cart(false, false) == false;
+  assert cart_line_control_changes_the_cart(false, true) == false;
+  assert cart_line_control_changes_the_cart(true, false) == false;
+  assert cart_line_control_changes_the_cart(true, true) == true;
+}
+
+test it_asks_no_served_kind_because_every_way_in_already_did {
+  assert CART_LINE_COMPONENT_ASKS_THE_SERVED_KIND == false;
+  assert every_printed_line_was_asked(CLIENT_CART_WAYS_IN, CLIENT_CART_WAYS_IN_ASKING_THE_PREDICATE) == true;
+  assert every_printed_line_was_asked(CLIENT_CART_WAYS_IN, CLIENT_CART_WAYS_IN_ASKING_THE_PREDICATE_BEFORE_THE_RECONCILIATION) == false;
+  assert CLIENT_CART_ADD_ASKS_THE_PREDICATE == true;
+  assert CART_LINES_SERVED_UNDER_A_NEUTRAL_NAME == 0;
+}
+
+test it_would_print_the_lines_own_name_picture_and_price_note {
+  assert CART_LINE_COMPONENT_PRICE_NOTE_KEY == "T_BIKE_PRICE_ON_REQUEST";
+  assert CART_LINE_COMPONENT_IMAGE_SUFFIX == "?v=2";
+  assert REUSES_PRICING_HONESTY_ID == "turbobaby/pricing-honesty";
+  // Since 2026-09-30 the picture rule is ui-kit's, read by name; the line keeps only its own site
+  // and the emptiness test that refuses nothing the kit's predicate admits.
+  assert CART_LINE_IMAGE_RULE_SITE == "src/ui/components/cart_item.rs:16-20 (at 55a6664)";
+  assert CART_LINE_IMAGE_RULE_OWNER_DECLS[0] == "media_url_is_shown";
+  assert CART_LINE_IMAGE_RULE_OWNER_DECLS[1] == "MEDIA_PREDICATE_SITES";
+  assert CART_LINE_IMAGE_RULE_ADDS_AN_EMPTINESS_TEST == true;
+  assert CART_LINE_IMAGE_EMPTINESS_TEST_CHANGES_AN_ANSWER == false;
+  assert RESTATEMENT_DROPPED_ON_2026_09_30.len == 1;
+  assert RESTATEMENT_DROPPED_ON_2026_09_30[0] == "cart_line_image_is_drawn";
+}
+
+; The three facts the renderer's section restated until 2026-09-30 are read from their owners by
+; name: the build premise from webapp-bridge, the picture rule and Button's default from ui-kit.
+test the_line_renderer_reads_the_kit_and_the_gate_from_their_owners {
+  assert REUSES_UI_KIT_ID == "turbobaby/ui-kit";
+  assert REUSES_WEBAPP_BRIDGE_ID == "turbobaby/webapp-bridge";
+  assert REUSES_UI_KIT_ID != ID;
+  assert REUSES_WEBAPP_BRIDGE_ID != ID;
+  assert REUSES_UI_KIT_ID != REUSES_WEBAPP_BRIDGE_ID;
+  assert CART_LINE_COMPONENT_BUILD_PREMISE_OWNER_DECLS[0] == "WASM_GATE_SITE";
+  assert CART_LINE_COMPONENT_BUILD_PREMISE_OWNER_DECLS[1] == "HOST_SUITE_COMPILES_THIS_HALF";
+  assert CART_LINE_BUTTON_DEFAULT_OWNER_DECL == "BUTTON_ONCLICK_DEFAULT_DOES_NOTHING";
+  assert CART_LINE_COMPONENT_IS_COMPILED_FOR_THE_BROWSER == true;
+  assert CART_LINE_COMPONENT_BUTTONS_WITH_A_HANDLER == 0;
+}
+
+invariant a_line_renderer_nothing_mounts_changes_no_cart
+  assert CART_LINE_COMPONENT_MOUNT_SITES == 0 and cart_line_control_changes_the_cart(CART_LINE_COMPONENT_BUTTONS_WITH_A_HANDLER > 0, CART_LINE_COMPONENT_MOUNT_SITES > 0) == false
+
+invariant the_printer_that_skips_the_question_is_handed_only_served_lines
+  assert CART_LINE_COMPONENT_ASKS_THE_SERVED_KIND == false and every_printed_line_was_asked(CLIENT_CART_WAYS_IN, CLIENT_CART_WAYS_IN_ASKING_THE_PREDICATE) == true

@@ -27,6 +27,10 @@ AGENT_CARD = "specs/agents/turbobaby.t27"
 # test/invariant/bench floor with the pinned compiler. Discovery supplies the tripwire. All 45 floors equal the measured counts as of 2026-09-25.
 # 46 contracts since 2026-09-26, when turbobaby/referral-credit (R3) arrived; all 46 floors equal the
 # measured counts that day.
+# 47 contracts since 2026-09-29, when turbobaby/ui-kit arrived (round 7, every source file named);
+# all 47 floors equal the measured counts that day, the sixteen contracts that round changed included.
+# Re-measured 2026-09-30 after the review of round 7: seventeen floors raised, each to the count the
+# pinned compiler measured that day, and all 47 floors equal the measurement again.
 # Re-measured 2026-09-25 for the two contracts the owner's CLICK 125 redirect decision changed:
 # availability 114 -> 120 declarations and 32 -> 34 checks, order_money 114 -> 115 declarations.
 # Re-measured 2026-09-25 again for the two contracts answer 5 of the owner's second list changed
@@ -60,8 +64,12 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         "module": "turbobaby-api-surface",
         "id": "turbobaby/api-surface",
         # Raised 2026-09-26 from 172/42 to the measured count (R1-R3, the owner's answers of 2026-09-26): the referral credit's six routes and stubs re-measured the router and the document.
-        "min_declarations": 186,
-        "min_checks": 42,
+        # Raised 2026-09-29 (round 7, every source file named) from 186/42 to the measured
+        # 205/45: src/web.rs and the two [[bin]] targets named, the stub's census bound.
+        # Raised 2026-09-30 (the review of round 7) from 205/45 to the measured
+        # 208/45: the browser build target read from webapp-bridge by name (one edge).
+        "min_declarations": 208,
+        "min_checks": 45,
     },
     "specs/turbobaby/availability.t27": {
         "module": "availability",
@@ -72,14 +80,20 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         # Raised 2026-09-26 from 141/37 when the owner's answer to question I (allow booking; a
         # manager confirms availability) took the unit count out of the Book control (12
         # declarations, customer_may_book and 1 test).
-        "min_declarations": 154,
-        "min_checks": 38,
+        # Raised 2026-09-29 (round 7, every source file named) from 154/38 to the measured
+        # 170/41: src/ui/components/bike_grid.rs named, the card grid's mount census.
+        # Raised 2026-09-30 (the review of round 7) from 170/41 to the measured
+        # 173/42: the card grid's build premise read from webapp-bridge by name (one edge).
+        "min_declarations": 173,
+        "min_checks": 42,
     },
     "specs/turbobaby/bike_catalog.t27": {
         "module": "bike-catalog",
         "id": "turbobaby/bike-catalog",
-        "min_declarations": 97,
-        "min_checks": 41,
+        # Raised 2026-09-29 (round 7, every source file named) from 97/41 to the measured
+        # 138/50: the family and service-record entity mirrors named and their fields counted.
+        "min_declarations": 138,
+        "min_checks": 50,
     },
     "specs/turbobaby/bot_surface.t27": {
         "module": "turbobaby-bot-surface",
@@ -92,8 +106,12 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         "id": "turbobaby/cart-persistence",
         # 266/52 with the kept-cart change of 2026-09-26; 276/54 once that change was
         # reconciled the same day with the owner's answer 3 (one rule for a kept cart).
-        "min_declarations": 276,
-        "min_checks": 54,
+        # Raised 2026-09-29 (round 7, every source file named) from 276/54 to the measured
+        # 298/60: src/ui/components/cart_item.rs named, its mounts and handler-less buttons counted.
+        # Raised 2026-09-30 (the review of round 7) from 298/60 to the measured
+        # 308/61: the line renderer reads the media predicate, Button's default and the wasm gate from ui-kit and webapp-bridge; its three-flag copy of the predicate dropped.
+        "min_declarations": 308,
+        "min_checks": 61,
     },
     "specs/turbobaby/catalog_api.t27": {
         "module": "catalog-api",
@@ -108,8 +126,10 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         # 159 on 2026-09-26 (R3, client lane): the admin screen's length re-measured after the
         # Loyalty tab's referral sub-tab, the 5910 kept under ADMIN_SCREEN_LINES_BEFORE_2026_09_26.
         # Merged 2026-09-26 on the integration branch (t27/round5), both kept: 160/44, measured.
-        "min_declarations": 160,
-        "min_checks": 44,
+        # Raised 2026-09-30 (the review of round 7) from 160/44 to the measured
+        # 173/47: the image address a family write may store (validate_url's five prefixes), moved here from ui-kit.
+        "min_declarations": 173,
+        "min_checks": 47,
     },
     "specs/turbobaby/checkout_contact.t27": {
         "module": "turbobaby-checkout-contact",
@@ -128,14 +148,22 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         # again the same day from 248 to 253 when the sentence was reworded to hold for every
         # 409 (5 declarations; no check added). 249 on its own branch the same day: the retired
         # age body code's count before that day (the 20+ box, removed); merged 2026-09-26, 254.
-        "min_declarations": 254,
-        "min_checks": 58,
+        # Raised 2026-09-29 (round 7, every source file named) from 254/58 to the measured
+        # 294/67: src/ui/components/error_banner.rs named, its mounts and empty-message guard counted.
+        # Raised 2026-09-30 (the review of round 7) from 294/67 to the measured
+        # 298/68: the banner's build premise read from webapp-bridge by name (one edge); its first prop re-cited at :16.
+        "min_declarations": 298,
+        "min_checks": 68,
     },
     "specs/turbobaby/commerce.t27": {
         "module": "commerce",
         "id": "turbobaby/commerce",
-        "min_declarations": 168,
-        "min_checks": 57,
+        # Raised 2026-09-29 (round 7, every source file named) from 168/57 to the measured
+        # 254/75: the order, key, fraud-event and block-history mirrors named, the auto-block and the block gate's census recorded.
+        # Raised 2026-09-30 (the review of round 7) from 254/75 to the measured
+        # 257/76: the one stale attribution of the block gate named (turbobaby/referral-credit).
+        "min_declarations": 257,
+        "min_checks": 76,
     },
     "specs/turbobaby/customer_surface.t27": {
         "module": "turbobaby-customer-surface",
@@ -182,14 +210,20 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/happy_hour.t27": {
         "module": "turbobaby-happy-hour",
         "id": "turbobaby/happy-hour",
-        "min_declarations": 167,
-        "min_checks": 41,
+        # Raised 2026-09-30 (the review of round 7) from 167/41 to the measured
+        # 170/42: SEEDED_CONFIG_KEYS bound to the seed as a set, noted at the end of the file.
+        "min_declarations": 170,
+        "min_checks": 42,
     },
     "specs/turbobaby/http_cache.t27": {
         "module": "turbobaby-http-cache",
         "id": "turbobaby/http-cache",
-        "min_declarations": 284,
-        "min_checks": 62,
+        # Raised 2026-09-29 (round 7, every source file named) from 284/62 to the measured
+        # 320/71: src/ui/prefetch.rs named, the warmed route and its one firing hover counted.
+        # Raised 2026-09-30 (the review of round 7) from 320/71 to the measured
+        # 324/72: the prefetch's build premise read from webapp-bridge by name (one edge).
+        "min_declarations": 324,
+        "min_checks": 72,
     },
     "specs/turbobaby/legacy_retirement.t27": {
         "module": "turbobaby-legacy-retirement",
@@ -208,8 +242,14 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         # carried was retired (sixteen LEFTOVERS_2026_09_26_* declarations, one test and one
         # invariant). Merged 2026-09-26 on the integration branch (round 4), the measured 338/69; 341/69 after its review (the welcome sentence stored, not served: +4 WELCOME_SENTENCE_* flags, -1 count).
         # Raised 2026-09-26 from 341/69 to the measured count (R1-R3, the owner's answers of 2026-09-26): R1 and R2 recorded, and the welcome credit's writer retired by R3.
-        "min_declarations": 360,
-        "min_checks": 73,
+        # Raised 2026-09-29 (round 7, every source file named) from 360/73 to the measured
+        # 532/92: twenty-one legacy files named and classified, the kept quest's defects recorded.
+        # 536/92 once round 7 was integrated the same day: the entity guard's false green is read
+        # from schema-provenance by name (REUSES_SCHEMA_PROVENANCE_ID and three declarations).
+        # Raised 2026-09-30 (the review of round 7) from 536/92 to the measured
+        # 545/92: the detail modal's copy of the media predicate dropped for ui-kit's, the wasm gate read from webapp-bridge, and the entity guard read by five names.
+        "min_declarations": 545,
+        "min_checks": 92,
     },
     "specs/turbobaby/locale_policy.t27": {
         "module": "turbobaby-locale-policy",
@@ -236,15 +276,21 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         # Raised 2026-09-26 (round 6) to the measured 161/36: the owner's answer on the referral top
         # list retired the four keys only the list used, named by five declarations with the two
         # counts before it kept under _BEFORE_THE_TOP_LIST_ANSWER names.
-        "min_declarations": 161,
-        "min_checks": 36,
+        # Raised 2026-09-29 (round 7, every source file named) from 161/36 to the measured
+        # 189/41: src/db/entities/user.rs named, the language column's width against the write's truncation.
+        "min_declarations": 189,
+        "min_checks": 41,
     },
     "specs/turbobaby/loyalty_ledger.t27": {
         "module": "turbobaby-loyalty-ledger",
         "id": "turbobaby/loyalty-ledger",
         # Raised 2026-09-26 from 206/47 to the measured count (R1-R3, the owner's answers of 2026-09-26): R1 and R2 split the route table, and R3 removed three paired credits.
-        "min_declarations": 219,
-        "min_checks": 49,
+        # Raised 2026-09-29 (round 7, every source file named) from 219/49 to the measured
+        # 297/61: src/db/loyalty.rs and the loyalty_config and loyalty_profile mirrors named.
+        # Raised 2026-09-30 (the review of round 7) from 297/61 to the measured
+        # 298/61: the happy-hour share of the seed marked a copy of SEEDED_CONFIG_KEYS, the nine defaults keys bound.
+        "min_declarations": 298,
+        "min_checks": 61,
     },
     "specs/turbobaby/market_profile.t27": {
         "module": "turbobaby-market",
@@ -342,8 +388,10 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         # Raised 2026-09-26 (round 6) from 148/24 to the measured 155/26: the owner's answer on the
         # base of the 10% (after the discount, the net base as built), five declarations, one test
         # and one invariant.
-        "min_declarations": 155,
-        "min_checks": 26,
+        # Raised 2026-09-30 (the review of round 7) from 155/26 to the measured
+        # 160/27: check_not_blocked credited to commerce's BLOCK_GATE, not to request-identity.
+        "min_declarations": 160,
+        "min_checks": 27,
     },
     "specs/turbobaby/referral_program.t27": {
         "module": "turbobaby-referral-program",
@@ -352,14 +400,22 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         # Raised 2026-09-26 (round 6) from 289/62 to the measured 318/65: the owner's answer on the
         # referral top list (the address admin-only, the list off the Mini App, the /refstats label):
         # twenty-six declarations, two tests and one invariant.
-        "min_declarations": 318,
-        "min_checks": 65,
+        # Raised 2026-09-29 (round 7, every source file named) from 318/65 to the measured
+        # 347/72: src/ui/pages/mod.rs and the referrals screen named, the page's mounts and entry points counted.
+        # Raised 2026-09-30 (the review of round 7) from 347/72 to the measured
+        # 351/73: the two client files' build premise read from webapp-bridge by name (one edge).
+        "min_declarations": 351,
+        "min_checks": 73,
     },
     "specs/turbobaby/rental_terms.t27": {
         "module": "rental-terms",
         "id": "turbobaby/rental-terms",
-        "min_declarations": 190,
-        "min_checks": 62,
+        # Raised 2026-09-29 (round 7, every source file named) from 190/62 to the measured
+        # 229/72: the rental_term and class_discount mirrors named, the stored ceiling in both homes.
+        # Raised 2026-09-30 (the review of round 7) from 229/72 to the measured
+        # 234/73: the class table's fifth reader, the order check, and full paths in four citations.
+        "min_declarations": 234,
+        "min_checks": 73,
     },
     "specs/turbobaby/request_identity.t27": {
         "module": "turbobaby-request-identity",
@@ -367,8 +423,12 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         # Raised 2026-09-26 from 155/30 to the measured count (R1-R3, the owner's answers of 2026-09-26): the gate census re-measured and referral-credit added as a consumer.
         # Raised 2026-09-26 (round 6) from 161/30 to the measured 164/30: the census re-measured
         # after the referral leaderboard's admin gate (three declarations).
-        "min_declarations": 164,
-        "min_checks": 30,
+        # Raised 2026-09-29 (round 7, every source file named) from 164/30 to the measured
+        # 191/36: src/api/users.rs named, the owner-gated echo's route, steps and reads.
+        # Raised 2026-09-30 (the review of round 7) from 191/36 to the measured
+        # 197/37: the echo route names the owners of its id bound and its documentation census.
+        "min_declarations": 197,
+        "min_checks": 37,
     },
     "specs/turbobaby/ride_game.t27": {
         "module": "ride-game",
@@ -393,14 +453,31 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         "module": "turbobaby-schema-provenance",
         "id": "turbobaby/schema-provenance",
         # Raised 2026-09-26 from 233/51 to the measured count (R1-R3, the owner's answers of 2026-09-26): migration 089 took the next number.
-        "min_declarations": 241,
-        "min_checks": 51,
+        # Raised 2026-09-29 (round 7, every source file named) from 241/51 to the measured
+        # 289/60: src/db/entities/mod.rs named, the entity guard's spelling-only passes recorded.
+        # Raised 2026-09-30 (the review of round 7) from 289/60 to the measured
+        # 291/60: the spec gate's manifest entry cited by key, the line reading kept.
+        "min_declarations": 291,
+        "min_checks": 60,
     },
     "specs/turbobaby/star_award.t27": {
         "module": "turbobaby-star-award",
         "id": "turbobaby/star-award",
-        "min_declarations": 113,
-        "min_checks": 43,
+        # Raised 2026-09-29 (round 7, every source file named) from 113/43 to the measured
+        # 140/50: the ledger, replay-key and balance mirrors named, the source column's width in both homes.
+        "min_declarations": 140,
+        "min_checks": 50,
+    },
+    "specs/turbobaby/ui_kit.t27": {
+        "module": "turbobaby-ui-kit",
+        "id": "turbobaby/ui-kit",
+        # New 2026-09-29 (round 7, every source file named): the shared presentational kit under
+        # src/ui/components and the dead theme module, nineteen files no contract named. Floors are
+        # the measured counts.
+        # Raised 2026-09-30 (the review of round 7) from 307/42 to the measured
+        # 322/44: the brief named as unpublished, the lazy and server-gate copies dropped for their owners, Button's default declared, two claims bound.
+        "min_declarations": 322,
+        "min_checks": 44,
     },
     "specs/turbobaby/upload_media.t27": {
         "module": "turbobaby-upload-media",
@@ -419,8 +496,12 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
     "specs/turbobaby/webapp_bridge.t27": {
         "module": "turbobaby-webapp-bridge",
         "id": "turbobaby/webapp-bridge",
-        "min_declarations": 263,
-        "min_checks": 61,
+        # Raised 2026-09-29 (round 7, every source file named) from 263/61 to the measured
+        # 360/78: src/ui/mod.rs, src/ui/api/mod.rs, src/ui/api/context.rs, src/ui/admin.rs and the no-host notice named.
+        # Raised 2026-09-30 (the review of round 7) from 360/78 to the measured
+        # 364/78: the no-host notice's third text node, the glyph, and its keys bound.
+        "min_declarations": 364,
+        "min_checks": 78,
     },
 }
 

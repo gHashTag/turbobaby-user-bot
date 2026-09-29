@@ -283,7 +283,17 @@ pub const LOYALTY_LEDGER_SUPPLIES : str = "the points ledger this credit is kept
 pub const ORDER_MONEY_SUPPLIES : str = "the order total, bonus_used and MAX_ORDER_TOTAL, which bounds a recorded rental; the credit writes none of them.";
 pub const ORDER_STATUS_SUPPLIES : str = "the completed status a linked order must hold, and the bot reject that is the one path un-completing an order.";
 pub const COMMERCE_SUPPLIES : str = "the PromptPay amount and its zero-total refusal, both unchanged.";
-pub const REQUEST_IDENTITY_SUPPLIES : str = "check_owner, check_not_blocked and check_admin, which stand behind the six routes.";
+; CORRECTED 2026-09-30 (review of round 7): this line gave check_not_blocked to request-identity. Its
+; GATE_NAMES are check_admin, check_owner and check_owner_lenient, and the block gate is not among
+; them: its census is turbobaby/commerce's BLOCK_GATE (with BLOCK_GATE_CALL_SITES), recorded there on
+; 2026-09-29 with the words that no contract owned the gate before that date. The block gate stands
+; behind the two customer routes, after check_owner (src/api/referral_credit.rs:261 and :285, at
+; 55a6664); the four admin routes are behind check_admin. The old line is kept under its _BEFORE_ name.
+pub const REQUEST_IDENTITY_SUPPLIES : str = "check_owner and check_admin, which stand behind the six routes: check_owner behind the two customer routes, check_admin behind the four admin routes.";
+pub const REQUEST_IDENTITY_SUPPLIES_BEFORE_2026_09_30 : str = "check_owner, check_not_blocked and check_admin, which stand behind the six routes.";
+pub const BLOCK_GATE_OWNER_ID : str = "turbobaby/commerce";
+pub const BLOCK_GATE_OWNER_DECL : str = "BLOCK_GATE";
+pub const BLOCK_GATE_ROUTES_HERE : u8 = 2;
 pub const MARKET_SUPPLIES : str = "the THB market and format_baht, in which the balance is shown.";
 pub const DEPOSIT_TIERS_SUPPLIES : str = "the deposit a rental charge excludes by definition.";
 pub const NOTIFICATION_QUEUE_SUPPLIES : str = "the referrer notices this credit does NOT queue: no accrual, payout or decline notice was worded.";
@@ -575,6 +585,17 @@ test the_nine_reuse_edges_are_named_by_id_and_none_is_this_file {
   assert REUSE_EDGES[7] == REUSES_DEPOSIT_TIERS_ID;
   assert REUSE_EDGES[8] == REUSES_NOTIFICATION_QUEUE_ID;
   assert REUSES_REFERRAL_PROGRAM_ID != ID;
+}
+
+; CORRECTED 2026-09-30: the block gate behind the two customer routes is named by its census owner,
+; commerce, and no longer credited to request-identity. The edge to commerce was already declared.
+test the_block_gate_is_named_by_its_census_owner_and_not_by_request_identity {
+  assert BLOCK_GATE_OWNER_ID == REUSES_COMMERCE_ID;
+  assert BLOCK_GATE_OWNER_ID != REUSES_REQUEST_IDENTITY_ID;
+  assert BLOCK_GATE_OWNER_DECL == "BLOCK_GATE";
+  assert REQUEST_IDENTITY_SUPPLIES != REQUEST_IDENTITY_SUPPLIES_BEFORE_2026_09_30;
+  assert BLOCK_GATE_ROUTES_HERE == 2;
+  assert BLOCK_GATE_ROUTES_HERE < ROUTE_COUNT;
 }
 
 test the_integration_pins_one_shape_and_names_the_retired_keys {

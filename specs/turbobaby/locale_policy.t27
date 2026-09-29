@@ -444,6 +444,72 @@ pub const PER_LANGUAGE_DEMAND_NOTE : str = "D13 states a staffing fact, not a de
 pub const UNPUBLISHED_VARIANT_TRAFFIC_IS_NOT_MEASURED : bool = true;
 pub const UNPUBLISHED_VARIANT_TRAFFIC_NOTE : str = "Reachability is proved by the pick_lang path; frequency is counted nowhere in this repository. The gap is therefore a fact about the code, never a claim about customers.";
 
+; --- The mirror of the stored preference: src/db/entities/user.rs (added 2026-09-29) -------------
+; Measured 2026-09-29 at 55a6664. STORAGE_COLUMN above names a column; this names the Rust mirror
+; every read and write of it goes through, which no contract named before this date. It maps the
+; table user_languages, and the mirror's own doc says there is no users table (:1-5). Declared at
+; src/db/entities/mod.rs:81, under the entities module of src/db/mod.rs:7, which src/lib.rs:108 and
+; src/main.rs:13 compile with the backend. Seven fields: five created by
+; migrations/001_initial.sql:2-8 and two, last_name and username, added by
+; migrations/073_user_identity.sql:13-15.
+pub const USER_ENTITY : str = "src/db/entities/user.rs";
+pub const USER_TABLE : str = "user_languages";
+pub const USER_ENTITY_DECLARED_AT : str = "src/db/entities/mod.rs:81";
+pub const USER_ENTITY_FIELD_COUNT : u8 = 7;
+pub const USER_COLUMNS_FROM_001 : u8 = 5;
+pub const USER_COLUMNS_FROM_073 : u8 = 2;
+pub const USERS_TABLE_EXISTS : bool = false;
+; Who opens the mirror: four functions. src/db/mod.rs get_user_lang (:880-897) reads the language,
+; set_user_lang (:904-927) upserts it, set_user_timezone (:934-947) writes the timezone, and
+; src/db/users.rs first_name_for (:14-29) reads a first name. Three of the four are this file's
+; subject; the fourth, and the three name columns, are turbobaby/person-naming's, whose migration
+; and writer are its STORAGE_MIGRATION and WRITER and are not restated here. That writer does not
+; open this mirror at all: it writes the three name columns in raw SQL (src/db/mod.rs:990).
+pub const REUSES_PERSON_NAMING_ID : str = "turbobaby/person-naming";
+pub const USER_ENTITY_OPENING_FUNCTIONS : u8 = 4;
+pub const USER_ENTITY_OPENING_FUNCTIONS_ON_LOCALE_OR_TIMEZONE : u8 = 3;
+pub const USER_NAME_COLUMNS : u8 = 3;
+; The other four: telegram_id, language, timezone and updated_at.
+pub const USER_COLUMNS_OUTSIDE_NAMING : u8 = 4;
+; A DEFECT, measured and not repaired (this round changes no code). The language column is
+; VARCHAR(10) (STORAGE_COLUMN), and set_user_lang truncates the code it is handed to 50
+; characters (src/db/mod.rs:907) before the upsert. A code of 11 to 50 characters therefore passes
+; the truncation and is refused by the column, so the upsert fails; the bot's language callback
+; logs that failure (src/bot/callbacks.rs:351-358) and still answers in the new language
+; (:359-362), which is not stored. The bot's own picker only ever sends the two published codes
+; (PUBLISHED_SET_REACHES_THE_CUSTOMER_AT), and whether a callback carrying another can reach
+; route_callback is Telegram's behaviour and is not measured here; so this is a shape in the code,
+; with the same standing as MISLABELLED_PAYLOAD_IS_NOT_SHIPPED. It also narrows the sentence above
+; that the store admits a code the shop does not publish: it admits one of up to ten characters.
+pub const LANGUAGE_COLUMN_WIDTH : u8 = 10;
+pub const LANGUAGE_WRITE_TRUNCATES_TO : u8 = 50;
+pub const LANGUAGE_WRITE_FITS_THE_COLUMN : bool = false;
+; The timezone column: VARCHAR(50) with DEFAULT 'Asia/Bangkok' (migrations/001_initial.sql:5),
+; truncated to 100 by its writer (src/db/mod.rs:936), which is wider than the column again. It does
+; not matter today, because set_user_timezone has no caller anywhere under src/, and nothing reads
+; the column: the mirror's field is written by a function nobody calls and read by nobody. The
+; timezone the shop runs on is the market's, turbobaby/market's TH_TIMEZONE, and the column's
+; default equals it by coincidence of two measurements, as PUBLISHED_LOCALES and TH_LANGUAGES do.
+pub const TIMEZONE_COLUMN_WIDTH : u8 = 50;
+pub const TIMEZONE_WRITE_TRUNCATES_TO : u8 = 100;
+pub const TIMEZONE_WRITER_CALL_SITES : u8 = 0;
+pub const TIMEZONE_COLUMN_READERS : u8 = 0;
+pub const STORAGE_TIMEZONE_DEFAULT : str = "Asia/Bangkok";
+pub const MARKET_TIMEZONE_FIELD : str = "turbobaby/market TH_TIMEZONE";
+
+; What the column keeps of a code the writer was handed.
+pub fn stored_code_length(code_chars: u8, truncation: u8) u8 {
+  if (code_chars > truncation) {
+    return truncation;
+  }
+  return code_chars;
+}
+
+; The write fails when what survives the truncation is still wider than the column.
+pub fn column_refuses_the_write(code_chars: u8, truncation: u8, width: u8) bool {
+  return stored_code_length(code_chars, truncation) > width;
+}
+
 // ================================================================================================
 // Predicates. Membership, resolution, and the two silences. Locale codes arrive as plain
 // strings; any decision owned by another contract would arrive as a bool, never as a restated
@@ -803,6 +869,50 @@ test the_ownership_edges_are_named_and_nothing_they_own_is_restated {
   assert DECISIONS[1] == "D14";
 }
 
+test the_user_mirror_is_named_and_closes_over_its_two_migrations {
+  assert USER_ENTITY == "src/db/entities/user.rs";
+  assert USER_TABLE == "user_languages";
+  assert USER_ENTITY_DECLARED_AT == "src/db/entities/mod.rs:81";
+  assert USER_COLUMNS_FROM_001 + USER_COLUMNS_FROM_073 == USER_ENTITY_FIELD_COUNT;
+  assert USER_ENTITY_FIELD_COUNT == 7;
+  assert USERS_TABLE_EXISTS == false;
+  assert USER_ENTITY_OPENING_FUNCTIONS_ON_LOCALE_OR_TIMEZONE < USER_ENTITY_OPENING_FUNCTIONS;
+  assert USER_NAME_COLUMNS + USER_COLUMNS_OUTSIDE_NAMING == USER_ENTITY_FIELD_COUNT;
+}
+
+test the_name_columns_belong_to_the_naming_contract {
+  assert REUSES_PERSON_NAMING_ID == "turbobaby/person-naming";
+  assert REUSES_PERSON_NAMING_ID != ID;
+  assert REUSES_PERSON_NAMING_ID != REUSES_MARKET_PROFILE_ID;
+  assert REUSES_PERSON_NAMING_ID != REUSES_PRICING_HONESTY_ID;
+}
+
+; The band the defect lives in: the two published codes fit, a code the truncation already cuts to
+; fifty is still too wide, and a truncation to the column's own width would have closed the band.
+test a_language_code_between_eleven_and_fifty_characters_is_refused_by_the_column {
+  assert LANGUAGE_COLUMN_WIDTH == 10;
+  assert LANGUAGE_WRITE_TRUNCATES_TO == 50;
+  assert LANGUAGE_WRITE_TRUNCATES_TO > LANGUAGE_COLUMN_WIDTH;
+  assert LANGUAGE_WRITE_FITS_THE_COLUMN == false;
+  assert column_refuses_the_write(2, LANGUAGE_WRITE_TRUNCATES_TO, LANGUAGE_COLUMN_WIDTH) == false;
+  assert column_refuses_the_write(10, LANGUAGE_WRITE_TRUNCATES_TO, LANGUAGE_COLUMN_WIDTH) == false;
+  assert column_refuses_the_write(11, LANGUAGE_WRITE_TRUNCATES_TO, LANGUAGE_COLUMN_WIDTH) == true;
+  assert column_refuses_the_write(200, LANGUAGE_WRITE_TRUNCATES_TO, LANGUAGE_COLUMN_WIDTH) == true;
+  assert stored_code_length(200, LANGUAGE_WRITE_TRUNCATES_TO) == LANGUAGE_WRITE_TRUNCATES_TO;
+  assert column_refuses_the_write(200, LANGUAGE_COLUMN_WIDTH, LANGUAGE_COLUMN_WIDTH) == false;
+  assert STORAGE_CONSTRAINS_THE_PUBLISHED_SET == false;
+}
+
+; The same gap on the timezone column, with nothing to reach it: no caller, no reader.
+test the_timezone_column_has_no_live_writer_and_no_reader {
+  assert TIMEZONE_WRITER_CALL_SITES == 0;
+  assert TIMEZONE_COLUMN_READERS == 0;
+  assert column_refuses_the_write(TIMEZONE_WRITE_TRUNCATES_TO, TIMEZONE_WRITE_TRUNCATES_TO, TIMEZONE_COLUMN_WIDTH) == true;
+  assert STORAGE_TIMEZONE_DEFAULT == "Asia/Bangkok";
+  assert MARKET_TIMEZONE_FIELD == "turbobaby/market TH_TIMEZONE";
+  assert REUSES_MARKET_PROFILE_ID == "turbobaby/market";
+}
+
 // ================================================================================================
 // Invariants
 // ================================================================================================
@@ -851,3 +961,7 @@ invariant the_published_set_is_measured_here_and_never_inherited_from_the_market
 
 invariant the_unmeasured_demand_and_the_unmeasured_traffic_are_refused_rather_than_guessed
   assert PER_LANGUAGE_DEMAND_MEASUREMENT_IS_NOT_SHIPPED == true and UNPUBLISHED_VARIANT_TRAFFIC_IS_NOT_MEASURED == true
+
+; Added 2026-09-29 with the user mirror: both published codes fit the column the mirror writes.
+invariant every_published_code_fits_the_stored_column
+  assert column_refuses_the_write(2, LANGUAGE_WRITE_TRUNCATES_TO, LANGUAGE_COLUMN_WIDTH) == false and PUBLISHED_LOCALE_COUNT == 2 and USER_COLUMNS_FROM_001 + USER_COLUMNS_FROM_073 == USER_ENTITY_FIELD_COUNT

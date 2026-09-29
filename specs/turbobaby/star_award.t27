@@ -336,6 +336,61 @@ pub const THE_ENDPOINT_REFUSES_A_NONPOSITIVE_AMOUNT_BEFORE_THE_TRIO_SEES_IT : bo
 pub const ANOTHER_CALLER_OF_THE_TRIO_IS_NOT_SHIPPED : bool = true;
 pub const TRIO_CALL_SITE_COUNT : u8 = 1;
 
+; --- The three tables a payout touches, and their mirrors (added 2026-09-29) ------------------
+; Measured 2026-09-29 at 55a6664. A payout reads one table and writes three, and until this date
+; no contract named any of their mirrors. All three tables are created by LEDGER_MIGRATION and by
+; no other migration (a search of migrations/ for the three names finds only that file). The
+; mirrors are declared in src/db/entities/mod.rs under the entities module of src/db/mod.rs:7,
+; which src/lib.rs:108 and src/main.rs:13 compile with the backend, and all three are live: the
+; stars router that serves /api/stars/add is merged at src/api/mod.rs:97.
+; CORRECTED 2026-09-29: the header says this file "carries no player, no balance row". It still
+; carries no player and no value of any row; from this date it names the balance TABLE and its
+; three columns, because the credit this file decides is written into it and a contract that
+; cannot name where its answer lands has not said what it decides.
+pub const MIRRORS_MEASURED_AT : str = "2026-09-29";
+pub const THIS_FILE_NAMES_THE_BALANCE_TABLE : bool = true;
+pub const THIS_FILE_NAMES_THE_BALANCE_TABLE_BEFORE_2026_09_29 : bool = false;
+; src/db/entities/stars_transaction.rs (declared at src/db/entities/mod.rs:68): the ledger,
+; migrations/042_stars_currency.sql:16-26, nine columns. It is the table the per-source window is
+; summed over: src/api/stars.rs:234-238 reads four of the nine -- the player, the source, the
+; amount and the time -- and counts only credits (amount > 0), so a debit never refunds headroom.
+pub const LEDGER_ENTITY : str = "src/db/entities/stars_transaction.rs";
+pub const LEDGER_TABLE : str = "stars_transactions";
+pub const LEDGER_COLUMNS : [9]str = ["id", "telegram_id", "amount", "balance_after", "source", "reason", "external_tx_id", "related_order_id", "created_at"];
+pub const WINDOW_SUM_READS : [4]str = ["telegram_id", "source", "amount", "created_at"];
+pub const WINDOW_SUM_COUNTS_CREDITS_ONLY : bool = true;
+; The door holds the ledger's two text widths: src/api/stars.rs:62 refuses a source longer than 50
+; and a reason longer than 100 bytes, which are the widths of 042:21-22. A byte bound is the
+; stricter of the two readings of a VARCHAR width, so nothing the door admits overflows a column.
+pub const LEDGER_SOURCE_MAX_CHARS : u8 = 50;
+pub const LEDGER_REASON_MAX_CHARS : u8 = 100;
+; Nine places in src/ insert a ledger row: this endpoint's credit and debit (src/api/stars.rs), the
+; order path's three (src/api/orders.rs), the events path's three (src/api/events.rs) and one raw
+; INSERT in the bot (src/bot/callbacks.rs:722). Only the credit of /api/stars/add writes a source
+; the caller chose; the other eight write "plot" or "events", and neither is capped, so the window
+; sum over a capped source sees this endpoint's rows and no other writer's.
+pub const LEDGER_INSERT_SITES : u8 = 9;
+pub const LEDGER_INSERT_SITES_WITH_A_CALLER_CHOSEN_SOURCE : u8 = 1;
+pub const SERVER_WRITTEN_SOURCES : [2]str = ["plot", "events"];
+; src/db/entities/stars_idempotency_key.rs (declared at src/db/entities/mod.rs:66): the replay
+; key, migrations/042_stars_currency.sql:33-38, four columns, keyed on IDEMPOTENCY_SUBJECT_FIELD
+; alone. Read at src/api/stars.rs:203 and written at :357-366 with the amount ASKED
+; (SUCCESS_BODY_ECHOES_THE_REQUESTED_AMOUNT is the same choice on the wire).
+pub const KEY_ENTITY : str = "src/db/entities/stars_idempotency_key.rs";
+pub const KEY_TABLE : str = "stars_idempotency_keys";
+pub const KEY_COLUMNS : [4]str = ["external_tx_id", "telegram_id", "amount", "created_at"];
+; src/db/entities/user_stars.rs (declared at src/db/entities/mod.rs:83): the balance a payout
+; credits, migrations/042_stars_currency.sql:8-12, three columns, one row per player, its key a
+; foreign key to loyalty_profiles (042:9). The credit upserts the row (src/api/stars.rs:294-311)
+; and then adds the allowed amount to it.
+pub const BALANCE_ENTITY : str = "src/db/entities/user_stars.rs";
+pub const BALANCE_TABLE : str = "user_stars";
+pub const BALANCE_COLUMNS : [3]str = ["telegram_id", "balance", "updated_at"];
+; One measured difference between the three mirrors and their DDL, recorded and not a defect:
+; three timestamp columns are NOT NULL in 042 (:11, :25, :37) and an Option in the mirror, so the
+; mirror is wider than the column and a read can never meet the case it allows for.
+pub const MIRROR_OPTIONS_ON_NOT_NULL_COLUMNS : u8 = 3;
+
 ; --- Tests -------------------------------------------------------------------------------------
 
 test the_capped_set_is_exactly_the_four_game_sources {
@@ -522,6 +577,60 @@ test the_deferred_absence_still_has_an_owner_and_a_declaration {
   assert CONTRACTS_DECLARING_THE_DISCRIMINATOR_ABSENCE == 1;
 }
 
+; The balance table is named from this date; the promise that no player and no row value enters
+; this file is unchanged.
+test the_three_mirrors_are_named_and_no_row_value_enters {
+  assert LEDGER_ENTITY == "src/db/entities/stars_transaction.rs";
+  assert KEY_ENTITY == "src/db/entities/stars_idempotency_key.rs";
+  assert BALANCE_ENTITY == "src/db/entities/user_stars.rs";
+  assert MIRRORS_MEASURED_AT == "2026-09-29";
+  assert THIS_FILE_NAMES_THE_BALANCE_TABLE == true;
+  assert THIS_FILE_NAMES_THE_BALANCE_TABLE_BEFORE_2026_09_29 == false;
+  assert PERSON_LEVEL_FIELDS_CARRIED.len == 0;
+  assert LEDGER_MIGRATION == "migrations/042_stars_currency.sql";
+}
+
+; The four columns the window sum reads are columns of the ledger, at the places the ledger
+; declares them. A window sum that read a column the ledger lost would stop compiling; this is
+; the contract-side half of that fact.
+test the_window_is_summed_over_four_of_the_ledgers_nine_columns {
+  assert LEDGER_COLUMNS.len == 9;
+  assert WINDOW_SUM_READS.len == 4;
+  assert WINDOW_SUM_READS[0] == LEDGER_COLUMNS[1];
+  assert WINDOW_SUM_READS[1] == LEDGER_COLUMNS[4];
+  assert WINDOW_SUM_READS[2] == LEDGER_COLUMNS[2];
+  assert WINDOW_SUM_READS[3] == LEDGER_COLUMNS[8];
+  assert WINDOW_SUM_COUNTS_CREDITS_ONLY == true;
+  assert WINDOW_HOURS == 24;
+}
+
+; The replay key is keyed on the field this file already names, and nothing else.
+test the_replay_key_table_is_keyed_on_the_subject_field_alone {
+  assert KEY_COLUMNS.len == 4;
+  assert KEY_COLUMNS[0] == IDEMPOTENCY_SUBJECT_FIELD;
+  assert LEDGER_COLUMNS[6] == IDEMPOTENCY_SUBJECT_FIELD;
+  assert BALANCE_COLUMNS.len == 3;
+  assert BALANCE_COLUMNS[0] == KEY_COLUMNS[1];
+  assert BALANCE_COLUMNS[0] == LEDGER_COLUMNS[1];
+}
+
+test the_door_holds_the_ledgers_text_widths {
+  assert LEDGER_SOURCE_MAX_CHARS == 50;
+  assert LEDGER_REASON_MAX_CHARS == 100;
+  assert EXTERNAL_TX_ID_MAX_LEN == 100;
+  assert LEDGER_SOURCE_MAX_CHARS < LEDGER_REASON_MAX_CHARS;
+}
+
+; No writer but this endpoint's credit puts a capped source into the ledger.
+test the_server_written_sources_are_never_capped {
+  assert LEDGER_INSERT_SITES == 9;
+  assert LEDGER_INSERT_SITES_WITH_A_CALLER_CHOSEN_SOURCE == 1;
+  assert SERVER_WRITTEN_SOURCES.len == 2;
+  assert source_is_capped(SERVER_WRITTEN_SOURCES[0]) == false;
+  assert source_is_capped(SERVER_WRITTEN_SOURCES[1]) == false;
+  assert MIRROR_OPTIONS_ON_NOT_NULL_COLUMNS == 3;
+}
+
 ; --- Invariants --------------------------------------------------------------------------------
 
 invariant the_capped_set_length_is_the_permission
@@ -592,3 +701,10 @@ invariant no_person_level_field_enters_this_contract
 
 invariant the_score_ledger_and_its_discriminator_belong_to_another_contract
   assert HIGH_SCORE_TABLE_IS_OWNED_HERE == false and GAME_DISCRIMINATOR_IS_OWNED_HERE == false and REUSES_GAME_SCORE_ID == "turbobaby/game-score"
+
+; Added 2026-09-29 with the three mirrors.
+invariant no_server_written_ledger_source_is_capped
+  assert source_is_capped(SERVER_WRITTEN_SOURCES[0]) == false and source_is_capped(SERVER_WRITTEN_SOURCES[1]) == false and LEDGER_INSERT_SITES_WITH_A_CALLER_CHOSEN_SOURCE == 1
+
+invariant the_window_sum_reads_ledger_columns_and_the_key_is_the_subject_field
+  assert WINDOW_SUM_READS[1] == LEDGER_COLUMNS[4] and KEY_COLUMNS[0] == IDEMPOTENCY_SUBJECT_FIELD

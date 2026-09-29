@@ -962,3 +962,86 @@ invariant the_named_largest_family_is_still_the_largest
 ; accepts, so this holds the constant, the clamp and the signature together.
 invariant the_capacity_is_the_width_of_the_slot_arrays
     assert NO_UNITS.len == MAX_UNITS_PER_FAMILY
+
+; --- The one renderer of the card: src/ui/components/bike_grid.rs (2026-09-29) --------------------
+; Appended at the end of the file so that no line citation into it moves.
+; WHY (measured 2026-09-29 at 55a6664, every citation below opened that day). The decision of
+; 2026-09-26 above calls src/ui/components/bike_card.rs "the card component no screen mounts", and
+; that sentence rests on a file no contract named. src/ui/components/bike_grid.rs (37 lines) holds
+; the ONLY place under src/ where a BikeCard is rendered (:28, keyed by the item id at :29), and
+; BikeGrid itself (:21) is mounted by nothing: under src/ its name occurs at its declaration and at
+; its re-export (src/ui/components/mod.rs:47) and nowhere else, and tests/ never names it. So the
+; card is unmounted BECAUSE the grid is, and the day a screen mounts the grid, the card's reading
+; of the offer and the rate reaches a customer through this file. Both are compiled for the browser
+; only: the ui half sits behind turbobaby/webapp-bridge's WASM_GATE_SITE, which the host suite never
+; compiles (its HOST_SUITE_COMPILES_THIS_HALF), and inside it src/ui/mod.rs:12 ->
+; src/ui/components/mod.rs:8 declare the grid. CORRECTED 2026-09-30 (review of round 7): this line
+; cited the gate itself, by its lines in src/lib.rs, and did not name its owner; the owner is named by
+; ID below (REUSES_WEBAPP_BRIDGE_ID) and CARD_GRID_IS_COMPILED_FOR_THE_BROWSER is this file's reading
+; of that premise for one file.
+; WHAT IT DOES. Layout only (its doc, :1-6). Three props: the cards (:12), an optional featured
+; family key (:15) that marks one card featured (:31), and on_add_to_cart (:17), which it forwards
+; unchanged (:32). It writes no cart itself, and the doc gives D8 as the reason: a rental line
+; carries dates and a family key, and the date pickers live on the screen. It reads no unit count
+; and decides no bookability -- whether a family may be booked is customer_may_book above, and this
+; file adds nothing to it.
+pub const CARD_GRID_SOURCE : str = "src/ui/components/bike_grid.rs";
+pub const CARD_GRID_SOURCE_LINES : u8 = 37;
+pub const CARD_SOURCE : str = "src/ui/components/bike_card.rs";
+pub const CARD_GRID_MEASURED_AT : str = "2026-09-29";
+pub const CARD_GRID_MOUNT_SITES : u8 = 0;
+pub const CARD_RENDER_SITES : u8 = 1;
+pub const CARD_RENDER_SITES_OUTSIDE_THE_GRID : u8 = 0;
+pub const CARD_RENDER_SITE : str = "src/ui/components/bike_grid.rs:28";
+pub const CARD_GRID_PROPS : u8 = 3;
+pub const CARD_GRID_WRITES_A_CART : bool = false;
+pub const CARD_GRID_READS_A_UNIT_COUNT : bool = false;
+pub const CARD_GRID_IS_COMPILED_FOR_THE_BROWSER : bool = true;
+; Added 2026-09-30: the owner of the build premise above, named by ID and by its two declarations.
+pub const REUSES_WEBAPP_BRIDGE_ID : str = "turbobaby/webapp-bridge";
+pub const CARD_GRID_BUILD_PREMISE_OWNER_DECLS : [2]str = ["WASM_GATE_SITE", "HOST_SUITE_COMPILES_THIS_HALF"];
+
+; The card reaches a customer only through a mounted grid or through a render site outside it.
+pub fn card_reaches_a_screen(grid_mount_sites: u8, card_render_sites_outside_the_grid: u8) bool {
+    return grid_mount_sites > 0 or card_render_sites_outside_the_grid > 0;
+}
+
+test the_card_is_unmounted_because_its_one_renderer_is {
+    assert CARD_GRID_SOURCE == "src/ui/components/bike_grid.rs";
+    assert CARD_GRID_SOURCE_LINES == 37;
+    assert CARD_SOURCE == "src/ui/components/bike_card.rs";
+    assert CARD_GRID_MEASURED_AT == "2026-09-29";
+    assert CARD_GRID_IS_COMPILED_FOR_THE_BROWSER == true;
+    assert CARD_GRID_MOUNT_SITES == 0;
+    assert CARD_RENDER_SITES == 1;
+    assert CARD_RENDER_SITES_OUTSIDE_THE_GRID + 1 == CARD_RENDER_SITES;
+    assert CARD_RENDER_SITE == "src/ui/components/bike_grid.rs:28";
+    assert card_reaches_a_screen(CARD_GRID_MOUNT_SITES, CARD_RENDER_SITES_OUTSIDE_THE_GRID) == false;
+    assert card_reaches_a_screen(1, CARD_RENDER_SITES_OUTSIDE_THE_GRID) == true;
+    assert card_reaches_a_screen(CARD_GRID_MOUNT_SITES, 1) == true;
+}
+
+; The build premise is webapp-bridge's, named by ID and by its two declarations; this file keeps only
+; which of its files sits behind it.
+test the_grids_build_premise_names_its_owner {
+    assert REUSES_WEBAPP_BRIDGE_ID == "turbobaby/webapp-bridge";
+    assert REUSES_WEBAPP_BRIDGE_ID != ID;
+    assert REUSES_WEBAPP_BRIDGE_ID != SEED_GATE_SPEC_READ;
+    assert CARD_GRID_BUILD_PREMISE_OWNER_DECLS.len == 2;
+    assert CARD_GRID_BUILD_PREMISE_OWNER_DECLS[0] == "WASM_GATE_SITE";
+    assert CARD_GRID_BUILD_PREMISE_OWNER_DECLS[1] == "HOST_SUITE_COMPILES_THIS_HALF";
+    assert CARD_GRID_IS_COMPILED_FOR_THE_BROWSER == true;
+}
+
+; The grid forwards the press and adds nothing to the booking rule: the count stays out of it.
+test the_grid_writes_no_cart_and_reads_no_count {
+    assert CARD_GRID_PROPS == 3;
+    assert CARD_GRID_WRITES_A_CART == false;
+    assert CARD_GRID_READS_A_UNIT_COUNT == false;
+    assert CUSTOMER_BOOKING_READS_THE_FILE == false;
+    assert customer_may_book(true, true, 0) == customer_may_book(true, true, 5);
+    assert customer_may_book(false, true, 5) == false;
+}
+
+invariant the_card_reaches_no_screen_while_its_only_renderer_is_unmounted
+    assert card_reaches_a_screen(CARD_GRID_MOUNT_SITES, CARD_RENDER_SITES_OUTSIDE_THE_GRID) == false and CARD_RENDER_SITES == 1 and CARD_GRID_READS_A_UNIT_COUNT == false

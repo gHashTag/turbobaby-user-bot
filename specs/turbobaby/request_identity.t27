@@ -862,3 +862,154 @@ invariant a_mismatched_id_is_forbidden_and_an_absent_proof_is_unauthorized
 
 invariant this_contract_takes_no_decision_from_another_contract
     assert REUSE_EDGE_COUNT == 0 and IS_OWNERSHIP_ROOT == true and CONSUMERS.len == CONSUMER_COUNT and CONSUMERS_DECLARING_THE_EDGE < CONSUMER_COUNT
+
+; --- An owner-gated echo: src/api/users.rs (2026-09-29) --------------------------------------------
+; Appended at the end of the file so that no line citation into it moves.
+; WHY (measured 2026-09-29 at 55a6664, every citation below opened that day). src/api/users.rs
+; (29 lines) was named by no contract, and its whole behaviour is this file's subject. It is
+; compiled with the backend (src/lib.rs:101-102 and src/main.rs:4-5 declare `api`, and
+; src/api/mod.rs:31 declares `pub(crate) mod users`) and merged into the API router at
+; src/api/mod.rs:99, under the /api nest at :77. It registers exactly one route, GET
+; /api/users/me/:telegram_id (:13). Its handler, get_my_profile (:18-29), does three things and in
+; this order: validate_telegram_id_param (:23), which refuses a non-positive or over-large id before
+; any proof is read -- the bound is turbobaby/validation-bounds' (ID_MAX_SAFE) and is not restated;
+; check_owner (:24), one of the GATE_CALL_SITES_OWNER counted above; and an answer carrying one
+; field, the telegram_id taken from the path (:26-28). It reads nothing else: no query, no table,
+; no configuration -- the state it is handed goes to the gate and nowhere further.
+; WHAT A 200 PROVES. The answer is the path id echoed after the owner gate admitted it, so a 200
+; says exactly what owner_gate_admits says and nothing more. Its doc comment (:17) calls the answer
+; "the authenticated user's id". With LENIENT_PATH_IS_SHIPPED true, an unsigned request carrying a
+; matching id and a fresh stamp is admitted too, so "authenticated" there means the owner gate's
+; answer, lenient path included -- the same guarantee this file already refuses to overstate for
+; every owner-gated route, and nothing weaker or stronger.
+; WHO CALLS IT: nobody in this tree. Over every tracked file outside specs/, the path string occurs
+; twice, both in src/api/users.rs -- the registration (:13) and the doc comment (:16) -- and never
+; under src/ui, tests/, assets/ or dist/. Whether the path is documented is turbobaby/api-surface's
+; census and is not restated. The route is recorded as a routed surface with no client of this
+; repository, and not as a retirement: this file owns who a request is, and the route answers only
+; that.
+pub const ECHO_ROUTE_SOURCE : str = "src/api/users.rs";
+pub const ECHO_ROUTE_SOURCE_LINES : u8 = 29;
+pub const ECHO_ROUTE_MEASURED_AT : str = "2026-09-29";
+pub const ECHO_ROUTE_MEASURED_AT_COMMIT : str = "55a6664";
+pub const ECHO_ROUTE_METHOD : str = "GET";
+pub const ECHO_ROUTE_PATH : str = "/api/users/me/:telegram_id";
+pub const ECHO_MODULE_ROUTES : [1]str = ["/users/me/:telegram_id"];
+pub const ECHO_MODULE_ROUTE_COUNT : u8 = 1;
+pub const ECHO_ROUTE_HANDLER : str = "get_my_profile";
+pub const ECHO_ROUTE_STEPS : [2]str = ["validate_telegram_id_param", "check_owner"];
+pub const ECHO_ROUTE_FIRST_CALL : str = "validate_telegram_id_param";
+pub const ECHO_ROUTE_ANSWER_FIELDS : u8 = 1;
+pub const ECHO_ROUTE_DATA_READS : u8 = 0;
+pub const ECHO_ROUTE_PATH_OCCURRENCES_IN_THE_TREE : u8 = 2;
+pub const ECHO_ROUTE_CLIENT_CALLERS : u8 = 0;
+pub const ECHO_ROUTE_ADMITS_THE_LENIENT_PATH : bool = true;
+pub const ECHO_ROUTE_ANSWER_PROVES_MORE_THAN_THE_GATE : bool = false;
+pub const ECHO_ROUTE_ID_BOUND_IS_OWNED_HERE : bool = false;
+; CORRECTED 2026-09-30 (review of round 7): the section above consumes two siblings' decisions and
+; named neither in a constant. The id bound the route checks first is turbobaby/validation-bounds'
+; (ID_MAX_SAFE, with the grammar validate_telegram_id_param applies), taken below as the input
+; id_well_formed; whether the path is documented is turbobaby/api-surface's census
+; (ROUTED_API_PATHS_NOT_DOCUMENTED). Both are named here the way READ_TRANSPORT_STATUS_OWNER_ID names
+; its owner -- by an owner constant, not a REUSES_ edge -- so REUSE_EDGE_COUNT stays 0 and this file
+; stays the ownership root: an input taken as a boolean is not a rule re-derived here.
+pub const ECHO_ROUTE_ID_BOUND_OWNER_ID : str = "turbobaby/validation-bounds";
+pub const ECHO_ROUTE_ID_BOUND_OWNER_DECL : str = "ID_MAX_SAFE";
+pub const ECHO_ROUTE_DOCUMENTATION_OWNER_ID : str = "turbobaby/api-surface";
+pub const ECHO_ROUTE_DOCUMENTATION_OWNER_DECL : str = "ROUTED_API_PATHS_NOT_DOCUMENTED";
+pub const ECHO_ROUTE_INPUTS_FROM_OTHER_CONTRACTS : u8 = 1;
+
+; The route answers the id only when the id is well formed AND the owner gate admitted the request.
+; A malformed id never reaches the gate.
+pub fn echo_route_reads_the_proof(id_well_formed: bool) bool {
+    return id_well_formed;
+}
+
+pub fn echo_route_answers_the_id(id_well_formed: bool, gate_outcome: u8) bool {
+    return id_well_formed and gate_outcome == OUTCOME_ADMITTED;
+}
+
+; The refusal numeral this file owns for the route. A malformed id is refused by the validator,
+; whose numeral is not this file's, so that arm answers HTTP_STATUS_NOT_OWNED_HERE.
+pub fn echo_route_refusal(id_well_formed: bool, gate_outcome: u8) u16 {
+    if (!id_well_formed) {
+        return HTTP_STATUS_NOT_OWNED_HERE;
+    }
+    return refusal_http_status(gate_outcome);
+}
+
+test the_echo_route_is_one_owner_gated_path {
+    assert ECHO_ROUTE_SOURCE == "src/api/users.rs";
+    assert ECHO_ROUTE_SOURCE_LINES == 29;
+    assert ECHO_ROUTE_MEASURED_AT == "2026-09-29";
+    assert ECHO_ROUTE_MEASURED_AT_COMMIT == "55a6664";
+    assert ECHO_ROUTE_METHOD == "GET";
+    assert ECHO_ROUTE_PATH == "/api/users/me/:telegram_id";
+    assert ECHO_MODULE_ROUTES.len == ECHO_MODULE_ROUTE_COUNT;
+    assert ECHO_MODULE_ROUTES[0] == "/users/me/:telegram_id";
+    assert ECHO_ROUTE_HANDLER == "get_my_profile";
+    assert ECHO_ROUTE_STEPS.len == 2;
+    assert ECHO_ROUTE_STEPS[0] == ECHO_ROUTE_FIRST_CALL;
+    assert ECHO_ROUTE_STEPS[1] == GATE_NAMES[1];
+    assert ECHO_ROUTE_STEPS[1] != GATE_NAMES[2];
+    assert ECHO_ROUTE_ANSWER_FIELDS == 1;
+    assert ECHO_ROUTE_DATA_READS == 0;
+    assert ECHO_ROUTE_ID_BOUND_IS_OWNED_HERE == false;
+    assert GATE_CALL_SITES_OWNER >= ECHO_MODULE_ROUTE_COUNT;
+}
+
+; A malformed id is turned away before the proof is read; a well-formed one gets exactly the gate's
+; answer, and the only numerals are the gate's own.
+test the_echo_answers_what_the_owner_gate_admits_and_nothing_else {
+    assert echo_route_reads_the_proof(false) == false;
+    assert echo_route_reads_the_proof(true) == true;
+    assert echo_route_answers_the_id(false, OUTCOME_ADMITTED) == false;
+    assert echo_route_answers_the_id(true, OUTCOME_ADMITTED) == true;
+    assert echo_route_answers_the_id(true, owner_gate_outcome(false, false, false)) == false;
+    assert echo_route_refusal(true, owner_gate_outcome(false, false, false)) == HTTP_UNAUTHORIZED;
+    assert echo_route_refusal(true, owner_gate_outcome(true, false, true)) == HTTP_FORBIDDEN;
+    assert echo_route_refusal(false, OUTCOME_UNAUTHORIZED) == HTTP_STATUS_NOT_OWNED_HERE;
+    assert echo_route_refusal(true, OUTCOME_ADMITTED) == HTTP_STATUS_NOT_OWNED_HERE;
+    assert ECHO_ROUTE_ANSWER_PROVES_MORE_THAN_THE_GATE == false;
+}
+
+; The lenient path reaches this route like every other owner-gated one: an unsigned request with a
+; matching id and a fresh stamp is answered with the id it sent.
+test an_unsigned_request_with_a_matching_id_gets_its_own_id_back {
+    assert ECHO_ROUTE_ADMITS_THE_LENIENT_PATH == LENIENT_PATH_IS_SHIPPED;
+    assert echo_route_answers_the_id(true, owner_gate_outcome(true, owner_gate_admits(IDENTITY_NONE, false, LENIENT_PATH_IS_SHIPPED, true, true, true), false)) == true;
+    assert echo_route_answers_the_id(true, owner_gate_outcome(true, owner_gate_admits(IDENTITY_NONE, false, false, true, true, true), false)) == false;
+    assert hmac_is_necessary_for_owner_access(LENIENT_PATH_IS_SHIPPED) == false;
+}
+
+test no_client_of_this_repository_calls_the_echo {
+    assert ECHO_ROUTE_PATH_OCCURRENCES_IN_THE_TREE == 2;
+    assert ECHO_ROUTE_CLIENT_CALLERS == 0;
+    assert ENDPOINT_TO_GATE_MAP_IS_NOT_OWNED_HERE == true;
+    assert REUSE_EDGE_COUNT == 0;
+    assert IS_OWNERSHIP_ROOT == true;
+}
+
+; CORRECTED 2026-09-30: the echo takes one decision from another contract, the id's well-formedness,
+; as the boolean id_well_formed; its owner and the documentation census's owner are named by owner
+; constants, and neither is an edge that would move this file off the root.
+test the_echo_names_the_owners_of_its_id_bound_and_its_documentation {
+    assert ECHO_ROUTE_ID_BOUND_OWNER_ID == "turbobaby/validation-bounds";
+    assert ECHO_ROUTE_ID_BOUND_OWNER_DECL == "ID_MAX_SAFE";
+    assert ECHO_ROUTE_DOCUMENTATION_OWNER_ID == "turbobaby/api-surface";
+    assert ECHO_ROUTE_DOCUMENTATION_OWNER_DECL == "ROUTED_API_PATHS_NOT_DOCUMENTED";
+    assert ECHO_ROUTE_ID_BOUND_OWNER_ID != ID;
+    assert ECHO_ROUTE_DOCUMENTATION_OWNER_ID != ID;
+    assert ECHO_ROUTE_INPUTS_FROM_OTHER_CONTRACTS == 1;
+    assert ECHO_ROUTE_ID_BOUND_IS_OWNED_HERE == false;
+    assert echo_route_reads_the_proof(false) == false;
+    assert REUSE_EDGE_COUNT == 0;
+}
+
+invariant the_echo_route_never_answers_a_request_the_owner_gate_refused
+    assert echo_route_answers_the_id(true, OUTCOME_UNAUTHORIZED) == false and echo_route_answers_the_id(true, OUTCOME_FORBIDDEN) == false and echo_route_answers_the_id(false, OUTCOME_ADMITTED) == false
+
+; RENAMED 2026-09-30 (was naming_the_echo_route_took_no_decision_from_another_contract, which was
+; false: the route takes the id's well-formedness from turbobaby/validation-bounds as an input).
+invariant naming_the_echo_route_added_no_reuse_edge_and_took_one_input_by_its_owners_name
+    assert REUSE_EDGE_COUNT == 0 and ECHO_ROUTE_ID_BOUND_IS_OWNED_HERE == false and ECHO_ROUTE_DATA_READS == 0 and ECHO_ROUTE_INPUTS_FROM_OTHER_CONTRACTS == 1 and ECHO_ROUTE_ID_BOUND_OWNER_ID != ID

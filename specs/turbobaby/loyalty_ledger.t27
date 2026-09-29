@@ -128,18 +128,26 @@ pub const REGRESSION_WITNESS : str = "tests/integration_idempotency_negative.rs"
 ;   request-identity owns the gate names and what a failed proof means. Consumed as a gate id.
 ;   market           owns the minor-digit count. Every amount below is an integer in minor units
 ;                    and the scale arrives as an argument, never as a constant here.
+;   happy-hour       owns the four happy-hour keys of the loyalty_config row this file's entity
+;                    mirror reads (its SEEDED_CONFIG_KEYS). Added 2026-09-29 with the section on
+;                    the loyalty source files near the end of this file; that section counts those
+;                    keys in the seeded blob and names none of them.
 pub const REUSES_ORDER_MONEY_ID : str = "turbobaby/order-money";
 pub const REUSES_STAR_AWARD_ID : str = "turbobaby/star-award";
 pub const REUSES_COMMERCE_ID : str = "turbobaby/commerce";
 pub const REUSES_REQUEST_IDENTITY_ID : str = "turbobaby/request-identity";
 pub const REUSES_MARKET_PROFILE_ID : str = "turbobaby/market";
-pub const REUSE_EDGE_COUNT : u8 = 5;
-pub const REUSE_EDGES : [5]str = [
+pub const REUSES_HAPPY_HOUR_ID : str = "turbobaby/happy-hour";
+; CORRECTED 2026-09-29: REUSE_EDGE_COUNT was 5; the five above are unchanged and happy-hour makes 6.
+pub const REUSE_EDGE_COUNT : u8 = 6;
+pub const REUSE_EDGE_COUNT_BEFORE_2026_09_29 : u8 = 5;
+pub const REUSE_EDGES : [6]str = [
   "turbobaby/order-money",
   "turbobaby/star-award",
   "turbobaby/commerce",
   "turbobaby/request-identity",
   "turbobaby/market",
+  "turbobaby/happy-hour",
 ];
 pub const RESTATES_THE_COMMERCE_DECISION_SET : bool = false;
 pub const DECLARES_AN_EXCHANGE_RATE : bool = false;
@@ -620,6 +628,205 @@ pub fn a_bonus_expires(expiry_is_published: bool) bool {
   return expiry_is_published;
 }
 
+; --- The three loyalty source files, named (added 2026-09-29) ----------------------------------------
+; Measured 2026-09-29 at 55a6664. Three files under src/ were named by no contract that day: an
+; uncalled tier helper and the entity mirrors of the two loyalty tables its rule concerns. They are named
+; here because this file owns the ledger's STRUCTURE -- its two sibling mirrors,
+; src/db/entities/bonus_transaction.rs and src/db/entities/loyalty_idempotency_key.rs, are cited
+; above as LEDGER_ENTITY and KEY_ENTITY -- and none of the three brings a rate into this file. The
+; first of them is the hardest test of that refusal, so it is taken first.
+; --
+; 1. src/db/loyalty.rs, 125 lines: one function and its unit tests. BUILD: backend only.
+;    src/db/mod.rs:8 declares it `pub(crate) mod loyalty`, and the db module is itself compiled only
+;    for the backend (src/lib.rs:107-108) and the native binary (src/main.rs:12-13).
+;    REACHABILITY: dead in production. calculate_tier (:22-50) carries #[allow(dead_code, ...)] at
+;    :21, and a grep of src/ and tests/ for a call finds exactly one, the file's own test helper at
+;    :67, which all eight unit tests (:80-124) go through. The comment at :17-21 says a cashback flow
+;    will call it "once they wire it up"; none has.
+;    WHAT IT HOLDS is a SECOND rule and not a copy of the live one. It takes nine arguments (:23-31),
+;    answers one of four tier names (:34, :36, :38, :40 -- three tiers and the untiered answer), and
+;    returns the larger of the tier percent and one entry of the progressive schedule, that entry
+;    picked by order count and clamped to the last one (:42-49). The live answer is not this. The live
+;    tier is a SQL CASE at src/db/orders.rs:305-316, and the live percent is cashback_pct_for_tier
+;    (src/db/orders.rs:136), called at src/db/orders.rs:351 and src/api/loyalty.rs:144: it reads ONE
+;    key per tier through RATE_SOURCE's cashback_key, takes the FIRST element when that key holds an
+;    array (src/db/orders.rs:140-145), and takes neither a maximum nor an order count. A tiered
+;    customer whose progressive entry exceeds his tier percent is paid the tier percent by the live
+;    path and would be paid the entry by this one.
+;    DEFECT, measured 2026-09-29: the comment at :56-58 says the test fixture mirrors "the prod
+;    loyalty_config JSONB defaults (see migrations/001_initial.sql)". It does not. The fixture at
+;    :59-64 holds six scalars -- three thresholds and three percents -- and the seed at
+;    migrations/001_initial.sql:89-94 holds the same six keys: FIVE differ and ONE agrees,
+;    bronze_cashback_pct. RATE_SOURCE's defaults block (src/trios/loyalty.rs:34-46) carries the seed's
+;    six values, so the fixture disagrees with it on the same five. The values themselves are not
+;    written here, because six of them side by side would be the tier table this file refuses
+;    (DECLARES_A_TIER_TABLE); the count, the key that agrees and the site are enough to find it. Not
+;    fixed: this round changes no code.
+; --
+; 2. src/db/entities/loyalty_config.rs, 36 lines: the mirror of the loyalty_config singleton. BUILD:
+;    backend only, through src/db/mod.rs:7 and src/db/entities/mod.rs:46. REACHABILITY: live, used by
+;    four modules (src/api/admin.rs, src/api/happy_hour.rs, src/api/loyalty.rs, src/api/orders.rs).
+;    Three fields (:21, :23, :29): id and config from migrations/001_initial.sql:82-85, and
+;    marketing_badges_hidden from migration 032. Every access is to row 1, as the doc at :10-11 says:
+;    five entity reads by find_by_id(1) (src/api/admin.rs:626, src/api/happy_hour.rs:58,
+;    src/api/loyalty.rs:96 and :704, src/api/orders.rs:401), four raw reads by `WHERE id = 1`
+;    (src/db/orders.rs:308, :309, :310 and :341), and three writes to id 1 (src/api/admin.rs:659-664
+;    and :673-678, src/api/loyalty.rs:772-791). The config GET is closed to customers (R2,
+;    CLOSED_READ_ROUTE_COUNT above). The seeded blob is migrations/001_initial.sql:88-102 and holds
+;    13 keys: nine are the keys RATE_SOURCE's defaults block names, and four are the happy-hour keys,
+;    which turbobaby/happy-hour reads and declares in SEEDED_CONFIG_KEYS -- counted here, named there.
+;    One SHAPE disagrees inside the blob and it is structure, not a rate: progressive_cashback is a
+;    nine-element array in the seed (:97) and a scalar in RATE_SOURCE's defaults
+;    (src/trios/loyalty.rs:42). The live reader accepts both (src/db/orders.rs:140-148); the uncalled
+;    helper above takes only a slice.
+; --
+; 3. src/db/entities/loyalty_profile.rs, 27 lines: the mirror of loyalty_profiles, the table whose
+;    bonus_balance and tier this ledger is about (BALANCE_MIGRATION). BUILD: backend only, through
+;    src/db/entities/mod.rs:50. REACHABILITY: live, used by eight modules (src/api/auth.rs,
+;    src/api/events.rs, src/api/loyalty.rs, src/api/orders.rs, src/api/stars.rs, src/db/mod.rs,
+;    src/db/orders.rs, src/db/referrals.rs). Ten fields (:9-20). The table has thirteen columns,
+;    eleven at migrations/001_initial.sql:12-22 and two added at migrations/047_age_verification.sql:5-7,
+;    so three are not mirrored: created_at, age_verified and date_of_birth. Two NOT NULL columns,
+;    total_spent and bonus_balance (migrations/001_initial.sql:13-14), are mirrored as Option<f64>
+;    (:12-13), the only widening in the struct. Unlike every other mirror named in this section it
+;    carries no schema header.
+pub const LOYALTY_SOURCE_FILES_NAMED : [3]str = [
+  "src/db/loyalty.rs",
+  "src/db/entities/loyalty_config.rs",
+  "src/db/entities/loyalty_profile.rs",
+];
+pub const LOYALTY_SOURCE_FILES_NAMED_AT : str = "2026-09-29";
+pub const LOYALTY_SOURCE_FILES_MEASURED_AT_COMMIT : str = "55a6664";
+
+; 1. The uncalled tier helper.
+pub const TIER_HELPER_SOURCE : str = "src/db/loyalty.rs";
+pub const TIER_HELPER_LINES : u16 = 125;
+pub const TIER_HELPER_MODULE_DECLARATION : str = "src/db/mod.rs:8";
+pub const TIER_HELPER_IS_BACKEND_ONLY : bool = true;
+pub const TIER_HELPER_ARGUMENT_COUNT : u8 = 9;
+pub const TIER_HELPER_OUTCOME_COUNT : u8 = 4;
+; Bound by gate 3 over src/: the one call is the test helper at :67.
+pub const TIER_HELPER_CALL_SITES : u8 = 1;
+pub const TIER_HELPER_TEST_HELPER_CALL_SITES : u8 = 1;
+pub const TIER_HELPER_DEAD_CODE_ALLOWANCES : u8 = 1;
+pub const TIER_HELPER_UNIT_TESTS : u8 = 8;
+pub const TIER_HELPER_TAKES_THE_MAX_OF_TIER_AND_PROGRESSIVE : bool = true;
+pub const TIER_HELPER_INDEXES_PROGRESSIVE_BY_ORDER_COUNT : bool = true;
+pub const LIVE_TIER_DECISION_SITE : str = "src/db/orders.rs:305-316";
+pub const LIVE_CASHBACK_READER : str = "cashback_pct_for_tier, src/db/orders.rs:136";
+pub const LIVE_CASHBACK_READER_CALL_SITES : u8 = 2;
+pub const LIVE_CASHBACK_TAKES_THE_MAX_OF_TIER_AND_PROGRESSIVE : bool = false;
+pub const LIVE_CASHBACK_INDEXES_PROGRESSIVE_BY_ORDER_COUNT : bool = false;
+pub const TIER_HELPER_IS_THE_LIVE_RULE : bool = false;
+; The fixture defect, as counts and a key name, never as values.
+pub const FIXTURE_PROVENANCE_SITE : str = "src/db/loyalty.rs:56-58";
+pub const FIXTURE_CLAIMS_TO_MIRROR_THE_SEED : bool = true;
+pub const FIXTURE_SCALARS_COMPARED : u8 = 6;
+pub const FIXTURE_SCALARS_AGREEING_WITH_THE_SEED : u8 = 1;
+pub const FIXTURE_SCALARS_DIFFERING_FROM_THE_SEED : u8 = 5;
+pub const FIXTURE_SCALARS_DIFFERING_FROM_RATE_SOURCE_DEFAULTS : u8 = 5;
+pub const FIXTURE_SCALAR_THAT_AGREES : str = "bronze_cashback_pct";
+pub const FIXTURE_PROVENANCE_COMMENT_IS_TRUE : bool = false;
+pub const FIXTURE_DEFECT_MEASURED_AT : str = "2026-09-29";
+
+; The helper's rule and the live rule, over abstract percents. Neither function carries a rate; the
+; caller supplies both percents, so the tests below compare SHAPES and never a published figure.
+pub fn helper_percent(tier_pct: u16, progressive_pct: u16) u16 {
+  if (progressive_pct > tier_pct) {
+    return progressive_pct;
+  }
+  return tier_pct;
+}
+
+pub fn live_percent(is_tiered: bool, tier_pct: u16, first_progressive_pct: u16) u16 {
+  if (is_tiered) {
+    return tier_pct;
+  }
+  return first_progressive_pct;
+}
+
+; src/db/loyalty.rs:42-48: no order reads no entry; otherwise the entry is orders - 1, clamped to the
+; last index of the schedule. The empty schedule is answered with 0, as unwrap_or(0.0) at :45 does.
+pub fn helper_progressive_index(order_count: u16, schedule_len: u16) u16 {
+  if (schedule_len == 0) {
+    return 0;
+  }
+  if (order_count == 0) {
+    return 0;
+  }
+  if (order_count > schedule_len) {
+    return schedule_len - 1;
+  }
+  return order_count - 1;
+}
+
+pub fn a_fixture_mirrors_its_source(scalars_differing: u8) bool {
+  return scalars_differing == 0;
+}
+
+; 2. The loyalty_config mirror.
+pub const CONFIG_ENTITY : str = "src/db/entities/loyalty_config.rs";
+pub const CONFIG_ENTITY_LINES : u16 = 36;
+pub const CONFIG_TABLE : str = "loyalty_config";
+; Bound by gate 3: the Model's field names, in order.
+pub const CONFIG_ENTITY_FIELDS : [3]str = ["id", "config", "marketing_badges_hidden"];
+pub const CONFIG_SINGLETON_ROW_ID : u8 = 1;
+pub const CONFIG_ENTITY_READS_OF_ROW_ONE : u8 = 5;
+pub const CONFIG_RAW_READS_OF_ROW_ONE : u8 = 4;
+pub const CONFIG_WRITES_TO_ROW_ONE : u8 = 3;
+pub const CONFIG_ACCESSES_TO_ANOTHER_ROW : u8 = 0;
+; Bound by gate 3: modules naming the entity path.
+pub const CONFIG_ENTITY_MODULES : u8 = 4;
+pub const CONFIG_SEED_SITE : str = "migrations/001_initial.sql:88-102";
+; Bound by gate 3: the keys of the one JSON object migrations/001_initial.sql seeds.
+pub const CONFIG_SEED_KEY_COUNT : u8 = 13;
+; Bound by gate 3 since 2026-09-30: the keys RATE_SOURCE's defaults block names
+; (src/trios/loyalty.rs:36-44, at 55a6664), which are nine of the seed's thirteen.
+pub const CONFIG_SEED_KEYS_NAMED_BY_RATE_SOURCE_DEFAULTS : u8 = 9;
+; CORRECTED 2026-09-30 (review of round 7): the four happy-hour keys are turbobaby/happy-hour's
+; SEEDED_CONFIG_KEYS, and the 4 below is the length of that list, carried here as a marked COPY and
+; not as this file's count. It is not bound on its own: the total and the nine are, gate 3 binds the
+; owner's list to the same seed row, and the split test below is what makes a one-sided edit red.
+pub const CONFIG_SEED_KEYS_READ_BY_HAPPY_HOUR : u8 = 4;
+pub const CONFIG_SEED_KEYS_READ_BY_HAPPY_HOUR_IS_A_COPY : bool = true;
+pub const HAPPY_HOUR_KEY_DECLARATION : str = "SEEDED_CONFIG_KEYS";
+pub const PROGRESSIVE_KEY_SHAPE_AGREES_BETWEEN_SEED_AND_DEFAULTS : bool = false;
+pub const LIVE_CASHBACK_READER_ACCEPTS_BOTH_SHAPES : bool = true;
+
+pub fn config_accesses_are_one_row(accesses_to_another_row: u8) bool {
+  return accesses_to_another_row == 0;
+}
+
+; 3. The loyalty_profiles mirror.
+pub const PROFILE_ENTITY : str = "src/db/entities/loyalty_profile.rs";
+pub const PROFILE_ENTITY_LINES : u16 = 27;
+pub const PROFILE_TABLE : str = "loyalty_profiles";
+; Bound by gate 3: the Model's field names, in order.
+pub const PROFILE_ENTITY_FIELDS : [10]str = [
+  "telegram_id",
+  "total_spent",
+  "bonus_balance",
+  "tier",
+  "referral_code",
+  "referred_by",
+  "referral_count",
+  "first_purchase_at",
+  "manager_telegram_id",
+  "is_blocked",
+];
+pub const PROFILE_TABLE_COLUMNS : u8 = 13;
+pub const PROFILE_TABLE_COLUMNS_IN_001 : u8 = 11;
+pub const PROFILE_TABLE_COLUMNS_ADDED_BY_047 : u8 = 2;
+pub const PROFILE_COLUMNS_NOT_MIRRORED : [3]str = ["created_at", "age_verified", "date_of_birth"];
+pub const PROFILE_NOT_NULL_COLUMNS_MIRRORED_AS_OPTION : [2]str = ["total_spent", "bonus_balance"];
+; Bound by gate 3: modules naming the entity path.
+pub const PROFILE_ENTITY_MODULES : u8 = 8;
+pub const PROFILE_ENTITY_CARRIES_A_SCHEMA_HEADER : bool = false;
+
+pub fn a_mirror_accounts_for_every_column(fields: u8, not_mirrored: u8, columns: u8) bool {
+  return fields + not_mirrored == columns;
+}
+
 ; --- Tests -------------------------------------------------------------------------------------------
 
 test the_route_table_is_eight_registrations_over_seven_paths {
@@ -931,6 +1138,132 @@ test reuse_edges_are_declared_and_nothing_is_restated {
   assert NAMED_IN_THE_IDENTITY_CONSUMER_SNAPSHOT == true;
 }
 
+; Added 2026-09-29: the sixth edge, and the five before it kept as the reading they were.
+test the_happy_hour_edge_is_the_sixth_and_names_its_keys_by_declaration {
+  assert REUSE_EDGE_COUNT == 6;
+  assert REUSE_EDGE_COUNT_BEFORE_2026_09_29 + 1 == REUSE_EDGE_COUNT;
+  assert REUSE_EDGES[5] == REUSES_HAPPY_HOUR_ID;
+  assert REUSES_HAPPY_HOUR_ID == "turbobaby/happy-hour";
+  assert REUSES_HAPPY_HOUR_ID != ID;
+  assert HAPPY_HOUR_KEY_DECLARATION == "SEEDED_CONFIG_KEYS";
+}
+
+; --- The three loyalty source files, checked --------------------------------------------------------
+
+test the_three_loyalty_source_files_are_named_with_the_day_and_commit {
+  assert LOYALTY_SOURCE_FILES_NAMED.len == 3;
+  assert LOYALTY_SOURCE_FILES_NAMED[0] == TIER_HELPER_SOURCE;
+  assert LOYALTY_SOURCE_FILES_NAMED[1] == CONFIG_ENTITY;
+  assert LOYALTY_SOURCE_FILES_NAMED[2] == PROFILE_ENTITY;
+  assert LOYALTY_SOURCE_FILES_NAMED_AT == "2026-09-29";
+  assert LOYALTY_SOURCE_FILES_MEASURED_AT_COMMIT == "55a6664";
+  assert TIER_HELPER_LINES == 125;
+  assert CONFIG_ENTITY_LINES == 36;
+  assert PROFILE_ENTITY_LINES == 27;
+}
+
+; The helper is compiled and called by nothing but its own tests. The one call is the test helper, so
+; the production count is the total less that one, and it is zero.
+test the_tier_helper_is_compiled_for_the_backend_and_dead_in_production {
+  assert TIER_HELPER_IS_BACKEND_ONLY == true;
+  assert TIER_HELPER_MODULE_DECLARATION == "src/db/mod.rs:8";
+  assert TIER_HELPER_CALL_SITES - TIER_HELPER_TEST_HELPER_CALL_SITES == 0;
+  assert TIER_HELPER_DEAD_CODE_ALLOWANCES == 1;
+  assert TIER_HELPER_UNIT_TESTS == 8;
+  assert TIER_HELPER_ARGUMENT_COUNT == 9;
+  assert TIER_HELPER_OUTCOME_COUNT == 4;
+  assert TIER_HELPER_IS_THE_LIVE_RULE == false;
+}
+
+; The two rules on the same abstract inputs. They agree while the tier percent is the larger and part
+; the moment the progressive entry is, which is the case the helper exists to decide.
+test the_helper_takes_a_maximum_and_the_live_reader_does_not {
+  assert helper_percent(2, 1) == 2;
+  assert live_percent(true, 2, 1) == 2;
+  assert helper_percent(1, 2) == 2;
+  assert live_percent(true, 1, 2) == 1;
+  assert helper_percent(1, 2) != live_percent(true, 1, 2);
+  assert live_percent(false, 1, 2) == 2;
+  assert TIER_HELPER_TAKES_THE_MAX_OF_TIER_AND_PROGRESSIVE == true;
+  assert LIVE_CASHBACK_TAKES_THE_MAX_OF_TIER_AND_PROGRESSIVE == false;
+  assert LIVE_CASHBACK_READER_CALL_SITES == 2;
+}
+
+; src/db/loyalty.rs:42-48 on the three shapes its own tests exercise: an order count inside the
+; schedule, one past its end (the clamp at :43, unit test :115-118), and no order at all.
+test the_helper_indexes_the_schedule_by_order_count_and_the_live_reader_reads_the_first {
+  assert helper_progressive_index(1, 3) == 0;
+  assert helper_progressive_index(3, 3) == 2;
+  assert helper_progressive_index(10, 2) == 1;
+  assert helper_progressive_index(0, 9) == 0;
+  assert helper_progressive_index(4, 0) == 0;
+  assert TIER_HELPER_INDEXES_PROGRESSIVE_BY_ORDER_COUNT == true;
+  assert LIVE_CASHBACK_INDEXES_PROGRESSIVE_BY_ORDER_COUNT == false;
+  assert LIVE_CASHBACK_READER_ACCEPTS_BOTH_SHAPES == true;
+  assert PROGRESSIVE_KEY_SHAPE_AGREES_BETWEEN_SEED_AND_DEFAULTS == false;
+}
+
+; The fixture defect, recorded without a single rate. The counts partition the six scalars, the claim
+; the comment makes is false by them, and naming the helper did not make this file a tier table.
+test the_fixture_does_not_mirror_the_seed_it_names {
+  assert FIXTURE_CLAIMS_TO_MIRROR_THE_SEED == true;
+  assert FIXTURE_SCALARS_AGREEING_WITH_THE_SEED + FIXTURE_SCALARS_DIFFERING_FROM_THE_SEED == FIXTURE_SCALARS_COMPARED;
+  assert FIXTURE_SCALARS_COMPARED == 6;
+  assert FIXTURE_SCALARS_DIFFERING_FROM_THE_SEED == 5;
+  assert FIXTURE_SCALARS_DIFFERING_FROM_RATE_SOURCE_DEFAULTS == FIXTURE_SCALARS_DIFFERING_FROM_THE_SEED;
+  assert FIXTURE_SCALAR_THAT_AGREES == "bronze_cashback_pct";
+  assert a_fixture_mirrors_its_source(FIXTURE_SCALARS_DIFFERING_FROM_THE_SEED) == false;
+  assert a_fixture_mirrors_its_source(0) == true;
+  assert a_fixture_mirrors_its_source(FIXTURE_SCALARS_DIFFERING_FROM_THE_SEED) == FIXTURE_PROVENANCE_COMMENT_IS_TRUE;
+  assert FIXTURE_PROVENANCE_SITE == "src/db/loyalty.rs:56-58";
+  assert FIXTURE_DEFECT_MEASURED_AT == LOYALTY_SOURCE_FILES_NAMED_AT;
+  assert DECLARES_A_TIER_TABLE == false;
+  assert DECLARES_A_CASHBACK_PERCENT == false;
+}
+
+test the_loyalty_config_mirror_is_one_row_three_fields_and_a_thirteen_key_seed {
+  assert CONFIG_ENTITY_FIELDS.len == 3;
+  assert CONFIG_ENTITY_FIELDS[0] == "id";
+  assert CONFIG_ENTITY_FIELDS[2] == "marketing_badges_hidden";
+  assert CONFIG_TABLE == "loyalty_config";
+  assert CONFIG_SINGLETON_ROW_ID == 1;
+  assert CONFIG_ENTITY_READS_OF_ROW_ONE + CONFIG_RAW_READS_OF_ROW_ONE == 9;
+  assert CONFIG_WRITES_TO_ROW_ONE == 3;
+  assert config_accesses_are_one_row(CONFIG_ACCESSES_TO_ANOTHER_ROW) == true;
+  assert config_accesses_are_one_row(1) == false;
+  assert CONFIG_ENTITY_MODULES == 4;
+  assert CONFIG_SEED_SITE == "migrations/001_initial.sql:88-102";
+  assert CONFIG_SEED_KEYS_NAMED_BY_RATE_SOURCE_DEFAULTS + CONFIG_SEED_KEYS_READ_BY_HAPPY_HOUR == CONFIG_SEED_KEY_COUNT;
+  assert CONFIG_SEED_KEY_COUNT == 13;
+  // The happy-hour share is a marked copy of the owner's list length; the nine and the total are bound.
+  assert CONFIG_SEED_KEYS_READ_BY_HAPPY_HOUR_IS_A_COPY == true;
+  assert CONFIG_SEED_KEY_COUNT - CONFIG_SEED_KEYS_NAMED_BY_RATE_SOURCE_DEFAULTS == CONFIG_SEED_KEYS_READ_BY_HAPPY_HOUR;
+  assert HAPPY_HOUR_KEY_DECLARATION == "SEEDED_CONFIG_KEYS";
+  assert CLOSED_READ_ROUTE_COUNT == 1;
+  assert RATE_SOURCE == "src/trios/loyalty.rs";
+}
+
+; Ten fields, three unmirrored columns, thirteen columns: nothing is left over. The balance is one of
+; the two NOT NULL columns the mirror reads as an Option, and it is still the binary float this file
+; records above.
+test the_loyalty_profile_mirror_accounts_for_every_column_and_widens_two {
+  assert PROFILE_ENTITY_FIELDS.len == 10;
+  assert PROFILE_TABLE == "loyalty_profiles";
+  assert PROFILE_TABLE_COLUMNS_IN_001 + PROFILE_TABLE_COLUMNS_ADDED_BY_047 == PROFILE_TABLE_COLUMNS;
+  assert a_mirror_accounts_for_every_column(PROFILE_ENTITY_FIELDS.len, PROFILE_COLUMNS_NOT_MIRRORED.len, PROFILE_TABLE_COLUMNS) == true;
+  assert a_mirror_accounts_for_every_column(PROFILE_ENTITY_FIELDS.len, PROFILE_NOT_NULL_COLUMNS_MIRRORED_AS_OPTION.len, PROFILE_TABLE_COLUMNS) == false;
+  assert PROFILE_COLUMNS_NOT_MIRRORED.len == 3;
+  assert PROFILE_COLUMNS_NOT_MIRRORED[0] == "created_at";
+  assert PROFILE_ENTITY_FIELDS[2] == "bonus_balance";
+  assert PROFILE_ENTITY_FIELDS[3] == "tier";
+  assert PROFILE_NOT_NULL_COLUMNS_MIRRORED_AS_OPTION[1] == PROFILE_ENTITY_FIELDS[2];
+  assert PROFILE_NOT_NULL_COLUMNS_MIRRORED_AS_OPTION[0] == PROFILE_ENTITY_FIELDS[1];
+  assert BALANCE_COLUMN_IS_A_BINARY_FLOAT == true;
+  assert PROFILE_ENTITY_MODULES == 8;
+  assert PROFILE_ENTITY_CARRIES_A_SCHEMA_HEADER == false;
+  assert BALANCE_MIGRATION == "migrations/001_initial.sql";
+}
+
 ; --- Invariants --------------------------------------------------------------------------------------
 
 invariant a_key_alone_decides_whether_two_requests_are_one
@@ -989,3 +1322,16 @@ invariant the_referral_credit_is_not_this_ledger
 
 invariant the_leaderboard_answers_an_admin_only_and_the_config_read_is_closed
   assert LEADERBOARD_GATE_SITES == 1 and CLOSED_READ_ROUTE_COUNT == 1 and UNGATED_ROUTE_COUNT == 1
+
+; Added 2026-09-29 with the three loyalty source files.
+invariant the_uncalled_tier_helper_is_not_the_live_rule_and_brings_no_rate
+  assert TIER_HELPER_CALL_SITES == TIER_HELPER_TEST_HELPER_CALL_SITES and TIER_HELPER_IS_THE_LIVE_RULE == false and helper_percent(1, 2) != live_percent(true, 1, 2) and DECLARES_A_TIER_TABLE == false
+
+invariant a_fixture_that_differs_from_its_seed_is_never_recorded_as_mirroring_it
+  assert a_fixture_mirrors_its_source(FIXTURE_SCALARS_DIFFERING_FROM_THE_SEED) == FIXTURE_PROVENANCE_COMMENT_IS_TRUE and FIXTURE_SCALARS_AGREEING_WITH_THE_SEED + FIXTURE_SCALARS_DIFFERING_FROM_THE_SEED == FIXTURE_SCALARS_COMPARED
+
+invariant every_loyalty_config_access_is_to_the_one_row
+  assert config_accesses_are_one_row(CONFIG_ACCESSES_TO_ANOTHER_ROW) == true and CONFIG_SINGLETON_ROW_ID == 1 and CONFIG_SEED_KEYS_NAMED_BY_RATE_SOURCE_DEFAULTS + CONFIG_SEED_KEYS_READ_BY_HAPPY_HOUR == CONFIG_SEED_KEY_COUNT
+
+invariant the_loyalty_profile_mirror_leaves_no_column_unaccounted
+  assert a_mirror_accounts_for_every_column(PROFILE_ENTITY_FIELDS.len, PROFILE_COLUMNS_NOT_MIRRORED.len, PROFILE_TABLE_COLUMNS) == true and PROFILE_ENTITY_FIELDS.len == 10 and PROFILE_COLUMNS_NOT_MIRRORED.len == 3

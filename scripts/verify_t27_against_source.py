@@ -34,7 +34,14 @@ declared, is RED. DECISIONS.md D16 is the rule -- a gate whose input can reach z
 must pin a floor, because "found nothing" and "found nothing wrong" look identical
 from the outside. The floor on the table itself is MIN_BINDINGS.
 
-WHAT A GREEN RUN DOES NOT PROVE. Re-measured 2026-09-25 on the integration of that day's owner
+WHAT A GREEN RUN DOES NOT PROVE. Re-measured 2026-09-29 on round 7 (every source file named, over
+55a6664): the table's 420 bindings cover 396 distinct (contract, constant) pairs out of 7127
+top-level `pub const` declarations across the 47 files under specs/, touching 43 of those 47
+contracts -- 5.6% of the declared constants, and 0% of the 12404 `assert` statements. At 55a6664
+itself: 288 bindings, 266 pairs of 6272 (4.2%), 11119 asserts, 42 of 46 contracts. The four
+files no row names as a contract are still the four named below; ui_kit.t27 is bound from its
+first day. The reading of 2026-09-25 follows, as it was.
+Re-measured 2026-09-25 on the integration of that day's owner
 answers (items 7, 10, 11, 12 client and server, and 13): the table's 239 bindings cover 226
 distinct (contract, constant) pairs out of 5698 top-level `pub const` declarations across the
 45 files under specs/, touching 41 of those 45 contracts -- 4.0% of the declared constants,
@@ -121,7 +128,9 @@ REPO = Path(__file__).resolve().parents[1]
 #              replica count, on the same terms. Also since 2026-09-22 a tracked gate
 #              script (scripts/verify_t27_specs.py) and a tracked .t27 that is itself the
 #              published artifact a contract reasons about (specs/agents/turbobaby.t27),
-#              both for publication.t27, again on the same terms.
+#              both for publication.t27, again on the same terms. Since 2026-09-30 also a
+#              contract's OWN .t27, for a claim the contract makes about its own text
+#              (ui_kit.SIBLING_LINE_CITATIONS_IN_THIS_FILE: no `name.t27:N` citation in it).
 #   extract    how to read the same fact out of `source`. One of:
 #                ("regex", PATTERN)        -- one capture group, a scalar.
 #                ("regex_list", PATTERN)   -- one capture group holding a list body.
@@ -357,6 +366,92 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "why": "the per-call ceiling the endpoint enforces before the cap trio is "
                "consulted at all; star_award.t27:198 declares it as the outer bound",
     },
+    # --- star_award, round 7 (2026-09-29): every source file named --------------------------------
+    # Named: the ledger, replay-key and balance mirrors (stars_transaction.rs,
+    # stars_idempotency_key.rs, user_stars.rs), and the source column's width in both its homes.
+    # Measured by hand on both sides at 55a6664 before the row was written, and planted RED
+    # once through this script: a single-file row with --source-override, a tree row in a
+    # mirror of the working tree.
+    {
+        "name": "star_award.LEDGER_COLUMNS ~ stars_transaction entity fields",
+        "spec": "specs/turbobaby/star_award.t27",
+        "const": "LEDGER_COLUMNS",
+        "source": "src/db/entities/stars_transaction.rs",
+        # Every `name: Type` field of Model, pub or not (the cart_persistence row's pattern).
+        # list_equal because the contract indexes the list (WINDOW_SUM_READS against it).
+        # Planted RED: `source` renamed.
+        "extract": ("regex_all", r"^\s*(?:pub\s+)?(\w+):\s"),
+        "relation": "list_equal",
+        "why": "the table the per-source window is summed over; the contract pins which four of "
+               "the nine the sum reads by position, so a rename or a reorder moves the fact",
+    },
+    {
+        "name": "star_award.KEY_COLUMNS ~ stars_idempotency_key entity fields",
+        "spec": "specs/turbobaby/star_award.t27",
+        "const": "KEY_COLUMNS",
+        "source": "src/db/entities/stars_idempotency_key.rs",
+        "extract": ("regex_all", r"^\s*(?:pub\s+)?(\w+):\s"),
+        "relation": "list_equal",
+        "why": "KEY_COLUMNS[0] is asserted to be IDEMPOTENCY_SUBJECT_FIELD; the replay key is keyed "
+               "on it alone, and a second key column changes what counts as a replay",
+    },
+    {
+        "name": "star_award.BALANCE_COLUMNS ~ user_stars entity fields",
+        "spec": "specs/turbobaby/star_award.t27",
+        "const": "BALANCE_COLUMNS",
+        "source": "src/db/entities/user_stars.rs",
+        "extract": ("regex_all", r"^\s*(?:pub\s+)?(\w+):\s"),
+        "relation": "list_equal",
+        "why": "the row the payout credits; the contract names it from 2026-09-29 and holds its "
+               "key to the ledger's and the replay key's player column",
+    },
+    {
+        "name": "star_award.LEDGER_SOURCE_MAX_CHARS ~ stars.rs source length guard",
+        "spec": "specs/turbobaby/star_award.t27",
+        "const": "LEDGER_SOURCE_MAX_CHARS",
+        "source": "src/api/stars.rs",
+        "extract": ("regex", r"source\.len\(\) > (\d+)"),
+        "relation": "equal",
+        "why": "the door that keeps a caller-chosen source inside the ledger column; if it ever "
+               "admits more than the column holds, the ledger insert fails inside the payout's "
+               "transaction, after the balance bump, and the whole credit answers 500",
+    },
+    {
+        "name": "star_award.LEDGER_SOURCE_MAX_CHARS ~ 042 source column width",
+        "spec": "specs/turbobaby/star_award.t27",
+        "const": "LEDGER_SOURCE_MAX_CHARS",
+        "source": "migrations/042_stars_currency.sql",
+        "extract": ("regex", r"^\s*source\s+VARCHAR\((\d+)\)"),
+        "relation": "equal",
+        "why": "the column half of the same bound; the two rows together hold the door and the "
+               "column to one number",
+    },
+    {
+        "name": "star_award.EXTERNAL_TX_ID_MAX_LEN ~ 042 replay key column width",
+        "spec": "specs/turbobaby/star_award.t27",
+        "const": "EXTERNAL_TX_ID_MAX_LEN",
+        "source": "migrations/042_stars_currency.sql",
+        "extract": ("regex", r"external_tx_id\s+VARCHAR\((\d+)\)\s+PRIMARY KEY"),
+        "relation": "equal",
+        "why": "the contract says the key's length bound IS the column width; this is the column "
+               "side of that sentence, the replay key table's primary key",
+    },
+    {
+        "name": "star_award.LEDGER_INSERT_SITES ~ src/ stars_transactions inserts",
+        "spec": "specs/turbobaby/star_award.t27",
+        "const": "LEDGER_INSERT_SITES",
+        "source": "src/**/*.rs",
+        # The entity inserts under the three aliases the tree uses (TxEntity, TxEntity2,
+        # StarsTxEntity; `\b` keeps BonusTxEntity out) plus the bot's one raw INSERT, not on a
+        # commented-out line. Measured 9. Planted RED: a tenth insert in src/api/events.rs.
+        "extract": ("tree_regex_count",
+                    NOT_IN_A_LINE_COMMENT
+                    + r"(?:\b(?:StarsTxEntity|TxEntity2?)::insert\(|INSERT INTO stars_transactions)"),
+        "relation": "equal",
+        "why": "the window sum over a capped source sees every ledger writer; the contract holds "
+               "that only one of them writes a caller-chosen source, and a new writer is a new "
+               "row the cap reads",
+    },
     # --- order money ----------------------------------------------------------------
     {
         "name": "order_money.MAX_STARS_PER_TRANSACTION ~ orders.rs MAX_STARS_PER_TX",
@@ -446,6 +541,101 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "relation": "set_equal",
         "why": "the column decides which class discount joins in 079; the API list is "
                "explicitly a duplicate of this one (src/api/bikes.rs:938-943)",
+    },
+    # --- bike_catalog, round 7 (2026-09-29): every source file named ------------------------------
+    # Named: the family and service-record mirrors (src/db/entities/bike.rs,
+    # bike_service_record.rs), and the service record's routes and uses under src/api.
+    # Measured by hand on both sides at 55a6664 before the row was written, and planted RED
+    # once through this script: a single-file row with --source-override, a tree row in a
+    # mirror of the working tree.
+    {
+        "name": "bike_catalog.FAMILY_ENTITY_FIELD_COUNT ~ bike entity fields",
+        "spec": "specs/turbobaby/bike_catalog.t27",
+        "const": "FAMILY_ENTITY_FIELD_COUNT",
+        "source": "src/db/entities/bike.rs",
+        # Every `pub name: Type` line of Model, the file's only struct; `:[ \t]` skips `::`
+        # paths and the doc lines start with `///`. Measured 20 at 55a6664 (19 from 077,
+        # for_sale from 086). Planted RED: a 21st field.
+        "extract": ("regex_count", r"^[ \t]*pub[ \t]+\w+:[ \t]"),
+        "relation": "equal",
+        "why": "the family row's width is the other half of FAMILY_COLUMNS_FROM_077 + "
+               "FAMILY_COLUMNS_FROM_086, and of the 18 the Bike DTO carries to every customer; a "
+               "column added here reaches the public catalog through From<bike::Model> unless "
+               "someone decides it should not",
+    },
+    {
+        "name": "bike_catalog.FAMILY_ROW_UNIT_OR_FORBIDDEN_FIELDS ~ bike entity absence",
+        "spec": "specs/turbobaby/bike_catalog.t27",
+        "const": "FAMILY_ROW_UNIT_OR_FORBIDDEN_FIELDS",
+        "source": "src/db/entities/bike.rs",
+        # A field of the family mirror named for a unit (unit_code, bike_unit_id) or for any
+        # entry of FORBIDDEN_UNIT_FIELDS that could be a column (sale_price_derived_from_cost is
+        # a rule, not a name, and is left out). Expected zero, so the witness is the family key
+        # field the row does carry. Planted RED: `pub plate_number: Option<String>,` added.
+        # Blind to a forbidden fact under a new name.
+        "extract": ("regex_count",
+                    r"^[ \t]*pub[ \t]+(?:unit_code|bike_unit_id|renter_name|telegram_handle|"
+                    r"phone_number|outstanding_debt|key_code|tax_date|insurance_date|"
+                    r"purchase_cost|plate_number|personal_note)[ \t]*:"),
+        "witness": r"pub key: String,",
+        "relation": "equal",
+        "why": "the family-versus-unit boundary and D14 on the one row every customer is "
+               "served: a unit identity or a private field on the family mirror is published by "
+               "the same From<bike::Model> that serves the catalog",
+    },
+    {
+        "name": "bike_catalog.SERVICE_ENTITY_FIELD_COUNT ~ service record entity fields",
+        "spec": "specs/turbobaby/bike_catalog.t27",
+        "const": "SERVICE_ENTITY_FIELD_COUNT",
+        "source": "src/db/entities/bike_service_record.rs",
+        # Same field-line count as the family row. Measured 9, all from 080.
+        "extract": ("regex_count", r"^[ \t]*pub[ \t]+\w+:[ \t]"),
+        "relation": "equal",
+        "why": "the service mirror is admin-only by this contract's rule; a field added to it is "
+               "one more fact that rule has to keep off the public row",
+    },
+    {
+        "name": "bike_catalog.SERVICE_RECORD_STATUSES ~ bikes.rs SERVICE_STATUSES",
+        "spec": "specs/turbobaby/bike_catalog.t27",
+        "const": "SERVICE_RECORD_STATUSES",
+        "source": "src/api/bikes.rs",
+        # 080 leaves the column free TEXT, so this array is its only constraint (the admin
+        # write's validator). Planted RED: a fourth status appended.
+        "extract": ("regex_list", r"const SERVICE_STATUSES:\s*\[&str;\s*\d+\]\s*=\s*\[(.*?)\]\s*;"),
+        "relation": "list_equal",
+        "why": "the whole vocabulary of a column with no CHECK; the admin screen colours rows by "
+               "these words, and a word the contract does not name is a state no contract has "
+               "said anything about",
+    },
+    {
+        "name": "bike_catalog.SERVICE_RECORD_ROUTES_OUTSIDE_ADMIN ~ src/api service-record paths",
+        "spec": "specs/turbobaby/bike_catalog.t27",
+        "const": "SERVICE_RECORD_ROUTES_OUTSIDE_ADMIN",
+        "source": "src/api/*.rs",
+        # A path literal naming a service record that does not start with /admin/. Expected
+        # zero; the witness is the admin route itself, so a renamed path or a moved router
+        # turns this red instead of leaving a blind zero. Planted RED: a public
+        # "/bike-service-records" route added to src/api/bikes.rs.
+        "extract": ("tree_regex_count", r'"/(?!admin/)[^"\n]*service-record'),
+        "witness": r'"/admin/bike-service-records"',
+        "relation": "equal",
+        "why": "public_unit_fields_exclude_private_and_service_records is only true while no "
+               "route outside /admin serves a service line; this is the route half of it",
+    },
+    {
+        "name": "bike_catalog.SERVICE_ENTITY_USE_SITES_IN_THE_API ~ src/api service entity uses",
+        "spec": "specs/turbobaby/bike_catalog.t27",
+        "const": "SERVICE_ENTITY_USE_SITES_IN_THE_API",
+        "source": "src/api/*.rs",
+        # Every path to the mirror under src/api, not in a line comment: the four admin handlers
+        # of src/api/bikes.rs (unit delete's count, list, create, delete), each behind
+        # check_admin. Planted RED: a fifth use in src/api/catalog.rs. A use moved from an
+        # admin handler into a public one keeps the total; the route row above is the one that
+        # sees the route.
+        "extract": ("tree_regex_count", NOT_IN_A_LINE_COMMENT + r"entities::bike_service_record::"),
+        "relation": "equal",
+        "why": "the mirror's own doc names a reader with no caller; the live readers are these "
+               "four admin handlers, and a new one is a new place the privacy rule must hold",
     },
     # --- game score --------------------------------------------------------------------
     {
@@ -790,6 +980,35 @@ BINDINGS: tuple[dict[str, object], ...] = (
                "unit count to a customer as if a live check had confirmed it, and a line that "
                "uses one again brings that promise back",
     },
+    # --- availability, round 7 (2026-09-29): every source file named ------------------------------
+    # Named: src/ui/components/bike_grid.rs, the card's only renderer, mounted by nothing.
+    # Measured by hand on both sides at 55a6664 before the row was written, and planted RED
+    # once through this script: a single-file row with --source-override, a tree row in a
+    # mirror of the working tree.
+    {
+        "name": "availability.CARD_GRID_MOUNT_SITES ~ src/ui census",
+        "spec": "specs/turbobaby/availability.t27",
+        "const": "CARD_GRID_MOUNT_SITES",
+        "source": "src/ui/**/*.rs",
+        # Zero; the declaration `BikeGrid(props` and the re-export at
+        # src/ui/components/mod.rs:47 carry no brace after the name. Witness: the declaration.
+        "extract": ("tree_regex_count", r"(?<![\w])BikeGrid\s*\{"),
+        "witness": r"pub fn BikeGrid\(",
+        "relation": "equal",
+        "why": "availability calls bike_card.rs the card no screen mounts, and the grid is its "
+               "only renderer; mounting the grid puts the card's offer and rate on a screen",
+    },
+    {
+        "name": "availability.CARD_RENDER_SITES ~ src/ui census",
+        "spec": "specs/turbobaby/availability.t27",
+        "const": "CARD_RENDER_SITES",
+        "source": "src/ui/**/*.rs",
+        # One: src/ui/components/bike_grid.rs:28. EditBikeCard and BikeCardData do not match.
+        "extract": ("tree_regex_count", r"(?<![\w])BikeCard\s*\{"),
+        "relation": "equal",
+        "why": "with the grid's mount count, the reason the card is unmounted; a render site "
+               "outside the grid makes it reachable without the grid",
+    },
     # --- censuses: the numbers that rot on the next endpoint -------------------------------------
     # request_identity.t27:323-333 (:312-318 until 2026-09-26) declares how many places each authorisation gate is
     # called from. The lookbehind drops the one `fn check_admin(` that is the
@@ -861,6 +1080,57 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "why": "how wide the gate surface is, not just how deep; a module that starts "
                "authorising is a module that has joined this contract's subject",
     },
+    # --- request_identity, round 7 (2026-09-29): every source file named --------------------------
+    # Named: src/api/users.rs, the owner-gated echo.
+    # Measured by hand on both sides at 55a6664 before the row was written, and planted RED
+    # once through this script: a single-file row with --source-override, a tree row in a
+    # mirror of the working tree.
+    {
+        "name": "request_identity.ECHO_MODULE_ROUTES ~ users.rs route table",
+        "spec": "specs/turbobaby/request_identity.t27",
+        "const": "ECHO_MODULE_ROUTES",
+        "source": "src/api/users.rs",
+        # :13, nested under /api at src/api/mod.rs:77.
+        "extract": ("regex_all", r"\.route\(\s*\"([^\"]+)\""),
+        "relation": "list_equal",
+        "why": "the module is one owner-gated echo; a second route there is a surface the "
+               "contract has not said who may call",
+    },
+    {
+        "name": "request_identity.ECHO_ROUTE_STEPS ~ users.rs handler order",
+        "spec": "specs/turbobaby/request_identity.t27",
+        "const": "ECHO_ROUTE_STEPS",
+        "source": "src/api/users.rs",
+        # :23 then :24, the two `?`-propagated calls of get_my_profile, in file order.
+        "extract": ("regex_all", r"^    (\w+)\([^;\n]*\)\?;\r?$"),
+        "relation": "list_equal",
+        "why": "a malformed id is refused before the proof is read; swapping the two reads the "
+               "proof of an id the validator would have refused",
+    },
+    {
+        "name": "request_identity.ECHO_ROUTE_DATA_READS ~ users.rs state use",
+        "spec": "specs/turbobaby/request_identity.t27",
+        "const": "ECHO_ROUTE_DATA_READS",
+        "source": "src/api/users.rs",
+        # Zero: the state goes to check_owner and nowhere else. Witness: that hand-off.
+        "extract": ("regex_count", r"\bstate\.\w+"),
+        "witness": r"check_owner\(&headers, &state",
+        "relation": "equal",
+        "why": "a 200 proves exactly what the owner gate admits because the route reads "
+               "nothing; a read turns the echo into a data route under the lenient path",
+    },
+    {
+        "name": "request_identity.ECHO_ROUTE_CLIENT_CALLERS ~ src/ui absence",
+        "spec": "specs/turbobaby/request_identity.t27",
+        "const": "ECHO_ROUTE_CLIENT_CALLERS",
+        "source": "src/ui/**/*.rs",
+        # Zero. Witness: the client still builds /api/ URLs, so the scan is not blind.
+        "extract": ("tree_regex_count", r"users/me"),
+        "witness": r"/api/",
+        "relation": "equal",
+        "why": "the contract records the route as having no client in this tree; a client "
+               "call makes it a live identity read",
+    },
     {
         "name": "rate_limit.PEER_ADDRESS_OCCURRENCES_IN_SRC ~ src/ absence",
         "spec": "specs/turbobaby/rate_limit.t27",
@@ -902,6 +1172,57 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "relation": "equal",
         "why": "the declared copy of the owner's figure; D15 drift is two contracts "
                "holding one measurement, and this is the check that keeps them equal",
+    },
+    # --- locale_policy, round 7 (2026-09-29): every source file named -----------------------------
+    # Named: src/db/entities/user.rs, the language column's width against set_user_lang's
+    # truncation, and the timezone writer nothing calls.
+    # Measured by hand on both sides at 55a6664 before the row was written, and planted RED
+    # once through this script: a single-file row with --source-override, a tree row in a
+    # mirror of the working tree.
+    {
+        "name": "locale_policy.USER_ENTITY_FIELD_COUNT ~ user entity fields",
+        "spec": "specs/turbobaby/locale_policy.t27",
+        "const": "USER_ENTITY_FIELD_COUNT",
+        "source": "src/db/entities/user.rs",
+        # Field lines of Model. Measured 7 (5 from 001, 2 from 073).
+        "extract": ("regex_count", r"^[ \t]*pub[ \t]+\w+:[ \t]"),
+        "relation": "equal",
+        "why": "the mirror every read and write of the stored preference goes through; the "
+               "contract closes it over USER_COLUMNS_FROM_001 + USER_COLUMNS_FROM_073",
+    },
+    {
+        "name": "locale_policy.LANGUAGE_COLUMN_WIDTH ~ 001 language column",
+        "spec": "specs/turbobaby/locale_policy.t27",
+        "const": "LANGUAGE_COLUMN_WIDTH",
+        "source": "migrations/001_initial.sql",
+        "extract": ("regex", r"^\s*language\s+VARCHAR\((\d+)\)\s+NOT NULL"),
+        "relation": "equal",
+        "why": "one side of the recorded defect: codes of 11 to 50 characters pass set_user_lang's "
+               "truncation and are refused by this width",
+    },
+    {
+        "name": "locale_policy.LANGUAGE_WRITE_TRUNCATES_TO ~ db/mod.rs set_user_lang truncation",
+        "spec": "specs/turbobaby/locale_policy.t27",
+        "const": "LANGUAGE_WRITE_TRUNCATES_TO",
+        "source": "src/db/mod.rs",
+        "extract": ("regex", r"truncate_string\(lang, (\d+)\)"),
+        "relation": "equal",
+        "why": "the other side: the day the truncation is brought down to the column's width, "
+               "the contract's LANGUAGE_WRITE_FITS_THE_COLUMN = false is stale",
+    },
+    {
+        "name": "locale_policy.TIMEZONE_WRITER_CALL_SITES ~ src/ set_user_timezone callers",
+        "spec": "specs/turbobaby/locale_policy.t27",
+        "const": "TIMEZONE_WRITER_CALL_SITES",
+        "source": "src/**/*.rs",
+        # Calls, not the definition (lookbehind on `fn `), not in a line comment. Expected zero;
+        # the witness is the definition itself. Planted RED: a call added in src/bot/callbacks.rs.
+        "extract": ("tree_regex_count",
+                    NOT_IN_A_LINE_COMMENT + r"(?<!fn )\bset_user_timezone\("),
+        "witness": r"pub async fn set_user_timezone\(",
+        "relation": "equal",
+        "why": "the timezone column's only writer has no caller and the column no reader; a first "
+               "caller also brings the 100-into-50 truncation gap the contract records to life",
     },
     {
         "name": "pricing_honesty.MIGRATION_COUNT_TOP_LEVEL ~ migrations/*.sql",
@@ -1091,6 +1412,71 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "why": "the published-document side of the same comparison; the contract is "
                "about routes served versus routes documented, so both lengths matter",
     },
+    # --- api_surface, round 7 (2026-09-29): every source file named -------------------------------
+    # Named: src/web.rs, the one binary a default build produces, and the two [[bin]] tables of
+    # Cargo.toml.
+    # Measured by hand on both sides at 55a6664 before the row was written, and planted RED
+    # once through this script: a single-file row with --source-override, a tree row in a
+    # mirror of the working tree.
+    {
+        "name": "api_surface.CARGO_BIN_TARGET_COUNT ~ Cargo.toml [[bin]] tables",
+        "spec": "specs/turbobaby/api_surface.t27",
+        "const": "CARGO_BIN_TARGET_COUNT",
+        "source": "Cargo.toml",
+        # Planted RED: a third [[bin]] table.
+        "extract": ("regex_count", r"^\[\[bin\]\]"),
+        "relation": "equal",
+        "why": "which binaries a build can produce; the contract's claim that a default build "
+               "serves nothing is a claim over exactly these two",
+    },
+    {
+        "name": "api_surface.WEB_STUB_SOURCE ~ Cargo.toml turbobaby-bot path",
+        "spec": "specs/turbobaby/api_surface.t27",
+        "const": "WEB_STUB_SOURCE",
+        "source": "Cargo.toml",
+        # Captured with its quotes so the value parses as a string.
+        "extract": ("regex", r'\[\[bin\]\]\s*name\s*=\s*"turbobaby-bot"\s*path\s*=\s*("[^"]+")'),
+        "relation": "equal",
+        "why": "the file the default build's one binary is compiled from; the contract's census "
+               "of that binary (no route, nine lines) is of this path",
+    },
+    {
+        "name": "api_surface.WEB_STUB_REQUIRED_FEATURE_LINES ~ Cargo.toml stub required-features",
+        "spec": "specs/turbobaby/api_surface.t27",
+        "const": "WEB_STUB_REQUIRED_FEATURE_LINES",
+        "source": "Cargo.toml",
+        # Expected zero: no required-features line directly under the stub's path. Witness: the
+        # path line. Planted RED: `required-features = ["web"]` added under it.
+        "extract": ("regex_count", r'path = "src/web\.rs"\s*\nrequired-features'),
+        "witness": r'path = "src/web\.rs"',
+        "relation": "equal",
+        "why": "with no required feature the stub is built by every build, CI's wasm release "
+               "build included; the contract's WEB_STUB_REQUIRES_A_FEATURE = false and its "
+               "bin_target_is_built verdict rest on this absence",
+    },
+    {
+        "name": "api_surface.WEB_STUB_ROUTE_REGISTRATIONS ~ src/web.rs routing absence",
+        "spec": "specs/turbobaby/api_surface.t27",
+        "const": "WEB_STUB_ROUTE_REGISTRATIONS",
+        "source": "src/web.rs",
+        # Expected zero: no .route/.nest/.merge, no Router, no axum path. Witness: its main.
+        # Planted RED: an axum Router built in main.
+        "extract": ("regex_count", r"\.route\(|\bRouter\b|\.nest\(|\.merge\(|\baxum::"),
+        "witness": r"fn main\(\)",
+        "relation": "equal",
+        "why": "the binary every build compiles answers no path; a route here is a second "
+               "serving surface outside api_routes, its fallback and the document",
+    },
+    {
+        "name": "api_surface.WEB_STUB_LINES ~ src/web.rs length",
+        "spec": "specs/turbobaby/api_surface.t27",
+        "const": "WEB_STUB_LINES",
+        "source": "src/web.rs",
+        "extract": ("line_count",),
+        "relation": "equal",
+        "why": "the census of the stub (one println, no module, no route) was taken over this "
+               "file at this length",
+    },
     {
         "name": "client_errors.INTAKE_SOURCE_LINES ~ src/api/client_errors.rs length",
         "spec": "specs/turbobaby/client_errors.t27",
@@ -1098,8 +1484,8 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "source": "src/api/client_errors.rs",
         "extract": ("line_count",),
         "relation": "equal",
-        "why": "client_errors.t27:94 records it so that 'the whole file' is a "
-               "measurement; every claim about the intake path scopes to this length",
+        "why": "client_errors.t27 records it (INTAKE_SOURCE_LINES) so that 'the whole file' "
+               "is a measurement; every claim about the intake path scopes to this length",
     },
     {
         "name": "client_errors.FILTER_SOURCE_LINES ~ src/trios/js_errors.rs length",
@@ -1576,6 +1962,58 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "why": "the binding above counts one module; a delegation added to another trio "
                "would sit outside it, and this count is what turns red instead",
     },
+    # --- client_errors, round 7 (2026-09-29): every source file named -----------------------------
+    # Named: src/ui/components/error_banner.rs, its mounts and its empty-message guard.
+    # Measured by hand on both sides at 55a6664 before the row was written, and planted RED
+    # once through this script: a single-file row with --source-override, a tree row in a
+    # mirror of the working tree.
+    {
+        "name": "client_errors.BANNER_MOUNT_SITES ~ src/ui ErrorBanner mounts",
+        "spec": "specs/turbobaby/client_errors.t27",
+        "const": "BANNER_MOUNT_SITES",
+        "source": "src/ui/**/*.rs",
+        # Added 2026-09-29. checkout_screen.rs:1586, game/quest.rs:198, ar_hunt_screen.rs:115,
+        # location_quest_screen.rs:114, tech_tree_screen.rs:134, treasure_hunt_screen.rs:113.
+        # ErrorBannerProps and the fn definition do not match.
+        "extract": ("tree_regex_count", NOT_IN_A_LINE_COMMENT + r"\bErrorBanner \{"),
+        "relation": "equal",
+        "why": "the six mounts are classified two reached and four on unmounted screens; "
+               "a seventh is a failure surface nobody has checked for an empty sentence",
+    },
+    {
+        "name": "client_errors.BANNER_EMPTY_MESSAGE_GUARDS ~ error_banner.rs early return",
+        "spec": "specs/turbobaby/client_errors.t27",
+        "const": "BANNER_EMPTY_MESSAGE_GUARDS",
+        "source": "src/ui/components/error_banner.rs",
+        # Added 2026-09-29. :28-30.
+        "extract": ("regex_count", r"if props\.message\.is_empty\(\) \{\s*return rsx! \{\};\s*\}"),
+        "relation": "equal",
+        "why": "the branch where a failure with an empty sentence becomes nothing on "
+               "screen; banner_hides_a_failure is written against it",
+    },
+    {
+        "name": "client_errors.BANNER_PROP_NAMES ~ error_banner.rs props",
+        "spec": "specs/turbobaby/client_errors.t27",
+        "const": "BANNER_PROP_NAMES",
+        "source": "src/ui/components/error_banner.rs",
+        # Added 2026-09-29. :16 message, :19 icon, :23 margin (message cited as :15, its doc
+        # comment, until the review of 2026-09-30).
+        "extract": ("regex_all", r"^\s*pub (\w+):"),
+        "relation": "list_equal",
+        "why": "the banner takes a finished sentence and no key or status; a prop that "
+               "lets it choose the sentence makes it a third mapper this file does not count",
+    },
+    {
+        "name": "client_errors.BANNER_DEFAULT_MARGIN ~ error_banner.rs margin default",
+        "spec": "specs/turbobaby/client_errors.t27",
+        "const": "BANNER_DEFAULT_MARGIN",
+        "source": "src/ui/components/error_banner.rs",
+        # Added 2026-09-29. :32. The capture keeps its quotes, so literal_element returns the bare string.
+        "extract": ("regex", r"props\.margin\.as_deref\(\)\.unwrap_or\((\"[^\"]*\")\)"),
+        "relation": "equal",
+        "why": "a checkable literal of the component, the anchor that shows the file is "
+               "the one the contract measured",
+    },
     # The dialog's closes, each accounted for by where it stands. A checker's plant put a
     # close first thing in Confirm's onclick, `{ show_cancel_confirm.set(false); ... }`:
     # it follows `{`, so DIALOG_CLOSES_THAT_FOLLOW_ANOTHER_STATEMENT above never saw it,
@@ -2035,6 +2473,49 @@ BINDINGS: tuple[dict[str, object], ...] = (
                "or ABANDONED makes the no-representation verdicts wrong. A migration-only "
                "column the entity never learns about is outside this row",
     },
+    # --- cart_persistence, round 7 (2026-09-29): every source file named --------------------------
+    # Named: src/ui/components/cart_item.rs, mounted by nothing, its three buttons without a
+    # handler.
+    # Measured by hand on both sides at 55a6664 before the row was written, and planted RED
+    # once through this script: a single-file row with --source-override, a tree row in a
+    # mirror of the working tree.
+    {
+        "name": "cart_persistence.CART_LINE_COMPONENT_MOUNT_SITES ~ src/ui census",
+        "spec": "specs/turbobaby/cart_persistence.t27",
+        "const": "CART_LINE_COMPONENT_MOUNT_SITES",
+        "source": "src/ui/**/*.rs",
+        # Zero. The declaration `CartItemComponent(props` has no brace after the name, and the
+        # re-export at src/ui/components/mod.rs:51 has none either. Witness: the declaration.
+        "extract": ("tree_regex_count", r"(?<![\w])CartItemComponent\s*\{"),
+        "witness": r"pub fn CartItemComponent\(",
+        "relation": "equal",
+        "why": "the component prints a line as it is and its controls have no handler; mounted, "
+               "it shows a line nobody can change or remove from that row",
+    },
+    {
+        "name": "cart_persistence.CART_LINE_COMPONENT_BUTTONS_WITH_A_HANDLER ~ cart_item.rs onclick",
+        "spec": "specs/turbobaby/cart_persistence.t27",
+        "const": "CART_LINE_COMPONENT_BUTTONS_WITH_A_HANDLER",
+        "source": "src/ui/components/cart_item.rs",
+        # Zero onclick in the file; Button defaults the prop to a no-op
+        # (src/ui/components/button.rs:84-85). Witness: the Buttons are still there.
+        "extract": ("regex_count", r"\bonclick\s*:"),
+        "witness": r"Button \{",
+        "relation": "equal",
+        "why": "the contract records the minus, plus and remove controls as doing nothing; a "
+               "handler added is a cart write path this contract has not described",
+    },
+    {
+        "name": "cart_persistence.CART_LINE_COMPONENT_BUTTONS ~ cart_item.rs Button nodes",
+        "spec": "specs/turbobaby/cart_persistence.t27",
+        "const": "CART_LINE_COMPONENT_BUTTONS",
+        "source": "src/ui/components/cart_item.rs",
+        # :50 minus, :56 plus, :63 remove.
+        "extract": ("regex_count", r"^[ \t]*Button \{"),
+        "relation": "equal",
+        "why": "the denominator of the handler count above; without it, removing the controls "
+               "would keep the zero true and the sentence about them false",
+    },
     # The next four read data/fleet_seed.json, the first JSON source in this table. It is
     # delivery_terms.t27's declared SOURCE, "the repository-tracked file a gate could bind
     # to" (delivery_terms.t27:21-26); read_text and the tracked check treat it like any
@@ -2384,11 +2865,13 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "const": "CATALOG_MAX_AGE_SECONDS",
         "source": "src/api/bikes.rs",
         # The WHOLE directive is the anchor, so adding must-revalidate or no-cache (both
-        # declared false at http_cache.t27:376-377) also turns this row red.
+        # declared false by http_cache.t27's MUST_REVALIDATE_IS_SET and NO_CACHE_IS_SET) also turns
+        # this row red.
         "extract": ("regex", r"HeaderValue::from_static\(\"public, max-age=(\d+)\"\)"),
         "relation": "equal",
         "why": "how long a client may act on a catalog body -- prices and unit counts -- "
-               "without asking (http_cache.t27:370-377); the whole stale-price window "
+               "without asking (http_cache.t27, CATALOG_MAX_AGE_SECONDS and the two flags "
+               "beside it); the whole stale-price window "
                "the contract reasons about is this one number",
     },
     {
@@ -2401,7 +2884,8 @@ BINDINGS: tuple[dict[str, object], ...] = (
         # emitted as an inline literal instead of through a CLIENT_RATE_ const is not seen.
         "extract": ("regex_all", r"^(?:pub(?:\([^)]*\))?\s+)?const CLIENT_RATE_[A-Z_]+:\s*&(?:'static\s+)?str\s*=\s*\"([^\"]*)\"\s*;"),
         "relation": "set_equal",
-        "why": "the provenance words a served price carries (http_cache.t27:677-688); "
+        "why": "the provenance words a served price carries (http_cache.t27, "
+               "BODY_SOURCE_FIELD_VALUES); "
                "a third value such as 'not reconciled' is exactly what flips "
                "RULE_NEEDS_A_SOURCE_VALUE_THAT_DOES_NOT_EXIST_YET, and must not ship unseen",
     },
@@ -2418,8 +2902,9 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "extract": ("regex_count", r"\.remove\((?:\"bikes|(?!\"))|starts_with\(\"bikes|\.clear\(\)|\.retain\(|\.drain\("),
         "witness": r"\.remove\(\"[a-z_]+\"\)",
         "relation": "equal",
-        "why": "http_cache.t27:298-311 says no invalidator touches a live catalog key, and "
-               ":395-398 that removing one would recall no copy a client already holds; "
+        "why": "http_cache.t27 says no invalidator touches a live catalog key "
+               "(INVALIDATORS_NAMING_A_LIVE_KEY, INVALIDATION_NOTE), and that removing one "
+               "would recall no copy a client already holds (REMOVING_A_KEY_RECALLS_A_HELD_COPY); "
                "an edit that starts clearing catalog keys should meet both paragraphs first",
     },
     {
@@ -2432,8 +2917,74 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "extract": ("regex", r"numReplicas\s*=\s*(\d+)"),
         "relation": "equal",
         "why": "the map is coherent only because one process holds it; "
-               "http_cache.t27:798 says this can change 'in one edit to a file no test "
+               "http_cache.t27's REPLICA_NOTE says this can change 'in one edit to a file no test "
                "in this repository reads', and this row is that reader",
+    },
+    # --- http_cache, round 7 (2026-09-29): every source file named --------------------------------
+    # Named: src/ui/prefetch.rs, the one warmed catalog route and the one hover that fires it.
+    # Measured by hand on both sides at 55a6664 before the row was written, and planted RED
+    # once through this script: a single-file row with --source-override, a tree row in a
+    # mirror of the working tree.
+    {
+        "name": "http_cache.PREFETCH_CALL_SITES ~ src/ui prefetch_route calls",
+        "spec": "specs/turbobaby/http_cache.t27",
+        "const": "PREFETCH_CALL_SITES",
+        "source": "src/ui/**/*.rs",
+        # Added 2026-09-29. src/ui/components/bottom_nav.rs:27, :34, :41, :48, :60; the definition in
+        # src/ui/prefetch.rs is excluded by the lookbehind.
+        "extract": ("tree_regex_count", NOT_IN_A_LINE_COMMENT + r"(?<!fn )\bprefetch_route\("),
+        "relation": "equal",
+        "why": "every call can put the price-carrying catalog body into the browser early; "
+               "a sixth caller is a new place a held copy becomes the first read",
+    },
+    {
+        "name": "http_cache.PREFETCH_WARMED_ROUTES ~ prefetch.rs endpoint_for arms",
+        "spec": "specs/turbobaby/http_cache.t27",
+        "const": "PREFETCH_WARMED_ROUTES",
+        "source": "src/ui/prefetch.rs",
+        # Added 2026-09-29. Arms at :15 and :23 that map to a string literal. set_equal because arm
+        # order is not a claim. The `return None` arms have no `=> "` and are not read.
+        "extract": ("regex_all", r"Route::(\w+) \{\}(?=[^\n]*=> \")"),
+        "relation": "set_equal",
+        "why": "the routes whose hover warms a copy; one more warmed route is one more "
+               "hover that fires, which PREFETCH_HOVERS_THAT_FIRE counts",
+    },
+    {
+        "name": "http_cache.PREFETCH_ENDPOINTS ~ prefetch.rs endpoint literals",
+        "spec": "specs/turbobaby/http_cache.t27",
+        "const": "PREFETCH_ENDPOINTS",
+        "source": "src/ui/prefetch.rs",
+        # Added 2026-09-29. Two arms, one distinct path; set_equal collapses the duplicate.
+        "extract": ("regex_all", r"=> \"(/api/[^\"]*)\""),
+        "relation": "set_equal",
+        "why": "the one path warmed is the catalog list this contract ages at "
+               "CATALOG_MAX_AGE_SECONDS; a second path warms a body nothing here has aged",
+    },
+    {
+        "name": "http_cache.PREFETCH_REQUEST_OPTIONS_SET ~ prefetch.rs bare GET",
+        "spec": "specs/turbobaby/http_cache.t27",
+        "const": "PREFETCH_REQUEST_OPTIONS_SET",
+        "source": "src/ui/prefetch.rs",
+        # Added 2026-09-29. Zero expected (D16). The witness is the request builder at :46, so an option
+        # chained between get() and send() still leaves the witness matching and goes red on the count.
+        "extract": ("regex_count", r"\.(?:header|headers|cache|credentials|mode)\("),
+        "witness": r"gloo_net::http::Request::get\(&url\)",
+        "relation": "equal",
+        "why": "a bare GET shares the catalog screen's cache entry; a header or cache mode "
+               "can split the entry or bypass it, and the warmed-copy reasoning here "
+               "stops describing the request",
+    },
+    {
+        "name": "http_cache.PREFETCH_HOVERS_THAT_FIRE ~ bottom_nav.rs hovers on a warmed route",
+        "spec": "specs/turbobaby/http_cache.t27",
+        "const": "PREFETCH_HOVERS_THAT_FIRE",
+        "source": "src/ui/components/bottom_nav.rs",
+        # Added 2026-09-29. Only :27 (Home). The alternation is PREFETCH_WARMED_ROUTES spelled out, and
+        # it has to move with that row.
+        "extract": ("regex_count", r"prefetch::prefetch_route\(&Route::(?:Home|Menu|Sets|Accessories|Tea) \{\}\)"),
+        "relation": "equal",
+        "why": "one of the five tab hovers fires a request today; the alternation is "
+               "PREFETCH_WARMED_ROUTES and has to move with the row above",
     },
     # The six rows on migrations/079_rental_terms.sql share the limit stated on
     # DAYS_PER_FORTNIGHT: 079 runs once, so a LATER migration that re-cuts a band is unseen.
@@ -2521,6 +3072,106 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "why": "band_index_for_days returns an INDEX into this array and the served "
                "term_bands are these rows sorted by min_days; a renamed, added or dropped "
                "band breaks that index, and the DAYS_PER_* rows pin the order",
+    },
+    # --- rental_terms, round 7 (2026-09-29): every source file named ------------------------------
+    # Named: the rental_term and class_discount mirrors, and the stored class ceiling in both its
+    # homes.
+    # Measured by hand on both sides at 55a6664 before the row was written, and planted RED
+    # once through this script: a single-file row with --source-override, a tree row in a
+    # mirror of the working tree.
+    {
+        "name": "rental_terms.BAND_ENTITY_FIELDS ~ rental_term.rs Model fields",
+        "spec": "specs/turbobaby/rental_terms.t27",
+        "const": "BAND_ENTITY_FIELDS",
+        "source": "src/db/entities/rental_term.rs",
+        # Added 2026-09-29. :22, :26, :29, :32, :36, :37, in file order.
+        "extract": ("regex_all", r"^\s*pub (\w+):"),
+        "relation": "list_equal",
+        "why": "the mirror GET /api/rental-terms is built from; a renamed bound or a "
+               "collapsed pair is a band served as something other than a range (D11)",
+    },
+    {
+        "name": "rental_terms.BAND_ENTITY_OPTIONAL_FIELDS ~ rental_term.rs Option fields",
+        "spec": "specs/turbobaby/rental_terms.t27",
+        "const": "BAND_ENTITY_OPTIONAL_FIELDS",
+        "source": "src/db/entities/rental_term.rs",
+        # Added 2026-09-29. max_days at :32 is the one Option: the month band's NULL end.
+        "extract": ("regex_count", r"^\s*pub \w+: Option<"),
+        "relation": "equal",
+        "why": "the one open end is the month band's absent last day "
+               "(MONTH_BAND_HAS_A_LAST_DAY false); max_days made required caps the month "
+               "band at a guess, and a second Option is a bound that may vanish",
+    },
+    {
+        "name": "rental_terms.CLASS_ENTITY_FIELDS ~ class_discount.rs Model fields",
+        "spec": "specs/turbobaby/rental_terms.t27",
+        "const": "CLASS_ENTITY_FIELDS",
+        "source": "src/db/entities/class_discount.rs",
+        # Added 2026-09-29. :24 class, :30 discount.
+        "extract": ("regex_all", r"^\s*pub (\w+):"),
+        "relation": "list_equal",
+        "why": "the mirror every catalog price and the rental-terms document read the "
+               "class rate through (src/db/bikes.rs list_class_discounts)",
+    },
+    {
+        "name": "rental_terms.CLASS_DISCOUNT_STORED_CEILING_UNITS ~ class_discount.rs CHECK doc",
+        "spec": "specs/turbobaby/rental_terms.t27",
+        "const": "CLASS_DISCOUNT_STORED_CEILING_UNITS",
+        "source": "src/db/entities/class_discount.rs",
+        # Added 2026-09-29. The doc at :28 restates the CHECK in 079's words. The contract names both homes,
+        # which licenses the second row below for the same constant.
+        "extract": ("regex", r"CHECK \(discount >= 0 AND discount < (\d+)\)"),
+        "relation": "equal",
+        "why": "the mirror's restatement of the stored ceiling; with the row on 079 it "
+               "pins the doc and the schema to one exclusive whole unit",
+    },
+    {
+        "name": "rental_terms.CLASS_DISCOUNT_STORED_CEILING_UNITS ~ 079 class_discounts CHECK",
+        "spec": "specs/turbobaby/rental_terms.t27",
+        "const": "CLASS_DISCOUNT_STORED_CEILING_UNITS",
+        "source": "migrations/079_rental_terms.sql",
+        # Added 2026-09-29. migrations/079_rental_terms.sql:17. The rental_terms table's own CHECK
+        # (discount_max < 1) is a different pattern and does not match.
+        "extract": ("regex", r"CHECK \(discount >= 0 AND discount < (\d+)\)"),
+        "relation": "equal",
+        "why": "an inclusive or wider ceiling admits a rate of a whole unit, a free rental "
+               "that usable_discount then refuses at read time; class_rate_is_storable "
+               "is written against this bound",
+    },
+    {
+        "name": "rental_terms.PUBLISHED_TABLE_WRITERS_IN_SRC ~ src/ writes to the two tables",
+        "spec": "specs/turbobaby/rental_terms.t27",
+        "const": "PUBLISHED_TABLE_WRITERS_IN_SRC",
+        "source": "src/**/*.rs",
+        # Added 2026-09-29. Zero expected (D16), with a witness on the entities' Model reads
+        # (src/db/bikes.rs). Not seen: a write through a sea_query builder that names neither
+        # the table string nor the ActiveModel.
+        "extract": ("tree_regex_count",
+                    r"(?i:\b(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+(?:class_discounts|rental_terms)\b)"
+                    r"|\b(?:class_discount|rental_term)::ActiveModel\b"),
+        "witness": r"\b(?:class_discount|rental_term)::Model\b",
+        "relation": "equal",
+        "why": "migration 079 is the only writer and its comment names an admin surface "
+               "that does not exist; the day one is written, the published rates stop "
+               "being the seed's and this contract's",
+    },
+    # --- rental_terms, review of round 7 (2026-09-30) ---------------------------------------------
+    # The class table's readers were written as four on 2026-09-29 and nothing bound the count; a
+    # review found the fifth, the order check in src/api/orders.rs. Measured by hand on both sides
+    # and planted RED once (a mirror of the working tree, since the source is a glob).
+    {
+        "name": "rental_terms.CLASS_ENTITY_READING_HANDLERS ~ src/api list_class_discounts calls",
+        "spec": "specs/turbobaby/rental_terms.t27",
+        "const": "CLASS_ENTITY_READING_HANDLERS",
+        "source": "src/api/*.rs",
+        # Added 2026-09-30. src/api/bikes.rs:458, :551, :569, :1086 and src/api/orders.rs:794, one
+        # per reading handler. The import at src/api/orders.rs:766 and the error string at :796
+        # carry no call parenthesis and do not match. Not seen: a reader outside src/api.
+        "extract": ("tree_regex_count", NOT_IN_A_LINE_COMMENT + r"\blist_class_discounts\("),
+        "relation": "equal",
+        "why": "every catalog price, the rental-terms document and the order's divergence log "
+               "read the class rate through this call; a sixth reader is a sixth place the "
+               "rate reaches a customer or an order",
     },
     {
         "name": "happy_hour.FALLBACK_START_HOUR ~ happy_hour.rs reader and no-row arm",
@@ -3174,6 +3825,137 @@ BINDINGS: tuple[dict[str, object], ...] = (
                "= this + 1); the doc comment misstated it once already, and the contract is "
                "where the worst case per tap is sized",
     },
+    # --- webapp_bridge, round 7 (2026-09-29): every source file named -----------------------------
+    # Named: src/ui/mod.rs, src/ui/api/mod.rs, src/ui/api/context.rs, src/ui/admin.rs and the no-
+    # host notice (src/ui/components/open_in_telegram.rs).
+    # Measured by hand on both sides at 55a6664 before the row was written, and planted RED
+    # once through this script: a single-file row with --source-override, a tree row in a
+    # mirror of the working tree.
+    {
+        "name": "webapp_bridge.UI_ROOT_MODULE_COUNT ~ src/ui/mod.rs pub mod lines",
+        "spec": "specs/turbobaby/webapp_bridge.t27",
+        "const": "UI_ROOT_MODULE_COUNT",
+        "source": "src/ui/mod.rs",
+        # :1-9 nine file modules, :11-15 and :18 six directories: the root of the browser tree,
+        # gated on wasm32 at src/lib.rs:17-18, so cargo test on the host compiles none of it.
+        "extract": ("regex_count", r"^pub mod \w+;"),
+        "relation": "equal",
+        "why": "the root of the tree no host test compiles; a sixteenth module is a new part of "
+               "the client that no contract has been asked about",
+    },
+    {
+        "name": "webapp_bridge.TRANSPORT_MODULE_NAMES ~ src/ui/api/mod.rs pub mod names",
+        "spec": "specs/turbobaby/webapp_bridge.t27",
+        "const": "TRANSPORT_MODULE_NAMES",
+        "source": "src/ui/api/mod.rs",
+        # :1-5 in file order. Four were this contract's sources before 2026-09-29 (TYPED_CLIENT_,
+        # TRANSPORT_, SHIM_ and DTO_SOURCE); context is ORIGIN_SOURCE since that day.
+        "extract": ("regex_all", r"^pub mod (\w+);"),
+        "relation": "list_equal",
+        "why": "the transport modules this contract owns the client half of; a sixth (a retry "
+               "layer, a second client) would carry requests no clause here describes",
+    },
+    {
+        "name": "webapp_bridge.ADMIN_STATUS_HOOK_CALL_SITES ~ src/ui census",
+        "spec": "specs/turbobaby/webapp_bridge.t27",
+        "const": "ADMIN_STATUS_HOOK_CALL_SITES",
+        "source": "src/ui/**/*.rs",
+        # Zero today: src/ui/admin.rs:13 is the declaration, which the lookbehind drops. The
+        # witness is that declaration, so a renamed hook reads as blind, not as absent (D16).
+        "extract": ("tree_regex_count", r"(?<!fn )\buse_admin_status\("),
+        "witness": r"pub fn use_admin_status\(",
+        "relation": "equal",
+        "why": "the hook will not ask without a stored non-zero id where AdminScreen asks with "
+               "telegram_id=0; the contract records that divergence as reaching nobody, and a "
+               "first call site makes it reach an admin",
+    },
+    {
+        "name": "webapp_bridge.NO_HOST_NOTICE_MOUNT_SITES ~ src/ui census",
+        "spec": "specs/turbobaby/webapp_bridge.t27",
+        "const": "NO_HOST_NOTICE_MOUNT_SITES",
+        "source": "src/ui/**/*.rs",
+        # One today: src/ui/screens/orders_screen.rs:387. The declaration is
+        # `OpenInTelegramNotice() -> Element {`, which `\s*\{` does not match, and the two
+        # imports carry no brace.
+        "extract": ("tree_regex_count", r"(?<![\w])OpenInTelegramNotice\s*\{"),
+        "relation": "equal",
+        "why": "what a tab with no Telegram host shows is this contract's; the notice is that "
+               "state on the orders screen alone, and a second mount or a lost one changes it",
+    },
+    {
+        "name": "webapp_bridge.NO_HOST_NOTICE_KEYS ~ open_in_telegram.rs t() keys",
+        "spec": "specs/turbobaby/webapp_bridge.t27",
+        "const": "NO_HOST_NOTICE_KEYS",
+        "source": "src/ui/components/open_in_telegram.rs",
+        # Added 2026-09-30 at the review of round 7, which found the notice's third text node (the
+        # glyph at :23) that the prose had called "nothing else". :24 title, :26 body; the import at
+        # :9 carries no t( and does not match. Planted RED once through --source-override.
+        "extract": ("regex_all", r"\bt\(lang, (T_OPEN_IN_TELEGRAM_\w+)\)"),
+        "witness": r"pub fn OpenInTelegramNotice\(\) -> Element",
+        "relation": "list_equal",
+        "why": "the notice is the no-host state this contract owns, told in the shop's languages "
+               "through these two keys; a third key or a lost one changes what that tab says",
+    },
+    {
+        "name": "webapp_bridge.ADMIN_TOKEN_CLIENT_CAP_BYTES ~ src/ui/admin.rs token guard",
+        "spec": "specs/turbobaby/webapp_bridge.t27",
+        "const": "ADMIN_TOKEN_CLIENT_CAP_BYTES",
+        "source": "src/ui/admin.rs",
+        # :29, inclusive (`<=`). String::len counts bytes.
+        "extract": ("regex", r"Some\(t\) if !t\.is_empty\(\) && t\.len\(\) <= (\d+) =>"),
+        "relation": "equal",
+        "why": "the byte bound the client puts on a stored admin token before it attaches it; "
+               "the server compares the header with no length check of its own",
+    },
+    {
+        "name": "webapp_bridge.ADMIN_TOKEN_CLIENT_CAP_SITES_IN_UI ~ src/ui census",
+        "spec": "specs/turbobaby/webapp_bridge.t27",
+        "const": "ADMIN_TOKEN_CLIENT_CAP_SITES_IN_UI",
+        "source": "src/ui/**/*.rs",
+        # src/ui/admin.rs:29; src/ui/screens/admin_screen.rs:75, :84, :590, :739;
+        # src/ui/screens/tech_tree_screen.rs:16. One bare literal six times, no shared constant.
+        "extract": ("tree_regex_count", NOT_IN_A_LINE_COMMENT + r"\.len\(\) (?:<=|>) 2048\b"),
+        "relation": "equal",
+        "why": "the six copies are the only length bound on that header anywhere; one of them "
+               "moving alone is a token one screen keeps and another drops",
+    },
+    {
+        "name": "webapp_bridge.PAGE_ORIGIN_READ_SITES ~ src/ui census",
+        "spec": "specs/turbobaby/webapp_bridge.t27",
+        "const": "PAGE_ORIGIN_READ_SITES",
+        "source": "src/ui/**/*.rs",
+        # src/ui/api/context.rs:16, inside api_base_url.
+        "extract": ("tree_regex_count", NOT_IN_A_LINE_COMMENT + r"\.origin\(\)"),
+        "relation": "equal",
+        "why": "every API URL the client builds rests on this one read, which is why the client "
+               "has no configurable API host; a second read is a second base nobody declared",
+    },
+    {
+        "name": "webapp_bridge.ORIGIN_READER_CALL_SITES ~ src/ui census",
+        "spec": "specs/turbobaby/webapp_bridge.t27",
+        "const": "ORIGIN_READER_CALL_SITES",
+        "source": "src/ui/**/*.rs",
+        # 104 in 25 files outside src/ui/api/context.rs (45 in admin_screen.rs) plus the one
+        # through get_base_url at context.rs:21; the declaration is dropped by the lookbehind.
+        # A census: it moves with every new call, and that is the re-measurement it asks for.
+        "extract": ("tree_regex_count", r"(?<!fn )\bapi_base_url\(\)"),
+        "relation": "equal",
+        "why": "the reach of the one origin read; a call site added or removed without "
+               "re-measuring the contract is caught here",
+    },
+    {
+        "name": "webapp_bridge.TYPED_CLIENT_CONSTRUCTION_SITES ~ src/ui census",
+        "spec": "specs/turbobaby/webapp_bridge.t27",
+        "const": "TYPED_CLIENT_CONSTRUCTION_SITES",
+        "source": "src/ui/**/*.rs",
+        # One: ApiClient::anonymous at src/ui/api/context.rs:33. The doc lines naming both
+        # constructors (client.rs:37, :73; context.rs:28-29) are comments and excluded.
+        "extract": ("tree_regex_count", NOT_IN_A_LINE_COMMENT + r"\bApiClient::(?:new|anonymous)\("),
+        "relation": "equal",
+        "why": "the typed client's only instance is anonymous and unread, which is why its "
+               "with_auth site (UNLABELLED_SITES[1]) sends nothing today; a second construction, "
+               "with a proof, makes that unlabelled site live",
+    },
     {
         "name": "ride_game.MIN_UNITS_AVAILABLE_TO_RIDE ~ ride.js unit floor",
         "spec": "specs/turbobaby/ride_game.t27",
@@ -3392,6 +4174,87 @@ BINDINGS: tuple[dict[str, object], ...] = (
                "lookup in src/api/orders.rs reads a price through the strict try_get today, "
                "on purpose (its Cycle #98 comment) -- is exactly the move D9 asks a human to "
                "look at",
+    },
+    # --- schema_provenance, round 7 (2026-09-29): every source file named -------------------------
+    # Named: src/db/entities/mod.rs, and the entity guard's allowlist and its two spelling-only
+    # passes.
+    # Measured by hand on both sides at 55a6664 before the row was written, and planted RED
+    # once through this script: a single-file row with --source-override, a tree row in a
+    # mirror of the working tree.
+    {
+        "name": "schema_provenance.ENTITY_MODULES_DECLARED ~ entities/mod.rs pub mod lines",
+        "spec": "specs/turbobaby/schema_provenance.t27",
+        "const": "ENTITY_MODULES_DECLARED",
+        "source": "src/db/entities/mod.rs",
+        # :7-83, one declaration per mirror.
+        "extract": ("regex_count", r"^pub mod \w+;"),
+        "relation": "equal",
+        "why": "how many tables the tree carries a typed mirror of; a mirror added or removed "
+               "is a change to the shape the database is read through",
+    },
+    {
+        "name": "schema_provenance.ENTITY_FILES_DEFINING_A_MODEL ~ src/db/entities census",
+        "spec": "specs/turbobaby/schema_provenance.t27",
+        "const": "ENTITY_FILES_DEFINING_A_MODEL",
+        "source": "src/db/entities/*.rs",
+        # The entity guard's own input test (src/db/mod.rs:2007, src.contains("pub struct
+        # Model")). mod.rs does not match. Paired with ENTITY_MODULES_DECLARED: disk and glue.
+        "extract": ("tree_module_count", r"pub struct Model\b"),
+        "relation": "equal",
+        "why": "the files the entity guard walks; with the declaration count it holds the glue "
+               "and the directory to the same thirty",
+    },
+    {
+        "name": "schema_provenance.ENTITY_DECLARATIONS_WITH_THE_UNREACHABLE_PUB_ALLOW ~ entities/mod.rs",
+        "spec": "specs/turbobaby/schema_provenance.t27",
+        "const": "ENTITY_DECLARATIONS_WITH_THE_UNREACHABLE_PUB_ALLOW",
+        "source": "src/db/entities/mod.rs",
+        # 29 of 30; block_history (:17) carries none.
+        "extract": ("regex_count", r"^#\[allow\(unreachable_pub\)\]\s*\npub mod \w+;"),
+        "relation": "equal",
+        "why": "the outer attributes are the only unreachable_pub allowances the mirrors have, "
+               "since the inner one the doc at :2-5 claims exists in no file",
+    },
+    {
+        "name": "schema_provenance.ENTITY_FILES_WITH_AN_INNER_UNREACHABLE_PUB_ALLOW ~ src/db/entities census",
+        "spec": "specs/turbobaby/schema_provenance.t27",
+        "const": "ENTITY_FILES_WITH_AN_INNER_UNREACHABLE_PUB_ALLOW",
+        "source": "src/db/entities/*.rs",
+        # Zero: the only text of the inner attribute is the `//` doc at src/db/entities/mod.rs:4,
+        # which NOT_IN_A_LINE_COMMENT excludes. Witness: the scan still sees the entity files.
+        "extract": ("tree_module_count", NOT_IN_A_LINE_COMMENT + r"#!\[allow\(unreachable_pub\)\]"),
+        "witness": r"pub struct Model",
+        "relation": "equal",
+        "why": "the contract records the glue's doc as stale on exactly this count; a file that "
+               "gains the attribute makes the doc less wrong and the recorded fact false",
+    },
+    {
+        "name": "schema_provenance.ENTITY_GUARD_ALLOWLIST ~ db/mod.rs ALLOWED_UNWIRED_ENTITIES",
+        "spec": "specs/turbobaby/schema_provenance.t27",
+        "const": "ENTITY_GUARD_ALLOWLIST",
+        "source": "src/db/mod.rs",
+        # :1941, entries at :1957 and :1962; the rationale comments inside the list are stripped
+        # by the list reader.
+        "extract": ("regex_list", r"const ALLOWED_UNWIRED_ENTITIES: &\[&str\] = &\[(.*?)\];"),
+        "relation": "list_equal",
+        "why": "the mirrors the entity guard excuses; 28 checked = 30 - these, and the two that "
+               "pass on spelling alone are counted against that 28",
+    },
+    {
+        "name": "schema_provenance.TREASURE_HUNT_MIRROR_PATH_REFERENCES ~ src/ absence",
+        "spec": "specs/turbobaby/schema_provenance.t27",
+        "const": "TREASURE_HUNT_MIRROR_PATH_REFERENCES",
+        "source": "src/**/*.rs",
+        # Zero: no treasure_hunt:: path, no entities::treasure_hunt, no use-group naming it.
+        # Witness: the declaration at src/db/entities/mod.rs:79. Not seen: a name after a
+        # nested `{...}` inside the same use-group (under-count, green), and tests/.
+        "extract": ("tree_regex_count", NOT_IN_A_LINE_COMMENT
+                    + r"(?:\btreasure_hunt::|entities::treasure_hunt\b|entities::\{[^}]*\btreasure_hunt\b)"),
+        "witness": r"pub mod treasure_hunt;",
+        "relation": "equal",
+        "why": "the premise of the recorded guard defect: the mirror passes every_entity_"
+               "module_is_referenced only on the i18n literal at src/trios/i18n.rs:594; a real "
+               "reader makes the defect note stale",
     },
     {
         "name": "runtime_config.WEB_APP_URL_DENYLIST_ENTRIES ~ config.rs legacy-host guard",
@@ -3753,6 +4616,230 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "relation": "equal",
         "why": "SALE_LINE_ADMITTED_AT_CHECKOUT is false; without this arm POST /api/orders admits "
                "a sale line for any known family again, with no sale owner asked",
+    },
+    # --- commerce, round 7 (2026-09-29): every source file named ----------------------------------
+    # Named: the order, order-key, fraud-event and block-history mirrors under src/db/entities, the
+    # fraud auto-block of src/db/orders.rs and its two sweeps in src/main.rs, and the census of
+    # check_not_blocked, which no contract owned before.
+    # Measured by hand on both sides at 55a6664 before the row was written, and planted RED
+    # once through this script: a single-file row with --source-override, a tree row in a
+    # mirror of the working tree.
+    {
+        "name": "commerce.ORDER_ENTITY_FIELD_COUNT ~ order entity fields",
+        "spec": "specs/turbobaby/commerce.t27",
+        "const": "ORDER_ENTITY_FIELD_COUNT",
+        "source": "src/db/entities/order.rs",
+        # Field lines of Model. Measured 17 = 12 (001) + 1 (042) + 2 (044) + 2 (057).
+        # Planted RED: an 18th field.
+        "extract": ("regex_count", r"^[ \t]*pub[ \t]+\w+:[ \t]"),
+        "relation": "equal",
+        "why": "the committed order's row; the contract closes it over ORDER_COLUMNS_ADDED_BY_EACH, "
+               "so a column added without a migration named there, or a migration without a "
+               "mirror field, turns one side of that sum wrong",
+    },
+    {
+        "name": "commerce.ORDER_QUOTE_IDENTITY_COLUMNS ~ order entity quote fields",
+        "spec": "specs/turbobaby/commerce.t27",
+        "const": "ORDER_QUOTE_IDENTITY_COLUMNS",
+        "source": "src/db/entities/order.rs",
+        # Expected zero: no field named for a quote, a revision or an expiry. Witness: the one
+        # json column the quoted figures live in. Planted RED: `pub quote_id: Option<String>,`.
+        "extract": ("regex_count", r"^[ \t]*pub[ \t]+\w*(?:quote|revision|expir)\w*[ \t]*:"),
+        "witness": r"pub items: JsonValue,",
+        "relation": "equal",
+        "why": "QUOTE_SNAPSHOT_RULE is the model and the stored order keeps the figures without "
+               "the identity; the day a column arrives the contract's recorded gap is false",
+    },
+    {
+        "name": "commerce.ORDER_KEY_ENTITY_FIELD_COUNT ~ order key entity fields",
+        "spec": "specs/turbobaby/commerce.t27",
+        "const": "ORDER_KEY_ENTITY_FIELD_COUNT",
+        "source": "src/db/entities/order_idempotency_key.rs",
+        # Field lines of Model. Measured 4 (029). Planted RED: a payload-digest field added.
+        "extract": ("regex_count", r"^[ \t]*pub[ \t]+\w+:[ \t]"),
+        "relation": "equal",
+        "why": "four columns and neither a payload digest nor a route: the two facts the "
+               "contract's divergences 1 and 3 stand on. A fifth column is the likeliest shape of "
+               "the fix, and the contract must move with it",
+    },
+    {
+        "name": "commerce.ORDER_KEY_WRITING_ENDPOINTS ~ modules importing the order key ActiveModel",
+        "spec": "specs/turbobaby/commerce.t27",
+        "const": "ORDER_KEY_WRITING_ENDPOINTS",
+        "source": "src/**/*.rs",
+        # A writer needs the ActiveModel. Measured in 2 modules: src/api/orders.rs (create_order)
+        # and src/api/stars.rs (spend_stars, which writes order_id "stars:" plus a ledger id).
+        # Planted RED: the spend's import narrowed to its Entity alone (1).
+        "extract": ("tree_module_count", r"order_idempotency_key::\{ActiveModel"),
+        "relation": "equal",
+        "why": "divergence 3: two endpoints claim keys in one table with nothing in a row to say "
+               "which; a third writer widens the cross-endpoint replay, one fewer closes it",
+    },
+    {
+        "name": "commerce.REPLAY_LOOKUPS_AFTER_THE_DATE_GATE ~ orders.rs create_order order",
+        "spec": "specs/turbobaby/commerce.t27",
+        "const": "REPLAY_LOOKUPS_AFTER_THE_DATE_GATE",
+        "source": "src/api/orders.rs",
+        # DOTALL: the date gate's call, then (anywhere later in the file) the replay lookup.
+        # Each occurs once today, so the count is 1 exactly while the lookup follows the gate.
+        # Planted RED: the lookup moved above the validate_bike_lines call (0).
+        "extract": ("regex_count",
+                    r"validate_bike_lines\(&req\.items, shop_today\(\)\)\?;.*?"
+                    r"IdemEntity::find_by_id\(k\.clone\(\)\)"),
+        "relation": "equal",
+        "why": "divergence 2: commerce_committed_replay_precedes_current_cart_and_inventory_state "
+               "is the model and the shipped replay runs after the domain gates, so a committed "
+               "rental retried after the shop's midnight is refused instead of replayed; the day "
+               "the lookup moves ahead the recorded divergence is false",
+    },
+    {
+        "name": "commerce.FRAUD_CODES ~ db/orders.rs FRAUD_CODE_* literals",
+        "spec": "specs/turbobaby/commerce.t27",
+        "const": "FRAUD_CODES",
+        "source": "src/db/orders.rs",
+        # The four `pub(crate) const FRAUD_CODE_*: &str` declarations, in file order.
+        # Planted RED: a fifth code declared.
+        "extract": ("regex_all", r'pub\(crate\) const FRAUD_CODE_\w+: &str = "([a-z_]+)";'),
+        "relation": "list_equal",
+        "why": "the refusal vocabulary order_fraud_events stores; FRAUD_CODES[0] is the only code "
+               "the auto-block counts, so the order is part of the fact",
+    },
+    {
+        "name": "commerce.FRAUD_AUTO_BLOCK_THRESHOLD ~ db/orders.rs threshold",
+        "spec": "specs/turbobaby/commerce.t27",
+        "const": "FRAUD_AUTO_BLOCK_THRESHOLD",
+        "source": "src/db/orders.rs",
+        "extract": ("regex", r"const FRAUD_AUTO_BLOCK_THRESHOLD:\s*i64\s*=\s*([0-9_]+)\s*;"),
+        "relation": "equal",
+        "why": "how many subtotal mismatches block a customer from every gated route; no "
+               "contract held the number before 2026-09-29",
+    },
+    {
+        "name": "commerce.FRAUD_AUTO_BLOCK_LOOKBACK_HOURS ~ db/orders.rs lookback",
+        "spec": "specs/turbobaby/commerce.t27",
+        "const": "FRAUD_AUTO_BLOCK_LOOKBACK_HOURS",
+        "source": "src/db/orders.rs",
+        "extract": ("regex", r"const FRAUD_AUTO_BLOCK_LOOKBACK_HOURS:\s*i32\s*=\s*([0-9_]+)\s*;"),
+        "relation": "equal",
+        "why": "the window the threshold is counted in; the contract also holds that the rows "
+               "outlive it (FRAUD_EVENT_RETENTION_DAYS)",
+    },
+    {
+        "name": "commerce.FRAUD_EVENT_CALL_SITES ~ orders.rs record_fraud_event calls",
+        "spec": "specs/turbobaby/commerce.t27",
+        "const": "FRAUD_EVENT_CALL_SITES",
+        "source": "src/api/orders.rs",
+        # Calls not on a commented-out line. Measured 6 over four codes. Planted RED: one of the
+        # six commented out (5).
+        "extract": ("regex_count", NOT_IN_A_LINE_COMMENT + r"crate::db::orders::record_fraud_event\("),
+        "relation": "equal",
+        "why": "which refusals leave an audit row, the only input of the auto-block; the mirror's "
+               "doc says every rejection and the count says six places",
+    },
+    {
+        "name": "commerce.FRAUD_EVENT_RETENTION_DAYS ~ main.rs fraud sweep",
+        "spec": "specs/turbobaby/commerce.t27",
+        "const": "FRAUD_EVENT_RETENTION_DAYS",
+        "source": "src/main.rs",
+        "extract": ("regex", r"cleanup_old_fraud_events\(&orm, (\d+)\)"),
+        "relation": "equal",
+        "why": "how long a refusal stays countable; the loop is runtime_config's "
+               "fraud_events_ttl_sweep and the span was declared by no contract",
+    },
+    {
+        "name": "commerce.BLOCK_HISTORY_RETENTION_DAYS ~ main.rs block history sweep",
+        "spec": "specs/turbobaby/commerce.t27",
+        "const": "BLOCK_HISTORY_RETENTION_DAYS",
+        "source": "src/main.rs",
+        "extract": ("regex", r"cleanup_old_block_history\(&orm, (\d+)\)"),
+        "relation": "equal",
+        "why": "how long the audit of who was blocked and who unblocked them survives; the loop "
+               "is runtime_config's block_history_ttl_sweep",
+    },
+    {
+        "name": "commerce.BLOCK_ACTIONS ~ db/orders.rs BLOCK_ACTION_* literals",
+        "spec": "specs/turbobaby/commerce.t27",
+        "const": "BLOCK_ACTIONS",
+        "source": "src/db/orders.rs",
+        # Planted RED: a manual-block action declared.
+        "extract": ("regex_all", r'pub\(crate\) const BLOCK_ACTION_\w+: &str = "([a-z_]+)";'),
+        "relation": "list_equal",
+        "why": "the transitions block_history can record; a third action is a second writer "
+               "that sets a block, which the contract says the checkout's fraud path alone does",
+    },
+    {
+        "name": "commerce.BLOCK_GATE_CALL_SITES ~ src/api check_not_blocked census",
+        "spec": "specs/turbobaby/commerce.t27",
+        "const": "BLOCK_GATE_CALL_SITES",
+        "source": "src/api/*.rs",
+        # Calls, not the definition (`state: &AppState` has no `&state`), not the imports, not a
+        # commented-out line. Measured 25 at 55a6664. Planted RED: one call commented out (24).
+        "extract": ("tree_regex_count", NOT_IN_A_LINE_COMMENT + r"check_not_blocked\(&state"),
+        "relation": "equal",
+        "why": "where the block the fraud path raises actually bites; request_identity's "
+               "GATE_NAMES does not include this gate, so this census is the only record of it",
+    },
+    {
+        "name": "commerce.BLOCK_GATE_CALL_SITE_MODULES ~ src/api modules calling check_not_blocked",
+        "spec": "specs/turbobaby/commerce.t27",
+        "const": "BLOCK_GATE_CALL_SITE_MODULES",
+        "source": "src/api/*.rs",
+        # Same pattern, counted per file. Measured 8. Planted RED: the one call in
+        # src/api/quest.rs commented out (7).
+        "extract": ("tree_module_count", NOT_IN_A_LINE_COMMENT + r"check_not_blocked\(&state"),
+        "relation": "equal",
+        "why": "a module dropping out of the census is a whole surface a blocked customer "
+               "reaches again, which the site total can hide behind a call added elsewhere",
+    },
+    {
+        "name": "commerce.BOT_BLOCK_CHECK_SITES ~ src/bot fail-open block reads",
+        "spec": "specs/turbobaby/commerce.t27",
+        "const": "BOT_BLOCK_CHECK_SITES",
+        "source": "src/bot/*.rs",
+        # The bot's read of the same flag with a failed lookup mapped to "not blocked". Measured 4.
+        # Planted RED: one site changed to unwrap_or(true), i.e. fail-closed (3).
+        "extract": ("tree_regex_count",
+                    NOT_IN_A_LINE_COMMENT + r"is_user_blocked\(user_id\)\.await\.unwrap_or\(false\)"),
+        "relation": "equal",
+        "why": "BOT_BLOCK_CHECK_FAILS_CLOSED is false and BLOCK_GATE_FAILS_CLOSED is true: one flag, "
+               "two failure directions. A site that changes direction changes this count",
+    },
+    {
+        "name": "commerce.AUTO_BLOCK_ADVISORY_LOCK_CALLS ~ db/orders.rs advisory lock absence",
+        "spec": "specs/turbobaby/commerce.t27",
+        "const": "AUTO_BLOCK_ADVISORY_LOCK_CALLS",
+        "source": "src/db/orders.rs",
+        # Expected zero outside line comments: the name occurs once in the file, in the `///`
+        # doc of record_fraud_event that claims a lock. Witness: the helper the doc speaks of.
+        # Planted RED: a pg_advisory_xact_lock statement added to auto_block_for_fraud.
+        "extract": ("regex_count", NOT_IN_A_LINE_COMMENT + r"pg_advisory_xact_lock"),
+        "witness": r"async fn auto_block_for_fraud\(",
+        "relation": "equal",
+        "why": "the doc says the auto-block is serialised by an advisory lock and the code "
+               "serialises it with a conditional upsert; the contract records the second, and a "
+               "real lock arriving makes that record stale",
+    },
+    {
+        "name": "commerce.FRAUD_EVENT_ENTITY_FIELD_COUNT ~ fraud event entity fields",
+        "spec": "specs/turbobaby/commerce.t27",
+        "const": "FRAUD_EVENT_ENTITY_FIELD_COUNT",
+        "source": "src/db/entities/order_fraud_event.rs",
+        # Field lines of Model; the `//!` schema lines of the file's doc are not matched. Measured 8.
+        "extract": ("regex_count", r"^[ \t]*pub[ \t]+\w+:[ \t]"),
+        "relation": "equal",
+        "why": "the refusal log the auto-block counts over; migration 030 and the mirror agree "
+               "at eight today",
+    },
+    {
+        "name": "commerce.BLOCK_HISTORY_ENTITY_FIELD_COUNT ~ block history entity fields",
+        "spec": "specs/turbobaby/commerce.t27",
+        "const": "BLOCK_HISTORY_ENTITY_FIELD_COUNT",
+        "source": "src/db/entities/block_history.rs",
+        # Field lines of Model. Measured 6.
+        "extract": ("regex_count", r"^[ \t]*pub[ \t]+\w+:[ \t]"),
+        "relation": "equal",
+        "why": "the audit of every block transition; migration 031 and the mirror agree at six "
+               "today",
     },
     {
         "name": "catalog_api.PUBLIC_READS_WITHHOLDING_THE_SALE_OFFER ~ bikes.rs public serialisers",
@@ -4219,6 +5306,244 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "why": "one call per read the owner closed to customers; a closed read that loses it serves "
                "its rows to anyone, and a fourth is a read nobody decided to close",
     },
+    # --- legacy_retirement, round 7 (2026-09-29): every source file named -------------------------
+    # Named: twenty-one legacy files: the seven repointed screens' exports and mounts, the kept
+    # quest (its poll, cap, reward and the scan that credits nothing), the pack module, the grow
+    # tech tree, the legacy modal, picker and set card, and the strain mirror.
+    # Measured by hand on both sides at 55a6664 before the row was written, and planted RED
+    # once through this script: a single-file row with --source-override, a tree row in a
+    # mirror of the working tree.
+    {
+        "name": "legacy_retirement.REPOINTED_LEGACY_SCREEN_EXPORTS ~ screens/mod.rs legacy exports",
+        "spec": "specs/turbobaby/legacy_retirement.t27",
+        "const": "REPOINTED_LEGACY_SCREEN_EXPORTS",
+        "source": "src/ui/screens/mod.rs",
+        # :39, :41, :47, :49, :58, :59, :60 at 55a6664, in the file's alphabetical order. The pattern
+        # spells the seven modules, so it sees an export removed or renamed, not a new legacy one.
+        "extract": ("regex_all", r"^pub use (?:accessories_screen|ar_hunt_screen|game_screen|location_quest_screen|tea_screen|tech_tree_screen|treasure_hunt_screen)::(\w+);"),
+        "relation": "list_equal",
+        "why": "the export end of 'the seven screens stay compiled and exported' (owner, "
+               "2026-09-25); a screen deleted or renamed is a retirement the contract must record "
+               "before REPOINTED_LEGACY_SCREENS_KEPT_UNMOUNTED can stay 7",
+    },
+    {
+        "name": "legacy_retirement.REPOINTED_LEGACY_SCREEN_MOUNTS ~ src/ui mounts of the seven",
+        "spec": "specs/turbobaby/legacy_retirement.t27",
+        "const": "REPOINTED_LEGACY_SCREEN_MOUNTS",
+        "source": "src/ui/**/*.rs",
+        # A MOUNT is the component followed by its brace: `pub fn TeaScreen() -> Element {` and the
+        # re-exports do not match. Zero expected (D16), so the witness proves the walk still sees
+        # the catalog mounts that replaced them; unanchored, because tree witnesses carry no flags.
+        "extract": ("tree_regex_count", NOT_IN_A_LINE_COMMENT
+                    + r"\b(?:AccessoriesScreen|TeaScreen|GameScreen|TreasureHuntScreen|ARHuntScreen|LocationQuestScreen|TechTreeScreen)\s*\{"),
+        "witness": r"CatalogScreen \{\}",
+        "relation": "equal",
+        "why": "the owner's answer of 2026-09-25 unmounted the previous shop's goods, game, hunts "
+               "and tech tree; a mount of any of the seven anywhere under src/ui puts an unrouted "
+               "legacy surface back in front of customers, and this contract's states for them "
+               "(GOODS_FILES_STATE, UNROUTED_NON_GOODS_STATE) would be wrong",
+    },
+    {
+        "name": "legacy_retirement.QUEST_SCAN_POLL_TRIES ~ quest.rs scan poll loop",
+        "spec": "specs/turbobaby/legacy_retirement.t27",
+        "const": "QUEST_SCAN_POLL_TRIES",
+        "source": "src/ui/game/quest.rs",
+        # :79-80 at 55a6664: the kept quest polls window.__tb_qr this many times.
+        "extract": ("regex", r"for _ in 0\.\.(\d+) \{\s*gloo_timers::future::TimeoutFuture::new\(\d+\)\.await;"),
+        "relation": "equal",
+        "why": "one factor of QUEST_SCAN_WINDOW_MS, the time a customer on the one kept legacy "
+               "surface has to scan before the screen gives up silently",
+    },
+    {
+        "name": "legacy_retirement.QUEST_SCAN_POLL_MS ~ quest.rs scan poll interval",
+        "spec": "specs/turbobaby/legacy_retirement.t27",
+        "const": "QUEST_SCAN_POLL_MS",
+        "source": "src/ui/game/quest.rs",
+        # :80 at 55a6664, the interval inside the same loop the row above counts.
+        "extract": ("regex", r"for _ in 0\.\.\d+ \{\s*gloo_timers::future::TimeoutFuture::new\((\d+)\)\.await;"),
+        "relation": "equal",
+        "why": "the other factor of QUEST_SCAN_WINDOW_MS; the contract executes tries x ms == window, "
+               "so either factor moving without the contract breaks the recorded sixty seconds",
+    },
+    {
+        "name": "legacy_retirement.QUEST_CLIENT_TOKEN_CAP ~ quest.rs cap decided in bytes, cut in chars",
+        "spec": "specs/turbobaby/legacy_retirement.t27",
+        "const": "QUEST_CLIENT_TOKEN_CAP",
+        "source": "src/ui/game/quest.rs",
+        # :100-104 at 55a6664. The anchor IS the recorded defect's shape: decided on token.len()
+        # (bytes), cut with chars().take(N) (characters), the same N both times (backreference).
+        # Fixing the defect -- truncating on a byte boundary -- makes the anchor match nothing:
+        # RED on purpose, so QUEST_CLIENT_CAP_TRUNCATES_IN_CHARS and _GUARANTEES_THE_SERVER_BOUND
+        # are revisited in the same change.
+        "extract": ("regex", r"if token\.len\(\) > (\d+) \{\s*token\.chars\(\)\.take\(\1\)\.collect\(\)"),
+        "relation": "equal",
+        "why": "the kept quest's client cap claims to mirror the server's bound (turbobaby/"
+               "validation-bounds LIVE_TOKEN_MAX_CHARS, in bytes) and measures in the wrong unit; "
+               "the contract records that as a defect, and a change to the cap or its unit must "
+               "reach the contract",
+    },
+    {
+        "name": "legacy_retirement.QUEST_SCAN_HANDLER_WRITES ~ quest.rs scan_quest_qr writes nothing",
+        "spec": "specs/turbobaby/legacy_retirement.t27",
+        "const": "QUEST_SCAN_HANDLER_WRITES",
+        "source": "src/api/quest.rs",
+        # :628-690 at 55a6664. The body runs from the signature to the first `}` at column zero;
+        # a write, or any call into the loyalty or star ledgers, inside it counts. DOTALL is on in
+        # extract_source, so `.` crosses lines. Zero expected (D16): the witness proves the
+        # handler is still there to be read. Not seen: a credit made through a helper whose
+        # name carries none of the listed words.
+        "extract": ("regex_count", r"async fn scan_quest_qr\((?:(?!\n\}\n).)*?(?:\.execute\(|\bINSERT\b|\bUPDATE\b|loyalty|stars|bonus|credit)"),
+        "witness": r"async fn scan_quest_qr\(",
+        "relation": "equal",
+        "why": "the kept quest shows a reward per checkpoint and a claim line on completion, and "
+               "the contract records (QUEST_REWARD_IS_CREDITED = false) that the scan credits "
+               "nothing; the day a scan starts writing, the recorded defect has changed and the "
+               "contract must say how",
+    },
+    {
+        "name": "legacy_retirement.QUEST_CHECKPOINT_COUNT ~ trios/quest.rs get_checkpoints",
+        "spec": "specs/turbobaby/legacy_retirement.t27",
+        "const": "QUEST_CHECKPOINT_COUNT",
+        "source": "src/trios/quest.rs",
+        # :370-374 at 55a6664. The unit test at :572 builds one with a literal title, not a
+        # T_POINT_ key, so it does not match.
+        "extract": ("regex_count", r"QuestCheckpoint::new\(\d+, T_POINT_\d+,"),
+        "relation": "equal",
+        "why": "the number of scans that completes the kept quest and the upper bound of the "
+               "reward it displays (QUEST_DISPLAYED_REWARD_TOTAL is executed from it)",
+    },
+    {
+        "name": "legacy_retirement.QUEST_REWARD_PER_CHECKPOINT_ID ~ trios/quest.rs reward_bat",
+        "spec": "specs/turbobaby/legacy_retirement.t27",
+        "const": "QUEST_REWARD_PER_CHECKPOINT_ID",
+        "source": "src/trios/quest.rs",
+        # :345 at 55a6664.
+        "extract": ("regex", r"reward_bat: \(id as u32\) \* (\d+),"),
+        "relation": "equal",
+        "why": "the reward the kept quest displays per checkpoint, which nothing credits; a "
+               "bigger unbacked promise must not appear on a customer's screen unrecorded",
+    },
+    {
+        "name": "legacy_retirement.PACK_BADGE_VALUES ~ packs.rs PackBadge::as_str",
+        "spec": "specs/turbobaby/legacy_retirement.t27",
+        "const": "PACK_BADGE_VALUES",
+        "source": "src/trios/packs.rs",
+        # The as_str arms, :46-53 at 55a6664. The colour arms return "#..." and the label arms
+        # Some((..)), so neither matches `"(\w+)",`.
+        "extract": ("regex_all", r'PackBadge::\w+ => "(\w+)",'),
+        "relation": "list_equal",
+        "why": "the stored badge vocabulary the live /api/sets write check enforces (400 on an "
+               "unknown value); a new badge is a change to a server-live legacy surface over rows "
+               "085 hid",
+    },
+    {
+        "name": "legacy_retirement.PACK_SERVER_CALL_SITES ~ catalog.rs calls into trios::packs",
+        "spec": "specs/turbobaby/legacy_retirement.t27",
+        "const": "PACK_SERVER_CALL_SITES",
+        "source": "src/api/catalog.rs",
+        # :1170, :1353, :1422, :1434 at 55a6664: two read filters, the write check, the normaliser.
+        "extract": ("regex_count", r"crate::trios::packs::"),
+        "relation": "equal",
+        "why": "what makes src/trios/packs.rs server-live (PACK_MODULE_STATE = STATE_SURFACE_LIVE); "
+               "a dropped call is the write check or a read filter gone from a public legacy route",
+    },
+    {
+        "name": "legacy_retirement.GROW_TECH_TREE_NODE_IDS ~ ui/game/tech_tree.rs TECH_TREE",
+        "spec": "specs/turbobaby/legacy_retirement.t27",
+        "const": "GROW_TECH_TREE_NODE_IDS",
+        "source": "src/ui/game/tech_tree.rs",
+        # :12-48 at 55a6664, the five nodes in declaration order.
+        "extract": ("regex_all", r'^\s+id: "(\w+)",'),
+        "relation": "list_equal",
+        "why": "the growing-themed node set the contract records as out of the bundle and past "
+               "FARM_WORDS_EN, with its ruling-#12 reach left undecided; a node renamed, added or "
+               "removed changes what that record describes",
+    },
+    {
+        "name": "legacy_retirement.PRODUCT_DETAIL_MODAL_MOUNTS ~ src/ui mounts of the modal",
+        "spec": "specs/turbobaby/legacy_retirement.t27",
+        "const": "PRODUCT_DETAIL_MODAL_MOUNTS",
+        "source": "src/ui/**/*.rs",
+        # accessories_screen.rs:242, tea_screen.rs:331, set_card.rs:231 at 55a6664; the Props struct
+        # (`ProductDetailModalProps {`) and the fn signature do not match.
+        "extract": ("tree_regex_count", NOT_IN_A_LINE_COMMENT + r"\bProductDetailModal\s*\{"),
+        "relation": "equal",
+        "why": "the modal is unreached because all three mounters are (GOODS_FILES_STATE); a fourth "
+               "mount, from a live screen, would bring the previous shop's cafe fulfilment and the "
+               "lightbox back in front of customers",
+    },
+    {
+        "name": "legacy_retirement.ID_PICKER_MOUNTS ~ src/ui mounts of IdPicker",
+        "spec": "specs/turbobaby/legacy_retirement.t27",
+        "const": "ID_PICKER_MOUNTS",
+        "source": "src/ui/**/*.rs",
+        # Zero expected (D16): the witness proves the component is still there to be mounted.
+        "extract": ("tree_regex_count", NOT_IN_A_LINE_COMMENT + r"\bIdPicker\s*\{"),
+        "witness": r"pub fn IdPicker\(",
+        "relation": "equal",
+        "why": "the admin set picker was built for the three set tables 085 hid and is mounted by "
+               "nothing; a mount is the previous shop's bundles coming back into the admin",
+    },
+    {
+        "name": "legacy_retirement.SET_CARD_CALLERS ~ src/ui calls of render_uniform_set_card",
+        "spec": "specs/turbobaby/legacy_retirement.t27",
+        "const": "SET_CARD_CALLERS",
+        "source": "src/ui/**/*.rs",
+        # A call, not the definition (`fn ` lookbehind) and not the brace re-export. Zero expected
+        # (D16): the witness proves the function is still defined.
+        "extract": ("tree_regex_count", NOT_IN_A_LINE_COMMENT + r"(?<!fn )\brender_uniform_set_card\("),
+        "witness": r"pub fn render_uniform_set_card\(",
+        "relation": "equal",
+        "why": "the set card would print a confident zero for a non-finite or negative price (what "
+               "turbobaby/pricing-honesty's rate_present refuses) and is harmless only because "
+               "nothing calls it",
+    },
+    {
+        "name": "legacy_retirement.TREASURE_HUNT_SCREEN_READ_PATHS ~ treasure_hunt_screen.rs reads",
+        "spec": "specs/turbobaby/legacy_retirement.t27",
+        "const": "TREASURE_HUNT_SCREEN_READ_PATHS",
+        "source": "src/ui/screens/treasure_hunt_screen.rs",
+        # :38 and :56 at 55a6664, both through fetch_text (no header).
+        "extract": ("regex_all", r'format!\("\{\}(/api/[\w/-]+)", api_base_url\(\)\)'),
+        "relation": "list_equal",
+        "why": "the contract executes that every hunt read is one R2 closed to customers "
+               "(hunt_reads_closed_by_r2 over OWNER_R2_CLOSED_READS); a read of another route "
+               "would make HUNT_SCREENS_COULD_ONLY_SHOW_ERRORS_IF_REMOUNTED false",
+    },
+    {
+        "name": "legacy_retirement.STRAIN_ENTITY_FIELD_COUNT ~ strain.rs Model fields",
+        "spec": "specs/turbobaby/legacy_retirement.t27",
+        "const": "STRAIN_ENTITY_FIELD_COUNT",
+        "source": "src/db/entities/strain.rs",
+        # :13-56 at 55a6664; `pub enum Relation {}` is at column zero and does not match.
+        "extract": ("regex_count", r"^    pub \w+: "),
+        "relation": "equal",
+        "why": "the mirror of the one dropped table that keeps readers (STATE_READER_ALLOWLISTED); "
+               "a field added to a mirror of a table 083 dropped is someone building on it",
+    },
+    {
+        "name": "legacy_retirement.GAME_MODULES ~ ui/game/mod.rs declarations",
+        "spec": "specs/turbobaby/legacy_retirement.t27",
+        "const": "GAME_MODULES",
+        "source": "src/ui/game/mod.rs",
+        # :1-3 at 55a6664.
+        "extract": ("regex_all", r"^pub mod (\w+);"),
+        "relation": "list_equal",
+        "why": "the three game modules of the footprint -- the kept quest, the previous shop's game "
+               "and the growing-themed tech tree; one dropped or added moves LEGACY_SOURCE_FILES "
+               "and the executed footprint sum",
+    },
+    {
+        "name": "legacy_retirement.ACCESSORIES_SCREEN_CATEGORIES ~ accessories_screen.rs CATEGORIES",
+        "spec": "specs/turbobaby/legacy_retirement.t27",
+        "const": "ACCESSORIES_SCREEN_CATEGORIES",
+        "source": "src/ui/screens/accessories_screen.rs",
+        # :77 at 55a6664. Ten until 2026-09-25; ruling #12 cut four and the leftovers two.
+        "extract": ("regex_list", r"const CATEGORIES: &\[&str\] = &\[(.*?)\];"),
+        "relation": "list_equal",
+        "why": "the chips ruling #12 and the leftovers of 2026-09-26 left; a paraphernalia chip put "
+               "back must not arrive silently, even on an unmounted screen",
+    },
     {
         "name": "loyalty_ledger.CLOSED_READ_ROUTE_COUNT ~ loyalty.rs admin_or_missing_route calls",
         "spec": "specs/turbobaby/loyalty_ledger.t27",
@@ -4238,6 +5563,101 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "relation": "equal",
         "why": "R1: the leaderboard (first names, total spend, tier) answers an admin only, and the "
                "gate is the handler's first statement, before the query",
+    },
+    # --- loyalty_ledger, round 7 (2026-09-29): every source file named ----------------------------
+    # Named: src/db/loyalty.rs and the loyalty_config and loyalty_profile mirrors.
+    # Measured by hand on both sides at 55a6664 before the row was written, and planted RED
+    # once through this script: a single-file row with --source-override, a tree row in a
+    # mirror of the working tree.
+    {
+        "name": "loyalty_ledger.TIER_HELPER_CALL_SITES ~ src/ calculate_tier calls",
+        "spec": "specs/turbobaby/loyalty_ledger.t27",
+        "const": "TIER_HELPER_CALL_SITES",
+        "source": "src/**/*.rs",
+        # Added 2026-09-29. One call today: the test helper at src/db/loyalty.rs:67. The lookbehind
+        # drops the definition and the prefix drops comment lines. tests/ holds no call (grep, same day).
+        # Planted RED (mirror tree): a production call added to src/db/orders.rs read 2.
+        "extract": ("tree_regex_count", NOT_IN_A_LINE_COMMENT + r"(?<!fn )\bcalculate_tier\("),
+        "relation": "equal",
+        "why": "calculate_tier is dead in production and its one call is the test helper "
+               "at src/db/loyalty.rs:67; a second call is a production caller of a rule "
+               "that is not the live cashback rule (TIER_HELPER_IS_THE_LIVE_RULE false)",
+    },
+    {
+        "name": "loyalty_ledger.TIER_HELPER_DEAD_CODE_ALLOWANCES ~ loyalty.rs allow on calculate_tier",
+        "spec": "specs/turbobaby/loyalty_ledger.t27",
+        "const": "TIER_HELPER_DEAD_CODE_ALLOWANCES",
+        "source": "src/db/loyalty.rs",
+        # Added 2026-09-29. The attribute at :21, which sits directly on the fn at :22.
+        # Planted RED: #[allow(clippy::too_many_arguments)] with dead_code removed read 0.
+        "extract": ("regex_count", r"#\[allow\(dead_code\b[^\]]*\)\][^\n]*\n\s*pub\(crate\) fn calculate_tier\("),
+        "relation": "equal",
+        "why": "the contract records the helper as uncalled on the strength of this "
+               "allowance; wiring a caller removes it and must meet the fixture defect "
+               "and the two-rules finding first",
+    },
+    {
+        "name": "loyalty_ledger.CONFIG_ENTITY_FIELDS ~ loyalty_config.rs Model fields",
+        "spec": "specs/turbobaby/loyalty_ledger.t27",
+        "const": "CONFIG_ENTITY_FIELDS",
+        "source": "src/db/entities/loyalty_config.rs",
+        # Added 2026-09-29. :21 id, :23 config, :29 marketing_badges_hidden, in file order.
+        # Planted RED: a fourth field.
+        "extract": ("regex_all", r"^\s*pub (\w+):"),
+        "relation": "list_equal",
+        "why": "the singleton's mirror; a fourth column read through it is a new "
+               "loyalty_config shape nobody has classified against RATE_SOURCE",
+    },
+    {
+        "name": "loyalty_ledger.CONFIG_SEED_KEY_COUNT ~ 001 loyalty_config seed keys",
+        "spec": "specs/turbobaby/loyalty_ledger.t27",
+        "const": "CONFIG_SEED_KEY_COUNT",
+        "source": "migrations/001_initial.sql",
+        # Added 2026-09-29. migrations/001_initial.sql:89-101; that seed is the only JSON object in the
+        # file (13 key lines in the whole file). The witness pins the INSERT the keys belong to.
+        # Not seen: a later migration rewriting the row (only 032 touches the table, and it adds a column).
+        "extract": ("regex_count", r'^\s+"[a-z_]+":'),
+        "witness": r"INSERT INTO loyalty_config \(id, config\) VALUES \(1, '\{",
+        "relation": "equal",
+        "why": "13 keys split 9 named by RATE_SOURCE's defaults and 4 read by happy-hour; "
+               "a fourteenth key belongs to neither until someone says whose it is",
+    },
+    {
+        "name": "loyalty_ledger.CONFIG_ENTITY_MODULES ~ src/ modules naming loyalty_config::",
+        "spec": "specs/turbobaby/loyalty_ledger.t27",
+        "const": "CONFIG_ENTITY_MODULES",
+        "source": "src/**/*.rs",
+        # Added 2026-09-29. src/api/admin.rs, happy_hour.rs, loyalty.rs and orders.rs (7 matches).
+        # The four raw `WHERE id = 1` reads in src/db/orders.rs do not name the entity and are not counted.
+        "extract": ("tree_module_count", NOT_IN_A_LINE_COMMENT + r"\bloyalty_config::"),
+        "relation": "equal",
+        "why": "every access through the entity is to row 1 today "
+               "(CONFIG_ACCESSES_TO_ANOTHER_ROW 0); a fifth module is a fifth place that "
+               "claim has to be re-checked",
+    },
+    {
+        "name": "loyalty_ledger.PROFILE_ENTITY_FIELDS ~ loyalty_profile.rs Model fields",
+        "spec": "specs/turbobaby/loyalty_ledger.t27",
+        "const": "PROFILE_ENTITY_FIELDS",
+        "source": "src/db/entities/loyalty_profile.rs",
+        # Added 2026-09-29. :9-20, ten fields, in file order. With PROFILE_COLUMNS_NOT_MIRRORED (3) they
+        # account for the 13 columns of migrations 001 and 047.
+        "extract": ("regex_all", r"^\s*pub (\w+):"),
+        "relation": "list_equal",
+        "why": "ten fields plus three unmirrored columns is the thirteen-column table; a "
+               "field added or dropped breaks that accounting and may carry the balance",
+    },
+    {
+        "name": "loyalty_ledger.PROFILE_ENTITY_MODULES ~ src/ modules naming loyalty_profile::",
+        "spec": "specs/turbobaby/loyalty_ledger.t27",
+        "const": "PROFILE_ENTITY_MODULES",
+        "source": "src/**/*.rs",
+        # Added 2026-09-29. src/api/auth.rs, events.rs, loyalty.rs, orders.rs, stars.rs, src/db/mod.rs,
+        # orders.rs and referrals.rs (21 matches). The mapper's list of 2026-09-29 named five of these.
+        "extract": ("tree_module_count", NOT_IN_A_LINE_COMMENT + r"\bloyalty_profile::"),
+        "relation": "equal",
+        "why": "the mirror of the table that holds bonus_balance; a new module reaching it "
+               "is where a fifth ledger bypass would appear",
     },
     # The owner's answer of 2026-09-26 on the referral top list ("remove the top and close the
     # address"; the Russian is verbatim in DECISIONS.md): the referral leaderboard answers an admin only, exactly as R1's.
@@ -4270,6 +5690,400 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "why": "one admin-gated route among the five; with the owner census and the handler count it "
                "pins the ungated count at zero, and a second admin read on the customers' module is a "
                "route nobody decided to add",
+    },
+    # --- referral_program, round 7 (2026-09-29): every source file named --------------------------
+    # Named: src/ui/pages/mod.rs and the referrals screen's one mount and two in-app entry points.
+    # Measured by hand on both sides at 55a6664 before the row was written, and planted RED
+    # once through this script: a single-file row with --source-override, a tree row in a
+    # mirror of the working tree.
+    {
+        "name": "referral_program.PAGES_DIRECTORY_FILES ~ src/ui/pages file count",
+        "spec": "specs/turbobaby/referral_program.t27",
+        "const": "PAGES_DIRECTORY_FILES",
+        "source": "src/ui/pages/*.rs",
+        # Added 2026-09-29. mod.rs and referrals.rs.
+        "extract": ("tree_file_count",),
+        "relation": "equal",
+        "why": "src/ui/pages/mod.rs:10-11 closes the directory to additions after cycle "
+               "#23 removed 13 dead modules; a third file is the drift that comment exists "
+               "to stop",
+    },
+    {
+        "name": "referral_program.PAGES_MODULES ~ pages/mod.rs module declarations",
+        "spec": "specs/turbobaby/referral_program.t27",
+        "const": "PAGES_MODULES",
+        "source": "src/ui/pages/mod.rs",
+        # Added 2026-09-29. :13.
+        "extract": ("regex_all", r"^pub mod (\w+);"),
+        "relation": "list_equal",
+        "why": "the directory holds the referral page and nothing else",
+    },
+    {
+        "name": "referral_program.PAGES_REEXPORT_CONSUMERS ~ src/ uses of pages::Referrals",
+        "spec": "specs/turbobaby/referral_program.t27",
+        "const": "PAGES_REEXPORT_CONSUMERS",
+        "source": "src/**/*.rs",
+        # Added 2026-09-29. Zero expected (D16). The witness is the one real import,
+        # src/ui/screens/referrals_screen.rs:2, which goes through the child module.
+        "extract": ("tree_regex_count", NOT_IN_A_LINE_COMMENT + r"\bpages::Referrals\b"),
+        "witness": r"\bpages::referrals::Referrals\b",
+        "relation": "equal",
+        "why": "the re-export at src/ui/pages/mod.rs:15 is unused; the day it gains a "
+               "consumer the contract's reading of the directory comment changes",
+    },
+    {
+        "name": "referral_program.REFERRALS_SCREEN_MOUNT_SITES ~ routes.rs ReferralsScreen mounts",
+        "spec": "specs/turbobaby/referral_program.t27",
+        "const": "REFERRALS_SCREEN_MOUNT_SITES",
+        "source": "src/ui/routes.rs",
+        # Added 2026-09-29. :297, inside fn Referrals (:293-300). The import at :10 has no braces.
+        "extract": ("regex_count", NOT_IN_A_LINE_COMMENT + r"\bReferralsScreen \{\}"),
+        "relation": "equal",
+        "why": "the kept referral surface is reachable through exactly one handler; zero "
+               "retires a surface the owner kept, two opens a second address",
+    },
+    {
+        "name": "referral_program.REFERRALS_IN_APP_ENTRY_POINTS ~ src/ui navigations to Route::Referrals",
+        "spec": "specs/turbobaby/referral_program.t27",
+        "const": "REFERRALS_IN_APP_ENTRY_POINTS",
+        "source": "src/ui/**/*.rs",
+        # Added 2026-09-29. profile_screen.rs:970 (Link) and success_screen.rs:359 (nav.push).
+        # The /referrals deep link lives in src/trios/deeplink.rs, outside this glob, and is deeplink's.
+        "extract": ("tree_regex_count", NOT_IN_A_LINE_COMMENT + r"\bRoute::Referrals \{\}"),
+        "relation": "equal",
+        "why": "the profile link and the success push are how a customer reaches the kept "
+               "page from inside the app; losing one hides it without retiring it",
+    },
+    # --- ui kit, 2026-09-29 ---
+    # specs/turbobaby/ui_kit.t27 owns the nineteen kit files under src/ui/components and
+    # src/ui/theme. Every count below was measured by hand on 2026-09-29 at 55a6664 before the
+    # row was written, and each row's planted change was evaluated red against a scratch copy.
+    # The module file: 28 `pub mod` lines at column zero (:7-39).
+    {
+        "name": "ui_kit.GLUE_PUB_MOD_COUNT ~ components/mod.rs pub mod lines",
+        "spec": "specs/turbobaby/ui_kit.t27",
+        "const": "GLUE_PUB_MOD_COUNT",
+        "source": "src/ui/components/mod.rs",
+        "extract": ("regex_count", r"^pub mod \w+;"),
+        "relation": "equal",
+        "why": "the contract splits the module list into 17 kit primitives and 11 domain "
+               "components; a module added or removed changes that split",
+    },
+    # The three bike-card money helpers re-exported at src/ui/components/mod.rs:44-46 are
+    # reached by NO path through the re-export: every use spells components::bike_card::<name>.
+    # The pattern also sees a brace import list (`components::{.., DASH}`), since [^}]* crosses
+    # lines. The witness is the full-path use, which must still exist for the zero to mean it.
+    {
+        "name": "ui_kit.MONEY_HELPER_REEXPORT_PATH_USES ~ uses through components::",
+        "spec": "specs/turbobaby/ui_kit.t27",
+        "const": "MONEY_HELPER_REEXPORT_PATH_USES",
+        "source": "src/**/*.rs",
+        "extract": ("tree_regex_count", r"components::(?:\{[^}]*)?\b(?:published|thb_or_dash|DASH)\b"),
+        "witness": r"components::bike_card::(?:published|thb_or_dash|DASH)\b",
+        "relation": "equal",
+        "why": "the contract records the re-export as published and unused; the first use "
+               "through it makes that false",
+    },
+    # LazyScreen: eleven wraps in the router, one heavy (Admin, src/ui/routes.rs:341).
+    {
+        "name": "ui_kit.LAZY_WRAPPED_HANDLERS ~ routes.rs LazyScreen wraps",
+        "spec": "specs/turbobaby/ui_kit.t27",
+        "const": "LAZY_WRAPPED_HANDLERS",
+        "source": "src/ui/routes.rs",
+        "extract": ("regex_count", r"LazyScreen \{"),
+        "relation": "equal",
+        "why": "the contract lists the eleven handlers that defer their screen and names the "
+               "three non-catalog ones that do not; a wrap added or removed moves a handler "
+               "between the two",
+    },
+    {
+        "name": "ui_kit.LAZY_HEAVY_HANDLERS ~ routes.rs heavy wraps",
+        "spec": "specs/turbobaby/ui_kit.t27",
+        "const": "LAZY_HEAVY_HANDLERS",
+        "source": "src/ui/routes.rs",
+        "extract": ("regex_count", r"LazyScreen \{ heavy: true"),
+        "relation": "equal",
+        "why": "Admin is the only heavy wrap; the doc at lazy_screen.rs:5-6 names three",
+    },
+    {
+        "name": "ui_kit.LAZY_DEFAULT_DELAY_MS ~ lazy_screen.rs delay_ms default",
+        "spec": "specs/turbobaby/ui_kit.t27",
+        "const": "LAZY_DEFAULT_DELAY_MS",
+        "source": "src/ui/components/lazy_screen.rs",
+        "extract": ("regex", r"#\[props\(default = (\d+)\)\] delay_ms: u32"),
+        "relation": "equal",
+        "why": "ten customer routes paint the placeholder for exactly this long",
+    },
+    {
+        "name": "ui_kit.LAZY_HEAVY_DELAY_MS ~ lazy_screen.rs heavy delay",
+        "spec": "specs/turbobaby/ui_kit.t27",
+        "const": "LAZY_HEAVY_DELAY_MS",
+        "source": "src/ui/components/lazy_screen.rs",
+        "extract": ("regex", r"let actual_delay = if heavy \{ (\d+) \} else \{ delay_ms \};"),
+        "relation": "equal",
+        "why": "the contract's lazy_total_delay_ms adds the extra tick to this number and "
+               "ignores the caller's delay_ms, as this line does",
+    },
+    # The media URL predicate: `x.starts_with("/") && !x.starts_with("//")`, with either quote
+    # on the first slash. 15 sites in 9 files under src/ui, card_media.rs:23 and card.rs:86 among
+    # them. Two separate facts, so two rows: a copy added inside a file already counted moves
+    # only the first.
+    {
+        "name": "ui_kit.MEDIA_PREDICATE_SITE_COUNT ~ hand copies under src/ui",
+        "spec": "specs/turbobaby/ui_kit.t27",
+        "const": "MEDIA_PREDICATE_SITE_COUNT",
+        "source": "src/ui/**/*.rs",
+        "extract": ("tree_regex_count", r'\.starts_with\((?:"/"|\'/\')\) && !\w+\.starts_with\("//"\)'),
+        "relation": "equal",
+        "why": "the contract lists every copy of the read-side predicate by site; a new copy "
+               "or a removed one is a change to that list",
+    },
+    {
+        "name": "ui_kit.MEDIA_PREDICATE_FILE_COUNT ~ files holding a copy",
+        "spec": "specs/turbobaby/ui_kit.t27",
+        "const": "MEDIA_PREDICATE_FILE_COUNT",
+        "source": "src/ui/**/*.rs",
+        "extract": ("tree_module_count", r'\.starts_with\((?:"/"|\'/\')\) && !\w+\.starts_with\("//"\)'),
+        "relation": "equal",
+        "why": "how many files would have to change if the predicate became one function",
+    },
+    # CardMedia's video branch is dead on every live route: both live mounts pass video_url
+    # None (catalog_screen.rs:859, bike_detail.rs:264), and the bike DTO has no video field.
+    {
+        "name": "ui_kit.CARD_MEDIA_LIVE_MOUNTS_PASSING_NO_VIDEO ~ screens passing video_url None",
+        "spec": "specs/turbobaby/ui_kit.t27",
+        "const": "CARD_MEDIA_LIVE_MOUNTS_PASSING_NO_VIDEO",
+        "source": "src/ui/screens/*.rs",
+        "extract": ("tree_regex_count", r"video_url: None,"),
+        "relation": "equal",
+        "why": "the contract says the autoplay branch and mute_media_element never run on a "
+               "live route because of exactly these two arguments",
+    },
+    {
+        "name": "ui_kit.BIKE_DTO_VIDEO_FIELDS ~ catalog_screen.rs ApiBike",
+        "spec": "specs/turbobaby/ui_kit.t27",
+        "const": "BIKE_DTO_VIDEO_FIELDS",
+        "source": "src/ui/screens/catalog_screen.rs",
+        "extract": ("regex_count", r"pub video_url\b"),
+        "witness": r"pub image_url: Option<String>,",
+        "relation": "equal",
+        "why": "a video field on the bike DTO is the change that could wake the video branch; "
+               "until it exists the None at both live mounts is structural",
+    },
+    # VideoModal's one live site: the button that opens it also closes the Modal it lives in
+    # (src/ui/screens/admin_screen.rs:2375).
+    {
+        "name": "ui_kit.VIDEO_MODAL_OPENERS_THAT_CLOSE_ITS_MODAL ~ admin ItemRow opener",
+        "spec": "specs/turbobaby/ui_kit.t27",
+        "const": "VIDEO_MODAL_OPENERS_THAT_CLOSE_ITS_MODAL",
+        "source": "src/ui/screens/admin_screen.rs",
+        "extract": ("regex_count", r"menu_open\.set\(false\); show_video\.set\(true\);"),
+        "relation": "equal",
+        "why": "the contract's video_modal_can_render is false while this opener closes the "
+               "player's own container",
+    },
+    {
+        "name": "ui_kit.LIGHTBOX_MAX_ZOOM_WHOLE ~ image_lightbox.rs MAX_ZOOM",
+        "spec": "specs/turbobaby/ui_kit.t27",
+        "const": "LIGHTBOX_MAX_ZOOM_WHOLE",
+        "source": "src/ui/components/image_lightbox.rs",
+        "extract": ("regex", r"const MAX_ZOOM: f64 = (\d+\.\d+);"),
+        "relation": "equal",
+        "why": "the zoom model in tenths is scaled from this bound; the reader turns 3.0 into 3",
+    },
+    {
+        "name": "ui_kit.MODAL_SIZE_COUNT ~ modal.rs ModalSize arms",
+        "spec": "specs/turbobaby/ui_kit.t27",
+        "const": "MODAL_SIZE_COUNT",
+        "source": "src/ui/components/modal.rs",
+        "extract": ("regex_count", r'Self::\w+ => "[a-z]+",'),
+        "relation": "equal",
+        "why": "the contract says every size class has a rule in styles/main.css; a fifth size "
+               "arrives with no rule until someone writes one",
+    },
+    # The kind titles and the close label of Toast bypass t(); the one mount (/admin) passes no
+    # title. Cyrillic counted by code point range so this file stays ASCII.
+    {
+        "name": "ui_kit.TOAST_HARDCODED_CYRILLIC_LITERALS ~ toast.rs string literals",
+        "spec": "specs/turbobaby/ui_kit.t27",
+        "const": "TOAST_HARDCODED_CYRILLIC_LITERALS",
+        "source": "src/ui/components/toast.rs",
+        "extract": ("regex_count", r'"[^"\n]*[\u0400-\u04FF][^"\n]*"'),
+        "relation": "equal",
+        "why": "every toast on /admin shows one of these words under every published locale; "
+               "routing one through t() moves this count",
+    },
+    # The one ruleless kit class rendered live: EmptyState's glass variant on /cart.
+    {
+        "name": "ui_kit.CARD_GLASS_RULES_IN_STYLES ~ styles/*.css",
+        "spec": "specs/turbobaby/ui_kit.t27",
+        "const": "CARD_GLASS_RULES_IN_STYLES",
+        "source": "styles/*.css",
+        "extract": ("tree_regex_count", r"\.card-glass(?![\w-])"),
+        "witness": r"\.empty-state(?![\w-])",
+        "relation": "equal",
+        "why": "/cart asks EmptyState for glass (cart_screen.rs:197) and gets card-glass; the "
+               "contract records that no rule answers it",
+    },
+    # The 45 css_class/selected_class tokens with no rule, as the host test's own `.name` scan
+    # would find them (a selector ends at the first character outside [A-Za-z0-9_-]).
+    {
+        "name": "ui_kit.UNSTYLED_METHOD_TOKEN_RULES_IN_STYLES ~ styles/*.css",
+        "spec": "specs/turbobaby/ui_kit.t27",
+        "const": "UNSTYLED_METHOD_TOKEN_RULES_IN_STYLES",
+        "source": "styles/*.css",
+        "extract": ("tree_regex_count", r"\.(?:btn-outline|btn-ghost|btn-danger|btn-pixel|btn-neon|btn-neon-green|btn-neon-purple|btn-neon-gold|btn-neon-red|card-default|card-product|card-bike|card-quest|card-member|card-glass|card-glass-green|card-glass-purple|card-glass-gold|badge|badge-neutral|badge-rarity-common|badge-rarity-rare|badge-rarity-epic|badge-rarity-legendary|badge-success|badge-warning|badge-info|badge-error|badge-sm|badge-lg|selected|chip-purple|chip-gold|progress-green|progress-purple|progress-gold|progress-neon|progress-sm|progress-lg|progress-xl|rarity-glow|rarity-glow-common|rarity-glow-rare|rarity-glow-epic|rarity-glow-legendary)(?![\w-])"),
+        "witness": r"\.skeleton-loader(?![\w-])",
+        "relation": "equal",
+        "why": "the host test cannot see a method's token (src/main.rs:1659), so this row is "
+               "the only instrument over the 45; a rule for any of them changes the contract",
+    },
+    {
+        "name": "ui_kit.SKELETON_SHAPE_COUNT ~ skeleton.rs css_class arms",
+        "spec": "specs/turbobaby/ui_kit.t27",
+        "const": "SKELETON_SHAPE_COUNT",
+        "source": "src/ui/components/skeleton.rs",
+        "extract": ("regex_count", r'=> "skeleton-loader'),
+        "relation": "equal",
+        "why": "all 13 shape tokens have rules today; a fourteenth arrives unseen by the host test",
+    },
+    {
+        "name": "ui_kit.BUTTON_VARIANT_COUNT ~ button.rs css_class arms",
+        "spec": "specs/turbobaby/ui_kit.t27",
+        "const": "BUTTON_VARIANT_COUNT",
+        "source": "src/ui/components/button.rs",
+        "extract": ("regex_count", r'=> "btn btn-'),
+        "relation": "equal",
+        "why": "the contract derives Button's 12 tokens from 10 variants plus btn and btn-neon",
+    },
+    # Button's renderers, and the primitives with no mount site at all. `^\s*Name \{` at a line
+    # start is an rsx mount; UpgradeButton, BikeCard and StatusChip do not match.
+    {
+        "name": "ui_kit.BUTTON_RENDER_SITES ~ Button mounts under src/ui",
+        "spec": "specs/turbobaby/ui_kit.t27",
+        "const": "BUTTON_RENDER_SITES",
+        "source": "src/ui/**/*.rs",
+        "extract": ("tree_regex_count", r"^\s*Button \{"),
+        "relation": "equal",
+        "why": "all four sites are in files nothing mounts; a fifth in a live screen changes "
+               "Button's reach class",
+    },
+    {
+        "name": "ui_kit.MOUNT_SITES_OF_THE_UNCALLED_PRIMITIVES ~ src/ui",
+        "spec": "specs/turbobaby/ui_kit.t27",
+        "const": "MOUNT_SITES_OF_THE_UNCALLED_PRIMITIVES",
+        "source": "src/ui/**/*.rs",
+        "extract": ("tree_regex_count", r"^\s*(?:Card|Input|Loading|Badge|Chip|ChipGroup|RarityGlow|SkeletonRow) \{"),
+        "witness": r"Skeleton \{ shape:",
+        "relation": "equal",
+        "why": "the census puts these primitives in REACH_NO_LIVE_SITE because nothing mounts "
+               "them; the first mount anywhere makes the census re-measured",
+    },
+    {
+        "name": "ui_kit.THEME_TOKEN_COUNT ~ theme/mod.rs custom properties",
+        "spec": "specs/turbobaby/ui_kit.t27",
+        "const": "THEME_TOKEN_COUNT",
+        "source": "src/ui/theme/mod.rs",
+        "extract": ("regex_count", r"^    --[a-z0-9-]+:"),
+        "relation": "equal",
+        "why": "the drift table classifies exactly these thirteen against styles/*.css",
+    },
+    {
+        "name": "ui_kit.THEME_EXPORT_FILES ~ files naming CSS_VARS or inject_theme",
+        "spec": "specs/turbobaby/ui_kit.t27",
+        "const": "THEME_EXPORT_FILES",
+        "source": "src/**/*.rs",
+        "extract": ("tree_module_count", r"\b(?:inject_theme|CSS_VARS)\b"),
+        "relation": "equal",
+        "why": "the theme is dead because no file but its own names its exports; a second file "
+               "is a caller",
+    },
+    {
+        "name": "ui_kit.STYLES_DEFINITIONS_OF_THE_ABSENT_THEME_TOKENS ~ styles/*.css",
+        "spec": "specs/turbobaby/ui_kit.t27",
+        "const": "STYLES_DEFINITIONS_OF_THE_ABSENT_THEME_TOKENS",
+        "source": "styles/*.css",
+        "extract": ("tree_regex_count", r"--(?:bg-primary|text-primary|text-secondary|pixel-border)\s*:"),
+        "witness": r"--bg-tertiary\s*:",
+        "relation": "equal",
+        "why": "four of the theme's thirteen tokens are declared by no sheet; declaring one "
+               "moves the 7/2/4 split",
+    },
+    # --- review of round 7, 2026-09-30 -------------------------------------------------------------
+    # Two reviewers read round 7 and found facts restated by a contract that does not own them and
+    # claims nothing bound. The fixes moved each fact to its owner and bound these five. Every row
+    # was measured by hand on both sides first (the probe is
+    # D:/t27work/scratch-2909/review7-fix/probe_patterns.py) and planted RED once through this
+    # script: a single-file row with --source-override, a tree row in a mirror of the working tree.
+    # The two rows added in place above (rental_terms.CLASS_ENTITY_READING_HANDLERS,
+    # webapp_bridge.NO_HOST_NOTICE_KEYS) were planted the same way.
+    {
+        "name": "catalog_write.WRITE_IMAGE_URL_ADMITTED_PREFIXES ~ api/mod.rs validate_url",
+        "spec": "specs/turbobaby/catalog_write.t27",
+        "const": "WRITE_IMAGE_URL_ADMITTED_PREFIXES",
+        "source": "src/api/mod.rs",
+        # Added 2026-09-30. :61-65, in the order validate_url tests them; the character '/' at :63
+        # is a char literal and the pattern takes either quote. The witness pins the protocol-relative
+        # refusal at :58, which runs first and which the list does not show.
+        "extract": ("regex_all", r"(?:let allowed = |\|\| )u\.starts_with\([\"']([^\"']+)[\"']\)"),
+        "witness": r"if u\.starts_with\(\"//\"\) \{\s*return Err",
+        "relation": "list_equal",
+        "why": "what a family write may store as its image address; the two data: prefixes are "
+               "why a stored address can be one the kit's media predicate never shows",
+    },
+    {
+        "name": "ui_kit.MEDIA_PREDICATE_DATA_SCHEME_CLAUSES ~ src/ui data-scheme clauses",
+        "spec": "specs/turbobaby/ui_kit.t27",
+        "const": "MEDIA_PREDICATE_DATA_SCHEME_CLAUSES",
+        "source": "src/ui/**/*.rs",
+        # Added 2026-09-30. Zero: no copy of the read-side predicate, and nothing else under src/ui,
+        # asks whether an address starts with data:. Witness: the '//' clause every copy carries.
+        "extract": ("tree_regex_count", r"\.starts_with\(\s*\"data:"),
+        "witness": r"\.starts_with\(\"//\"\)",
+        "relation": "equal",
+        "why": "MEDIA_PREDICATE_ADMITS_A_DATA_URL is false because of this zero; the first data: "
+               "clause in a copy makes a stored data: URL render where it did not",
+    },
+    {
+        "name": "ui_kit.SIBLING_LINE_CITATIONS_IN_THIS_FILE ~ ui_kit.t27 own text",
+        "spec": "specs/turbobaby/ui_kit.t27",
+        "const": "SIBLING_LINE_CITATIONS_IN_THIS_FILE",
+        "source": "specs/turbobaby/ui_kit.t27",
+        # Added 2026-09-30. The contract's own claim about its own text, read from that text: a
+        # `name.t27:N` citation anywhere in the file. The same scan finds the three quoted historical
+        # examples the contract map allows in the rest of the corpus, one each in bot_surface,
+        # deposit_tiers and locale_policy. Witness: the file names its siblings by ID.
+        "extract": ("regex_count", r"\b[a-z][a-z0-9_]*\.t27:\d"),
+        "witness": r"REUSES_[A-Z_]+_ID : str = \"turbobaby/",
+        "relation": "equal",
+        "why": "a sibling cited by line goes stale the day the sibling is edited (72 did in one "
+               "day); the kit names its owners by ID and declaration only",
+    },
+    {
+        "name": "loyalty_ledger.CONFIG_SEED_KEYS_NAMED_BY_RATE_SOURCE_DEFAULTS ~ trios/loyalty.rs defaults()",
+        "spec": "specs/turbobaby/loyalty_ledger.t27",
+        "const": "CONFIG_SEED_KEYS_NAMED_BY_RATE_SOURCE_DEFAULTS",
+        "source": "src/trios/loyalty.rs",
+        # Added 2026-09-30. :36-44, one key per line inside defaults(); the tests' inline json! blocks
+        # sit on one line and do not match. The witness pins the block the keys belong to.
+        "extract": ("regex_count", r"^\s+\"[a-z_]+\": [0-9.]+,?$"),
+        "witness": r"pub fn defaults\(\) -> Value \{\s*json!\(\{",
+        "relation": "equal",
+        "why": "13 seed keys split 9 named by these defaults and happy-hour's list (a marked copy "
+               "of its length); binding the nine and the total pins the split",
+    },
+    {
+        "name": "happy_hour.SEEDED_CONFIG_KEYS ~ 001 loyalty_config seed happy_hour keys",
+        "spec": "specs/turbobaby/happy_hour.t27",
+        "const": "SEEDED_CONFIG_KEYS",
+        "source": "migrations/001_initial.sql",
+        # Added 2026-09-30. :98-101. A set: the contract orders its list to face READER_CONFIG_KEYS
+        # key for key, not in file order. The witness pins the INSERT the keys belong to.
+        "extract": ("regex_all", r"^\s+\"(happy_hour_[a-z_]+)\":"),
+        "witness": r"INSERT INTO loyalty_config \(id, config\) VALUES \(1, '\{",
+        "relation": "set_equal",
+        "why": "the shipped blob's happy-hour keys, which the reader never reads; loyalty-ledger "
+               "carries this list's length as a copy in its 9 + 4 = 13 split",
     },
 )
 
@@ -4386,7 +6200,24 @@ ONE_GROUP_EXTRACTORS = (
 # leaderboard's admin gate as its first statement, ahead of the query string, and the admin census
 # of src/api/referrals.rs, each planted RED once by hand: 286 + 2 = 288 rows over the same 42
 # contracts, floor 288 (the measured table size). No row removed.
-MIN_BINDINGS = 288
+# Round 7 (2026-09-29, every source file named, over 55a6664): the 69 files under src/ that no
+# contract named went to the sixteen contracts owning their subjects and to the new
+# turbobaby/ui-kit, and 132 rows came with them -- bike_catalog 6, commerce 18, star_award 7,
+# locale_policy 4, api_surface 5, webapp_bridge 9, schema_provenance 6, cart_persistence 3,
+# availability 2, request_identity 4, loyalty_ledger 7, rental_terms 6, http_cache 5,
+# client_errors 4, referral_program 5, legacy_retirement 18, ui_kit 23. Each was measured by hand
+# on both sides and planted RED once through this script (a single-file row with
+# --source-override, a tree row in a mirror of the working tree): 288 + 132 = 420 rows over
+# 43 contracts, floor 420 (the measured table size). No row removed.
+# The review of round 7 (2026-09-30): facts a contract stated without owning, and claims nothing
+# bound, moved to their owners and bound -- rental_terms.CLASS_ENTITY_READING_HANDLERS (4 -> 5, the
+# order check), webapp_bridge.NO_HOST_NOTICE_KEYS, catalog_write.WRITE_IMAGE_URL_ADMITTED_PREFIXES,
+# ui_kit.MEDIA_PREDICATE_DATA_SCHEME_CLAUSES and SIBLING_LINE_CITATIONS_IN_THIS_FILE,
+# loyalty_ledger.CONFIG_SEED_KEYS_NAMED_BY_RATE_SOURCE_DEFAULTS and happy_hour.SEEDED_CONFIG_KEYS.
+# Each was measured by hand on both sides and planted RED once through this script, the same two
+# ways: 420 + 7 = 427 rows over the same 43 contracts, floor 427 (the measured table size). No row
+# removed.
+MIN_BINDINGS = 427
 
 
 # ---------------------------------------------------------------------------------

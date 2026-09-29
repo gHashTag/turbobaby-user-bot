@@ -140,7 +140,14 @@ pub const REUSES_CATALOG_API_ID : str = "turbobaby/catalog-api";
 pub const REUSES_CLIENT_ERRORS_ID : str = "turbobaby/client-errors";
 pub const REUSES_REQUEST_IDENTITY_ID : str = "turbobaby/request-identity";
 pub const REUSES_OBSERVABILITY_ID : str = "turbobaby/observability";
-pub const REUSE_EDGE_COUNT : u8 = 4;
+; Added 2026-09-30 at the review of round 7: webapp-bridge owns which crate target the browser build
+; compiles (BROWSER_BUILD_TARGET, and BROWSER_BUILD_ENABLES_THE_BACKEND_FEATURE). The section on the
+; web stub read that from index.html itself; it now reads it from the owner by name. CORRECTED
+; 2026-09-30: REUSE_EDGE_COUNT was 4, kept as REUSE_EDGE_COUNT_BEFORE_2026_09_30.
+pub const REUSES_WEBAPP_BRIDGE_ID : str = "turbobaby/webapp-bridge";
+pub const BROWSER_BUILD_OWNER_DECLS : [2]str = ["BROWSER_BUILD_TARGET", "BROWSER_BUILD_ENABLES_THE_BACKEND_FEATURE"];
+pub const REUSE_EDGE_COUNT : u8 = 5;
+pub const REUSE_EDGE_COUNT_BEFORE_2026_09_30 : u8 = 4;
 pub const SUCCESS_NUMERAL_ALREADY_DECLARED_AT : str = "turbobaby/catalog-api";
 pub const MISS_NUMERAL_ALREADY_DECLARED_AT : str = "turbobaby/catalog-api";
 pub const THIS_FILE_DECLARES_NO_HTTP_NUMERAL : bool = true;
@@ -328,6 +335,54 @@ pub const DOCUMENT_ENDPOINT_IS_UNDER_THE_NEST : bool = false;
 pub const OUTER_FALLBACK_SERVES_SPA : bool = true;
 pub const FEATURE_READING_NOTE : str = "A default feature set decides what a default build contains, not what a serving build contains. Reading Cargo.toml:174 alone and stopping there yields the claim that a client fetching /api-docs/openapi.json receives a success page instead of the document, and no build can be in that state: the same switch that removes the document removes the server that would have answered.";
 
+; --- The binary a default build does produce: src/web.rs (added 2026-09-29) ------------------------
+; Measured 2026-09-29 at 55a6664. The section above says a default build has no server. It does
+; have a binary, and until this date no contract named it. Cargo.toml declares two [[bin]] targets:
+; turbobaby-bot at src/web.rs (Cargo.toml:58-60, with no required-features) and the server at
+; src/main.rs (Cargo.toml:62-65, required-features backend). So src/web.rs is the one binary a
+; default build compiles, and CI compiles it: the release wasm job builds every default target
+; (.github/workflows/ci.yml:50), and the backend check and test steps (:33-34) build every binary
+; target too. The tree knows it is a crate root: src/main.rs:2523-2552 crate_root_files reads the
+; manifest's path lines precisely because this third root is the one a hand-written list forgets.
+; What it serves is nothing. The whole file is nine lines: a doc calling it a development stub that
+; never runs in the browser (:1-5) and a main that prints one line (:7-9). No route, no router, no
+; module declaration. It is not what ships either: Trunk builds the LIBRARY target, which is
+; turbobaby/webapp-bridge's BROWSER_BUILD_TARGET and is not this binary (CORRECTED 2026-09-30: this
+; line read the target from index.html itself), the Dockerfile builds only turbobaby-bot-server
+; (Dockerfile:15 and :28) and the image copies and runs only that binary (Dockerfile:38 and :65).
+; So the default build's only binary answers no path, which is FEATURE_READING_NOTE seen from the
+; other side: nothing a default build produces can mistake a miss for a success, because nothing
+; it produces answers at all.
+pub const WEB_STUB_SOURCE : str = "src/web.rs";
+pub const WEB_STUB_BIN_NAME : str = "turbobaby-bot";
+pub const WEB_STUB_MEASURED_AT : str = "2026-09-29";
+pub const CARGO_BIN_TARGET_COUNT : u8 = 2;
+pub const BIN_TARGETS_WITH_REQUIRED_FEATURES : u8 = 1;
+pub const WEB_STUB_REQUIRED_FEATURE_LINES : u8 = 0;
+pub const WEB_STUB_REQUIRES_A_FEATURE : bool = false;
+; Cargo.toml:174, default = []: a default build selects no feature, backend included.
+pub const DEFAULT_BUILD_SELECTS_BACKEND : bool = false;
+pub const WEB_STUB_LINES : u8 = 9;
+pub const WEB_STUB_ROUTE_REGISTRATIONS : u8 = 0;
+pub const WEB_STUB_MODULE_DECLARATIONS : u8 = 0;
+pub const WEB_STUB_IS_COMPILED_BY_A_DEFAULT_BUILD : bool = true;
+pub const WEB_STUB_IS_COMPILED_IN_CI : bool = true;
+pub const WEB_STUB_IS_SHIPPED : bool = false;
+
+; The binaries a build compiles are those whose required features it selects; a target that
+; requires none is compiled by every build.
+pub fn bin_target_is_built(requires_a_feature: bool, build_selects_that_feature: bool) bool {
+  if (!requires_a_feature) {
+    return true;
+  }
+  return build_selects_that_feature;
+}
+
+; A binary with no route answers no path, so it cannot answer a miss as anything.
+pub fn binary_answers_a_path(route_registrations: u8) bool {
+  return route_registrations > 0;
+}
+
 ; --- The law: a routed path and a documented path must be the same path -------------------------
 ; Exemption is an abstract parameter. It excuses a routed path the document omits on purpose --
 ; a liveness probe, a debug hook -- and it can never excuse a documented path that is not
@@ -488,7 +543,12 @@ test api_surface_reuse_edges_are_named_by_id {
   assert REUSES_CLIENT_ERRORS_ID == "turbobaby/client-errors";
   assert REUSES_REQUEST_IDENTITY_ID == "turbobaby/request-identity";
   assert REUSES_OBSERVABILITY_ID == "turbobaby/observability";
-  assert REUSE_EDGE_COUNT == 4;
+  assert REUSE_EDGE_COUNT_BEFORE_2026_09_30 == 4;
+  assert REUSE_EDGE_COUNT == REUSE_EDGE_COUNT_BEFORE_2026_09_30 + 1;
+  assert REUSES_WEBAPP_BRIDGE_ID == "turbobaby/webapp-bridge";
+  assert REUSES_WEBAPP_BRIDGE_ID != ID;
+  assert BROWSER_BUILD_OWNER_DECLS[0] == "BROWSER_BUILD_TARGET";
+  assert BROWSER_BUILD_OWNER_DECLS[1] == "BROWSER_BUILD_ENABLES_THE_BACKEND_FEATURE";
   assert SUCCESS_NUMERAL_ALREADY_DECLARED_AT == REUSES_CATALOG_API_ID;
   assert MISS_NUMERAL_ALREADY_DECLARED_AT == REUSES_CATALOG_API_ID;
   assert THIS_FILE_DECLARES_NO_HTTP_NUMERAL == true;
@@ -726,6 +786,35 @@ test api_surface_the_witness_pins_the_semantics_not_the_wiring {
   assert witness_would_catch_a_deleted_fallback(true) == true;
 }
 
+; A default build compiles the stub and not the server; a serving build compiles both. The stub
+; answers nothing in either.
+test api_surface_the_default_build_produces_one_binary_and_it_serves_nothing {
+  assert WEB_STUB_SOURCE == "src/web.rs";
+  assert WEB_STUB_BIN_NAME == "turbobaby-bot";
+  assert WEB_STUB_MEASURED_AT == "2026-09-29";
+  assert CARGO_BIN_TARGET_COUNT == 2;
+  assert BIN_TARGETS_WITH_REQUIRED_FEATURES == 1;
+  assert CARGO_BIN_TARGET_COUNT - BIN_TARGETS_WITH_REQUIRED_FEATURES == 1;
+  assert WEB_STUB_REQUIRED_FEATURE_LINES == 0;
+  assert WEB_STUB_REQUIRES_A_FEATURE == false;
+  assert bin_target_is_built(WEB_STUB_REQUIRES_A_FEATURE, DEFAULT_BUILD_SELECTS_BACKEND) == true;
+  assert bin_target_is_built(SERVER_BINARY_REQUIRES_THE_BACKEND_FEATURE, DEFAULT_BUILD_SELECTS_BACKEND) == false;
+  assert bin_target_is_built(WEB_STUB_REQUIRES_A_FEATURE, true) == true;
+  assert bin_target_is_built(SERVER_BINARY_REQUIRES_THE_BACKEND_FEATURE, true) == true;
+  assert WEB_STUB_IS_COMPILED_BY_A_DEFAULT_BUILD == true;
+  assert WEB_STUB_IS_COMPILED_IN_CI == true;
+}
+
+test api_surface_the_stub_has_no_route_and_does_not_ship {
+  assert WEB_STUB_LINES == 9;
+  assert WEB_STUB_ROUTE_REGISTRATIONS == 0;
+  assert WEB_STUB_MODULE_DECLARATIONS == 0;
+  assert binary_answers_a_path(WEB_STUB_ROUTE_REGISTRATIONS) == false;
+  assert binary_answers_a_path(1) == true;
+  assert WEB_STUB_IS_SHIPPED == false;
+  assert THIS_FILE_ENUMERATES_THE_PATHS == false;
+}
+
 test api_surface_refuses_to_become_a_second_router {
   assert THIS_FILE_ENUMERATES_THE_PATHS == false;
   assert THIS_FILE_CARRIES_A_SCHEMA_FRAGMENT == false;
@@ -789,3 +878,7 @@ invariant api_surface_the_witness_does_not_cover_the_shipped_wiring
 
 invariant api_surface_declares_no_list_and_no_schema
   assert THIS_FILE_ENUMERATES_THE_PATHS == false and THIS_FILE_CARRIES_A_SCHEMA_FRAGMENT == false and THIS_FILE_DECLARES_NO_HTTP_NUMERAL == true
+
+; Added 2026-09-29: the binary every build compiles is the one that answers no path.
+invariant api_surface_the_binary_every_build_compiles_answers_no_path
+  assert bin_target_is_built(WEB_STUB_REQUIRES_A_FEATURE, DEFAULT_BUILD_SELECTS_BACKEND) == true and binary_answers_a_path(WEB_STUB_ROUTE_REGISTRATIONS) == false and WEB_STUB_IS_SHIPPED == false
