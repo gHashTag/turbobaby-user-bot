@@ -554,7 +554,7 @@ test order_status_name_lookup_is_closed_over_the_whitelist {
   assert order_status_code_of("delivered") == STATUS_DELIVERED;
   assert order_status_code_of("completed") == STATUS_COMPLETED;
   assert order_status_code_of("cancelled") == STATUS_CANCELLED;
-  ; The two names the UI type declares and the server refuses, plus the shapes a caller guesses.
+; The two names the UI type declares and the server refuses, plus the shapes a caller guesses.
   assert order_status_code_of("processing") == STATUS_UNSET;
   assert order_status_code_of("shipped") == STATUS_UNSET;
   assert order_status_code_of("Pending") == STATUS_UNSET;
@@ -586,8 +586,8 @@ test order_status_produces_the_boolean_commerce_takes_as_an_input {
   assert REUSES_COMMERCE_ID != ID;
   assert order_status_current_is_terminal(STATUS_COMPLETED) == true;
   assert order_status_current_is_terminal(STATUS_PENDING) == false;
-  ; The fail-open, stated as a value and not as a silence: an unrecognised stored status is not
-  ; terminal, so it does not stop a write.
+; The fail-open, stated as a value and not as a silence: an unrecognised stored status is not
+; terminal, so it does not stop a write.
   assert UNKNOWN_STORED_STATUS_IS_TREATED_AS_NON_TERMINAL == true;
   assert order_status_current_is_terminal(STATUS_UNSET) == false;
   assert order_status_current_is_terminal(10) == false;
@@ -611,8 +611,8 @@ test order_status_unknown_requested_name_is_never_admitted {
   assert order_status_write_admitted(STATUS_PENDING, 10) == false;
   assert order_status_write_admitted(STATUS_PENDING, order_status_code_of("shipped")) == false;
   assert order_status_write_admitted(STATUS_PENDING, order_status_code_of("processing")) == false;
-  ; And the other direction: an unreadable CURRENT state admits the write, which is the shipped
-  ; behaviour and the opposite direction of failure from the line above.
+; And the other direction: an unreadable CURRENT state admits the write, which is the shipped
+; behaviour and the opposite direction of failure from the line above.
   assert order_status_write_admitted(STATUS_UNSET, STATUS_CONFIRMED) == true;
   assert order_status_write_admitted(10, STATUS_CONFIRMED) == true;
 }
@@ -627,7 +627,7 @@ test order_status_delivered_is_accepted_and_never_stored {
   assert order_status_persisted_code(STATUS_DELIVERED) == STATUS_COMPLETED;
   assert order_status_persisted_code(STATUS_COMPLETED) == STATUS_COMPLETED;
   assert order_status_persisted_code(STATUS_DELIVERED) == order_status_code_of(ALIAS_PERSISTED_NAME);
-  ; Every other accepted name is stored as itself.
+; Every other accepted name is stored as itself.
   assert order_status_persisted_code(STATUS_PREPARING) == STATUS_PREPARING;
   assert order_status_persisted_code(STATUS_OUT_FOR_DELIVERY) == STATUS_OUT_FOR_DELIVERY;
   assert order_status_persisted_code(STATUS_CANCELLED) == STATUS_CANCELLED;
@@ -642,7 +642,7 @@ test order_status_path_input_caps_refuse_with_four_hundred_in_shipped_order {
   assert order_status_validation_reason(201, 9, STATUS_CONFIRMED) == REFUSAL_REASON_ID_TOO_LONG;
   assert order_status_validation_reason(6, 51, STATUS_CONFIRMED) == REFUSAL_REASON_STATUS_TOO_LONG;
   assert order_status_validation_reason(6, 7, STATUS_UNSET) == REFUSAL_REASON_STATUS_UNKNOWN;
-  ; Precedence: the id cap answers first even when every later check would also refuse.
+; Precedence: the id cap answers first even when every later check would also refuse.
   assert order_status_validation_reason(201, 51, STATUS_UNSET) == REFUSAL_REASON_ID_TOO_LONG;
   assert order_status_validation_reason(6, 51, STATUS_UNSET) == REFUSAL_REASON_STATUS_TOO_LONG;
   assert order_status_validation_refusal(200, 9, STATUS_CONFIRMED) == REFUSAL_NONE;
@@ -659,8 +659,8 @@ test order_status_every_accepted_name_fits_the_column_today {
   assert order_status_name_fits_column(LONGEST_ACCEPTED_NAME_CHARS) == true;
   assert order_status_name_fits_column(DB_STATUS_COLUMN_CHARS) == true;
   assert order_status_name_fits_column(31) == false;
-  ; A name inside the door cap and outside the column is representable at the door and not in the
-  ; column, which is why the gap is recorded instead of being called safe.
+; A name inside the door cap and outside the column is representable at the door and not in the
+; column, which is why the gap is recorded instead of being called safe.
   assert order_status_name_fits_column(STATUS_CHARS_MAX) == false;
 }
 
@@ -678,7 +678,7 @@ test order_status_customer_cancellation_needs_pending_and_refuses_with_conflict 
   assert order_status_customer_cancel_refusal(STATUS_PENDING) == REFUSAL_NONE;
   assert order_status_customer_cancel_refusal(STATUS_CONFIRMED) == HTTP_CONFLICT;
   assert order_status_customer_cancel_refusal(STATUS_COMPLETED) == HTTP_CONFLICT;
-  ; A non-terminal status is still a refusal here, so cancellation is NOT the terminal test.
+; A non-terminal status is still a refusal here, so cancellation is NOT the terminal test.
   assert order_status_is_terminal(STATUS_CONFIRMED) == false;
 }
 
@@ -701,7 +701,7 @@ test order_status_five_declarations_of_one_column_carry_four_vocabularies {
   assert order_status_code_of(UI_TYPES_EXTRA_NAMES[1]) == STATUS_UNSET;
   assert TYPED_MODELS_AGREE == false;
   assert TYPED_MODELS_AGREE == order_status_models_agree(TRIOS_STORE_VARIANT_COUNT, TRIOS_STORE_MISSING_COUNT, TRIOS_STORE_EXTRA_COUNT, UI_TYPES_VARIANT_COUNT, UI_TYPES_MISSING_COUNT, UI_TYPES_EXTRA_COUNT);
-  ; The fourth and fifth, which the first draft of this file did not count at all.
+; The fourth and fifth, which the first draft of this file did not count at all.
   assert DISPLAY_PIPELINE_MODEL_A == "src/trios/order_status_view.rs:65-72";
   assert DISPLAY_PIPELINE_MODEL_A_BEFORE_REPAIR == "src/ui/components/status_stepper.rs:16-23";
   assert DISPLAY_PIPELINE_MODEL_A != DISPLAY_PIPELINE_MODEL_A_BEFORE_REPAIR;
@@ -714,14 +714,14 @@ test order_status_five_declarations_of_one_column_carry_four_vocabularies {
   assert DISPLAY_PIPELINE_MISSING_NAMES[0] == "completed";
   assert DISPLAY_PIPELINE_MISSING_NAMES[1] == "rejected";
   assert DISPLAY_PIPELINE_MISSING_NAMES[2] == "cancelled";
-  ; All three names the pipelines drop are terminal, which is what makes dropping them costly.
+; All three names the pipelines drop are terminal, which is what makes dropping them costly.
   assert order_status_is_terminal(order_status_code_of(DISPLAY_PIPELINE_MISSING_NAMES[0])) == true;
   assert order_status_is_terminal(order_status_code_of(DISPLAY_PIPELINE_MISSING_NAMES[1])) == true;
   assert order_status_is_terminal(order_status_code_of(DISPLAY_PIPELINE_MISSING_NAMES[2])) == true;
   assert DISPLAY_PIPELINES_AGREE == false;
   assert DISPLAY_PIPELINES_AGREE == order_status_display_pipeline_agrees(DISPLAY_PIPELINE_VARIANT_COUNT, DISPLAY_PIPELINE_MISSING_COUNT, DISPLAY_PIPELINE_EXTRA_COUNT);
   assert order_status_display_pipeline_agrees(STATUS_COUNT, 0, 0) == true;
-  ; Five declarations, two of them identical, so four vocabularies.
+; Five declarations, two of them identical, so four vocabularies.
   assert COLUMN_ENUMERATION_COUNT == 5;
   assert DISTINCT_VOCABULARY_COUNT == 4;
   assert DISPLAY_PIPELINES_ARE_IDENTICAL == true;
@@ -729,16 +729,16 @@ test order_status_five_declarations_of_one_column_carry_four_vocabularies {
 }
 
 test order_status_equal_variant_counts_do_not_prove_agreement {
-  ; The measured UI model has the same nine variants as the write path and shares only seven
-  ; names. A predicate on totals alone would call that agreement, so the predicate takes the
-  ; missing and extra lists too.
+; The measured UI model has the same nine variants as the write path and shares only seven
+; names. A predicate on totals alone would call that agreement, so the predicate takes the
+; missing and extra lists too.
   assert UI_TYPES_VARIANT_COUNT == STATUS_COUNT;
   assert order_status_models_agree(9, 0, 0, 9, 2, 2) == false;
   assert order_status_models_agree(9, 0, 0, 9, 0, 2) == false;
   assert order_status_models_agree(9, 0, 0, 9, 2, 0) == false;
   assert order_status_models_agree(6, 3, 0, 9, 0, 0) == false;
   assert order_status_models_agree(9, 3, 0, 9, 0, 0) == false;
-  ; The only shape that agrees, which is what a future fix has to produce.
+; The only shape that agrees, which is what a future fix has to produce.
   assert order_status_models_agree(9, 0, 0, 9, 0, 0) == true;
 }
 
@@ -754,8 +754,8 @@ test order_status_the_fourth_reader_recognises_two_of_the_four_terminal_names {
   assert REFUND_GUARD_TERMINAL_COUNT + REFUND_GUARD_MISSING_COUNT == TERMINAL_COUNT;
   assert TERMINAL_GUARDS_AGREE == false;
   assert TERMINAL_GUARDS_AGREE == order_status_terminal_guard_agrees(REFUND_GUARD_TERMINAL_COUNT, REFUND_GUARD_MISSING_COUNT);
-  ; The API reject path reads the full four, so the disagreement is between two guards and not
-  ; between one guard and this file.
+; The API reject path reads the full four, so the disagreement is between two guards and not
+; between one guard and this file.
   assert order_status_terminal_guard_agrees(API_REJECT_GUARD_TERMINAL_COUNT, API_REJECT_GUARD_MISSING_COUNT) == true;
 }
 
@@ -778,17 +778,17 @@ test order_status_names_its_owners_instead_of_restating_them {
 
 test order_status_declares_the_rules_this_repository_does_not_ship {
   assert NO_SERVER_SIDE_TRANSITION_EDGE_TABLE_IS_SHIPPED == true;
-  ; And the half of it that is NOT an absence: an ordering is shipped client-side, unenforced.
+; And the half of it that is NOT an absence: an ordering is shipped client-side, unenforced.
   assert CLIENT_SIDE_TRANSITION_ORDER_IS_SHIPPED == true;
   assert CLIENT_PIPELINE_IS_ENFORCED_ANYWHERE == false;
   assert CLIENT_PIPELINE_LENGTH == DISPLAY_PIPELINE_VARIANT_COUNT;
   assert CLIENT_PIPELINE_SOURCE == DISPLAY_PIPELINE_MODEL_B;
-  ; The one move the admin UI offers last is the name the write path never stores.
+; The one move the admin UI offers last is the name the write path never stores.
   assert CLIENT_PIPELINE_LAST_NAME == ALIAS_ACCEPTED_NAME;
   assert order_status_persisted_code(order_status_code_of(CLIENT_PIPELINE_LAST_NAME)) == STATUS_COMPLETED;
   assert BACKWARD_TRANSITION_IS_ADMITTED == true;
-  ; Backwards and skipping are both admitted today, and both are consequences of there being no
-  ; edge table rather than decisions anyone recorded.
+; Backwards and skipping are both admitted today, and both are consequences of there being no
+; edge table rather than decisions anyone recorded.
   assert order_status_write_admitted(STATUS_READY, STATUS_PENDING) == true;
   assert order_status_write_admitted(STATUS_PENDING, STATUS_OUT_FOR_DELIVERY) == true;
   assert ORDER_STATUS_HAS_NO_DATABASE_CONSTRAINT == true;
@@ -807,11 +807,11 @@ test order_status_bare_names_collide_with_two_other_contracts {
   assert COLLIDING_BARE_STATUS_NAMES[3] == "STATUS_CONFIRMED";
   assert order_status_bare_name_collides("STATUS_NAMES") == true;
   assert order_status_bare_name_collides("STATUS_CONFIRMED") == true;
-  ; The two this file owns outright, which is the other half of the finding.
+; The two this file owns outright, which is the other half of the finding.
   assert order_status_bare_name_collides("STATUS_COUNT") == false;
   assert order_status_bare_name_collides("STATUS_CHARS_MAX") == false;
   assert order_status_bare_name_collides("STATUS_OUT_FOR_DELIVERY") == false;
-  ; The arity difference, which is what makes STATUS_NAMES the worst of the four.
+; The arity difference, which is what makes STATUS_NAMES the worst of the four.
   assert STATUS_NAMES_ARITY_HERE == 9;
   assert STATUS_NAMES_ARITY_IN_AVAILABILITY == 4;
   assert STATUS_NAMES_ARITIES_DIFFER == true;
@@ -819,12 +819,12 @@ test order_status_bare_names_collide_with_two_other_contracts {
   assert STATUS_NAMES_ARITY_HERE == STATUS_COUNT;
   assert STATUS_NAMES.len == STATUS_NAMES_ARITY_HERE;
   assert STATUS_NAMES_SHARE_NO_VALUE_WITH_AVAILABILITY == true;
-  ; availability.t27's four values, asked of this file's own lookup: all four are unknown here.
+; availability.t27's four values, asked of this file's own lookup: all four are unknown here.
   assert order_status_code_of("available") == STATUS_UNSET;
   assert order_status_code_of("rented") == STATUS_UNSET;
   assert order_status_code_of("service") == STATUS_UNSET;
   assert order_status_code_of("retired") == STATUS_UNSET;
-  ; The zero that three contracts agree on, and the collision nobody renamed away.
+; The zero that three contracts agree on, and the collision nobody renamed away.
   assert STATUS_UNSET_DECLARER_COUNT == 3;
   assert STATUS_UNSET_AGREES_ACROSS_EVERY_DECLARER == true;
   assert STATUS_UNSET == 0;
@@ -850,8 +850,8 @@ test order_status_the_iana_precedent_is_nine_contracts_and_not_two {
   assert NEITHER_PRECEDENT_COVERS_THIS_SURFACE == true;
   assert HTTP_BAD_REQUEST == 400;
   assert HTTP_CONFLICT == 409;
-  ; The list, pinned name by name. This file is in it, which is the point: the sentence above is
-  ; about a habit this contract shares and not about a licence only neighbours have.
+; The list, pinned name by name. This file is in it, which is the point: the sentence above is
+; about a habit this contract shares and not about a licence only neighbours have.
   assert IANA_STATUS_DECLARERS[0] == "turbobaby/cart-persistence";
   assert IANA_STATUS_DECLARERS[1] == "turbobaby/catalog-api";
   assert IANA_STATUS_DECLARERS[2] == "turbobaby/client-errors";
@@ -864,7 +864,7 @@ test order_status_the_iana_precedent_is_nine_contracts_and_not_two {
   assert IANA_STATUS_DECLARERS[1] == IANA_STATUS_PRECEDENT_B;
   assert IANA_STATUS_DECLARERS[5] == IANA_STATUS_PRECEDENT_A;
   assert IANA_STATUS_DECLARERS[6] == REUSES_REQUEST_IDENTITY_ID;
-  ; The three a prefix grep does not see, which is why the total is nine and not six.
+; The three a prefix grep does not see, which is why the total is nine and not six.
   assert IANA_STATUS_DECLARERS_MISSED_BY_A_PREFIX_GREP == 3;
   assert CONTRACTS_DECLARING_AN_IANA_STATUS - IANA_STATUS_DECLARERS_MISSED_BY_A_PREFIX_GREP == 6;
 }
@@ -877,7 +877,7 @@ test order_status_is_named_as_the_order_owner_from_two_other_sides {
   assert INBOUND_EDGES[0] != INBOUND_EDGES[1];
   assert INBOUND_EDGES[0] != ID;
   assert INBOUND_EDGES[1] != ID;
-  ; An inbound edge is not an outbound one: neither of those two is named above as an owner here.
+; An inbound edge is not an outbound one: neither of those two is named above as an owner here.
   assert INBOUND_EDGES[0] != REUSES_COMMERCE_ID;
   assert INBOUND_EDGES[1] != REUSES_COMMERCE_ID;
   assert INBOUND_EDGES[0] != REUSES_AVAILABILITY_ID;

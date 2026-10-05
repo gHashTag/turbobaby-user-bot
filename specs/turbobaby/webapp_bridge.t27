@@ -1098,8 +1098,8 @@ test the_cart_drops_two_unreadable_things_and_keeps_the_third {
 test an_absent_price_is_now_the_absence_it_always_was {
   assert price_absence_is_visible(false, true) == true;
   assert price_absence_is_visible(true, false) == true;
-  ; The line this file recorded until 2026-09-21: a surviving line whose price field defaults to a
-  ; NUMBER hides the absence. Kept reachable so the fix is checkable and not merely asserted.
+; The line this file recorded until 2026-09-21: a surviving line whose price field defaults to a
+; NUMBER hides the absence. Kept reachable so the fix is checkable and not merely asserted.
   assert price_absence_is_visible(true, true) == false;
   assert ABSENT_PRICE_SURVIVED_AS_A_FREE_LINE_BEFORE_THE_FIX == true;
   assert ABSENT_PRICE_SURVIVES_AS_A_FREE_LINE == false;

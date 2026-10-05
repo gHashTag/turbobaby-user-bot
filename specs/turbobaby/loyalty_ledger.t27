@@ -114,7 +114,7 @@ pub const REGRESSION_WITNESS : str = "tests/integration_idempotency_negative.rs"
 ; A brace import lowers to an empty UseDecl under the pinned compiler and is rejected, so a
 ; cross-contract dependency is a string that a test pins to its literal. Each line is a decision
 ; this file consumes whole and deliberately does not restate.
-;
+
 ;   order-money      owns the identity the bonus is a TERM of, and what a star is worth when spent.
 ;                    This file owns where the bonus comes from and what bounds it; it writes no
 ;                    total and takes no subtotal. That owner also owns the fleet-seed measurement
@@ -146,7 +146,7 @@ pub const DECLARES_AN_EXCHANGE_RATE : bool = false;
 ; turbobaby/request-identity owns CONSUMER_COUNT and the closed CONSUMERS array beside it, and this
 ; file IS named in it. The edge is also declared here, from this side, so the pair is named from
 ; both ends.
-;
+
 ; CORRECTED TWICE ON 2026-09-21, and the second correction teaches more than the first.
 ; The wording that stood here called this file "a ninth consumer" of a snapshot of eight. That was
 ; a false absence wearing modest clothes: it implied the snapshot was one name short, when a count
@@ -158,7 +158,7 @@ pub const DECLARES_AN_EXCHANGE_RATE : bool = false;
 ; answer to "is this file in the snapshot" went from no to yes between one reading and the next.
 ; That is the whole argument for dating a measurement instead of stating it flatly, and it is why
 ; nothing below is written as a standing absence.
-;
+
 ; Measured 2026-09-21, AFTER that re-measurement: the snapshot holds 22 names, 18 files other than
 ; the owner declare the edge back, all 18 of them are inside the 22, and the remaining 4
 ; (turbobaby/commerce, turbobaby/bike-catalog, turbobaby/availability, turbobaby/ride-game) are

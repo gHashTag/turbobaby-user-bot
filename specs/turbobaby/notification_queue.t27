@@ -1261,9 +1261,9 @@ test every_reuse_edge_names_an_owner_and_restates_nothing {
 
 test what_is_missing_is_named_rather_than_guessed {
   assert BACKOFF_IS_NOT_SHIPPED == true;
-  ; Until 2026-09-21 the missing thing here was a bound on an uncountable row and the shipped
-  ; answer was a refusal to send it. The refusal is gone and the bound is real; what is still
-  ; missing is a PERSISTED one, so the two halves that survive the fix are what this asserts.
+; Until 2026-09-21 the missing thing here was a bound on an uncountable row and the shipped
+; answer was a refusal to send it. The refusal is gone and the bound is real; what is still
+; missing is a PERSISTED one, so the two halves that survive the fix are what this asserts.
   assert SUPERSEDED_UNCOUNTABLE_ATTEMPT_WAS_REFUSED == true;
   assert UNCOUNTABLE_SCAN_IS_BOUNDED == false;
   assert IN_MEMORY_BOUND_SURVIVES_A_RESTART == false;
@@ -1284,19 +1284,19 @@ test a_counter_the_database_refuses_bounds_the_send_without_cancelling_it {
   assert SUPERSEDED_UNCOUNTABLE_ATTEMPT_WAS_REFUSED == true;
   assert AN_UNCOUNTABLE_ATTEMPT_IS_HELD_IN_MEMORY == true;
   assert ATTEMPTS_ARE_READ_FROM_TWO_PLACES == 2;
-  ; The first pass on a row nobody can count still goes out, and so do the second and the third.
+; The first pass on a row nobody can count still goes out, and so do the second and the third.
   assert pass_sends(0, false) == true;
   assert pass_sends(1, false) == true;
   assert pass_sends(2, false) == true;
-  ; The fourth does not: one bound over both halves of the count.
+; The fourth does not: one bound over both halves of the count.
   assert pass_sends(3, false) == false;
   assert attempts_spent(0, 0) == 0;
   assert attempts_spent(0, 3) == MAX_ATTEMPTS;
   assert attempts_spent(1, 2) == MAX_ATTEMPTS;
   assert attempts_spent(3, 0) == MAX_ATTEMPTS;
-  ; A row with no chat is not sent whatever the counter did, which is the one early exit left.
+; A row with no chat is not sent whatever the counter did, which is the one early exit left.
   assert pass_sends(0, true) == false;
-  ; And what is still open, said here rather than implied.
+; And what is still open, said here rather than implied.
   assert UNCOUNTABLE_SEND_IS_BOUNDED == true;
   assert UNCOUNTABLE_SCAN_IS_BOUNDED == false;
   assert IN_MEMORY_BOUND_SURVIVES_A_RESTART == false;

@@ -103,7 +103,7 @@ pub const STORAGE_SOURCE_LINES : u16 = 260;
 ; parallel made every line citation between them stale within the hour -- re-measured 2026-09-21,
 ; the sibling line citations still standing in the corpus had drifted by between 3 and 59 lines.
 ; A name survives a reorder that a number does not.
-;
+
 ; turbobaby/rate-limit owns the sliding window, the key derivation and the shared fallback
 ; bucket, and attempt_admitted is the decision this route consumes. That contract already
 ; carries this route as its worked exemplar, so its window and its attempt cap are its numbers

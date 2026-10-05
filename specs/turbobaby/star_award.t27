@@ -517,7 +517,7 @@ test the_deferred_absence_still_has_an_owner_and_a_declaration {
   assert REUSES_GAME_SCORE_ID == "turbobaby/game-score";
   assert GAME_DISCRIMINATOR_IS_OWNED_HERE == false;
   assert HIGH_SCORE_TABLE_IS_OWNED_HERE == false;
-  ; One owner, and it is not this file: the deferral would be circular otherwise.
+; One owner, and it is not this file: the deferral would be circular otherwise.
   assert REUSES_GAME_SCORE_ID != ID;
   assert CONTRACTS_DECLARING_THE_DISCRIMINATOR_ABSENCE == 1;
 }

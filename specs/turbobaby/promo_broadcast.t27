@@ -7,7 +7,7 @@ module turbobaby-promo-broadcast;
 ; boundary between a drafted message and a sent one, and the two send paths with the guards
 ; each of them actually has. It owns no catalog row, no message text, no recipient and no
 ; schedule beyond the two intervals the repository declares.
-;
+
 ; WHY (measured 2026-09-21). DECISIONS.md D19 records that this database forked from another
 ; shop's bot carrying that shop's live catalogue, and that while it stayed public this bot
 ; promoted it. migrations/085_unpublish_woody_catalog.sql issues 7 UPDATE statements -- 6
@@ -21,7 +21,7 @@ module turbobaby-promo-broadcast;
 ; a row is live. Nothing in the path asks whose row it is. Flip one flag back and the other
 ; shop's goods are promoted again, with no code change and no warning, because the guard that
 ; was applied was applied to the data and not to the decision.
-;
+
 ; WHY (measured 2026-09-21, the two send paths). There are two ways a message reaches every
 ; customer and they do not have the same guards. The Publish button (src/promo.rs:667)
 ; subtracts the opt-out, the fraud block and the owners from its recipient query
@@ -33,7 +33,7 @@ module turbobaby-promo-broadcast;
 ; path that honours the unsubscribe has no cooldown, and the path that has a cooldown does
 ; not honour the unsubscribe. Neither path is fully guarded, and that is the fact, not an
 ; inference.
-;
+
 ; WHERE THE BRIEF IS REFUTED. The survey cites src/promo.rs:1-5 for the four questions the
 ; sweeper asks. The sentence runs :3-6, and the four it names are not the four the code runs.
 ; The doc comment still asks for "a strain", which migration 083 removed -- :145-148 says so
@@ -46,7 +46,7 @@ module turbobaby-promo-broadcast;
 ; src/trios/promo.rs. The shop rents motorbikes and no promotion mechanism can name one.
 ; turbobaby/legacy-retirement owns that retirement; this file only pins where the mechanism
 ; still speaks its language.
-;
+
 ; WHAT THIS FILE NEVER DOES. It carries no message text, no subject line, no recipient, no
 ; customer count, no locale table, no price, no per-kind ranking weight (those are
 ; unmeasured by their own source and named as such below) and no bound on a model's output.
@@ -185,7 +185,7 @@ pub const RENTAL_INVISIBILITY_NOTE : str = "The shop rents motorbikes and no pro
 ; oldest-first, so among equals the thing that has waited longest still goes first (:347-348).
 ; A sold-out event scores zero at :321-324: there is nothing left to sell and the post would
 ; spend the tick's cap on it.
-;
+
 ; CORRECTED BY REVIEW 2026-09-21: scoring zero is a POSITION, not an exclusion, and the
 ; difference is visible in the sweep. rank (:349-356) sorts and returns every candidate it was
 ; given -- it filters nothing -- and the only thing that ever removes a subject is the cap,
@@ -269,7 +269,7 @@ pub const FANOUT_RUNS_DETACHED : bool = true;
 ; the Publish button refuses a draft about an event and a draft about the retired shop's goods,
 ; and tells the admin why in the same alert its other refusals use. Nothing is deleted -- the row
 ; stays, published_at stays NULL, the owners' draft message keeps its button.
-;
+
 ; WHY (measured 2026-09-25). promo_posts keeps every draft the sweeper ever wrote, and publish
 ; (src/promo.rs, by name) asked who pressed, whether the row exists and whether it was already
 ; published -- never what the draft is about. Events left every customer surface with the owner's
@@ -284,7 +284,7 @@ pub const FANOUT_RUNS_DETACHED : bool = true;
 ; strain, whose variant left with migration 083 while drafts written under it did not. All seven
 ; belong to the retired catalog or its events, and RENTAL_SUBJECT_KIND_COUNT above is zero, so no
 ; draft in that table can be about a rental.
-;
+
 ; THE RULE. A draft is sent only when its kind is declared publishable, and none is
 ; (PUBLISHABLE_DRAFT_KIND_COUNT = 0): the button refuses every draft today, including a kind it
 ; does not recognise, because this database forked from another shop's bot (DECISIONS.md D19) and
@@ -294,13 +294,13 @@ pub const FANOUT_RUNS_DETACHED : bool = true;
 ; for every other kind. The refusal is taken after the already-published answer and BEFORE the
 ; published_at stamp, so a refused row is never marked published and nothing is written. The first
 ; promotion about a bike declares its kind in PUBLISHABLE_KINDS and raises the count here.
-;
+
 ; WHAT IT DOES NOT CHANGE. The sweeper's admission still asks no shop question
 ; (SHIPPED_CHECKS_SHOP_OWNERSHIP) and a flag flipped back still DRAFTS; the draft now stops at the
 ; owner. The admin HTTP broadcast, the other send path, sends admin-typed text rather than a draft
 ; and still accepts a retired call-to-action kind (ADMIN_CTA_ACCEPTS_RETIRED_STRAIN_KIND); this
 ; decision is about drafts and leaves it as it was.
-;
+
 ; WHERE THIS IS TIED TO THE CODE. Unit tests beside publish_refusal execute the decision for the
 ; six kinds written today, for unrecognised kinds, and for one of each Subject variant through a
 ; match with no wildcard, so a new variant cannot compile unclassified. The seventh kind, the one
@@ -311,7 +311,7 @@ pub const FANOUT_RUNS_DETACHED : bool = true;
 ; asks the decision and returns its answer before the stamp and before any send; that the
 ; decision, the stamp and the caller of publish each exist once under src/; that the lists below
 ; equal the code's; and that no retired shop kind sits in a list that answers otherwise.
-;
+
 ; LINE CITATIONS RE-MEASURED 2026-09-25. The refusal adds 8 lines inside publish and the decision
 ; 45 more after it, so every src/promo.rs line this file cites from the published_at stamp down
 ; moved: by 8 inside publish, by 53 below it. Each was re-read against the file and rewritten in
@@ -471,7 +471,7 @@ pub fn opt_out_changes_the_answer_on_the_button_path() bool {
 ; (src/promo.rs:623-626) and the customer's broadcast (:858-861) -- because an opt-out a reader
 ; has to go looking for is not an opt-out. The reverse command is deliberately not admin-gated
 ; (src/bot/commands.rs:685-697).
-;
+
 ; CORRECTED BY REVIEW 2026-09-21. The two reads of that one table fail in OPPOSITE directions,
 ; and a single "fails open" constant hid it behind the more alarming of the two. The owner's
 ; draft read is a function that swallows its error (src/promo.rs:1023-1033, the unwrap_or at

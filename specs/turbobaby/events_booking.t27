@@ -164,14 +164,14 @@ pub const SAME_DAY_WITNESS_LINES_BEFORE_2026_09_24 : u16 = 339;
 ; The pinned compiler lowers a brace import to an empty UseDecl and the gate rejects it, so a
 ; cross-contract edge is a string holding the owner's ID plus a test asserting the literal. Every
 ; edge below is named by ID and by the NAME of the declaration it leans on, never by line.
-;
+
 ; CORRECTED 2026-09-21. This paragraph used to say "ten contracts were written beside this one in a
 ; single wave". That number was wrong and wrong in the reassuring direction: counted from git, the
 ; commit that added this file added THIRTEEN new contracts (and modified a fourteenth), and the TEN
 ; belongs to the wave BEFORE it. So more siblings were moving under a line number than the sentence
 ; admitted, not fewer. "Goes stale inside the hour" is dropped with the bad count -- nobody timed
 ; the interval, and an untimed figure has no place beside measured ones.
-;
+
 ; The corpus-wide RESIDUE is refused a constant here for a reason that proves the point: counted at
 ; 63 when this correction began and at 7 a few minutes later, because sibling contracts are being
 ; repaired in parallel. Pinning a live total would publish a number that goes stale before the
@@ -192,7 +192,7 @@ pub const STALENESS_INTERVAL_IS_PUBLISHED : bool = false;
 pub fn edge_is_durable(names_a_declaration: bool, names_a_line_number: bool) bool {
   return names_a_declaration and !names_a_line_number;
 }
-;
+
 ; legacy-retirement owns the one distinction this file would otherwise have had to invent: that
 ; hiding DATA and retiring a SURFACE are different acts. Its HIDDEN_TABLES array already names
 ; `events` and its data_decision_changes_the_surface already answers no. This file therefore
@@ -502,7 +502,7 @@ pub const ZERO_CAPACITY_SHUTS_BOTH_DOORS : bool = true;
 ; overbooked row -- which the write path cannot produce but a lowered max_seats or a direct SQL
 ; edit can -- reads as zero over HTTP and never as a negative number. This function models THAT
 ; number.
-;
+
 ; MEASURED CORRECTION, 2026-09-21, adversarial review of this file, and FIXED the same day. The
 ; correction read: "the screen does NOT agree, and the earlier claim here that it did was wrong.
 ; The screen's own count at src/ui/screens/events_screen.rs:250-252 is
@@ -640,13 +640,13 @@ pub fn promotion_completes(promotion_running: bool, price: u32, candidate_balanc
 ; arithmetic. src/api/events.rs:1118-1120 is the `else { false }` arm: a head who cannot pay is not
 ; skipped, the whole promotion ends, and the seat stays empty until the NEXT cancellation. Nobody
 ; behind him is read, because the SELECT at :1018 is LIMIT 1 and runs once per cancel."
-;
+
 ; That arm is gone. The SELECT at :1099-1104 reads up to CANDIDATES_READ_PER_CANCEL rows ordered
 ; `(balance >= price) DESC, created_at ASC`, and next_promotable at :880 walks them until one can
 ; pay. Being passed over costs nothing: no status and no created_at is rewritten, and created_at is
 ; the only thing a place in this line is made of (the waitlist has no position column -- see
 ; WAITLIST_HAS_A_POSITION_COLUMN), so a customer who tops up is at the head again.
-;
+
 ; The seat can still end up empty, and the two ways are now NAMED rather than silent: nobody in the
 ; rows read can pay, or every candidate that the read said could pay lost the balance between the
 ; read and the debit (:1168-1180, which re-checks under the row lock and is the authority). Both
@@ -682,7 +682,7 @@ pub fn cancel_has_effect(current_state: u8) bool {
 ; src/api/events.rs:941-948. The refund is the amount the ROW records, never the event's current
 ; price, so a price change between booking and cancel can neither over- nor under-refund. A free
 ; booking records zero and refunds zero.
-;
+
 ; MEASURED, added 2026-09-21 by this file's adversarial review: "records zero" is exactly where the
 ; storage and the code disagree. migrations/051_events_stars_price.sql:10 states that NULL means a
 ; free booking, but src/api/events.rs:634 computes `stars_cost = price_stars.unwrap_or(0) * seats`
@@ -706,7 +706,7 @@ pub fn refund_amount(cancel_effective: bool, amount_on_row: u32) u32 {
 ; migrations/043_events_booking.sql:29 declares ON DELETE CASCADE, so every booking of that event
 ; -- paid ones included -- disappears with it. The refund code exists only inside
 ; cancel_booking_and_promote (:890-978) and delete never enters it."
-;
+
 ; The cascade is untouched and still declared at migrations/043_events_booking.sql:29. What changed
 ; is that the delete no longer walks into it: delete_event at src/api/events.rs:1747-1922 opens a
 ; transaction, takes FOR UPDATE on the event row the way the booking door and the cancel path both
@@ -715,13 +715,13 @@ pub fn refund_amount(cancel_effective: bool, amount_on_row: u32) u32 {
 ; answers 409 `paid_bookings_exist` with the count and the total while any exist. An unreadable
 ; count refuses too, rather than becoming a confident zero (D9): reading it as zero would open the
 ; delete on exactly the failure the count exists to catch.
-;
+
 ; It still refunds NOTHING, and the facts are kept in separate constants so none can be read as
 ; another. Refusing is the reversible half: nothing is destroyed by it, and the owner already has
 ; a path that returns Stars one booking at a time. Refunding from inside the delete would have had
 ; to reuse cancel_booking_and_promote, whose second half PROMOTES a waitlisted customer -- charging
 ; him for a seat at an event about to vanish.
-;
+
 ; AND THE REFUSAL HAS A DOOR, corrected here the same day by the review of the fix above. This
 ; block said "refuses" and stopped there, and a refusal with no way through is its own defect: an
 ; event that already happened holds its paid bookings for ever, so a finished evening with three
@@ -739,7 +739,7 @@ pub fn refund_amount(cancel_effective: bool, amount_on_row: u32) u32 {
 ; destroy the rows, not whether the Stars come back -- DELETE_HATCH_REFUNDS is false for the same
 ; reason DELETE_REFUNDS is, and src/trios/api_errors.rs is the one reader that turns either 409
 ; into something the admin screen can say.
-;
+
 ; DELETE_DESTROYS_PAID_BOOKINGS was one bool reading false and is now two, because with the door
 ; open the single word "destroys" has two answers. It was TRUE before the refusal, false between
 ; the refusal and the hatch, and is now false UNASKED and true WHEN NAMED.
@@ -1053,7 +1053,7 @@ pub fn handle_bounds_agree(declared_min: u32, enforced_min: u32) bool {
 ; the enforced floor and neither end of the gap. ATTENDEE_SOURCE_TESTS counts the #[test]
 ; attributes in the module, and scripts/verify_t27_against_source.py binds it the way it binds
 ; ATTENDEE_SOURCE_LINES.
-;
+
 ; The three constants arrived 2026-09-22 from turbobaby/person-naming, which held them under other
 ; names beside a restatement of this bound, bound by nothing. Two were renamed on arrival to what
 ; was measured: that file's "one length example" was one OVER-length example, and its "tests cover

@@ -59,7 +59,7 @@ pub const IMPLEMENTATION_BOUNDARY : str = "client proposal -> server recomputati
 ; --- Reuse edges -------------------------------------------------------------------------------
 ; Current t27c does not support brace imports, so a neighbour is named by its ID and pinned by a
 ; test. Each line below is a decision this file consumes and deliberately does not restate.
-;
+
 ;   commerce        owns WHO may name an amount: the browser origin, the snapshot origin, and the
 ;                   per-subject dispositions. This file owns only whether the numbers add up, and
 ;                   it asks no origin of any argument.
@@ -568,8 +568,8 @@ test the_seed_is_silent_about_bonus_and_the_policy_is_still_owned_elsewhere {
   assert FLEET_SEED_BONUS_MENTIONS == 0;
   assert BONUS_POLICY_IS_NOT_A_TERM_OF_THIS_IDENTITY == true;
   assert BONUS_POLICY_NOTE != "";
-  ; Re-run 2026-09-21 with the file's size beside the zeros, so a zero taken from a truncated or
-  ; missing file cannot pass for a zero taken from the real one.
+; Re-run 2026-09-21 with the file's size beside the zeros, so a zero taken from a truncated or
+; missing file cannot pass for a zero taken from the real one.
   assert SEED_MEASUREMENT_RE_RUN_AT == "2026-09-21";
   assert FLEET_SEED_BYTES > 0;
 }
@@ -606,7 +606,7 @@ test the_star_spend_value_is_declared_in_this_corpus_exactly_once {
   assert STAR_VALUE_CENSUS_MEASURED_AT == "2026-09-21";
   assert CONTRACTS_DECLARING_A_STAR_SPEND_VALUE == 1;
   assert STAR_VALUE_IN_MAJOR_UNITS == 1;
-  ; The neighbours that name the gap instead of filling it, pinned by ID from this side too.
+; The neighbours that name the gap instead of filling it, pinned by ID from this side too.
   assert INBOUND_EDGES.len == INBOUND_EDGE_COUNT;
   assert INBOUND_EDGE_COUNT == 4;
   assert INBOUND_EDGES[0] == "turbobaby/checkout-contact";
@@ -617,8 +617,8 @@ test the_star_spend_value_is_declared_in_this_corpus_exactly_once {
   assert INBOUND_EDGES[2] == SEED_MEASUREMENT_SECOND_READER_ID;
   assert INBOUND_EDGES[0] != ID;
   assert INBOUND_EDGES[3] != ID;
-  ; star-award is named in BOTH directions, which is the one pair in this list that is a cycle of
-  ; naming rather than a one-way pointer, and it is legal because neither restates the other.
+; star-award is named in BOTH directions, which is the one pair in this list that is a cycle of
+; naming rather than a one-way pointer, and it is legal because neither restates the other.
   assert REUSES_STAR_AWARD_ID == "turbobaby/star-award";
   assert INBOUND_EDGE_COUNT > CONTRACTS_DECLARING_A_STAR_SPEND_VALUE;
 }
