@@ -9,7 +9,13 @@
 //!
 //! ```text
 //! t27c gen-rust specs/turbobaby/request_identity.t27 > src/spec/request_identity.rs
+//! t27c gen-rust specs/turbobaby/pricing_honesty.t27 > src/spec/pricing_honesty.rs
 //! ```
+//!
+//! `pricing_honesty` is also called from `src/trios/pricing.rs`, which compiles
+//! for wasm32 as well (D15), where this module is not mounted; that file mounts
+//! the same generated file by path on those targets, so both runtimes execute
+//! one source.
 //!
 //! Generated code keeps the spec's own shape (explicit `return`, parentheses,
 //! every constant whether the host uses it or not), so rustfmt and the lints
@@ -24,3 +30,14 @@
 )]
 #[rustfmt::skip]
 pub(crate) mod request_identity;
+
+#[allow(
+    dead_code,
+    unreachable_pub,
+    unused_parens,
+    unexpected_cfgs,
+    clippy::all,
+    clippy::needless_return
+)]
+#[rustfmt::skip]
+pub(crate) mod pricing_honesty;

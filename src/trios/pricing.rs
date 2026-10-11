@@ -23,6 +23,27 @@
 
 use chrono::{DateTime, Utc};
 
+// The rules of `specs/turbobaby/pricing_honesty.t27`, executed from the spec:
+// `src/spec/pricing_honesty.rs` is `t27c gen-rust` output and is never edited
+// (`scripts/check_spec_gen.sh` fails on drift). On the backend it is the module
+// mounted in `src/spec/mod.rs`; this file also compiles for wasm32 (D15), where
+// `crate::spec` is not mounted, so there the same generated file is mounted by
+// path. Either way there is one source and no hand copy.
+#[cfg(all(not(target_arch = "wasm32"), feature = "backend"))]
+use crate::spec::pricing_honesty as ph;
+#[cfg(not(all(not(target_arch = "wasm32"), feature = "backend")))]
+#[allow(
+    dead_code,
+    unreachable_pub,
+    unused_parens,
+    unexpected_cfgs,
+    clippy::all,
+    clippy::needless_return
+)]
+#[rustfmt::skip]
+#[path = "../spec/pricing_honesty.rs"]
+mod ph;
+
 /// Inputs needed to compute the effective per-gram price.
 ///
 /// Designed as a plain-data struct so callers can construct it from either
@@ -171,6 +192,13 @@ pub fn effective_set_price(total_price: f64, discount_percent: f64) -> f64 {
 /// had to live where both runtimes compile (D15). `bike_card::published`
 /// delegates to this and keeps its name, because `tests/money_is_never_invented.rs`
 /// pins that name as the component layer's canonical helper.
+///
+/// Not yet executed from `pricing_honesty.t27`: this is the general money
+/// filter (cart lines, accessories, sets, deposits), its exact text is the
+/// `PUBLISHED_FILTER_SITE` that `tests/order_money_wiring.rs` holds the
+/// order-money contract to, and the door path no longer runs through it.
+/// `published_money_is_the_door_filter_under_another_name` keeps it equal to
+/// the spec-executed [`authoritative_door_rate`] on every probe.
 pub fn published_money(amount: Option<f64>) -> Option<f64> {
     measured_money(amount).filter(|v| *v > 0.0)
 }
@@ -182,7 +210,49 @@ pub fn published_money(amount: Option<f64>) -> Option<f64> {
 /// client price (D11) and the same boundary is shared by native and WASM code
 /// (D15).
 pub fn authoritative_door_rate(client_rate_thb_day: Option<f64>) -> Option<f64> {
-    published_money(client_rate_thb_day)
+    door_amount(
+        client_rate_thb_day,
+        spec_rate(client_rate_thb_day, Some(DOOR_SOURCE)),
+    )
+}
+
+/// The wire name of the door source, taken from the spec's `SOURCE_NAMES`
+/// rather than spelled here, so the host cannot grow a second spelling.
+const DOOR_SOURCE: &str = ph::SOURCE_NAMES[ph::SOURCE_DOOR as usize];
+
+/// Glue only: carry a wire rate into the spec's `OptionalRate`. Every decision
+/// -- is it a price, is it the door's, what renders -- is the spec's.
+///
+/// The spec holds whole baht in an `i16`; the wire carries `f64`. The spec's
+/// guard reads only the SIGN class of the amount (`thb_day <= 0` is invalid),
+/// and `ceil` preserves that class exactly for every finite input: any `v > 0`
+/// gives at least 1 and any `v <= 0` gives at most 0 (`as` saturates, so a
+/// value past `i16::MAX` stays positive). The amount itself is never taken
+/// from the spec's slot -- see [`door_amount`]. NaN and infinity cannot be
+/// represented in the spec's type at all (pricing_honesty.t27, the
+/// `rate_present` comment), so they are an absence: nobody measured them.
+fn spec_rate(amount: Option<f64>, source: Option<&str>) -> ph::OptionalRate {
+    let Some(v) = amount.filter(|v| v.is_finite()) else {
+        return ph::rate_absent();
+    };
+    let sign_class = v.ceil() as i16;
+    if source == Some(DOOR_SOURCE) {
+        ph::rate_present(sign_class)
+    } else {
+        ph::rate_reference(sign_class)
+    }
+}
+
+/// The wire amount, released only when the spec calls the value a client price.
+/// The host keeps its own `f64` because the runtime prices sub-baht amounts
+/// (`src/api/orders.rs` compares 337.4 against 337.0) that the spec's whole-baht
+/// slot cannot hold.
+fn door_amount(amount: Option<f64>, rate: ph::OptionalRate) -> Option<f64> {
+    if ph::is_client_price(rate) {
+        amount
+    } else {
+        None
+    }
 }
 
 /// What one cart line is worth, or `None` when nobody priced it.
@@ -236,16 +306,16 @@ pub fn client_day_rate(
     _base_rate_thb_day: Option<f64>,
     _class_discount: Option<f64>,
 ) -> Option<f64> {
-    if client_rate_source != Some("door") {
-        return None;
-    }
-    authoritative_door_rate(client_rate_thb_day)
+    door_amount(
+        client_rate_thb_day,
+        spec_rate(client_rate_thb_day, client_rate_source),
+    )
 }
 
-// ── The three-state rate, transcribed from `specs/turbobaby/pricing_honesty.t27`
-//    (D11, D15). The spec is executed by the `t27-contracts` CI job, so this is
-//    a transcription and not a design: where the two disagree the spec wins and
-//    the disagreement is a bug here. It lives in this module rather than beside
+// ── The three-state rate of `specs/turbobaby/pricing_honesty.t27` (D11, D15).
+//    The decisions are executed from the spec (`ph::rate_present`,
+//    `ph::is_client_price`, `ph::render`); what stays here is the host's wire
+//    shape (`f64`, `Option`) and the glue into it. It lives in this module rather than beside
 //    either screen because `src/lib.rs` gates `pub mod ui;` on `wasm32` — nothing
 //    under `src/ui` is compiled by `cargo test`, so an assertion written there
 //    proves nothing. These run.
@@ -253,7 +323,7 @@ pub fn client_day_rate(
 /// The sentence a dash must carry. Mirrors the spec's `MUST_SAY` (:157), which
 /// is D11's `on_silence.must_say`. The locale layer does the wording (D13); what
 /// is pinned here is that *something* is said.
-pub const SAY_HUMAN_QUOTES: &str = "a human quotes this price";
+pub const SAY_HUMAN_QUOTES: &str = ph::MUST_SAY;
 
 /// What a render may emit. Two shapes and no third, because there is no number
 /// to put in one — no "approximately", no "from", no "average". Mirrors
@@ -296,17 +366,24 @@ pub fn render_client_rate(
     client_rate_thb_day: Option<f64>,
     client_rate_source: Option<&str>,
 ) -> RenderedRate {
-    match client_day_rate(client_rate_thb_day, client_rate_source, None, None) {
-        Some(rate) => RenderedRate {
-            shape: RateShape::Amount,
-            thb_day: Some(rate),
-            say: None,
-        },
-        None => RenderedRate {
-            shape: RateShape::Dash,
-            thb_day: None,
-            say: Some(SAY_HUMAN_QUOTES),
-        },
+    let rate = spec_rate(client_rate_thb_day, client_rate_source);
+    let rendered = ph::render(rate);
+    // Anything the spec does not call an amount is a dash: a shape this glue
+    // does not know must never become a number.
+    let (shape, thb_day) = if rendered.shape == ph::SHAPE_AMOUNT {
+        (RateShape::Amount, door_amount(client_rate_thb_day, rate))
+    } else {
+        (RateShape::Dash, None)
+    };
+    let say = if rendered.say == ph::SAY_NOTHING_EXTRA {
+        None
+    } else {
+        Some(SAY_HUMAN_QUOTES)
+    };
+    RenderedRate {
+        shape,
+        thb_day,
+        say,
     }
 }
 
@@ -642,6 +719,29 @@ mod tests {
             client_day_rate(Some(f64::NAN), Some("door"), Some(939.0), Some(0.25)),
             None
         );
+    }
+
+    #[test]
+    fn the_wire_glue_keeps_the_sign_class_the_spec_guards_on() {
+        // The spec holds whole baht in an i16; the wire holds f64. The glue may
+        // only carry the sign class across, never move a value over the
+        // spec's `thb_day <= 0` line in either direction.
+        assert_eq!(authoritative_door_rate(Some(0.4)), Some(0.4));
+        assert_eq!(
+            authoritative_door_rate(Some(f64::MIN_POSITIVE)),
+            Some(f64::MIN_POSITIVE)
+        );
+        assert_eq!(authoritative_door_rate(Some(40_000.0)), Some(40_000.0));
+        assert_eq!(authoritative_door_rate(Some(-0.5)), None);
+        assert_eq!(authoritative_door_rate(Some(-0.0)), None);
+        assert_eq!(authoritative_door_rate(Some(-40_000.0)), None);
+        // The door's wire name is the spec's, not a host spelling.
+        assert_eq!(DOOR_SOURCE, ph::PRICE_AUTHORITY);
+        // A silent door names no number, however much the file holds.
+        let silent = render_client_rate(Some(939.0), Some("file_reference"));
+        assert_eq!(silent.shape, RateShape::Dash);
+        assert_eq!(silent.thb_day, None);
+        assert_eq!(silent.say, Some(SAY_HUMAN_QUOTES));
     }
 
     #[test]
