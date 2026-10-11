@@ -112,7 +112,11 @@ pub const AUTH_DATE_IS_REQUIRED: bool = true;
 
 pub const FUTURE_DATED_STAMP_IS_REFUSED: bool = true;
 
-pub const FRESHNESS_IS_CHECKED_IN_BOTH_PATHS: bool = true;
+pub const FRESHNESS_IS_CHECKED_IN_BOTH_PATHS: bool = false;
+
+pub const FRESHNESS_IS_CHECKED_IN_BOTH_PATHS_BEFORE_2026_10_11: bool = true;
+
+pub const FRESHNESS_HOST_COPIES: u8 = 1;
 
 pub fn auth_date_admits(auth_date_seconds: u32, now_seconds: u32) -> bool {
     if (auth_date_seconds > now_seconds) {
