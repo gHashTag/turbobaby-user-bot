@@ -254,7 +254,10 @@ pub fn init_data_present(header_supplied: bool, byte_len: u16) bool {
 }
 
 ; --- Freshness, and the stamp from the future ----------------------------------------------------
-; The same rule is implemented twice, at :371 in the strict path and at :652 in the lenient one:
+; The same rule was implemented twice, at :371 in the strict path and at :652 in the lenient one,
+; until 2026-10-11, when the lenient path was retired: the host now checks it once, in the strict
+; validator, and the facts it hands owner_gate_admits about an unsigned payload are measured by
+; THIS function (auth_date_admits), generated into src/spec/request_identity.rs. The rule is:
 ; refuse when auth_date > now, and refuse when now - auth_date > 86400. A missing auth_date is
 ; also a refusal (:378-380). The clause is written here with addition rather than subtraction so
 ; that no saturating behaviour is invented: now > auth_date + 86400 is the same refusal for every
@@ -262,7 +265,9 @@ pub fn init_data_present(header_supplied: bool, byte_len: u16) bool {
 pub const AUTH_DATE_MAX_AGE_SECONDS : u32 = 86400;
 pub const AUTH_DATE_IS_REQUIRED : bool = true;
 pub const FUTURE_DATED_STAMP_IS_REFUSED : bool = true;
-pub const FRESHNESS_IS_CHECKED_IN_BOTH_PATHS : bool = true;
+pub const FRESHNESS_IS_CHECKED_IN_BOTH_PATHS : bool = false;
+pub const FRESHNESS_IS_CHECKED_IN_BOTH_PATHS_BEFORE_2026_10_11 : bool = true;
+pub const FRESHNESS_HOST_COPIES : u8 = 1;
 
 pub fn auth_date_admits(auth_date_seconds: u32, now_seconds: u32) bool {
     if (auth_date_seconds > now_seconds) {
@@ -675,7 +680,9 @@ test a_stale_or_future_stamp_is_refused_and_the_edge_is_exact {
     assert AUTH_DATE_MAX_AGE_SECONDS == 86400;
     assert AUTH_DATE_IS_REQUIRED == true;
     assert FUTURE_DATED_STAMP_IS_REFUSED == true;
-    assert FRESHNESS_IS_CHECKED_IN_BOTH_PATHS == true;
+    assert FRESHNESS_IS_CHECKED_IN_BOTH_PATHS == false;
+    assert FRESHNESS_IS_CHECKED_IN_BOTH_PATHS_BEFORE_2026_10_11 == true;
+    assert FRESHNESS_HOST_COPIES == 1;
     assert auth_date_admits(200000, 200000) == true;
     assert auth_date_admits(113600, 200000) == true;
     assert auth_date_admits(113599, 200000) == false;
