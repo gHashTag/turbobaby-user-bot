@@ -357,6 +357,88 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "why": "the per-call ceiling the endpoint enforces before the cap trio is "
                "consulted at all; star_award.t27:198 declares it as the outer bound",
     },
+    # --- stars wallet (add and spend doors, inventory #79, 2026-10-11) -------------------
+    {
+        "name": "stars_wallet.SOURCE_MAX_LEN ~ stars.rs validate_source_reason source bound",
+        "spec": "specs/turbobaby/stars_wallet.t27",
+        "const": "SOURCE_MAX_LEN",
+        "source": "src/api/stars.rs",
+        "extract": ("regex", r"source\.len\(\) > (\d+)"),
+        "relation": "equal",
+        "why": "the add door's source ceiling; add_source_and_reason_are_legal is written "
+               "against exactly this number",
+    },
+    {
+        "name": "stars_wallet.REASON_MAX_LEN ~ stars.rs reason bound (add and spend copies)",
+        "spec": "specs/turbobaby/stars_wallet.t27",
+        "const": "REASON_MAX_LEN",
+        "source": "src/api/stars.rs",
+        # Two copies, validate_source_reason (:62) and spend_stars (:393); occurrences=2
+        # makes the extractor refuse when they disagree with each other.
+        "extract": ("regex", r"reason\.len\(\) > (\d+)"),
+        "occurrences": 2,
+        "relation": "equal",
+        "why": "one reason ceiling written twice; a drift in either copy splits the two doors",
+    },
+    {
+        "name": "stars_wallet.SPEND_LEDGER_SOURCE ~ stars.rs spend ledger source literal",
+        "spec": "specs/turbobaby/stars_wallet.t27",
+        "const": "SPEND_LEDGER_SOURCE",
+        "source": "src/api/stars.rs",
+        "extract": ("regex", r"source: Set\((\"[a-z_]+\")\.to_string\(\)\)"),
+        "relation": "equal",
+        "why": "the debit's ledger source; star_award's capped set must never contain it, "
+               "and a rename would move every spend row out of the history readers expect",
+    },
+    {
+        "name": "stars_wallet.DEBIT_GUARD_SITES ~ stars.rs balance >= amount filter",
+        "spec": "specs/turbobaby/stars_wallet.t27",
+        "const": "DEBIT_GUARD_SITES",
+        "source": "src/api/stars.rs",
+        "extract": ("regex_count", r"\.filter\(UsCol::Balance\.gte\(req\.amount\)\)"),
+        "relation": "equal",
+        "why": "the guard that keeps an admitted spend from going below zero lives inside "
+               "the debiting statement; debit_is_admitted is that filter",
+    },
+    {
+        "name": "stars_wallet.NEGATED_LEDGER_SITES ~ stars.rs spend row amount negated",
+        "spec": "specs/turbobaby/stars_wallet.t27",
+        "const": "NEGATED_LEDGER_SITES",
+        "source": "src/api/stars.rs",
+        "extract": ("regex_count", r"amount: Set\(-req\.amount\)"),
+        "relation": "equal",
+        "why": "direction is the sign alone (spend_ledger_amount); a positive spend row "
+               "would read as a credit in every history",
+    },
+    {
+        "name": "stars_wallet.INSUFFICIENT_REFUSAL_SITES ~ stars.rs 402 on short balance",
+        "spec": "specs/turbobaby/stars_wallet.t27",
+        "const": "INSUFFICIENT_REFUSAL_SITES",
+        "source": "src/api/stars.rs",
+        "extract": ("regex_count", r"Err\(StatusCode::PAYMENT_REQUIRED\)"),
+        "relation": "equal",
+        "why": "spend_status maps SPEND_REFUSED_INSUFFICIENT to 402; this is that one site",
+    },
+    {
+        "name": "stars_wallet.ACCOUNT_ROW_INSERT_SITES ~ stars.rs user_stars inserts",
+        "spec": "specs/turbobaby/stars_wallet.t27",
+        "const": "ACCOUNT_ROW_INSERT_SITES",
+        "source": "src/api/stars.rs",
+        "extract": ("regex_count", r"UsEntity::insert\("),
+        "relation": "equal",
+        "why": "only add provisions a user_stars row; a second insert would be the spend "
+               "re-opening accounts, the FK 500 that SPEND_PROVISIONS_AN_ACCOUNT=false records",
+    },
+    {
+        "name": "stars_wallet.REASON_CEILING_COPIES ~ stars.rs reason bound sites",
+        "spec": "specs/turbobaby/stars_wallet.t27",
+        "const": "REASON_CEILING_COPIES",
+        "source": "src/api/stars.rs",
+        "extract": ("regex_count", r"reason\.len\(\) > \d+"),
+        "relation": "equal",
+        "why": "the add and spend doors each check the reason; a third copy, or one gone, "
+               "means a door the contract does not describe",
+    },
     # --- order money ----------------------------------------------------------------
     {
         "name": "order_money.MAX_STARS_PER_TRANSACTION ~ orders.rs MAX_STARS_PER_TX",
@@ -4386,7 +4468,12 @@ ONE_GROUP_EXTRACTORS = (
 # leaderboard's admin gate as its first statement, ahead of the query string, and the admin census
 # of src/api/referrals.rs, each planted RED once by hand: 286 + 2 = 288 rows over the same 42
 # contracts, floor 288 (the measured table size). No row removed.
-MIN_BINDINGS = 288
+# 2026-10-11 (inventory #79): eight rows for the new turbobaby/stars-wallet contract -- the add
+# door's source ceiling, the reason ceiling in both doors and its copy count, the spend ledger's
+# source literal and sign, the in-statement balance guard, the 402 site and the single account
+# insert -- each planted RED once by hand: 288 + 8 = 296 rows over 43 contracts, floor 296.
+# No row removed.
+MIN_BINDINGS = 296
 
 
 # ---------------------------------------------------------------------------------

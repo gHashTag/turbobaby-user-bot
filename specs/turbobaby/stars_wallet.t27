@@ -1,0 +1,410 @@
+// SPDX-License-Identifier: Apache-2.0
+; specs/turbobaby/stars_wallet.t27 -- the two money doors of the Star wallet, add and spend
+; This contract owns the decisions /api/stars/add (src/api/stars.rs:162) and /api/stars/spend
+; (src/api/stars.rs:384) make that no other contract owned on 2026-10-11 (inventory #79): the
+; request door both routes share (owner, block, amount, text lengths), the whole spend path (the
+; reason gate, the optional replay key, the balance guard, the ledger sign, the status each
+; outcome answers with), and the parts of the add path that sit outside the award algebra (the
+; source and reason lengths, the cap log line). It is written FIRST so a later change can wire the
+; host to it; on the day of writing no Rust reads it.
+; --
+; WHAT IS REUSED AND NOT RESTATED. star_award.t27 already owns the award decision for /stars/add:
+; the per-call ceiling MAX_STARS_PER_CALL and its predicate amount_passes_per_call_ceiling, the
+; capped source set, the 300-per-window trim allowed_credit, the external_tx_id width
+; external_tx_id_length_is_legal, and the five award outcomes. Both routes call the SAME Rust
+; validate_amount (src/api/stars.rs:54-59, at :170 and :392), so this file takes that predicate's
+; verdict as one inbound boolean (amount_admitted) and declares no ceiling of its own. The replay
+; key syntax of the spend route is crate::api::orders::is_valid_idempotency_key
+; (src/api/orders.rs:419-424), which loyalty_ledger.t27 already states as key_syntax_is_legal
+; with KEY_MAX_LEN 100; this file takes that verdict as key_syntax_legal. The 24-hour sweep of the
+; order key table is loyalty_ledger.t27's ORDER_KEY_RETENTION_HOURS; this file names it and
+; restates no number. Who the caller is, is request_identity.t27's proof.
+; --
+; WHY (measured 2026-10-11 against src/api/stars.rs at origin/main).
+; 1. A SPEND NEVER OPENS AN ACCOUNT. src/api/stars.rs:455-460 records the defect it fixed: a debit
+;    used to insert a zero-balance row, violated the loyalty_profiles foreign key and turned "you
+;    have no Stars" into a 500. A missing row is now a zero balance and answers 402 through the
+;    same guard as a short balance (src/api/stars.rs:463-478).
+; 2. THE BALANCE GUARD IS IN THE UPDATE ITSELF. src/api/stars.rs:469 filters balance >= amount
+;    inside the debiting statement, so two racing spends cannot both pass a read-then-write check;
+;    rows_affected 0 is the refusal (src/api/stars.rs:476-477). No admitted spend drives a balance
+;    below zero.
+; 3. THE SPEND KEY IS NOT THE ADD KEY. Add requires external_tx_id in the body and keeps it in
+;    stars_idempotency_keys (src/api/stars.rs:172, 203, 357-366). Spend takes an OPTIONAL
+;    x-idempotency-key header (src/api/stars.rs:397-406) and keeps it in order_idempotency_keys,
+;    the table orders use (src/api/stars.rs:424-453, 506-520). That table's key is a global primary
+;    key (migrations/029_order_idempotency_keys.sql:16, :23) and the lookup is find_by_id(key)
+;    alone (src/api/stars.rs:436), so a key already spent by an ORDER, or by another account,
+;    answers a spend with success and no debit. Stated, not repaired.
+; phi^2 + 1/phi^2 = 3 | TRINITY
+
+module turbobaby-stars-wallet;
+
+pub const KIND : str = "contract";
+pub const ID : str = "turbobaby/stars-wallet";
+pub const NAME : str = "TurboBaby Star wallet add and spend doors";
+pub const WORLD : str = "gHashTag/turbobaby-user-bot";
+pub const MEASURED_AT : str = "2026-10-11";
+
+; Where each rule below is implemented.
+pub const ENDPOINT_IMPLEMENTATION : str = "src/api/stars.rs";
+pub const ADD_HANDLER_LINE : u16 = 162;
+pub const SPEND_HANDLER_LINE : u16 = 384;
+pub const LEDGER_MIGRATION : str = "migrations/042_stars_currency.sql";
+pub const SPEND_KEY_MIGRATION : str = "migrations/029_order_idempotency_keys.sql";
+
+; --- Reuse edges, named because there are no imports -------------------------------------------
+pub const REUSES_STAR_AWARD_ID : str = "turbobaby/star-award";
+pub const REUSES_LOYALTY_LEDGER_ID : str = "turbobaby/loyalty-ledger";
+pub const REUSES_REQUEST_IDENTITY_ID : str = "turbobaby/request-identity";
+pub const REUSES_COMMERCE_ID : str = "turbobaby/commerce";
+pub const THIS_FILE_RESTATES_THE_PER_CALL_CEILING : bool = false;
+pub const THIS_FILE_RESTATES_THE_WINDOW_CAP : bool = false;
+pub const THIS_FILE_RESTATES_THE_KEY_SYNTAX : bool = false;
+pub const THIS_FILE_RESTATES_THE_KEY_RETENTION : bool = false;
+; One Rust function gates the amount on both doors (src/api/stars.rs:170 and :392).
+pub const BOTH_DOORS_SHARE_ONE_AMOUNT_GATE : bool = true;
+
+; --- Who may call ----------------------------------------------------------------------------------
+; src/api/stars.rs:167-169 and :389-391: the path id is validated, check_owner proves the caller
+; IS the account (request_identity.t27), and check_not_blocked refuses a blocked account with 403
+; (src/api/auth.rs:683). Neither door has an admin variant: no third party moves a Star balance
+; through these routes, unlike the bonus routes loyalty_ledger.t27 records behind check_admin.
+pub const BOTH_DOORS_CHECK_OWNER : bool = true;
+pub const BOTH_DOORS_CHECK_BLOCK : bool = true;
+pub const A_THIRD_PARTY_MAY_MOVE_A_STAR_BALANCE : bool = false;
+pub const BLOCKED_STATUS : u16 = 403;
+
+pub fn caller_may_move_this_balance(caller_is_owner: bool, caller_is_blocked: bool) bool {
+  return caller_is_owner and !caller_is_blocked;
+}
+
+; --- Text lengths ----------------------------------------------------------------------------------
+; src/api/stars.rs:61-66 for add (source 1..50, reason 1..100) and :393-395 for spend (reason
+; 1..100, no source: the spend writes its own). Both reason ceilings are the same number in two
+; places; a binding pins both copies so they cannot drift apart.
+pub const SOURCE_MAX_LEN : u16 = 50;
+pub const REASON_MAX_LEN : u16 = 100;
+pub const BAD_REQUEST_STATUS : u16 = 400;
+
+pub fn reason_length_is_legal(length: u16) bool {
+  return length >= 1 and length <= REASON_MAX_LEN;
+}
+
+pub fn add_source_and_reason_are_legal(source_length: u16, reason_length: u16) bool {
+  return source_length >= 1 and source_length <= SOURCE_MAX_LEN and reason_length_is_legal(reason_length);
+}
+
+; The add door before star_award.star_award_outcome is reached. star_award declares that its
+; algebra assumes a well-formed request (THE_ALGEBRA_ASSUMES_A_WELL_FORMED_REQUEST); this is the
+; well-formedness, in the handler's order (src/api/stars.rs:167-172). amount_admitted is
+; star_award.amount_passes_per_call_ceiling, external_tx_id_legal is
+; star_award.external_tx_id_length_is_legal; both are consumed, not re-derived.
+pub fn add_request_clears_the_door(caller_admitted: bool, amount_admitted: bool, source_length: u16, reason_length: u16, external_tx_id_legal: bool) bool {
+  return caller_admitted and amount_admitted and add_source_and_reason_are_legal(source_length, reason_length) and external_tx_id_legal;
+}
+
+; --- Add: what is logged ---------------------------------------------------------------------------
+; src/api/stars.rs:249-258 writes one info line when a capped source is paid less than asked,
+; including the allowance-zero case. An uncapped source is never trimmed and never logs it. The
+; line carries the account id, which is why it is named here and not copied anywhere else.
+pub const CAP_LINE_IS_INFO_LEVEL : bool = true;
+pub const CAP_LINE_CARRIES_THE_ACCOUNT_ID : bool = true;
+
+pub fn add_logs_a_cap_line(source_capped: bool, requested: i64, allowed: i64) bool {
+  return source_capped and allowed < requested;
+}
+
+; --- Spend: the replay key -------------------------------------------------------------------------
+; src/api/stars.rs:397-401 trims the header and treats an empty one as absent; :402-405 refuses a
+; present key that fails the order validator. A request without a key is never replay-protected.
+pub const SPEND_KEY_HEADER : str = "x-idempotency-key";
+pub const SPEND_KEY_IS_REQUIRED : bool = false;
+pub const ADD_KEY_IS_REQUIRED : bool = true;
+pub const SPEND_KEY_TABLE_IS_SHARED_WITH_ORDERS : bool = true;
+pub const SPEND_KEY_IS_SCOPED_TO_THE_ACCOUNT : bool = false;
+; src/api/stars.rs:509 writes order_id as "stars:" plus the ledger row id, the only mark that tells
+; a spend's key row from an order's.
+pub const SPEND_KEY_ORDER_ID_PREFIX : str = "stars:";
+
+pub fn spend_key_is_refused(key_present: bool, key_syntax_legal: bool) bool {
+  return key_present and !key_syntax_legal;
+}
+
+pub fn spend_replay_skips_the_debit(key_present: bool, key_seen: bool) bool {
+  return key_present and key_seen;
+}
+
+; A seen key answers success whoever wrote it: an order, another account, or this spend earlier.
+pub fn a_foreign_key_answers_a_spend_without_debit(key_present: bool, key_seen_from_an_order_or_another_account: bool) bool {
+  return spend_replay_skips_the_debit(key_present, key_seen_from_an_order_or_another_account);
+}
+
+; --- Spend: the balance guard ----------------------------------------------------------------------
+; src/api/stars.rs:463-478. amount is already >= 1 here (validate_amount ran at :392).
+pub const SPEND_PROVISIONS_AN_ACCOUNT : bool = false;
+pub const INSUFFICIENT_STATUS : u16 = 402;
+
+pub fn debit_is_admitted(row_exists: bool, balance: i64, amount: i64) bool {
+  return row_exists and balance >= amount;
+}
+
+pub fn balance_after_spend(row_exists: bool, balance: i64, amount: i64) i64 {
+  if (debit_is_admitted(row_exists, balance, amount)) {
+    return balance - amount;
+  }
+  if (!row_exists) {
+    return 0;
+  }
+  return balance;
+}
+
+; --- The ledger row --------------------------------------------------------------------------------
+; Direction is the sign alone. src/api/stars.rs:493 stores the spend negated, :495 stamps the
+; source "plot", :497 leaves external_tx_id empty and :498 carries the optional order id. The add
+; row stores the CREDITED amount (src/api/stars.rs:344), star_award.t27's
+; LEDGER_ROW_RECORDS_THE_CREDITED_AMOUNT.
+pub const SPEND_LEDGER_SOURCE : str = "plot";
+
+pub fn spend_ledger_amount(amount: i64) i64 {
+  return 0 - amount;
+}
+
+pub fn add_ledger_amount(credited: i64) i64 {
+  return credited;
+}
+
+; --- Spend: the outcome ----------------------------------------------------------------------------
+; Server-side outcomes, not bodies. Zero is the unset sentinel and stars_spend_outcome never
+; returns it. The order is the handler's: amount (:392), reason (:393), key syntax (:402-405),
+; replay (:424-453), guard (:463-478). Identity runs first (:389-391) and is caller_may_move_this_
+; balance above, kept out of this algebra the same way star_award keeps it out of its own.
+pub const SPEND_OUTCOME_UNSET : u8 = 0;
+pub const SPEND_REFUSED_BAD_AMOUNT : u8 = 1;
+pub const SPEND_REFUSED_BAD_REASON : u8 = 2;
+pub const SPEND_REFUSED_BAD_KEY : u8 = 3;
+pub const SPEND_REPLAY_RETURNS_SUCCESS : u8 = 4;
+pub const SPEND_REFUSED_INSUFFICIENT : u8 = 5;
+pub const SPEND_DEBITED : u8 = 6;
+pub const SPEND_OUTCOME_COUNT : u8 = 6;
+pub const SUCCESS_STATUS : u16 = 200;
+
+pub fn stars_spend_outcome(amount_admitted: bool, reason_length: u16, key_present: bool, key_syntax_legal: bool, key_seen: bool, row_exists: bool, balance: i64, amount: i64) u8 {
+  if (!amount_admitted) {
+    return SPEND_REFUSED_BAD_AMOUNT;
+  }
+  if (!reason_length_is_legal(reason_length)) {
+    return SPEND_REFUSED_BAD_REASON;
+  }
+  if (spend_key_is_refused(key_present, key_syntax_legal)) {
+    return SPEND_REFUSED_BAD_KEY;
+  }
+  if (spend_replay_skips_the_debit(key_present, key_seen)) {
+    return SPEND_REPLAY_RETURNS_SUCCESS;
+  }
+  if (!debit_is_admitted(row_exists, balance, amount)) {
+    return SPEND_REFUSED_INSUFFICIENT;
+  }
+  return SPEND_DEBITED;
+}
+
+pub fn spend_status(outcome: u8) u16 {
+  if (outcome == SPEND_REFUSED_BAD_AMOUNT or outcome == SPEND_REFUSED_BAD_REASON or outcome == SPEND_REFUSED_BAD_KEY) {
+    return BAD_REQUEST_STATUS;
+  }
+  if (outcome == SPEND_REFUSED_INSUFFICIENT) {
+    return INSUFFICIENT_STATUS;
+  }
+  if (outcome == SPEND_REPLAY_RETURNS_SUCCESS or outcome == SPEND_DEBITED) {
+    return SUCCESS_STATUS;
+  }
+  return 0;
+}
+
+pub fn spend_moves_the_balance(outcome: u8) bool {
+  return outcome == SPEND_DEBITED;
+}
+
+; src/api/stars.rs:476-478 returns 402 with no log line; only database failures are logged on
+; this path. A replay body echoes the NEW request's amount, not the prior one (:446-451), on both
+; doors (:213-218).
+pub const INSUFFICIENT_REFUSAL_IS_LOGGED : bool = false;
+pub const REPLAY_BODY_ECHOES_THE_NEW_REQUEST_AMOUNT : bool = true;
+
+; --- Measured counts the bindings pin ---------------------------------------------------------------
+pub const DEBIT_GUARD_SITES : u8 = 1;
+pub const NEGATED_LEDGER_SITES : u8 = 1;
+pub const INSUFFICIENT_REFUSAL_SITES : u8 = 1;
+pub const ACCOUNT_ROW_INSERT_SITES : u8 = 1;
+pub const REASON_CEILING_COPIES : u8 = 2;
+
+; --- Tests -------------------------------------------------------------------------------------
+
+test only_the_unblocked_owner_moves_a_balance {
+  assert caller_may_move_this_balance(true, false) == true;
+  assert caller_may_move_this_balance(true, true) == false;
+  assert caller_may_move_this_balance(false, false) == false;
+  assert A_THIRD_PARTY_MAY_MOVE_A_STAR_BALANCE == false;
+  assert BLOCKED_STATUS == 403;
+}
+
+test the_text_lengths_are_bounded_at_both_ends {
+  assert reason_length_is_legal(0) == false;
+  assert reason_length_is_legal(1) == true;
+  assert reason_length_is_legal(REASON_MAX_LEN) == true;
+  assert reason_length_is_legal(REASON_MAX_LEN + 1) == false;
+  assert add_source_and_reason_are_legal(1, 1) == true;
+  assert add_source_and_reason_are_legal(SOURCE_MAX_LEN, REASON_MAX_LEN) == true;
+  assert add_source_and_reason_are_legal(0, 10) == false;
+  assert add_source_and_reason_are_legal(SOURCE_MAX_LEN + 1, 10) == false;
+  assert add_source_and_reason_are_legal(10, 0) == false;
+  assert add_source_and_reason_are_legal(10, REASON_MAX_LEN + 1) == false;
+}
+
+; Negative control: a source of 51 would pass a reason gate, so the two ceilings are not one.
+test the_source_ceiling_is_not_the_reason_ceiling {
+  assert reason_length_is_legal(SOURCE_MAX_LEN + 1) == true;
+  assert add_source_and_reason_are_legal(SOURCE_MAX_LEN + 1, 1) == false;
+  assert SOURCE_MAX_LEN != REASON_MAX_LEN;
+}
+
+test the_add_door_needs_every_gate {
+  assert add_request_clears_the_door(true, true, 4, 14, true) == true;
+  assert add_request_clears_the_door(false, true, 4, 14, true) == false;
+  assert add_request_clears_the_door(true, false, 4, 14, true) == false;
+  assert add_request_clears_the_door(true, true, 0, 14, true) == false;
+  assert add_request_clears_the_door(true, true, 4, 0, true) == false;
+  assert add_request_clears_the_door(true, true, 4, 14, false) == false;
+}
+
+test the_cap_line_is_written_only_for_a_trimmed_capped_source {
+  assert add_logs_a_cap_line(true, 100, 30) == true;
+  assert add_logs_a_cap_line(true, 100, 0) == true;
+  assert add_logs_a_cap_line(true, 100, 100) == false;
+  assert add_logs_a_cap_line(false, 100, 30) == false;
+  assert CAP_LINE_CARRIES_THE_ACCOUNT_ID == true;
+}
+
+test the_spend_key_is_optional_and_checked_only_when_present {
+  assert spend_key_is_refused(false, false) == false;
+  assert spend_key_is_refused(true, false) == true;
+  assert spend_key_is_refused(true, true) == false;
+  assert spend_replay_skips_the_debit(false, true) == false;
+  assert spend_replay_skips_the_debit(true, true) == true;
+  assert spend_replay_skips_the_debit(true, false) == false;
+  assert SPEND_KEY_IS_REQUIRED == false;
+  assert ADD_KEY_IS_REQUIRED == true;
+}
+
+test a_key_from_another_writer_answers_a_spend_without_debit {
+  assert a_foreign_key_answers_a_spend_without_debit(true, true) == true;
+  assert SPEND_KEY_TABLE_IS_SHARED_WITH_ORDERS == true;
+  assert SPEND_KEY_IS_SCOPED_TO_THE_ACCOUNT == false;
+  assert spend_moves_the_balance(stars_spend_outcome(true, 8, true, true, true, true, 500, 100)) == false;
+}
+
+test the_guard_admits_exactly_the_balance_and_no_more {
+  assert debit_is_admitted(true, 100, 100) == true;
+  assert debit_is_admitted(true, 100, 99) == true;
+  assert debit_is_admitted(true, 99, 100) == false;
+  assert debit_is_admitted(true, 0, 1) == false;
+  assert debit_is_admitted(false, 0, 1) == false;
+}
+
+test a_missing_account_is_a_zero_balance_not_a_new_row {
+  assert debit_is_admitted(false, 1000, 1) == false;
+  assert balance_after_spend(false, 1000, 1) == 0;
+  assert SPEND_PROVISIONS_AN_ACCOUNT == false;
+  assert stars_spend_outcome(true, 8, false, false, false, false, 0, 1) == SPEND_REFUSED_INSUFFICIENT;
+  assert spend_status(SPEND_REFUSED_INSUFFICIENT) == 402;
+}
+
+test no_admitted_spend_goes_below_zero {
+  assert balance_after_spend(true, 100, 100) == 0;
+  assert balance_after_spend(true, 100, 30) == 70;
+  assert balance_after_spend(true, 30, 100) == 30;
+  assert balance_after_spend(true, 0, 1) == 0;
+}
+
+test the_ledger_sign_is_the_direction {
+  assert spend_ledger_amount(100) == -100;
+  assert spend_ledger_amount(1) == -1;
+  assert add_ledger_amount(30) == 30;
+  assert spend_ledger_amount(5) + add_ledger_amount(5) == 0;
+  assert SPEND_LEDGER_SOURCE == "plot";
+}
+
+test the_spend_gates_run_in_the_handlers_order {
+  assert stars_spend_outcome(false, 0, true, false, true, false, 0, 0) == SPEND_REFUSED_BAD_AMOUNT;
+  assert stars_spend_outcome(true, 0, true, false, true, false, 0, 1) == SPEND_REFUSED_BAD_REASON;
+  assert stars_spend_outcome(true, 8, true, false, true, false, 0, 1) == SPEND_REFUSED_BAD_KEY;
+  assert stars_spend_outcome(true, 8, true, true, true, false, 0, 1) == SPEND_REPLAY_RETURNS_SUCCESS;
+  assert stars_spend_outcome(true, 8, true, true, false, true, 0, 1) == SPEND_REFUSED_INSUFFICIENT;
+  assert stars_spend_outcome(true, 8, true, true, false, true, 1, 1) == SPEND_DEBITED;
+  assert stars_spend_outcome(true, 8, false, false, false, true, 500, 100) == SPEND_DEBITED;
+}
+
+test every_outcome_has_its_status {
+  assert spend_status(SPEND_REFUSED_BAD_AMOUNT) == 400;
+  assert spend_status(SPEND_REFUSED_BAD_REASON) == 400;
+  assert spend_status(SPEND_REFUSED_BAD_KEY) == 400;
+  assert spend_status(SPEND_REPLAY_RETURNS_SUCCESS) == 200;
+  assert spend_status(SPEND_REFUSED_INSUFFICIENT) == 402;
+  assert spend_status(SPEND_DEBITED) == 200;
+  assert spend_status(SPEND_OUTCOME_UNSET) == 0;
+  assert spend_status(SPEND_OUTCOME_COUNT + 1) == 0;
+}
+
+; Negative control: only a debit moves money; a replay is a 200 that moved nothing.
+test a_success_status_is_not_a_debit {
+  assert spend_status(SPEND_REPLAY_RETURNS_SUCCESS) == SUCCESS_STATUS;
+  assert spend_moves_the_balance(SPEND_REPLAY_RETURNS_SUCCESS) == false;
+  assert spend_moves_the_balance(SPEND_REFUSED_INSUFFICIENT) == false;
+  assert spend_moves_the_balance(SPEND_DEBITED) == true;
+  assert INSUFFICIENT_REFUSAL_IS_LOGGED == false;
+  assert REPLAY_BODY_ECHOES_THE_NEW_REQUEST_AMOUNT == true;
+}
+
+test the_reuse_edges_are_named_and_nothing_is_restated {
+  assert REUSES_STAR_AWARD_ID == "turbobaby/star-award";
+  assert REUSES_LOYALTY_LEDGER_ID == "turbobaby/loyalty-ledger";
+  assert REUSES_REQUEST_IDENTITY_ID == "turbobaby/request-identity";
+  assert REUSES_COMMERCE_ID == "turbobaby/commerce";
+  assert REUSES_STAR_AWARD_ID != ID;
+  assert REUSES_LOYALTY_LEDGER_ID != ID;
+  assert THIS_FILE_RESTATES_THE_PER_CALL_CEILING == false;
+  assert THIS_FILE_RESTATES_THE_WINDOW_CAP == false;
+  assert THIS_FILE_RESTATES_THE_KEY_SYNTAX == false;
+  assert THIS_FILE_RESTATES_THE_KEY_RETENTION == false;
+  assert BOTH_DOORS_SHARE_ONE_AMOUNT_GATE == true;
+}
+
+test the_measured_site_counts_are_pinned {
+  assert DEBIT_GUARD_SITES == 1;
+  assert NEGATED_LEDGER_SITES == 1;
+  assert INSUFFICIENT_REFUSAL_SITES == 1;
+  assert ACCOUNT_ROW_INSERT_SITES == 1;
+  assert REASON_CEILING_COPIES == 2;
+  assert ADD_HANDLER_LINE == 162;
+  assert SPEND_HANDLER_LINE == 384;
+}
+
+; --- Invariants --------------------------------------------------------------------------------
+
+invariant a_short_balance_is_never_debited
+  assert debit_is_admitted(true, 99, 100) == false and stars_spend_outcome(true, 8, false, false, false, true, 99, 100) == SPEND_REFUSED_INSUFFICIENT
+
+invariant a_spend_never_opens_an_account
+  assert SPEND_PROVISIONS_AN_ACCOUNT == false and debit_is_admitted(false, 1000000, 1) == false
+
+invariant the_spend_ledger_row_is_negative
+  assert spend_ledger_amount(1) < 0
+
+invariant the_outcome_codes_are_contiguous_and_counted
+  assert SPEND_OUTCOME_UNSET == 0 and SPEND_OUTCOME_COUNT == 6 and SPEND_DEBITED == SPEND_OUTCOME_COUNT
+
+invariant an_unknown_outcome_has_no_status
+  assert spend_status(SPEND_OUTCOME_UNSET) == 0
+
+invariant no_third_party_moves_a_star_balance
+  assert A_THIRD_PARTY_MAY_MOVE_A_STAR_BALANCE == false and caller_may_move_this_balance(false, false) == false
