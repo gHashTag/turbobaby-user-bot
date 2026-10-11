@@ -115,7 +115,7 @@ pub const END_TO_END_WITNESS : str = "tests/integration_invitee_names.rs";
 ; constant plus a test asserting the literal -- the one shape a grep finds from either end. Each
 ; note names the sibling's DECLARATION, never a line in it: a line citation goes stale on the
 ; sibling's next edit and says nothing when it does.
-;
+
 ; CORRECTED 2026-09-22. This block said four and REUSE_EDGE_COUNT read 4. Further down, a
 ; constant named HANDLE_BOUND_IS_ALREADY_OWNED_BY already held turbobaby/events-booking as the
 ; owner of a decision this file leaned on -- an outbound edge in every respect but its name and
@@ -492,7 +492,7 @@ pub const REVIEWER_CLAIM_NOTE : str = "Confirmed 2026-09-21 by reading src/trios
 ; the overlap is the two owners' call, not a reviewer's" -- which left two present-tense copies
 ; that a fix to the check would have had to find in two files, and it named the owner in a
 ; constant of its own instead of in the edge block.
-;
+
 ; RESOLVED 2026-09-22 in the one direction the corpus allows: the copy goes, the owner stays, and
 ; the owner is named by REUSES_EVENTS_BOOKING_ID in the edge block. The seven restated
 ; declarations are listed by NAME in RESTATEMENT_DROPPED_ON_RESOLUTION, so a grep for any of them
@@ -504,12 +504,12 @@ pub const REVIEWER_CLAIM_NOTE : str = "Confirmed 2026-09-21 by reading src/trios
 ; The old "one length example" was one OVER-length example, and "the tests cover the lower bound"
 ; is asked there of the gap between the two minima: length zero IS tested, and the emptiness
 ; check refuses it before any length is compared, so it tests neither minimum.
-;
+
 ; The gate-1 floor for this file in scripts/verify_t27_specs.py fell on the same day, from 239
 ; declarations to 235, measured with the pinned compiler after this resolution; its check floor
 ; did not move. D16 keeps a floor so that a gate losing sight of what it checks goes red;
 ; declarations removed on purpose and listed by name above are not that.
-;
+
 ; What is NOT the owner's is the section above this one: the divergence between the two handle
 ; rules one file apart, and the consequence that only one of them builds a URL. That stays, and
 ; the predicate below consumes the owner's verdict. OWNER_HANDLE_MAX_CHARS and
@@ -786,7 +786,7 @@ test the_writer_chain_was_re_measured_and_the_header_is_out_of_date {
   assert a_writer_is_a_writer(REPLACEMENT_WRITER_PRODUCTION_CALLERS) == true;
   assert THAT_WRITER_STILL_EXISTS == false;
   assert DEFINITIONS_FOUND_TODAY == 0;
-  ; The mention census carries its correction the way the site census does.
+; The mention census carries its correction the way the site census does.
   assert SURVIVING_MENTIONS_ARE_PROSE == 6;
   assert SURVIVING_MENTION_COUNT_BEFORE_THE_REVIEW != SURVIVING_MENTIONS_ARE_PROSE;
   assert MENTION_SCOPE == "src/, tests/ and migrations/";

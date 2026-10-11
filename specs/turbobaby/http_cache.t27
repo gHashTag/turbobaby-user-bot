@@ -473,7 +473,7 @@ pub fn age_verdict(policy_is_decided: bool, age_seconds: u32, acceptable_age_sec
 ; The question the section above leaves open -- what makes a number with an age fit to show -- has
 ; an answer, and the answer is not in this repository. The owner's knowledge base publishes it and
 ; this file cites that base the way it cites a source file, by node and line.
-;
+
 ; THE INCIDENT IT CAME FROM (brain:knowledge_base:857-859). On 13 August 2026 the bridge behind a
 ; cash desk in the owner's other system answered with nothing after three attempts, and what the
 ; group then read carried TWO claims about the world -- "I wrote it" and "the balance is this" --
@@ -482,7 +482,7 @@ pub fn age_verdict(policy_is_decided: bool, age_seconds: u32, acceptable_age_sec
 ; as the evidence a rule stands on and not as anything this catalog serves. The gap is 500. Which
 ; of the two expenses named beside it, 120 and 500, the stale copy predated is NOT published, so
 ; this file does not say either.
-;
+
 ; THE RULE (brain:knowledge_base:860-866), translated and not summarised. A number has THREE
 ; outcomes and not two. Recomputed from the source -> the ordinary answer. The source is silent
 ; and a cache exists -> the number IS shown, marked NOT RECONCILED, together with the date on
@@ -490,12 +490,12 @@ pub fn age_verdict(policy_is_decided: bool, age_seconds: u32, acceptable_age_sec
 ; louder than silence. And the sentence that generalises it, which is the reason the rule reaches
 ; a catalog price at all: what changes is not the number but WHAT IT CALLS ITSELF, and with no
 ; date it is "time unknown", never "probably recent".
-;
+
 ; WHICH OUTCOME IS CHOSEN BY WHAT. By whether the source ANSWERED, never by how the number looks
 ; (brain:knowledge_base:867-869 records the earlier version of this rule judging the truthfulness
 ; of the value instead, and confusing an empty till with a sick bridge in both directions). A zero
 ; a live source answered with is an honest zero and takes the ordinary branch.
-;
+
 ; WHAT KIND OF FACT THIS IS, kept separate on purpose. The rule is a RULING IN FORCE, dated
 ; 13 August 2026, and it is not a measurement. CORRECTED 2026-09-21 BY REVIEW: this sentence
 ; read "the rule is the owner's decision", and the node does not say that. Node knowledge_base
@@ -512,14 +512,14 @@ pub fn age_verdict(policy_is_decided: bool, age_seconds: u32, acceptable_age_sec
 ; census is about that system. It is not about this one, the frequency here is not measured at
 ; all, and what IS measurable here is that the branch cannot fire today at all, because the door
 ; is a stub.
-;
+
 ; WHAT THE RULE DOES NOT DECIDE. It sets no ceiling in seconds, so ACCEPTABLE_PRICE_AGE_SECONDS
 ; keeps its sentinel and ACCEPTABLE_PRICE_AGE_IS_DECIDED stays false: what was ruled is that
 ; the ceiling is not what governs, the label is. Nor does it turn a published figure into a client
 ; quote. D11 is untouched, the door is still the price authority, turbobaby/pricing-honesty still
 ; owns that rule, and what is declared here is what the shop PUBLISHES about how a number must
 ; present itself -- not what anybody may charge for a bike.
-;
+
 ; THE NEIGHBOUR, by ID and declaration name. turbobaby/pricing-honesty owns the spatial half:
 ; render() maps an absent rate to SHAPE_DASH and never to a zero, and rate_zero_filled_record() is
 ; the D9 case that rule exists to refuse. This section is its TEMPORAL TWIN -- an absent time is
@@ -527,7 +527,7 @@ pub fn age_verdict(policy_is_decided: bool, age_seconds: u32, acceptable_age_sec
 ; The wording, and the languages it has to reach a reader in, belong to the surface;
 ; turbobaby/locale-policy holds copy and is named here as a bystander and not as an ownership
 ; edge, because this file takes no declaration from it and the census of five above is unchanged.
-;
+
 ; A SECOND NODE SAYS IT FROM TWO OTHER DIRECTIONS, and one of the two is a near miss for a refusal
 ; this file keeps. brain:business_rules is the owner's rule book, moved into the brain on
 ; 01.08.2026; its cash-desk section is four lines -- a heading and two rules -- and both rules
@@ -541,7 +541,7 @@ pub fn age_verdict(policy_is_decided: bool, age_seconds: u32, acceptable_age_sec
 ; an eviction rule in the whole brain and it is not one: it says what a partial write does to one
 ; record, not when a record dies or how many may live. The refusal stands and the near miss is
 ; counted, which this file already holds to be worth more than an absence asserted.
-;
+
 ; AND THE GENERAL RULE THE OWNER WROTE FIRST, about a service cell and not about money at all:
 ; brain:business_rules:32-34 rules that an empty cell means NOT MEASURED -- neither "overdue" nor
 ; "zero" -- and that the three outcomes are named separately. So this rule has four statements:

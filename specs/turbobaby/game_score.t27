@@ -346,13 +346,13 @@ test the_repository_contains_no_game_discriminator {
   assert GAME_KEY_OCCURRENCES == 0;
   assert GAME_DISCRIMINATOR_IS_NOT_SHIPPED_IN_THIS_LEDGER == true;
   assert eras_are_distinguishable(false, false) == false;
-  ; The scope of the zero, pinned so the number cannot be quoted without the tree it was taken
-  ; over. Re-run 2026-09-21 and still zero.
+; The scope of the zero, pinned so the number cannot be quoted without the tree it was taken
+; over. Re-run 2026-09-21 and still zero.
   assert GAME_KEY_SCOPE == "migrations/ src/ assets/";
   assert GAME_KEY_RE_RUN_AT == "2026-09-21";
-  ; And the tree that grep never visited, measured separately and by DECLARATION: one contract of
-  ; the 43 declares this absence, and it is this one. Counting mentions instead gives a number
-  ; that any contract can change by writing a sentence, which is why it is not the number pinned.
+; And the tree that grep never visited, measured separately and by DECLARATION: one contract of
+; the 43 declares this absence, and it is this one. Counting mentions instead gives a number
+; that any contract can change by writing a sentence, which is why it is not the number pinned.
   assert CORPUS_FILE_COUNT == 43;
   assert CONTRACTS_DECLARING_THE_ABSENCE == 1;
   assert CONTRACTS_DECLARING_THE_ABSENCE < CORPUS_FILE_COUNT;
@@ -382,12 +382,12 @@ test the_page_budget_coincidence_is_precedent_and_not_an_edge {
   assert PAGE_BUDGET_COINCIDENCE_IS_DERIVATION == false;
   assert CATALOG_API_OWNER_ID == "turbobaby/catalog-api";
   assert CATALOG_API_OWNER_ID != ID;
-  ; The magnitudes that coincide, stated here so the claim names the numbers it is about.
+; The magnitudes that coincide, stated here so the claim names the numbers it is about.
   assert LEADERBOARD_LIMIT_MIN == 1;
   assert LEADERBOARD_LIMIT_DEFAULT == 20;
   assert LEADERBOARD_LIMIT_MAX == 100;
-  ; No REUSES_ constant names the catalog contract, which is what "not an edge" means in a corpus
-  ; with no imports. The three that ARE edges are named instead.
+; No REUSES_ constant names the catalog contract, which is what "not an edge" means in a corpus
+; with no imports. The three that ARE edges are named instead.
   assert CATALOG_API_OWNER_ID != REUSES_RIDE_RUNTIME_ID;
   assert CATALOG_API_OWNER_ID != REUSES_STAR_AWARD_ID;
   assert CATALOG_API_OWNER_ID != REUSES_REQUEST_IDENTITY_ID;

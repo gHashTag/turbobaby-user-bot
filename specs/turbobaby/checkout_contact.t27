@@ -258,7 +258,7 @@ pub fn market_swap_reaches_every_branch() bool {
 ;   src/trios/store.rs:401 is still the SINGLE read of DEFAULT_COUNTRY_CODE in the normalizer --
 ;     grep gives two hits in the whole file, the declaration at :325 and that one use -- and
 ;     src/trios/store.rs:392 still emits a second country's code from a literal under no profile.
-;
+
 ; And the thing this section must never become: nowhere does this contract assert the stale claim
 ; as fact. The record's sentence is carried as a claim ABOUT THE RECORD
 ; (DECISION_RECORD_STILL_CALLS_IT_UNWIRED) and never as a claim about the code; the claim about the

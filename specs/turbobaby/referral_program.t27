@@ -157,7 +157,7 @@ pub const REGRESSION_WITNESS : str = "tests/integration_invite_counter.rs";
 ; --- Reuse edges, named because there are no imports ---------------------------------------------
 ; A cross-contract dependency is a string pinned to its literal by a test. Each edge names the
 ; DECLARATION this file consumes, never a line in the sibling.
-;
+
 ; RE-MEASURED 2026-09-21, from git rather than from memory, because the sentence that used to stand
 ; here ("ten contracts were written in parallel one wave ago and every line citation between them
 ; was stale within the hour") mixed one true count with one nobody timed. The true count: the wave
@@ -166,7 +166,7 @@ pub const REGRESSION_WITNESS : str = "tests/integration_invite_counter.rs";
 ; said, not smaller -- a line number typed into a sibling was typed against a file another author
 ; was still editing. "Within the hour" is dropped: nobody measured the interval and this corpus does
 ; not publish guessed numbers.
-;
+
 ; The corpus-wide RESIDUE is deliberately not pinned either, and the reason is the finding itself.
 ; It was counted at 63 when this correction began and at 7 a few minutes later, because sibling
 ; contracts are being repaired in parallel right now. A total written into this file would be false
@@ -251,7 +251,7 @@ pub const REFERRAL_CREDIT_SUPPLIES : str = "what a referral earns since 2026-09-
 
 ; turbobaby/request-identity declares a closed snapshot of its consumers, and this file IS named in
 ; it. The edge is declared from this side too, so the pair is named from both ends.
-;
+
 ; CORRECTED 2026-09-21, and the correction is worth more than the fact. The sentence that stood
 ; here -- "this file is not in that snapshot", written when the snapshot was taken before this file
 ; existed -- was true when written and false by the time it was read. That owner re-measured the
@@ -415,7 +415,7 @@ pub const SELF_EDGE_HAS_A_SCHEMA_CONSTRAINT : bool = false;
 pub const BACKFILL_PASSES_THROUGH_A_GUARD : bool = false;
 pub const BACKFILL_EXCLUDES_THE_SELF_EDGE : bool = false;
 pub const PAYOUT_RECHECKS_THE_SELF_EDGE : bool = false;
-;
+
 ; WHICH MONEY A SELF EDGE CAN ACTUALLY REACH, and the mistake of not asking. The status the row is
 ; BORN with decides it, and the two ways of making one give different answers.
 ; A backfilled row is born confirmed (migrations/007_referral_events.sql:26), and the confirmation

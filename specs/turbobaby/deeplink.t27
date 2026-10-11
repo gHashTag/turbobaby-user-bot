@@ -97,7 +97,7 @@ pub const DECISIONS : [3]str = ["D5", "D14", "D19"];
 ; --- The measured zero this file closes ----------------------------------------------------------
 ; Two greps over specs/ before this file was written, both run on 2026-09-21 across the twenty
 ; contracts then present. Neither the mechanism nor its vocabulary had an owner.
-;
+
 ; THE ZERO IS DATED, AND IT HAS ALREADY MOVED -- TWICE. Re-running `grep -ril deeplink specs/` at
 ; the end of the same session printed THREE paths, one of them this file, and that reading of 2
 ; others is kept below as the wave reading. It is no longer current. RE-MEASURED 2026-09-21

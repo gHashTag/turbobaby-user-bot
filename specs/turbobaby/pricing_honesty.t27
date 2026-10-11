@@ -268,7 +268,7 @@ pub fn may_add_to_cart(rate: OptionalRate, bookable: bool) bool {
 ; satisfied by a comparator that refuses the answer when the numbers disagree, which is the
 ; exact failure D11 forbids at one remove: a client who is told nothing because two internal
 ; numbers argue has been served silence, and silence is item 5 of MUST_NOT_EMIT.
-;
+
 ; What is pinned here is the DECISION, not the sink. The threshold, the direction of the
 ; boundary and the non-blocking rule are all checkable statements about behaviour. Persistence
 ; is a statement about storage, and the refusal below explains why this file may not make one.

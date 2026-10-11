@@ -535,7 +535,7 @@ test this_contract_is_a_root_and_names_its_consumers_instead {
     assert IS_OWNERSHIP_ROOT == true;
     assert REUSE_EDGE_COUNT == 0;
     assert CONSUMERS.len == CONSUMER_COUNT;
-    ; Re-measured 2026-09-21: 18 of the 22, not the 4 of the first writing; 19 of 23 since 2026-09-26.
+; Re-measured 2026-09-21: 18 of the 22, not the 4 of the first writing; 19 of 23 since 2026-09-26.
     assert CONSUMERS_DECLARING_THE_EDGE == 19;
     assert CONSUMERS_DECLARING_THE_EDGE < CONSUMER_COUNT;
     assert CONSUMERS_DECLARING_THE_EDGE + CONSUMERS_MEASURED_ONLY == CONSUMER_COUNT;
@@ -613,14 +613,14 @@ test the_consumer_census_and_the_array_describe_the_same_list {
     assert LAST_LATE_DECLARER_INDEX - FIRST_LATE_DECLARER_INDEX + 1 == LATE_DECLARER_COUNT;
     assert LATE_DECLARER_COUNT + CONSUMER_COUNT_BEFORE_THE_RE_MEASUREMENT + CONSUMERS_ADDED_2026_09_26 == CONSUMER_COUNT;
     assert FIRST_MEASURED_ONLY_INDEX + LATE_DECLARER_COUNT + CONSUMERS_ADDED_2026_09_26 == CONSUMERS_DECLARING_THE_EDGE;
-    ; The four measured-only entries are exactly the four positions the census says they are.
+; The four measured-only entries are exactly the four positions the census says they are.
     assert CONSUMERS[4] == "turbobaby/commerce";
     assert CONSUMERS[5] == "turbobaby/bike-catalog";
     assert CONSUMERS[6] == "turbobaby/availability";
     assert CONSUMERS[7] == "turbobaby/ride-game";
     assert CONSUMER_CENSUS_GREP == "grep -rlE \"^pub const REUSES_REQUEST_IDENTITY_ID\" specs/";
-    ; The grep counts declarations. A looser grep for the bare ID answers more files and is not
-    ; what this array holds, which is why the census names its own command.
+; The grep counts declarations. A looser grep for the bare ID answers more files and is not
+; what this array holds, which is why the census names its own command.
     assert THE_CENSUS_COUNTS_DECLARATIONS_NOT_MENTIONS == true;
 }
 
@@ -795,14 +795,14 @@ test the_exclusivity_claims_are_re_measured_and_not_remembered {
     assert HTTP_UNAUTHORIZED == 401;
     assert HTTP_FORBIDDEN == 403;
     assert HTTP_TOO_MANY_REQUESTS == 429;
-    ; And the half that is NOT exclusive, stated as the larger number so the two cannot be mixed.
+; And the half that is NOT exclusive, stated as the larger number so the two cannot be mixed.
     assert READ_TRANSPORT_STATUS_OWNER_ID == "turbobaby/catalog-api";
     assert READ_TRANSPORT_STATUS_OWNER_ID != ID;
     assert CONTRACTS_DECLARING_AN_IANA_STATUS == 9;
     assert CONTRACTS_DECLARING_BAD_REQUEST == 4;
     assert CONTRACTS_DECLARING_BAD_REQUEST > CONTRACTS_DECLARING_UNAUTHORIZED;
     assert CONTRACTS_DECLARING_AN_IANA_STATUS > CONTRACTS_DECLARING_BAD_REQUEST;
-    ; The census method, pinned: nine by reading, six by prefix grep, three invisible to the grep.
+; The census method, pinned: nine by reading, six by prefix grep, three invisible to the grep.
     assert PREFIX_GREP_ANSWER == 6;
     assert CONTRACTS_A_PREFIX_GREP_WOULD_HAVE_MISSED == 3;
     assert PREFIX_GREP_ANSWER + CONTRACTS_A_PREFIX_GREP_WOULD_HAVE_MISSED == CONTRACTS_DECLARING_AN_IANA_STATUS;
@@ -810,7 +810,7 @@ test the_exclusivity_claims_are_re_measured_and_not_remembered {
     assert PEER_CITING_THIS_PRECEDENT_ID == "turbobaby/cart-persistence";
     assert PEER_CITING_THIS_PRECEDENT_ID != ID;
     assert PEER_CITING_THIS_PRECEDENT_ID == CONSUMERS[10];
-    ; The two D14 homes, which the re-measurement confirmed rather than corrected.
+; The two D14 homes, which the re-measurement confirmed rather than corrected.
     assert D14_ENUMERATION_HOMES.len == D14_ENUMERATION_HOME_COUNT;
     assert D14_ENUMERATION_DECLARATIONS.len == D14_ENUMERATION_HOME_COUNT;
     assert D14_ENUMERATION_HOMES[0] == "specs/agents/turbobaby.t27";

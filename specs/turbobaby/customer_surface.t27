@@ -96,13 +96,13 @@ pub const WITNESS : str = "tests/customer_surface_wiring.rs";
 ; -- when both ends declare one. Outbound is the only end this file controls, and one of the six
 ; is outbound-only today; that gap is named in RECIPROCAL_EDGE_GAP below rather than assumed away.
 ; Each note names the sibling's DECLARATION rather than a line in it.
-;
+
 ; RE-MEASURED 2026-09-21, from git. The count that used to stand here -- ten contracts in the wave
 ; before this one -- is confirmed: that commit added exactly ten. What it left out is this file's
 ; OWN wave, which added THIRTEEN more beside it, so the number of siblings moving under a line
 ; citation was larger than the sentence implied. "Went stale inside the hour" is dropped: nobody
 ; timed the interval, and this file does not publish a figure it cannot open.
-;
+
 ; The corpus-wide RESIDUE is refused a constant too, and refusing it is the lesson. Counted at 63
 ; when this correction began and at 7 a few minutes later, because sibling contracts are being
 ; repaired in parallel: a total pinned here would be stale before the commit carrying it landed,
@@ -141,7 +141,7 @@ pub const RUNTIME_CONFIG_SUPPLIES : str = "turbobaby/runtime-config owns BOT_HAN
 ; MEASURED 2026-09-21, and declared because the paragraph above would otherwise let a reader assume
 ; symmetry. The shared fact is co-declared from one side only: this file declares the edge to
 ; turbobaby/runtime-config, and that owner declares none back.
-;
+
 ; RE-MEASURED THE SAME DAY, and the first wording of this note had to be corrected. It said "a grep
 ; of runtime_config.t27 for this contract's ID returns ZERO". That grep now returns ONE -- and the
 ; one hit is a COMMENT, not a declaration. That owner was counting, in prose, which files declare
@@ -151,7 +151,7 @@ pub const RUNTIME_CONFIG_SUPPLIES : str = "turbobaby/runtime-config owns BOT_HAN
 ; separate constants instead of one: being MENTIONED and being DECLARED are different facts, and a
 ; bare grep count cannot tell them apart. His BOT_HANDLE_CLIENT_LITERAL_SITES still reaches this
 ; surface by SOURCE PATH (src/ui/screens/home_screen.rs:446) and never by contract ID.
-;
+
 ; This file cannot repair the gap -- an edge is declared by the file that carries it, and this file
 ; does not own runtime_config.t27 -- so what it does is state the gap where a reader meets the
 ; claim, rather than let "named by ID from both ends" stand as a description of a pair named from
