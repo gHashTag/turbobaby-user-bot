@@ -13,6 +13,7 @@ use sea_orm::EntityTrait;
 use sha2::Sha256;
 
 use crate::db::entities::loyalty_profile;
+use crate::spec::request_identity as ri;
 use crate::AppState;
 
 type HmacSha256 = Hmac<Sha256>;
@@ -520,16 +521,24 @@ pub(crate) fn record_failed_admin_attempt(headers: &HeaderMap) -> Result<(), Sta
 /// Verify that the Telegram user in `X-Telegram-Init-Data` owns `expected_telegram_id`.
 /// Returns the authenticated telegram_id on success.
 ///
-/// Cycle #126+repair: first attempt strict HMAC validation (via
-/// `validate_init_data`). Production Telegram WebViews have been observed to
-/// fail the standard `hash` check despite valid-looking initData, so on a 401
-/// we fall back to verifying `user.id` and `auth_date` freshness. This is the
-/// same effective security boundary already used for garden endpoints; the
-/// fallback still prevents impersonation (user.id must match the path/body
-/// `telegram_id`) and rejects stale or missing initData.
+/// The decision is the spec's, not this file's: after the strict HMAC check,
+/// `spec::request_identity::owner_gate_admits` decides, with the spec's
+/// `LENIENT_PATH_IS_SHIPPED` (false since 2026-10-11, epic #77 / #82). A
+/// request whose HMAC does not verify is refused whatever its user id and
+/// stamp. A valid proof of the wrong person stays 403 and is terminal.
 pub(crate) fn check_owner(
     headers: &HeaderMap,
     state: &AppState,
+    expected_telegram_id: i64,
+) -> Result<i64, StatusCode> {
+    owner_gate(headers, &state.config.bot_token, expected_telegram_id)
+}
+
+/// The whole owner gate, needing only the bot token: what `check_owner` runs,
+/// in a form the unit tests can drive end to end without a database.
+fn owner_gate(
+    headers: &HeaderMap,
+    bot_token: &str,
     expected_telegram_id: i64,
 ) -> Result<i64, StatusCode> {
     let Some(init_data) = headers
@@ -542,7 +551,7 @@ pub(crate) fn check_owner(
         return Err(StatusCode::UNAUTHORIZED);
     };
 
-    if let Some(user) = validate_init_data(init_data, &state.config.bot_token) {
+    if let Some(user) = validate_init_data(init_data, bot_token) {
         if user.id == expected_telegram_id {
             return Ok(user.id);
         } else {
@@ -556,31 +565,33 @@ pub(crate) fn check_owner(
         }
     }
 
-    // Strict HMAC validation failed. Fall back to user-id + auth_date freshness
-    // so production Mini Apps keep working while the cause is root-caused.
+    // Strict HMAC validation produced no user. Whether that may still admit is
+    // the spec's decision (owner_gate_admits); the host only gathers the facts.
     //
-    // The log distinguishes the two cases, because they call for opposite
-    // responses and were previously indistinguishable:
-    //
-    //   reconstructed — the client had no `WebApp.initData` and rebuilt the
-    //     payload from `initDataUnsafe`. That can never match a signature, so
-    //     it is a client-compatibility problem, not an attack. This is the
-    //     cohort that has to keep working until the rebuild is removed.
-    //
-    //   signed-but-wrong — the client sent a payload it claims Telegram
-    //     signed, and it does not verify. That is either tampering or a real
-    //     validation bug, and it is the case that must eventually be refused.
-    //
-    // Counting them is what makes removing this fallback a decision instead of
-    // a gamble: today every rejection looks the same, so nobody can tell how
-    // many real users the strict path would lock out.
+    // The two cohorts are still told apart in the metrics, now as refusals:
+    //   reconstructed -- the client rebuilt the payload from initDataUnsafe,
+    //     which can never match a signature (a client-compatibility problem);
+    //   signed-but-invalid -- a payload that claims Telegram signed it and does
+    //     not verify (tampering or a validation bug).
     let reconstructed = headers
         .get("X-Telegram-Init-Data-Reconstructed")
         .and_then(|v| v.to_str().ok())
         .map(|v| v == "1")
         .unwrap_or(false);
+    let (id_matches, auth_date_supplied, auth_date_ok) =
+        unsigned_payload_facts(init_data, expected_telegram_id);
+    if ri::owner_gate_admits(
+        ri::IDENTITY_NONE,
+        false,
+        ri::LENIENT_PATH_IS_SHIPPED,
+        id_matches,
+        auth_date_supplied,
+        auth_date_ok,
+    ) {
+        return Ok(expected_telegram_id);
+    }
     tracing::warn!(
-        "owner strict HMAC failed for telegram_id={} kind={} — using lenient fallback",
+        "owner strict HMAC failed for telegram_id={} kind={} -- refused (spec request_identity)",
         expected_telegram_id,
         if reconstructed {
             "reconstructed-initdata"
@@ -589,16 +600,16 @@ pub(crate) fn check_owner(
         }
     );
     crate::metrics::auth_failure(if reconstructed {
-        "lenient_reconstructed"
+        "unsigned_refused_reconstructed"
     } else {
-        "lenient_signed_invalid"
+        "unsigned_refused_signed_invalid"
     });
-    lenient_owner_verify(init_data, expected_telegram_id)
+    Err(StatusCode::UNAUTHORIZED)
 }
 
-/// Explicit lenient gate. Kept for call-site readability in garden/events
-/// modules; it now delegates to `check_owner`, which already includes the
-/// user-id + auth-date fallback after strict HMAC failure.
+/// Kept for call-site readability in garden/events modules. It delegates to
+/// `check_owner`, so it is exactly as strict: since 2026-10-11 there is no
+/// unsigned fallback behind it (spec request_identity, LENIENT_PATH_IS_SHIPPED).
 pub(crate) fn check_owner_lenient(
     headers: &HeaderMap,
     state: &AppState,
@@ -628,42 +639,22 @@ fn extract_init_data_user_id_and_auth_date(init_data: &str) -> Option<(i64, i64)
     user_id.zip(auth_date)
 }
 
-/// Lenient fallback: accept the request when initData is present, its decoded
-/// `user.id` matches `expected_telegram_id`, and `auth_date` is within the
-/// last 24 hours. Used by `check_owner` when strict HMAC validation fails.
-fn lenient_owner_verify(init_data: &str, expected_telegram_id: i64) -> Result<i64, StatusCode> {
+/// The facts the spec's owner gate takes about a payload whose HMAC did not
+/// verify: does its `user.id` match, was `auth_date` supplied, and is it fresh
+/// by the spec's own `auth_date_admits`. Gathering only -- no decision here.
+fn unsigned_payload_facts(init_data: &str, expected_telegram_id: i64) -> (bool, bool, bool) {
     let Some((user_id, auth_date)) = extract_init_data_user_id_and_auth_date(init_data) else {
-        crate::metrics::auth_failure("invalid_init_data");
-        return Err(StatusCode::UNAUTHORIZED);
+        return (false, false, false);
     };
-    if user_id != expected_telegram_id {
-        tracing::warn!(
-            "lenient owner mismatch: initData user={} expected={}",
-            user_id,
-            expected_telegram_id
-        );
-        crate::metrics::auth_failure("owner_mismatch");
-        return Err(StatusCode::FORBIDDEN);
-    }
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
+        .map(|d| d.as_secs())
         .unwrap_or(0);
-    if auth_date > now || now.saturating_sub(auth_date) > 86400 {
-        tracing::warn!(
-            "lenient owner rejected stale initData: auth_date={} now={}",
-            auth_date,
-            now
-        );
-        crate::metrics::auth_failure("stale_init_data");
-        return Err(StatusCode::UNAUTHORIZED);
-    }
-    tracing::warn!(
-        "lenient owner auth accepted telegram_id={} (HMAC validation failed)",
-        user_id
-    );
-    crate::metrics::auth_failure("owner_lenient_fallback_accepted");
-    Ok(user_id)
+    let fresh = match (u32::try_from(auth_date), u32::try_from(now)) {
+        (Ok(stamp), Ok(now)) => ri::auth_date_admits(stamp, now),
+        _ => false,
+    };
+    (user_id == expected_telegram_id, true, fresh)
 }
 
 /// Returns `Ok(())` if the user is not blocked.
@@ -709,6 +700,97 @@ pub(crate) fn validate_telegram_id_param(id: i64) -> Result<(), StatusCode> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn headers_with(init_data: &str) -> HeaderMap {
+        let mut h = HeaderMap::new();
+        h.insert(
+            "X-Telegram-Init-Data",
+            init_data.parse().expect("ascii header"),
+        );
+        h
+    }
+
+    /// The gate end to end: the request that the retired fallback admitted is
+    /// now 401, a signed proof of the owner is admitted, of another person 403,
+    /// and no header at all 401.
+    #[test]
+    fn the_owner_gate_end_to_end_refuses_unsigned_and_keeps_signed() {
+        let token = "123456:test-token";
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+        let user = urlencoding::encode("{\"id\":42,\"first_name\":\"T\"}").into_owned();
+        let unsigned = format!("user={}&auth_date={}", user, now - 60);
+        assert_eq!(
+            owner_gate(&headers_with(&unsigned), token, 42),
+            Err(StatusCode::UNAUTHORIZED)
+        );
+
+        let signed = generate_init_data(token, 42, "T");
+        assert_eq!(owner_gate(&headers_with(&signed), token, 42), Ok(42));
+        assert_eq!(
+            owner_gate(&headers_with(&signed), token, 43),
+            Err(StatusCode::FORBIDDEN)
+        );
+        assert_eq!(
+            owner_gate(&HeaderMap::new(), token, 42),
+            Err(StatusCode::UNAUTHORIZED)
+        );
+    }
+
+    /// An unsigned payload naming the right owner with a fresh stamp: before
+    /// 2026-10-11 this was admitted by the host's own lenient verifier. The
+    /// facts are gathered correctly, and the spec's gate refuses it.
+    #[test]
+    fn unsigned_payload_with_matching_id_and_fresh_stamp_is_refused_by_the_spec() {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+        let user = urlencoding::encode("{\"id\":42,\"first_name\":\"T\"}").into_owned();
+        let payload = format!("user={}&auth_date={}", user, now - 60);
+        assert!(validate_init_data(&payload, "123:test").is_none());
+        let (id_matches, supplied, fresh) = unsigned_payload_facts(&payload, 42);
+        assert!(id_matches && supplied && fresh);
+        assert!(!ri::owner_gate_admits(
+            ri::IDENTITY_NONE,
+            false,
+            ri::LENIENT_PATH_IS_SHIPPED,
+            id_matches,
+            supplied,
+            fresh,
+        ));
+    }
+
+    /// A valid proof still admits its owner and stays terminal for anyone else.
+    #[test]
+    fn a_valid_proof_admits_its_owner_and_refuses_another() {
+        assert!(ri::owner_gate_admits(
+            ri::IDENTITY_TELEGRAM_USER,
+            true,
+            ri::LENIENT_PATH_IS_SHIPPED,
+            false,
+            false,
+            false
+        ));
+        assert!(!ri::owner_gate_admits(
+            ri::IDENTITY_TELEGRAM_USER,
+            false,
+            ri::LENIENT_PATH_IS_SHIPPED,
+            true,
+            true,
+            true
+        ));
+    }
+
+    #[test]
+    fn unparseable_or_stale_payload_facts_are_all_false_or_not_fresh() {
+        assert_eq!(unsigned_payload_facts("garbage", 42), (false, false, false));
+        let user = urlencoding::encode("{\"id\":42}").into_owned();
+        let stale = format!("user={}&auth_date=1000", user);
+        assert_eq!(unsigned_payload_facts(&stale, 42), (true, true, false));
+    }
 
     fn generate_init_data(bot_token: &str, user_id: i64, first_name: &str) -> String {
         let user_json = format!("{{\"id\":{},\"first_name\":\"{}\"}}", user_id, first_name);

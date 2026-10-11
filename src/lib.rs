@@ -119,6 +119,8 @@ pub mod promptpay;
 #[cfg(all(not(target_arch = "wasm32"), feature = "backend"))]
 pub mod s3;
 #[cfg(all(not(target_arch = "wasm32"), feature = "backend"))]
+pub(crate) mod spec;
+#[cfg(all(not(target_arch = "wasm32"), feature = "backend"))]
 pub mod util;
 
 /// Application shared state — the type plumbed through every Axum

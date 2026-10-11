@@ -24,6 +24,8 @@ pub mod notify;
 #[cfg(not(target_arch = "wasm32"))]
 #[path = "api/observability.rs"]
 mod observability;
+#[cfg(not(target_arch = "wasm32"))]
+mod spec;
 
 /// The promoter. Finds new products, sets and events, writes a post about each
 /// with z.ai, and hands it to the owners with a Publish button. Nothing here
