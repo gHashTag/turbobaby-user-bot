@@ -2,29 +2,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
 
-use crate::spec::order_status as os;
-
-/// Plumbing: the `order_status.t27` code of a status name read from the wire
-/// or a row. `t27c gen-rust` types the spec's `str` parameter as
-/// `&'static str`, so the name is first matched against the spec's own
-/// `STATUS_NAMES` and the code then comes from `order_status_code_of`; a name
-/// outside the vocabulary is the spec's `STATUS_UNSET`.
-pub(crate) fn order_status_code(name: &str) -> u8 {
-    os::STATUS_NAMES
-        .iter()
-        .find(|n| **n == name)
-        .map_or(os::STATUS_UNSET, |n| os::order_status_code_of(n))
-}
-
-/// Plumbing: the spec's name for a status code, found through
-/// `order_status_code_of` so no table order is assumed here.
-pub(crate) fn order_status_name(code: u8) -> Option<&'static str> {
-    os::STATUS_NAMES
-        .iter()
-        .copied()
-        .find(|n| os::order_status_code_of(n) == code)
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct Order {
     pub id: String,
@@ -1396,6 +1373,29 @@ pub(crate) async fn fraud_stats_24h(
         s.top_offender_count = top.try_get("", "n").unwrap_or(0);
     }
     Ok(s)
+}
+
+use crate::spec::order_status as os;
+
+/// Plumbing: the `order_status.t27` code of a status name read from the wire
+/// or a row. `t27c gen-rust` types the spec's `str` parameter as
+/// `&'static str`, so the name is first matched against the spec's own
+/// `STATUS_NAMES` and the code then comes from `order_status_code_of`; a name
+/// outside the vocabulary is the spec's `STATUS_UNSET`.
+pub(crate) fn order_status_code(name: &str) -> u8 {
+    os::STATUS_NAMES
+        .iter()
+        .find(|n| **n == name)
+        .map_or(os::STATUS_UNSET, |n| os::order_status_code_of(n))
+}
+
+/// Plumbing: the spec's name for a status code, found through
+/// `order_status_code_of` so no table order is assumed here.
+pub(crate) fn order_status_name(code: u8) -> Option<&'static str> {
+    os::STATUS_NAMES
+        .iter()
+        .copied()
+        .find(|n| os::order_status_code_of(n) == code)
 }
 
 #[cfg(test)]
