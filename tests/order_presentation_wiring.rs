@@ -15,7 +15,11 @@
 //! Contract: `specs/turbobaby/order_presentation.t27` (turbobaby/order-presentation).
 //! The vocabulary and the display pipeline's CONTENT belong to
 //! `specs/turbobaby/order_status.t27` (turbobaby/order-status); nothing here
-//! lists the nine names -- they are read out of the server's own whitelist.
+//! lists the nine names -- they are read out of the status contract's own list,
+//! the one `t27c gen-rust` emits into `src/spec/order_status.rs` (STATUS_NAMES),
+//! which the server's validator now asks instead of carrying a whitelist of its
+//! own (the slice it used to carry is gone; `order_status.t27` records the
+//! retirement).
 //!
 //! WHY IT EXISTS (measured 2026-09-21 and still true at 14b01ac): fifteen sites
 //! across the three files read one status string, six of them lower-casing it and
@@ -35,6 +39,7 @@ const DETAIL_PATH: &str = "src/ui/screens/order_detail_screen.rs";
 const STEPPER_PATH: &str = "src/ui/components/status_stepper.rs";
 const READING_PATH: &str = "src/trios/order_status_view.rs";
 const SERVER_PATH: &str = "src/api/orders.rs";
+const SPEC_HOST_PATH: &str = "src/spec/order_status.rs";
 const CONTRACT: &str = "specs/turbobaby/order_presentation.t27";
 const OWNER_CONTRACT: &str = "specs/turbobaby/order_status.t27";
 
@@ -63,35 +68,45 @@ fn code_lines(body: &str) -> Vec<&str> {
         .collect()
 }
 
-/// The quoted names between `const VALID_STATUSES: &[&str] = &[` and `];` in the
-/// server's validator -- the only list that decides what the column may hold.
-/// Read, never written here: a sixth hand-written enumeration of the column is
-/// exactly what the order-status contract counts against this repository.
+/// The quoted names inside `STATUS_NAMES: [&'static str; N] = [` in the status
+/// contract's generated host file -- the only list that decides what the column
+/// may hold, emitted by `t27c gen-rust` from specs/turbobaby/order_status.t27
+/// (the server's own VALID_STATUSES slice is retired; the contract records it).
+/// Read, never written here: a hand-written enumeration of the column coming
+/// back to Rust is exactly what the order-status contract counts against this
+/// repository.
 fn vocabulary() -> Vec<String> {
-    let server = source(SERVER_PATH);
-    let open = "const VALID_STATUSES: &[&str] = &[";
-    let start = server
-        .find(open)
-        .unwrap_or_else(|| panic!("{SERVER_PATH}: `{open}` is gone -- this guard reads nothing"));
-    let rest = &server[start + open.len()..];
+    let spec_host = source(SPEC_HOST_PATH);
+    let open = "pub const STATUS_NAMES: [&'static str;";
+    let start = spec_host.find(open).unwrap_or_else(|| {
+        panic!("{SPEC_HOST_PATH}: `{open}` is gone -- this guard reads nothing")
+    });
+    let bracket = start
+        + spec_host[start..]
+            .find("= [")
+            .unwrap_or_else(|| panic!("{SPEC_HOST_PATH}: STATUS_NAMES never opens its list"));
+    let rest = &spec_host[bracket + 3..];
     let end = rest
         .find("];")
-        .unwrap_or_else(|| panic!("{SERVER_PATH}: VALID_STATUSES never closes"));
-    let names: Vec<String> = rest[..end]
-        .lines()
-        .filter_map(|line| {
-            let line = line.trim();
-            let open = line.find('"')?;
-            let close = open + 1 + line[open + 1..].find('"')?;
-            Some(line[open + 1..close].to_string())
-        })
-        .collect();
+        .unwrap_or_else(|| panic!("{SPEC_HOST_PATH}: STATUS_NAMES never closes"));
+    // The list is emitted on one line ("a", "b", ...); walk every quoted
+    // pair in the slice instead of one-per-line.
+    let mut names: Vec<String> = Vec::new();
+    let mut tail = &rest[..end];
+    while let Some(open) = tail.find('"') {
+        let close = match tail[open + 1..].find('"') {
+            Some(c) => open + 1 + c,
+            None => break,
+        };
+        names.push(tail[open + 1..close].to_string());
+        tail = &tail[close + 1..];
+    }
     // D16: a scan whose input came back empty passes every check below. The floor
     // is not the count: the count is the order-status contract's STATUS_COUNT and
     // gate 3 pins it; this only refuses to run blind.
     assert!(
         names.len() >= 9,
-        "read only {} names out of VALID_STATUSES -- the reader is broken, not the code",
+        "read only {} names out of STATUS_NAMES -- the reader is broken, not the code",
         names.len()
     );
     names
@@ -582,13 +597,19 @@ fn the_contracts_sites_land_on_their_code() {
 #[test]
 fn the_exact_reading_rests_on_the_servers_own_reading() {
     let server = source(SERVER_PATH);
+    // The whitelist is the contract's now: the validator hands the requested
+    // name to order_status_code and asks the generated rule, so exactness is
+    // the spec's (order_status.t27's lookup gives anything else the UNSET
+    // verdict) and this guard pins the call, not a slice the server no longer
+    // carries.
     assert!(
-        server.contains("if !VALID_STATUSES.contains(&status) {"),
-        "the whitelist no longer compares the requested name exactly"
+        server.contains("os::order_status_validation_refusal(")
+            && server.contains("order_status_code(status)"),
+        "the validator no longer asks the status contract about the requested name"
     );
     assert!(
-        server.contains("if o.status != \"pending\" {"),
-        "the customer cancellation no longer compares the stored name exactly"
+        server.contains("os::order_status_customer_cancel_refusal(order_status_code(&o.status))"),
+        "the customer cancellation no longer asks the contract about the stored name"
     );
     let validator_at = server
         .find("pub(crate) fn validate_update_order_status(")
