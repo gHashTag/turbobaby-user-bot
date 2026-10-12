@@ -140,3 +140,37 @@ jobs:
         env:
           T27C: .t27-toolchain/target/release/t27c
         run: python3 scripts/verify_t27_specs.py --require-compiler -v
+
+  t27b-contracts:
+    name: T27 Contracts on t27b (native backend)
+    # t27b's JIT runs on arm64 only, so this job needs an arm64 runner.
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check out pinned t27b
+        uses: actions/checkout@v4
+        with:
+          repository: gHashTag/t27
+          # Re-pinned 2026-10-13: 3733ff1's parser rejects the indented `;`
+          # prose request_identity/api_surface carried since 2026-10-11 (a `;`
+          # is a comment only at column 1); the specs are fixed to column-1
+          # comments instead. d8604f7 is on master, descends from 3733ff1, and
+          # its gen-rust output for src/spec/request_identity.rs was proven
+          # byte-identical on the Railway lab the same day.
+          ref: d8604f71b0b9f0e03f3780fa1985d7e3d4d30156
+          path: .t27b-toolchain
+      - name: Build pinned t27b and its t27c
+        # gen-rust is taken from this commit, not from the t27-contracts pin:
+        # t27c @ 40003ed emits `pub const X: String = 2026-09-21;` for str
+        # constants, which rustc rejects (2 errors on request_identity.t27);
+        # this commit emits `&'static str = "..."` and its output compiles.
+        run: cargo build --locked --release --manifest-path .t27b-toolchain/Cargo.toml -p t27b -p t27c
+      - name: Generated rule modules match their specs (src/spec/*.rs == t27c gen-rust)
+        env:
+          T27C: .t27b-toolchain/target/release/t27c
+        run: scripts/check_spec_gen.sh
+      - name: Host-executed specs pass on t27b, and the pass floor holds
+        env:
+          T27B: .t27b-toolchain/target/release/t27b
+        run: scripts/check_t27b.sh

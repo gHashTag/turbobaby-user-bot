@@ -1248,7 +1248,7 @@ pub const DETAIL_ERROR_STATE_HAS_A_KEY_AND_ALSO_LEAKS_THE_TEXT : bool = true;
 ; line's stored name as it was stored. The operator chose the neutral name those lines are shown
 ; under; like every string on this surface it is cited by its key, RETIRED_LINE_NAME_KEY, and its
 ; two rows are pinned by a host test beside the rule (RETIRED_LINE_UNIT_TESTS_LIVE_IN).
-;; THE RULE is the server's, so a bundle that predates it is served the neutral name too
+; THE RULE is the server's, so a bundle that predates it is served the neutral name too
 ; (customer_order_line in RETIRED_LINE_RULE). A line whose bike is not an object is of a retired
 ; kind, and it is served as at most three fields: the neutral name, under the one name field every
 ; owned screen reads first (RETIRED_LINE_NAME_FIELD), and its quantity and unit price exactly as
@@ -1262,7 +1262,7 @@ pub const DETAIL_ERROR_STATE_HAS_A_KEY_AND_ALSO_LEAKS_THE_TEXT : bool = true;
 ; (shown_line_name, RETIRED_LINE_PRINT_SITES), so a customer reading English reads the English row.
 ; Only the two customer reads apply the rule, through Order::for_customer; the admin reads keep
 ; the stored row, which is the archive.
-;; THE SHOP. The same two reads withhold the shop an order names when it names the previous shop
+; THE SHOP. The same two reads withhold the shop an order names when it names the previous shop
 ; (customer_shop_id); every shop value the old checkout stored did. A withheld shop reaches the
 ; keyless shop fallback both owned screens print for an absent shop (two of
 ; KEYLESS_CUSTOMER_STRING_SITES), and that fallback names THIS shop, so an order the previous shop
@@ -1280,7 +1280,7 @@ pub const DETAIL_ERROR_STATE_HAS_A_KEY_AND_ALSO_LEAKS_THE_TEXT : bool = true;
 ; lines, so KEYLESS_CUSTOMER_STRING_SITES holds, and no cited line moved. A bundle built before the
 ; decision prints an empty value for the empty shop: not this shop's name either. The Mini App's
 ; checkout never sends an empty shop, so no order of this shop is read as a withheld one.
-;; WHAT DID NOT MOVE. No status, no figure, no owner question above and no cited line: each of the
+; WHAT DID NOT MOVE. No status, no figure, no owner question above and no cited line: each of the
 ; three print sites was replaced in place, so LIST_LINE_COUNT and DETAIL_LINE_COUNT hold.
 pub const RETIRED_LINE_DECIDED_AT : str = "2026-09-25";
 pub const RETIRED_LINE_DECIDED_BY : str = "operator, applying the owner's answer 3 of 2026-09-25";

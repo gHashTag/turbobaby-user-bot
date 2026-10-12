@@ -3,7 +3,9 @@
 //! Each file here is the output of `t27c gen-rust` on the spec it names and is
 //! never edited. The spec's tests and invariants run on t27b
 //! (`t27b test specs/turbobaby/<id>.t27`); this module is only how the host
-//! calls the same functions. Regenerate after changing a spec:
+//! calls the same functions. Regenerate after changing a spec, with t27c
+//! built from gHashTag/t27 @ 3733ff1 (the pin of the `t27b-contracts` CI job;
+//! `scripts/check_spec_gen.sh` fails on any byte of drift):
 //!
 //! ```text
 //! t27c gen-rust specs/turbobaby/request_identity.t27 > src/spec/request_identity.rs
