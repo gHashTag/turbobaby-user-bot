@@ -559,8 +559,6 @@ pub const T_MODAL_INCREASE_QTY: Key = "modal.increase_qty";
 pub const T_MODAL_CERTIFICATE: Key = "modal.certificate";
 
 // Menu screen hard-coded strings
-pub const T_MENU_FILTER_SATIVA: Key = "menu.filter.sativa";
-pub const T_MENU_FILTER_INDICA: Key = "menu.filter.indica";
 pub const T_MENU_FILTER_HYBRID: Key = "menu.filter.hybrid";
 pub const T_MENU_SORT_TOP: Key = "menu.sort.top";
 pub const T_MENU_SORT_PRICE_ASC: Key = "menu.sort.price_asc";
@@ -570,7 +568,6 @@ pub const T_MENU_NO_RESULTS: Key = "menu.no_results";
 pub const T_MENU_NEW_ARRIVALS: Key = "menu.new_arrivals";
 pub const T_MENU_PRICE_REQUEST: Key = "menu.price_request";
 pub const T_MENU_SOLD_OUT: Key = "menu.sold_out";
-pub const T_MENU_SOTD_BADGE: Key = "menu.sotd_badge";
 pub const T_MENU_NEW_BADGE: Key = "menu.new_badge";
 pub const T_MENU_BEST_BADGE: Key = "menu.best_badge";
 pub const T_MENU_SALE_BADGE: Key = "menu.sale_badge";
@@ -1204,8 +1201,6 @@ fn get_ru_translation(key: Key) -> Value {
         T_MODAL_INCREASE_QTY => "Добавить количество",
         T_MODAL_CERTIFICATE => "📄 Сертификат",
         // Menu screen
-        T_MENU_FILTER_SATIVA => "☀️ Sativa",
-        T_MENU_FILTER_INDICA => "🌙 Indica",
         T_MENU_FILTER_HYBRID => "⚖️ Hybrid",
         T_MENU_SORT_TOP => "✨ Топ",
         T_MENU_SORT_PRICE_ASC => "💰 Цена ↑",
@@ -1215,7 +1210,6 @@ fn get_ru_translation(key: Key) -> Value {
         T_MENU_NEW_ARRIVALS => "🆕 НОВИНКИ",
         T_MENU_PRICE_REQUEST => "Цена по запросу",
         T_MENU_SOLD_OUT => "Нет в наличии",
-        T_MENU_SOTD_BADGE => "⭐ СОТД",
         T_MENU_NEW_BADGE => "🆕 НОВИНКА",
         T_MENU_BEST_BADGE => "⭐ ЛУЧШЕЕ",
         T_MENU_SALE_BADGE => "🔥 СКИДКА",
@@ -1803,8 +1797,6 @@ fn get_en_translation(key: Key) -> Value {
         T_MODAL_INCREASE_QTY => "Increase quantity",
         T_MODAL_CERTIFICATE => "📄 Certificate",
         // Menu screen
-        T_MENU_FILTER_SATIVA => "☀️ Sativa",
-        T_MENU_FILTER_INDICA => "🌙 Indica",
         T_MENU_FILTER_HYBRID => "⚖️ Hybrid",
         T_MENU_SORT_TOP => "✨ Top",
         T_MENU_SORT_PRICE_ASC => "💰 ↑",
@@ -1814,7 +1806,6 @@ fn get_en_translation(key: Key) -> Value {
         T_MENU_NEW_ARRIVALS => "🆕 NEW ARRIVALS",
         T_MENU_PRICE_REQUEST => "Price on request",
         T_MENU_SOLD_OUT => "Sold Out",
-        T_MENU_SOTD_BADGE => "⭐ SOTD",
         T_MENU_NEW_BADGE => "🆕 NEW",
         T_MENU_BEST_BADGE => "⭐ BEST",
         T_MENU_SALE_BADGE => "🔥 SALE",

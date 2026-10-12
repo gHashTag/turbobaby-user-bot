@@ -138,14 +138,6 @@ fn build_admin_url(base_url: &str) -> String {
     }
 }
 
-/// Pure price calculator: apply a percentage discount and round to the nearest integer.
-/// Result is never negative.
-pub(crate) fn calculate_discounted_price(price_per_gram: f64, discount_percent: f64) -> f64 {
-    (price_per_gram * (1.0 - discount_percent / 100.0))
-        .max(0.0)
-        .round()
-}
-
 pub(crate) async fn handle_command(
     bot: Bot,
     msg: Message,
@@ -754,9 +746,7 @@ pub(crate) async fn handle_command(
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        build_admin_url, build_app_url, build_app_url_with_start, calculate_discounted_price,
-    };
+    use super::{build_admin_url, build_app_url, build_app_url_with_start};
 
     #[test]
     fn test_build_app_url_basic() {
@@ -915,45 +905,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_calculate_discounted_price_basic() {
-        assert_eq!(calculate_discounted_price(100.0, 10.0), 90.0);
-    }
-
-    #[test]
-    fn test_calculate_discounted_price_no_discount() {
-        assert_eq!(calculate_discounted_price(350.0, 0.0), 350.0);
-    }
-
-    #[test]
-    fn test_calculate_discounted_price_full_discount() {
-        assert_eq!(calculate_discounted_price(100.0, 100.0), 0.0);
-    }
-
-    #[test]
-    fn test_calculate_discounted_price_over_discount() {
-        assert_eq!(calculate_discounted_price(100.0, 150.0), 0.0);
-    }
-
-    #[test]
-    fn test_calculate_discounted_price_rounds() {
-        assert_eq!(calculate_discounted_price(99.0, 33.33), 66.0);
-    }
-}
-
-#[cfg(test)]
-mod deep_link_button_tests {
-    use super::build_app_url_with_start;
-
-    /// The URL the bot actually puts on the Mini App button must parse.
-    ///
-    /// `web_app_btn` falls back to a plain button pointing at `https://t.me`
-    /// when `url.parse()` fails — Telegram's own homepage, which is a tap that
-    /// goes nowhere and reads exactly like "the link does not work". The
-    /// fallback logs, but nothing asserted that the real production base ever
-    /// reaches it, so this pins the shapes that matter: the live
-    /// `WEB_APP_URL` (which carries `?cache=NNN`), a base with no query at all,
-    /// and a base arriving with Telegram's own fragment already attached.
     #[test]
     fn the_button_url_for_a_shared_card_parses() {
         let payload = "p_set_fe346171-aa5b-4f88-93ed-8be0ec38aa6c";
