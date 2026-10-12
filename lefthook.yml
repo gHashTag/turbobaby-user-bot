@@ -10,11 +10,19 @@
 #
 # To opt out temporarily: LEFTHOOK=0 git commit ...
 
+# Secret gate for turbobaby-user-bot (shared with gHashTag/t27 PR #6433). Requires gitleaks
+# (`brew install gitleaks`). A missing gitleaks fails the hook on purpose: the
+# secret gate must not silently turn itself off. Rules live in .gitleaks.toml;
+# the CI twin is .github/workflows/secret-scan.yml.
+
 # pre-push — defense in depth. block-main in pre-commit prevents *committing*
 # on main, but git also lets you commit on a feature branch and then push it
 # straight to `refs/heads/main`. This hook closes that gap.
 pre-push:
   commands:
+    secret-gate:
+      run: gitleaks git --no-banner --redact --config .gitleaks.toml --log-opts="HEAD --not --remotes" .
+
     block-push-to-main:
       # Git passes one line per push ref on stdin in the form:
       #   <local_ref> <local_sha> <remote_ref> <remote_sha>
@@ -123,6 +131,9 @@ commit-msg:
 pre-commit:
   parallel: false
   commands:
+    secret-gate:
+      run: gitleaks git --staged --no-banner --redact --config .gitleaks.toml .
+
     block-main:
       # Mirrors `.githooks/pre-commit`: forbid direct commits to main so all
       # changes go through PRs. Lefthook prints `tags` and skips silently if
