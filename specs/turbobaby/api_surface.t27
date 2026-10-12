@@ -541,8 +541,7 @@ test api_surface_a_single_line_grep_miscounts_the_router_in_both_directions {
   assert REGISTRATIONS_A_SINGLE_LINE_GREP_MISSES > 0;
   assert GREP_HITS_OUTSIDE_THE_CENSUS_SCOPE == 1;
   assert GREP_HIT_OUTSIDE_THE_CENSUS_SCOPE_SITE == "src/api/observability.rs:172";
-; The removal of the unreachable registration moved the grep by exactly one too.
-  assert SINGLE_LINE_GREP_REGISTRATIONS_BEFORE_2026_09_26 + 1 == SINGLE_LINE_GREP_REGISTRATIONS_BEFORE_REPAIR;
+  ; The removal of the unreachable registration moved the grep by exactly one too.  assert SINGLE_LINE_GREP_REGISTRATIONS_BEFORE_2026_09_26 + 1 == SINGLE_LINE_GREP_REGISTRATIONS_BEFORE_REPAIR;
   assert SINGLE_LINE_GREP_REGISTRATIONS_BEFORE_2026_09_26 - GREP_HITS_OUTSIDE_THE_CENSUS_SCOPE + REGISTRATIONS_A_SINGLE_LINE_GREP_MISSES_BEFORE_2026_09_26 == ROUTE_REGISTRATION_COUNT_BEFORE_2026_09_26;
 }
 
@@ -613,8 +612,7 @@ test api_surface_the_repair_moved_exactly_one_path {
   assert ROUTED_API_PATHS_NOT_DOCUMENTED + 1 == ROUTED_API_PATHS_NOT_DOCUMENTED_BEFORE_REPAIR;
   assert DOCUMENTED_PATH_COUNT_BEFORE_2026_09_26 == 9;
   assert census_closes(API_PATH_COUNT_BEFORE_REPAIR, DOCUMENTED_PATH_COUNT_BEFORE_2026_09_26, DOCUMENTED_PATHS_NOT_ROUTED, ROUTED_API_PATHS_NOT_DOCUMENTED_BEFORE_REPAIR) == true;
-; 2026-09-26: six routes and six stubs arrived together, so the undocumented count held still.
-  assert DOCUMENTED_PATH_COUNT - DOCUMENTED_PATH_COUNT_BEFORE_2026_09_26 == ROUTES_ADDED_2026_09_26;
+  ; 2026-09-26: six routes and six stubs arrived together, so the undocumented count held still.  assert DOCUMENTED_PATH_COUNT - DOCUMENTED_PATH_COUNT_BEFORE_2026_09_26 == ROUTES_ADDED_2026_09_26;
   assert PAIRS_ON_DOCUMENTED_PATHS - PAIRS_ON_DOCUMENTED_PATHS_BEFORE_2026_09_26 == ROUTES_ADDED_2026_09_26;
 }
 

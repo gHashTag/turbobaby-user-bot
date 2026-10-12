@@ -516,8 +516,7 @@ BINDINGS: tuple[dict[str, object], ...] = (
         # Two copies until 2026-10-11 (strict validator and lenient owner path). The lenient
         # path is retired (FRESHNESS_IS_CHECKED_IN_BOTH_PATHS = false, FRESHNESS_HOST_COPIES = 1):
         # exactly one hand-written copy remains, and a second one coming back is the failure.
-        "occurrences": 1,
-        "relation": "equal",
+        "occurrences": 1,        "relation": "equal",
         "why": "how long a replayed initData stays usable in the strict validator; the "
                "lenient owner path that carried a second copy is retired, so a copy coming "
                "back is the interesting failure",
