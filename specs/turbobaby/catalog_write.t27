@@ -129,9 +129,15 @@ pub const ADMIN_SCREEN_LINES_BEFORE_2026_09_26 : u16 = 5910;
 pub const ADMIN_SCREEN_LINES_BEFORE_2026_09_24 : u16 = 5881;
 ; Re-measured 2026-09-26: src/main.rs is 4603 lines, four more for the referral credit's three
 ; SENSITIVE_FNS entries and their comment (R3). It is still the second largest file.
-; Re-measured 2026-10-11: 4605, two more for `mod spec;` (rules executed from specs, epic #77).
-pub const NEXT_LARGEST_SOURCE_LINES : u16 = 4605;
-pub const NEXT_LARGEST_SOURCE_LINES_BEFORE_2026_10_11 : u16 = 4603;pub const NEXT_LARGEST_SOURCE_LINES_BEFORE_2026_09_26 : u16 = 4599;
+; Re-measured 2026-10-05: 4615, twelve more for log_bot_not_started, the fix that keeps the HTTP
+; server up when Telegram rejects BOT_TOKEN. No line above the end of the file moved.
+; Re-measured 2026-10-11 on the owner-gate branch: 4605, two more for `mod spec;` (rules executed
+; from specs, epic #77). Both re-measurements took the same 4603 base, neither knowing the other;
+; merged 2026-10-12 the file is 4617 and still the second largest.
+pub const NEXT_LARGEST_SOURCE_LINES : u16 = 4617;
+pub const NEXT_LARGEST_SOURCE_LINES_BEFORE_2026_10_12 : u16 = 4615;
+pub const NEXT_LARGEST_SOURCE_LINES_BEFORE_2026_10_05 : u16 = 4603;
+pub const NEXT_LARGEST_SOURCE_LINES_BEFORE_2026_09_26 : u16 = 4599;
 
 ; --- Who cites this screen, counted over the corpus as it stands now -------------------------
 ; The header's count of citing contracts was TWO and is FIVE. It is pinned as a literal here
