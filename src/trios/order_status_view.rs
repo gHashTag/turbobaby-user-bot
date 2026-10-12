@@ -17,10 +17,10 @@
 //! The screens compile only for wasm32, so none of that could be tested on the
 //! host. This module compiles on both targets and is tested below.
 //!
-//! THE READING IS EXACT, because the server's is. `validate_update_order_status`
-//! in `src/api/orders.rs` admits a name only if `VALID_STATUSES.contains` it,
-//! the terminal guard in `update_order_status` is a raw `matches!`, and a
-//! customer cancellation is refused with 409 whenever `o.status != "pending"`.
+//! THE READING IS EXACT, because the server's is: it runs `src/spec/order_status.rs`
+//! (gen-rust, 2026-10-11) -- a name must be one of `STATUS_NAMES` byte for byte,
+//! and cancel is 409 unless the status is pending. `arm_of` stays a hand reading:
+//! this module also compiles for wasm32, which has no backend-only `crate::spec`.
 //! The order-status contract's `order_status_code_of` says the same: a different
 //! case yields UNSET. Folding case here would draw a cancel button the server
 //! refuses.
@@ -251,9 +251,13 @@ pub fn draws_one_flat_bar(progress: Progress) -> bool {
 mod tests {
     use super::*;
 
-    /// The server's validator. The nine names are read out of it, never written in
-    /// this file: a hand-written list would be one more enumeration of the column.
+    /// The server's handlers: they call the generated module, and the cancel check
+    /// must be that call.
     const SERVER: &str = include_str!("../api/orders.rs");
+    /// What the server executes: `t27c gen-rust` of the order-status contract. The
+    /// nine names are read out of it, never written in this file: a hand-written
+    /// list would be one more enumeration of the column.
+    const GENERATED: &str = include_str!("../spec/order_status.rs");
     /// The owner of the vocabulary, the terminal set, the cancel precondition and
     /// the pipeline's content.
     const OWNER: &str = include_str!("../../specs/turbobaby/order_status.t27");
@@ -292,23 +296,20 @@ mod tests {
             .collect()
     }
 
-    /// The names in the server's `VALID_STATUSES`, in its own order.
+    /// The names the server admits: the generated `STATUS_NAMES`, in its order.
     fn vocabulary() -> Vec<String> {
-        let server = lf(SERVER);
-        let open = "const VALID_STATUSES: &[&str] = &[";
-        let start = server
+        let generated = lf(GENERATED);
+        let open = "pub const STATUS_NAMES: [&'static str; ";
+        let start = generated
             .find(open)
-            .expect("VALID_STATUSES is gone from src/api/orders.rs");
-        let rest = &server[start + open.len()..];
-        let body = &rest[..rest.find("];").expect("VALID_STATUSES never closes")];
-        let names: Vec<String> = body
-            .lines()
-            .map(|l| l.split("//").next().unwrap_or(""))
-            .flat_map(quoted)
-            .collect();
+            .expect("STATUS_NAMES is gone from src/spec/order_status.rs");
+        let rest = &generated[start + open.len()..];
+        let rest = &rest[rest.find('[').expect("STATUS_NAMES has no list") + 1..];
+        let body = &rest[..rest.find("];").expect("STATUS_NAMES never closes")];
+        let names: Vec<String> = quoted(body);
         // D16: the floor is that the scan saw something. The count itself is the
         // owner's, and is compared with the owner's STATUS_COUNT below.
-        assert!(!names.is_empty(), "read no names out of VALID_STATUSES");
+        assert!(!names.is_empty(), "read no names out of STATUS_NAMES");
         names
     }
 
@@ -596,17 +597,30 @@ mod tests {
         let names = owner_strs("STATUS_NAMES");
         let admitted = &names[code - 1];
 
+        // The server's cancel check is the generated precondition, called once,
+        // and the generated body is the owner's comparison.
         let server = lf(SERVER);
-        let needle = "if o.status != \"";
         assert_eq!(
-            server.matches(needle).count(),
+            server
+                .matches("os::order_status_customer_cancel_refusal(")
+                .count(),
             1,
             "the server's cancel check moved"
         );
-        let at = server.find(needle).map(|i| i + needle.len()).unwrap_or(0);
-        let checked = &server[at..at + server[at..].find('"').unwrap_or(0)];
+        let generated = lf(GENERATED);
+        let gen_body = generated
+            .split("pub fn order_status_customer_cancel_admitted(current: u8) -> bool {")
+            .nth(1)
+            .expect("the generated cancel precondition is gone");
+        let gen_returned = gen_body
+            .lines()
+            .map(str::trim)
+            .find(|l| !l.is_empty())
+            .and_then(|l| l.strip_prefix("return (current == "))
+            .and_then(|l| l.strip_suffix(");"))
+            .expect("the generated cancel precondition is no longer one comparison");
         assert_eq!(
-            checked, admitted,
+            gen_returned, returned,
             "the server and the owner name different statuses"
         );
 

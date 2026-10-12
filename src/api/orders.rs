@@ -14,8 +14,10 @@ use crate::api::rate_limit::{
     check_and_record, client_ip_from_headers, new_store, SlidingWindowStore,
 };
 use crate::db::entities::bonus_transaction::{Column as BtCol, Entity as BtEntity};
-use crate::db::orders::{BikeDeal, BikeLine, DepositForm, Order, OrderItem};
+use crate::db::orders::{order_status_code, BikeDeal, BikeLine, DepositForm, Order, OrderItem};
 use crate::promptpay::{build_payload, svg_qr};
+use crate::spec::order_money as om;
+use crate::spec::order_status as os;
 use crate::trios::pricing::{effective_accessory_price, effective_set_price, effective_tea_price};
 use crate::AppState;
 use sea_orm::{ColumnTrait, QueryFilter};
@@ -104,6 +106,22 @@ pub(crate) fn routes() -> Router<AppState> {
         .route("/delivery/zones", get(list_delivery_zones))
 }
 
+/// Minor units per baht: the spec takes this scale as a parameter and does
+/// not restate the currency's digit count.
+const THB_MINOR_UNIT_SCALE: i64 = 100;
+
+/// Plumbing: float baht from the wire to the spec's integer satang, rounded
+/// to the nearest satang. A non-finite value maps to 0 and is refused by the
+/// finiteness flag passed next to it; `as` saturates, so an absurd value
+/// lands outside the spec's envelope instead of wrapping.
+fn thb_to_minor(baht: f64) -> i64 {
+    if baht.is_finite() {
+        (baht * THB_MINOR_UNIT_SCALE as f64).round() as i64
+    } else {
+        0
+    }
+}
+
 /// Sanitized payment inputs returned by [`validate_create_order`].
 #[derive(Debug)]
 struct ValidatedPayment {
@@ -168,16 +186,10 @@ fn validate_create_order(req: &CreateOrderRequest) -> Result<ValidatedPayment, S
     }
     // Cycle #152: upper bounds. Pre-cycle the per-item quantity was
     // only `> 0`, so a request with `quantity = 1e18` would pass the
-    // boundary validator. The server-side price authority would then
-    // recompute subtotal at the same inflated number (DB price ×
-    // quantity), the comparison passes, and a `1e20 ฿` order lands
-    // in the DB + admin chat. Cap per-item quantity at 10_000 (10kg
-    // of weed is already implausible for a single line, but bulk-tea
-    // orders could plausibly be hundreds of boxes — pick a domain
-    // ceiling that's far above any real order). Cap subtotal/total
-    // at 100M ฿ — the theoretical max for 100 items × 1M ฿/item.
+    // boundary validator. Cap per-item quantity at 10_000 (bulk-tea orders
+    // could plausibly be hundreds of boxes). The 100M THB envelope on the
+    // total and subtotal is the spec's `MAX_ORDER_AMOUNT_MAJOR_UNITS`.
     const MAX_ITEM_QUANTITY: f64 = 10_000.0;
-    const MAX_ORDER_TOTAL: f64 = 100_000_000.0;
     if req
         .items
         .iter()
@@ -185,34 +197,24 @@ fn validate_create_order(req: &CreateOrderRequest) -> Result<ValidatedPayment, S
     {
         return Err(StatusCode::BAD_REQUEST);
     }
-    if !req.total.is_finite() || req.total < 0.0 || req.total > MAX_ORDER_TOTAL {
-        return Err(StatusCode::BAD_REQUEST);
-    }
-    if !req.subtotal.is_finite() || req.subtotal < 0.0 || req.subtotal > MAX_ORDER_TOTAL {
-        return Err(StatusCode::BAD_REQUEST);
-    }
+    // The money identity (envelope, bonus and star ceilings, total =
+    // subtotal - bonus - stars within one satang) is decided by
+    // `specs/turbobaby/order_money.t27`, executed from `src/spec/order_money.rs`.
+    // The host only converts the wire's float baht to the spec's integer
+    // satang and keeps the sanitized figures it hands on.
     let bonus_used = req.bonus_used.unwrap_or(0.0).max(0.0);
-    if !bonus_used.is_finite() {
-        return Err(StatusCode::BAD_REQUEST);
-    }
-    if bonus_used > req.subtotal + 0.01 {
-        return Err(StatusCode::BAD_REQUEST);
-    }
-    let stars_used = req.stars_used.unwrap_or(0).max(0);
-    const MAX_STARS_PER_TX: i64 = 1_000_000;
-    if stars_used > MAX_STARS_PER_TX {
-        return Err(StatusCode::BAD_REQUEST);
-    }
-    let stars_discount = stars_used as f64;
-    if stars_discount > req.subtotal - bonus_used + 0.01 {
-        return Err(StatusCode::BAD_REQUEST);
-    }
-    let expected_total = (req.subtotal - bonus_used - stars_discount).max(0.0);
-    // D5: the garden reward used to relax this into an inequality ("a reward
-    // can only lower the total"), with the exact figure re-checked later in
-    // `create_order`. With the mechanic gone the equality is strict again and
-    // there is no second, looser gate anywhere behind it.
-    if (req.total - expected_total).abs() > 0.01 {
+    let stars_used = om::order_money_clamp_at_zero(req.stars_used.unwrap_or(0));
+    let verdict = om::order_money_verdict(
+        thb_to_minor(req.subtotal),
+        thb_to_minor(req.total),
+        thb_to_minor(bonus_used),
+        stars_used,
+        THB_MINOR_UNIT_SCALE,
+        req.total.is_finite(),
+        req.subtotal.is_finite(),
+        bonus_used.is_finite(),
+    );
+    if verdict != om::VERDICT_ACCEPT {
         return Err(StatusCode::BAD_REQUEST);
     }
     Ok(ValidatedPayment {
@@ -1982,27 +1984,24 @@ async fn get_order_details(
 }
 
 pub(crate) fn validate_update_order_status(id: &str, status: &str) -> Result<(), StatusCode> {
-    if id.len() > 200 {
-        return Err(StatusCode::BAD_REQUEST);
-    }
-    if status.len() > 50 {
-        return Err(StatusCode::BAD_REQUEST);
-    }
-    const VALID_STATUSES: &[&str] = &[
-        "pending",
-        "confirmed",
-        "preparing",
-        "ready",
-        "out_for_delivery",
-        "delivered",
-        "completed", // legacy alias for delivered
-        "rejected",
-        "cancelled",
-    ];
-    if !VALID_STATUSES.contains(&status) {
-        return Err(StatusCode::BAD_REQUEST);
+    // Lengths, vocabulary and the refusal status come from
+    // `specs/turbobaby/order_status.t27`. The host measures bytes, as it always
+    // has; `completed` is in the spec's vocabulary next to `delivered`.
+    let refusal = os::order_status_validation_refusal(
+        len_u16(id.len()),
+        len_u16(status.len()),
+        order_status_code(status),
+    );
+    if refusal != os::REFUSAL_NONE {
+        return Err(StatusCode::from_u16(refusal).unwrap_or(StatusCode::BAD_REQUEST));
     }
     Ok(())
+}
+
+/// Plumbing: a length for the spec's `u16` parameters, saturating so an
+/// oversized input stays oversized.
+fn len_u16(len: usize) -> u16 {
+    u16::try_from(len).unwrap_or(u16::MAX)
 }
 
 async fn update_order_status(
@@ -2042,16 +2041,15 @@ async fn update_order_status(
     let Some(current) = current else {
         return Err(StatusCode::NOT_FOUND);
     };
-    let cur_status = current.status.as_str();
-    let is_terminal = matches!(
-        cur_status,
-        "completed" | "delivered" | "rejected" | "cancelled"
-    );
-    if is_terminal && req.status != cur_status {
+    // A terminal order only takes its own status again; the rule and the
+    // `delivered` -> `completed` persistence are the spec's.
+    let requested = order_status_code(&req.status);
+    if !os::order_status_write_admitted(order_status_code(&current.status), requested) {
         return Err(StatusCode::BAD_REQUEST);
     }
+    let persisted = os::order_status_persisted_code(requested);
 
-    if req.status == "completed" || req.status == "delivered" {
+    if persisted == os::STATUS_COMPLETED {
         // Cycle #171: `complete_order_and_update_loyalty` is now the
         // canonical completion point — loyalty tier (cycle #88) +
         // garden seed (cycle #168) + referral bonus (cycle #170
@@ -2071,7 +2069,7 @@ async fn update_order_status(
             );
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
-    } else if req.status == "rejected" {
+    } else if persisted == os::STATUS_REJECTED {
         // Reject path: refund bonus_used if any, then flip status. The
         // FOR UPDATE on the order row serialises against concurrent admin
         // actions and against the create_order tx's idempotency path.
@@ -2091,10 +2089,7 @@ async fn update_order_status(
             // Refund only if the order isn't already in a terminal state.
             // (cycle #76 `should_refund_bonus` helper lives in bot/callbacks
             // for the duplicate refund path there.)
-            if !matches!(
-                o.status.as_str(),
-                "rejected" | "completed" | "delivered" | "cancelled"
-            ) {
+            if !os::order_status_is_terminal(order_status_code(&o.status)) {
                 // D9: a refund of an unreadable figure cannot be silently
                 // rounded to nothing. `bonus_used` is a `NOT NULL DEFAULT 0`
                 // column on the frozen migration 001, so absent is not
@@ -2332,8 +2327,9 @@ async fn cancel_order(
     if o.telegram_id != Some(tid) || !Order::shown_to_customer(&o) {
         return Err(StatusCode::NOT_FOUND);
     }
-    if o.status != "pending" {
-        return Err(StatusCode::CONFLICT);
+    let refusal = os::order_status_customer_cancel_refusal(order_status_code(&o.status));
+    if refusal != os::REFUSAL_NONE {
+        return Err(StatusCode::from_u16(refusal).unwrap_or(StatusCode::CONFLICT));
     }
 
     // D9: same as the reject path — skipping the refund is forced by the
@@ -3252,6 +3248,57 @@ mod tests {
         let mut req = valid_req();
         req.total = 90.009; // within 0.01 of expected 90.0
         assert_eq!(validate_create_order(&req).unwrap().bonus_used, 10.0);
+    }
+
+    // The spec's boundary vectors (order_money.t27), driven through the host's
+    // float-baht door: one satang of slack is admitted, two are refused.
+    #[test]
+    fn money_identity_admits_one_satang_and_refuses_two() {
+        for (total, ok) in [(90.01, true), (89.99, true), (90.02, false), (89.98, false)] {
+            let mut req = valid_req();
+            req.total = total;
+            assert_eq!(validate_create_order(&req).is_ok(), ok, "total {total}");
+        }
+    }
+
+    #[test]
+    fn bonus_may_reach_the_subtotal_plus_one_satang_and_no_further() {
+        for (bonus, ok) in [(100.0, true), (100.01, true), (100.02, false)] {
+            let mut req = valid_req();
+            req.bonus_used = Some(bonus);
+            req.total = 0.0;
+            assert_eq!(validate_create_order(&req).is_ok(), ok, "bonus {bonus}");
+        }
+    }
+
+    #[test]
+    fn stars_are_bounded_by_what_the_bonus_left_and_by_the_ceiling() {
+        let mut req = valid_req();
+        req.stars_used = Some(90);
+        req.total = 0.0;
+        assert!(validate_create_order(&req).is_ok());
+        req.stars_used = Some(91);
+        assert!(validate_create_order(&req).is_err());
+        let mut big = valid_req();
+        big.subtotal = 2_000_000.0;
+        big.bonus_used = None;
+        big.stars_used = Some(crate::spec::order_money::MAX_STARS_PER_TRANSACTION + 1);
+        big.total = 0.0;
+        assert!(validate_create_order(&big).is_err());
+        big.stars_used = Some(crate::spec::order_money::MAX_STARS_PER_TRANSACTION);
+        big.total = 1_000_000.0;
+        assert!(validate_create_order(&big).is_ok());
+    }
+
+    #[test]
+    fn update_status_admits_an_id_of_exactly_the_cap() {
+        let id = "a".repeat(usize::from(crate::spec::order_status::ORDER_ID_CHARS_MAX));
+        assert!(validate_update_order_status(&id, "confirmed").is_ok());
+        let id = "a".repeat(usize::from(crate::spec::order_status::ORDER_ID_CHARS_MAX) + 1);
+        assert_eq!(
+            validate_update_order_status(&id, "confirmed").unwrap_err(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[test]

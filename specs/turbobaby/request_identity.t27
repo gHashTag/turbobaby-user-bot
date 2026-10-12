@@ -550,7 +550,7 @@ test this_contract_is_a_root_and_names_its_consumers_instead {
     assert IS_OWNERSHIP_ROOT == true;
     assert REUSE_EDGE_COUNT == 0;
     assert CONSUMERS.len == CONSUMER_COUNT;
-; Re-measured 2026-09-21: 18 of the 22, not the 4 of the first writing; 19 of 23 since 2026-09-26.
+; Re-measured 2026-09-21: 18 of the 22, not the 4 of the first writing, 19 of 23 since 2026-09-26.
     assert CONSUMERS_DECLARING_THE_EDGE == 19;
     assert CONSUMERS_DECLARING_THE_EDGE < CONSUMER_COUNT;
     assert CONSUMERS_DECLARING_THE_EDGE + CONSUMERS_MEASURED_ONLY == CONSUMER_COUNT;

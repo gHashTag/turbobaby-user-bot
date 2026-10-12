@@ -701,15 +701,15 @@ async fn main() -> Result<()> {
                 Arc::clone(&ai_client_for_bot)
             ])
             .build()
-            .dispatch_with_listener(
+            .try_dispatch_with_listener(
                 listener,
                 teloxide::error_handlers::LoggingErrorHandler::with_custom_text(
                     "An error from the update listener",
                 ),
             )
-            .await;
+            .await
+            .unwrap_or_else(log_bot_not_started);
     });
-
     let app_state = AppState {
         db: db.clone(),
         config: config.clone(),
@@ -4603,3 +4603,15 @@ async fn f() {
 
 // WASM entry point is now in src/lib.rs via #[wasm_bindgen(start)]
 // This file is only used for the native backend (Axum server)
+
+/// The bot's dispatcher cannot start when Telegram rejects `BOT_TOKEN`: its first call,
+/// `get_me`, fails. `dispatch_with_listener` panics there, and the release profile sets
+/// `panic = "abort"`, so a rejected token used to take the whole process down with it: the
+/// Mini App, the API and the health check. That was the outage of 2026-10-05. The bot is lost
+/// either way; the HTTP server is not, so the error is logged and the server keeps serving.
+fn log_bot_not_started(error: teloxide::RequestError) {
+    tracing::error!(
+        "Telegram bot not started, the HTTP server keeps serving (check BOT_TOKEN): {}",
+        error
+    );
+}

@@ -1292,3 +1292,40 @@ the gate as the handler's first statement ahead of the query string, and the adm
 **Still open, for the owner.** Open question 3 of the R1–R3 entry (the admin-facing wording both
 lanes wrote) and the two questions of the entry «R3 review fix» (a password holder off `ADMIN_IDS`,
 and an admin marking his own payout paid).
+
+## D21 — the host stays Rust, each host duty with its named reason, decided 2026-10-12
+
+Kept at the end of this file, like the entries above, so that no line citation into it moves.
+Epic #77 milestone M4 (issue #85) asked, from M0's measured table (issue #78): for each host
+duty, keep Rust with a named reason, or move to `t27b` with a named proof. The table below is
+the decision. No duty moves: `t27b` has no I/O at all (its README — it emits pure functions,
+no syscalls, no externs beyond the JIT's own) and its object output is Mach-O arm64 only, so it
+cannot run natively on Railway's x86_64 Linux; the proof a move would need does not exist yet.
+The three upstream gaps that would change this are filed and open:
+gHashTag/t27#8944 (the server and storage specs `t27b` rejects today), #8945 (ELF objects,
+aarch64-linux then x86_64) and #8946 (a declared I/O boundary, a host ABI for sockets, files
+and time). When they land, a row flips with the proof named — until then each row names its
+reason:
+
+| Host duty | Decision | Named reason |
+|---|---|---|
+| HTTP server / routing / sessions / SSE | keep Rust (Axum) | `server/http.t27` fails `t27b` at a string-to-`[16]u8` literal, `routes` at enum/scalar `==`, `session` at an array-of-structs literal, `sse` at string-to-`[]u8` (t27#8944); and no I/O boundary exists to bind a socket (t27#8946) |
+| Postgres client and TLS | keep Rust (tokio-postgres) | no spec exists for a Postgres client or TLS in `t27b` at all; the same I/O boundary gap (t27#8946) |
+| Telegram webhook and bot | keep Rust (teloxide) | no spec exists; needs sockets and TLS (t27#8946) |
+| S3 / MinIO media | keep Rust | no spec exists; needs sockets and TLS (t27#8946) |
+| KV / migrations | keep Rust (SQLx) | `storage/kv.t27` and `storage/migrate.t27` are rejected — calls to refused fns (t27#8944) |
+| Outbound HTTP client | keep Rust (reqwest) | `tri/net/http.t27` fails on `@ptrFromNull` (t27#8944) |
+| Deploy target | keep the Railway x86_64 Linux binary | `t27b build` emits Mach-O arm64 objects only (t27#8945); the README's own lab runs under qemu-user |
+| Actor supervision | model in `.t27`, host stays Rust | `queen/actors.t27`, `keyed.t27`, `dispatch.t27` all pass on `t27b` (37+8+6), so M2 (#83) models actors in specs — but the process that spawns and supervises real OS processes is a host duty with no `t27b` I/O boundary (t27#8946) |
+
+**What this does not freeze.** The rules themselves — money, access, availability, status order —
+are not host duties and keep moving out of Rust into `specs/turbobaby/*.t27`, with the host
+executing what `t27c gen-rust` emits (`src/spec/`). The first rule already runs that way:
+the owner gate is `owner_gate_admits` from `request_identity.t27` (PR #87, `check_owner` calls
+the generated `src/spec/request_identity.rs`), and `t27b` remains the checker — every spec's
+tests and invariants run on it in CI. 42 of 45 contracts execute there with zero
+JIT/interpreter mismatch, which is what makes the checker half real rather than aspirational.
+
+*Decided by the operator under epic #77's rule 5 (the Rust runtime stays as the thin
+transitional host); each row flips only with the named proof, not by preference.*
+
