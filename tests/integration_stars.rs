@@ -384,22 +384,20 @@ async fn one_user_cannot_read_or_spend_another_users_stars() {
     );
 }
 
-/// CHARACTERISATION TEST — records a known security weakness, not a desired
-/// property.
-///
-/// `check_owner` falls back to `lenient_owner_verify` (user id + auth_date
-/// freshness, **no HMAC**) whenever strict validation fails. The fallback is
-/// deliberate — see `src/api/auth.rs`, added "while the HMAC drift is
-/// root-caused" — but its effect is that initData signed with any secret, or
-/// none, authenticates as whoever it claims to be. Anyone who can reach the
-/// API can therefore read and spend another user's Stars.
-///
-/// This test asserts today's behaviour so the gap is visible in the suite and
-/// so that closing it is a deliberate, test-updating act rather than an
-/// accident. Flip the assertion to `assert_ne!` the moment the fallback goes.
+/// The weakness this file characterised from 2026-09-2x to 2026-10-11 is
+/// closed. `check_owner` used to fall back to `lenient_owner_verify` (user id
+/// + auth_date freshness, **no HMAC**) whenever strict validation failed, so
+/// initData signed with any secret — or none — authenticated as whoever it
+/// claimed to be, and anyone who could reach the API could read and spend
+/// another user's Stars. The original test asserted that behaviour so closing
+/// the gap would be a deliberate, test-updating act; its own failure message
+/// said what to do when the law turned. It turned on 2026-10-11:
+/// `request_identity.t27` (LENIENT_PATH_IS_SHIPPED = false, epic #77 issue
+/// #82) retired the fallback on every owner call site, and the host now asks
+/// `owner_gate_admits` from the generated `src/spec/request_identity.rs`.
 #[tokio::test]
 #[ignore = "needs DATABASE_URL env var; run with --ignored"]
-async fn forged_init_data_currently_still_authenticates() {
+async fn forged_init_data_is_refused() {
     let Some(app) = common::make_app().await else {
         eprintln!("DATABASE_URL not set — skipping");
         return;
@@ -420,9 +418,9 @@ async fn forged_init_data_currently_still_authenticates() {
     .await;
     assert_eq!(
         resp.status,
-        StatusCode::OK,
-        "expected the documented lenient fallback to accept unsigned initData; \
-         if this now fails, the HMAC fallback was removed — delete this test \
-         and assert rejection instead"
+        StatusCode::UNAUTHORIZED,
+        "initData signed with the wrong secret must not read a balance; \
+         the lenient fallback that accepted it is retired \
+         (request_identity.t27, 2026-10-11)"
     );
 }
