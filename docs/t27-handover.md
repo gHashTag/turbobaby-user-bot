@@ -11,11 +11,11 @@ what to do next.
 
 | | measured 2026-09-21 |
 | --- | --- |
-| canonical contracts | **45** (44 under `specs/turbobaby/` + `specs/agents/turbobaby.t27`); **46** on `t27/round5-server` and on the integration branch `t27/round5`, with `referral_credit.t27` (2026-09-26); still **46** on `t27/round6` |
-| assertions executed, all passing | **11 119** on `t27/round6` at `24f43a1` (2026-09-26, the owner's answers on the base of the 10% and the referral top list; see "Round 6" below), **11 048** on the integration branch `t27/round5` at `b1d900e` (2026-09-26, the review fix of round 5; see "Round 5, review fix" below), **11 033** on the integration branch `t27/round5` at `992077f` (2026-09-26, R1–R3 integrated; see "Round 5, integrated" below), **11 009** on the server lane `t27/round5-server` at `872698b` (2026-09-26, R1–R3; see "Round 5, server lane" below), **10 758** on `t27/round4` at `168892d` after its review (2026-09-26; see "Round 4, review fixes" below; bindings still 256), **10 754** on the integration branch `t27/round4` at `2f801fe` after the owner's answers of 2026-09-26 (see "Round 4, integrated" below), **10 581** on the integration branch `t27/owner-answers-2509` at `41315b2` after the owner's second list of 2026-09-25 and the operator's shop label (2026-09-26; see "The owner's second list of 2026-09-25 and the operator's shop label" below), **10 273** on the integration branch `t27/owner-answers-2509` after the three fixes on top of `69fd4fa` (2026-09-25; see "Three fixes on top of `69fd4fa`" below), **10 246** at `69fd4fa` (the owner's answers of that day; not pushed, not merged) — **9 996** re-measured 2026-09-25 on `f5e6b4f`, after #64, which changed comments only (9 996 after #63 on 2026-09-24, 9 859 after #62, 9 535 earlier that day, 9 514 on 2026-09-23 before that day's money family, 9 038 on 2026-09-22, 8 911 on 2026-09-21) |
-| contract-to-contract ownership edges | 203+, **zero dangling** |
-| source lines named by some contract | **73 407 of 80 308 (91.4 %)** |
-| enforced contract-to-source bindings | **288** on `t27/round6` at `24f43a1` (2026-09-26; +2 the referral leaderboard's admin gate), across 42 of 46 contracts and 88 source files — **286** on the integration branch `t27/round5` at `b1d900e` (2026-09-26; +2 the recorder guard, the review fix of round 5), across 42 of 46 contracts and 88 source files — **284** on the integration branch `t27/round5` at `992077f` (2026-09-26; +2 the Mini App's rate, the client lane added none), across 42 of 46 contracts and 88 source files — **282** on the server lane `t27/round5-server` at `872698b` (2026-09-26; −3 +29, R1–R3), across 42 of 46 contracts and 87 source files — **256** on the integration branch `t27/round4` at `2f801fe` (2026-09-26; +7 the server lane of round 4, +1 its client lane), across 41 of 45 contracts and 84 source files — **248** on the integration branch `t27/owner-answers-2509` at `41315b2` (2026-09-26; +2 answer 1, +4 answer 3, +2 the kept cart, +1 the held notification kinds), across 41 of 45 contracts and 83 source files — **239** on the same branch on 2026-09-25 (the two new rows bind the CLICK 125 redirect to the seed), across the same 41 of 45 contracts and 80 source files — **237**, across 41 of 45 contracts and 80 source files, re-measured 2026-09-25 on `f5e6b4f`, after #64 (237 after #63 on 2026-09-24, 227 after #62, 198 earlier that day, 197 on 2026-09-23, 168 across 40 on 2026-09-22, 66 across 16 on 2026-09-21) |
+| canonical contracts | **45** (44 under `specs/turbobaby/` + `specs/agents/turbobaby.t27`); **46** on `t27/round5-server` and on the integration branch `t27/round5`, with `referral_credit.t27` (2026-09-26); still **46** on `t27/round6`; **47** on `t27/named-complete` (2026-09-29, round 7), with `ui_kit.t27` |
+| assertions executed, all passing | **12 404** on `t27/named-complete` over `55a6664` (2026-09-29, round 7, every source file named; see "Round 7" below), **11 119** on `t27/round6` at `24f43a1` (2026-09-26, the owner's answers on the base of the 10% and the referral top list; see "Round 6" below), **11 048** on the integration branch `t27/round5` at `b1d900e` (2026-09-26, the review fix of round 5; see "Round 5, review fix" below), **11 033** on the integration branch `t27/round5` at `992077f` (2026-09-26, R1–R3 integrated; see "Round 5, integrated" below), **11 009** on the server lane `t27/round5-server` at `872698b` (2026-09-26, R1–R3; see "Round 5, server lane" below), **10 758** on `t27/round4` at `168892d` after its review (2026-09-26; see "Round 4, review fixes" below; bindings still 256), **10 754** on the integration branch `t27/round4` at `2f801fe` after the owner's answers of 2026-09-26 (see "Round 4, integrated" below), **10 581** on the integration branch `t27/owner-answers-2509` at `41315b2` after the owner's second list of 2026-09-25 and the operator's shop label (2026-09-26; see "The owner's second list of 2026-09-25 and the operator's shop label" below), **10 273** on the integration branch `t27/owner-answers-2509` after the three fixes on top of `69fd4fa` (2026-09-25; see "Three fixes on top of `69fd4fa`" below), **10 246** at `69fd4fa` (the owner's answers of that day; not pushed, not merged) — **9 996** re-measured 2026-09-25 on `f5e6b4f`, after #64, which changed comments only (9 996 after #63 on 2026-09-24, 9 859 after #62, 9 535 earlier that day, 9 514 on 2026-09-23 before that day's money family, 9 038 on 2026-09-22, 8 911 on 2026-09-21) |
+| contract-to-contract ownership edges | **276** on `t27/named-complete` (2026-09-29, round 7; 252 at `55a6664`), **zero dangling**; 203+ on 2026-09-21 |
+| source lines named by some contract | **88 816 of 88 816 (100 %)**, 187 of 187 files, on `t27/named-complete` (2026-09-29, round 7; 82 537 lines and 118 files at `55a6664`, 69 files named by no contract) — **73 407 of 80 308 (91.4 %)** on 2026-09-21 |
+| enforced contract-to-source bindings | **420** on `t27/named-complete` over `55a6664` (2026-09-29, round 7; +132, none removed), across 43 of 47 contracts and 140 source files — **288** on `t27/round6` at `24f43a1` (2026-09-26; +2 the referral leaderboard's admin gate), across 42 of 46 contracts and 88 source files — **286** on the integration branch `t27/round5` at `b1d900e` (2026-09-26; +2 the recorder guard, the review fix of round 5), across 42 of 46 contracts and 88 source files — **284** on the integration branch `t27/round5` at `992077f` (2026-09-26; +2 the Mini App's rate, the client lane added none), across 42 of 46 contracts and 88 source files — **282** on the server lane `t27/round5-server` at `872698b` (2026-09-26; −3 +29, R1–R3), across 42 of 46 contracts and 87 source files — **256** on the integration branch `t27/round4` at `2f801fe` (2026-09-26; +7 the server lane of round 4, +1 its client lane), across 41 of 45 contracts and 84 source files — **248** on the integration branch `t27/owner-answers-2509` at `41315b2` (2026-09-26; +2 answer 1, +4 answer 3, +2 the kept cart, +1 the held notification kinds), across 41 of 45 contracts and 83 source files — **239** on the same branch on 2026-09-25 (the two new rows bind the CLICK 125 redirect to the seed), across the same 41 of 45 contracts and 80 source files — **237**, across 41 of 45 contracts and 80 source files, re-measured 2026-09-25 on `f5e6b4f`, after #64 (237 after #63 on 2026-09-24, 227 after #62, 198 earlier that day, 197 on 2026-09-23, 168 across 40 on 2026-09-22, 66 across 16 on 2026-09-21) |
 
 The two re-measured rows come from gates 2 and 3, run on 2026-09-25 on `main` at `f5e6b4f` (#64
 on top of the rental-only change of #63). Both equal the 2026-09-24 readings on #63's tree to the
@@ -1192,6 +1192,345 @@ pointed two lines above `PUBLISHED_SET_SOURCE` (:109) before this round.
 * The referral leaderboard has no OpenAPI stub (it had none); it stays in
   `tests/api_document_pairing.rs`'s undocumented count.
 
+### Round 7, 2026-09-29: every source file named, not yet live
+
+Worktree `D:/t27work/wt-named-2909`, branch `t27/named-complete`, at `55a6664` (upstream `main`, the
+merge of #70, round 6). The round **names and binds; it changes no behaviour**: nothing under
+`src/`, `migrations/`, `dist/` or `tests/` changed, and every defect below is recorded in its owner
+as a measured, dated fact, not fixed. **Nothing is committed, pushed or deployed** at the time of
+this reading. No migration, no row written.
+
+**Why.** At `55a6664`, 69 of the 187 files under `src/` (6 279 of 88 816 lines) were named by no
+contract. `python coverage_2109.py <root>` (the coverage script of 2026-09-21, kept outside the
+repository at `D:/t27work/coverage_2109.py`) counts a file as named when its exact repo-relative
+path occurs anywhere in a `.t27`. Five writers took the 69 between them, each file to the contract
+that owns its subject, and one new contract took the nineteen that no existing subject covers.
+Afterwards the same command prints `NOT NAMED ANYWHERE: 0 files, 0 lines` and `187 files (100.0%),
+88816 lines (100.0%)`. Which contract took which file is in [`t27-contract-map.md`](t27-contract-map.md),
+"Files named in round 7".
+
+| contract | files it named | gate 1, declarations/checks | gate 3 rows |
+| --- | --- | --- | ---: |
+| `api_surface` | `src/web.rs` | 186/42 → 205/45 → 208/45 | 5 |
+| `availability` | `src/ui/components/bike_grid.rs` | 154/38 → 170/41 → 173/42 | 2 |
+| `bike_catalog` | the `bike` and `bike_service_record` mirrors | 97/41 → 138/50 | 6 |
+| `cart_persistence` | `src/ui/components/cart_item.rs` | 276/54 → 298/60 → 308/61 | 3 |
+| `client_errors` | `src/ui/components/error_banner.rs` | 254/58 → 294/67 → 298/68 | 4 |
+| `commerce` | the `order`, `order_idempotency_key`, `order_fraud_event` and `block_history` mirrors | 168/57 → 254/75 → 257/76 | 18 |
+| `http_cache` | `src/ui/prefetch.rs` | 284/62 → 320/71 → 324/72 | 5 |
+| `legacy_retirement` | 21 files of the previous shop's surfaces | 360/73 → 536/92 (532/92 in its lane) → 545/92 | 18 |
+| `locale_policy` | the `user` mirror | 161/36 → 189/41 | 4 |
+| `loyalty_ledger` | `src/db/loyalty.rs`, the `loyalty_config` and `loyalty_profile` mirrors | 219/49 → 297/61 → 298/61 | 7 + 1 |
+| `referral_program` | `src/ui/pages/mod.rs`, `src/ui/screens/referrals_screen.rs` | 318/65 → 347/72 → 351/73 | 5 |
+| `rental_terms` | the `rental_term` and `class_discount` mirrors | 190/62 → 229/72 → 234/73 | 6 + 1 |
+| `request_identity` | `src/api/users.rs` | 164/30 → 191/36 → 197/37 | 4 |
+| `schema_provenance` | `src/db/entities/mod.rs` | 241/51 → 289/60 → 291/60 | 6 |
+| `star_award` | the `stars_transaction`, `stars_idempotency_key` and `user_stars` mirrors | 113/43 → 140/50 | 7 |
+| `webapp_bridge` | `src/ui/mod.rs`, `src/ui/api/mod.rs`, `src/ui/api/context.rs`, `src/ui/admin.rs`, `src/ui/components/open_in_telegram.rs` | 263/61 → 360/78 → 364/78 | 9 + 1 |
+| `ui_kit` (**new**) | the seventeen kit primitives under `src/ui/components`, their module list and `src/ui/theme/mod.rs` | — → 307/42 → 322/44 | 23 + 2 |
+
+A third reading in the gate-1 column, and a `+ n` in the rows column, is the review of 2026-09-30
+("Round 7, review fixes", below). That review also moved three contracts this table does not list:
+`catalog_write` 160/44 → 173/47 (+1 row), `happy_hour` 167/41 → 170/42 (+1 row) and
+`referral_credit` 155/26 → 160/27.
+
+Every floor equals the pinned compiler's count (gate 1 `-v`, below). Every changed contract only
+appended or corrected with a dated note; each reading it replaced is kept under a `_BEFORE_` name
+(for example `LEGACY_SOURCE_LOC_BEFORE_2026_09_25`, `INVALIDATION_NOTE_BEFORE_2026_09_29`,
+`THIS_FILE_NAMES_A_TABLE_BEFORE_2026_09_29`, `REUSE_EDGE_COUNT_BEFORE_2026_09_29`). The sibling
+declarations the five lanes consume by name were checked by a script to exist in their owners once
+the lanes had landed together (2026-09-29; the two sweep names `fraud_events_ttl_sweep` and
+`block_history_ttl_sweep` are elements of runtime-config's array, not top-level declarations, and are
+named as such).
+
+**The new contract, `ui_kit.t27`** (`turbobaby/ui-kit`, module `turbobaby-ui-kit`). None of the 46
+contracts named any of the nineteen files. It owns five facts about them and nothing else: which
+primitive a live route can render (counted by what can render, six, not by mount site, eight: the
+two with a live site that never render are `mute_media_element`, called only in CardMedia's video
+branch, which both live CardMedia mounts skip by passing `video_url: None`, and VideoModal, whose one
+live opener closes the Modal that holds it; CardMedia itself renders on customer routes); the class
+vocabulary the primitives emit against `styles/*.css` (45 of the 67 method tokens have no rule, 43
+of them since `158500b` deleted `styles/components.css` on 2026-05-15, all in six primitives nothing
+mounts; the one ruleless class that renders is `card-glass` on `/cart`); what
+`css_class_consistency_tests` (`src/main.rs`) cannot see (it reads only 7 of the 43 class
+attributes and none of the 67 method tokens); LazyScreen's deferral (16 ms, 80 when heavy; only
+Admin is heavy); the dead theme module's drift; and the media URL predicate, hand-copied at 15 sites
+in 9 files. Eleven `REUSES_*` edges (twelve after the review of 2026-09-30, which added
+catalog-write); it decides no wording, route, price, error message, locale or retirement.
+*Corrected 2026-09-30:* this paragraph named CardMedia, not `mute_media_element`, as one of the two
+that never render, and said the host test "cannot see 7 of the 43"; it sees those 7 and cannot see
+the other 36.
+
+**Defects recorded, not fixed.** Each is a dated fact in the owner named, with the constants that hold
+it; the ones marked *bound* have a gate-3 row that turns red the day the code changes.
+
+* **commerce.** The order replay compares only the key, never the body or the caller, so an edited
+  resubmit after a lost response gets the first order (divergence 1,
+  `SHIPPED_REPLAY_COMPARES_THE_PAYLOAD = false`). The replay lookup runs after the domain gates, so a
+  committed rental retried after the shop's midnight is refused, against the contract's own rule
+  (divergence 2, *bound*: `REPLAY_LOOKUPS_AFTER_THE_DATE_GATE`). `order_idempotency_keys` is shared
+  with `/api/stars/spend` and has no route column (divergence 3, latent; *bound*:
+  `ORDER_KEY_WRITING_ENDPOINTS`). The fraud-event mirror's doc says every rejection is logged; only six
+  call sites over four codes write one (*bound*). A doc claims `pg_advisory_xact_lock` serialises the
+  auto-block; no such call exists, a conditional upsert does it (*bound*). `check_not_blocked`'s doc
+  says 403 on a failed lookup; the code answers 500, and the bot reads the same flag fail-open at four
+  sites (*bound*: `BLOCK_GATE_CALL_SITES` 25 in `BLOCK_GATE_CALL_SITE_MODULES` 8,
+  `BOT_BLOCK_CHECK_SITES` 4). No quote identity column on the order row (*bound*).
+* **locale_policy.** `set_user_lang` truncates to 50 characters and the column is `VARCHAR(10)`: a
+  code of 11 to 50 characters fails the upsert while the bot says the language changed (latent: the
+  picker sends `ru` and `en`; *bound* on both sides). The timezone writer truncates 100 into 50 and
+  has no caller (*bound*).
+* **schema_provenance.** The entity guard `every_entity_module_is_referenced` matches a word, not a
+  reader: `treasure_hunt` passes on the i18n key `"home.treasure_hunt"`, `event` on unrelated
+  identifiers, so 28 of 28 "wired" is 26 by path (*bound*: `TREASURE_HUNT_MIRROR_PATH_REFERENCES`).
+  The glue's doc says every entity file carries `#![allow(unreachable_pub)]`; 0 of 30 do (*bound*).
+  `legacy_retirement` recorded it too, and now reads it from here by name ("Integration", below).
+* **webapp_bridge.** The admin-token byte cap is the bare literal 2048 at six sites in three files
+  (*bound*: `ADMIN_TOKEN_CLIENT_CAP_BYTES` and `ADMIN_TOKEN_CLIENT_CAP_SITES_IN_UI`, both over
+  `src/ui`), and the server checks no length (recorded in prose about request-identity's code, bound
+  by no row: no row reads `src/api/auth.rs`, and request-identity declares no length fact for the
+  `X-Admin-Token` branch; *corrected 2026-09-30*, this line marked the whole sentence bound).
+  `use_admin_status` does not mirror AdminScreen on the id
+  (0 callers, *bound*). The typed `ApiClient` is built once, anonymous, and read by nothing
+  (*bound*). `api_base_url`'s comment gives a reqwest reason the browser build no longer has.
+* **cart_persistence.** CartItemComponent's three buttons have no handler; nothing mounts it
+  (*bound*, three rows).
+* **request_identity.** `GET /api/users/me/:telegram_id` is called "the authenticated user's id" in
+  its doc; it echoes the path id once `check_owner` admits the request, lenient path included
+  (*bound*: its route, step order, reads and client callers).
+* **loyalty_ledger.** The test fixture's comment says it mirrors the seeded config; 5 of 6 scalars
+  differ. `calculate_tier` is an uncalled second rule, not the live one (*bound*). The seed stores
+  `progressive_cashback` as an array, the defaults as a scalar. The profile mirror maps 10 of 13
+  columns and widens two NOT NULL columns to `Option` (*bound*: its field list).
+* **rental_terms.** Migration 079's comment guards against an admin surface that does not exist: 0
+  writes to `class_discounts` or `rental_terms` under `src/` (*bound*).
+* **client_errors.** `ErrorBanner`'s doc names screens it does not serve, and it renders nothing for
+  an empty message (*bound*).
+* **http_cache.** `prefetch.rs` says mobile skips the prefetch; nothing tests the platform, and only
+  the Home hover warms anything (*bound*). The contract's own `INVALIDATION_NOTE` cited stale lines;
+  corrected, the old text kept.
+* **referral_program.** The `pages::Referrals` re-export has no consumer (*bound*).
+* **bike_catalog.** `bike.rs`'s header puts every column in 077 (`for_sale` is 086's); the service
+  mirror's doc names an uncalled reader, the live readers are four admin handlers (*bound*).
+* **star_award.** Three NOT NULL timestamps are `Option` in their mirrors (recorded, not a defect).
+* **ui_kit.** VideoModal cannot render on a live route; `/cart`'s glass empty state has no rule; 45
+  method tokens unstyled, 43 of them since `158500b`, and `docs/DESIGN_SYSTEM.md` still names the deleted sheet;
+  the CSS test's blind spot; CardMedia's video branch never runs; the theme is dead and its
+  `@font-face` loads a file the tree does not have; the money re-export has no user; `routes.rs:4`
+  says every screen is lazy (11 of 26 handlers are); Toast bypasses `t()` with five hard-coded words
+  on `/admin`; the media predicate at 15 sites. All bound except the design doc's stale sheet, the
+  CSS test's reach, the missing font and the `158500b` provenance of the 43 (git history, which no
+  gate-3 row reads; the rows bind the 45 ruleless tokens and `card-glass` over today's
+  `styles/*.css` only; the 43 and its 37 + 6 split reproduce at `158500b^`, re-checked 2026-09-30).
+* **legacy_retirement.** The kept `/quest/:id` caps the scanned text in bytes and cuts it in
+  characters (*bound*); it shows a reward per checkpoint that nothing credits (*bound*); its
+  progress is a client signal any active QR code advances, stored nowhere. `set_card` would print a
+  confident zero for a missing price and has no caller (*bound*). The growing-themed tech tree
+  outlived the leftovers review; whether ruling #12 reaches it is left open.
+
+**Gate 3**, 288 + 132 = **420** rows (`MIN_BINDINGS` 420; **427** since the review of 2026-09-30,
+which added seven, each planted red once the same way), no row removed. Every proposed row was
+evaluated on the clean tree first (all held), checked against the table for a duplicate of an
+existing row (none: the two constants bound twice, `LEDGER_SOURCE_MAX_CHARS` and
+`CLASS_DISCOUNT_STORED_CEILING_UNITS`, are each bound once per home, a door and a column, a doc and
+a CHECK), and then planted RED once through this script's own code: a single-file row by writing a
+planted copy under `D:/t27work/scratch-2909/integ-2909/plants/` and running the worktree gate with
+`--source-override <repo path>=<copy>`, a tree row (a glob, which `--source-override` refuses) by
+planting the change in a mirror of the working tree (every spec, the gate script and every file a
+binding reads) and running the mirror's copy of the gate, then writing the original text back.
+**132 of 132 went red** in the row that names them (88 single-file rows, 44 tree rows): 130
+by a value comparison (`contract=… source=…`), and two by an anchor that matches nothing, which
+is the red each of those rows is written to give (`rental_terms`' mirror doc restating the CHECK as
+`<= 1`; the kept quest's cap truncating on a byte boundary, which is the fix itself). Sixteen
+plants also turned a second row red, each a row over the same fact or an older length row of the
+planted file (for example `events_booking.HTTP_SOURCE_LINES`,
+`order_presentation.LIST_LINE_COUNT`, `legacy_retirement.REPOINTED_ROUTE_COUNT`). The mirror (337
+files) printed `OK - 420 bindings hold across 43 contracts and 140 source files` before the first
+plant and after the last. No row was rejected: none stayed green, none was red on the clean tree,
+and none duplicates an existing row. The harness, the planted copies and the per-row readings are
+`negctl.py`, `plants/` and `results.json` under `D:/t27work/scratch-2909/integ-2909/`.
+Five older rows cited `client_errors.t27` and `http_cache.t27` by line number, seven citations in
+all, and this round's insertions had moved those lines; they cite the declarations by name now
+(`INTAKE_SOURCE_LINES`, `MUST_REVALIDATE_IS_SET` and `NO_CACHE_IS_SET`, `BODY_SOURCE_FIELD_VALUES`
+and `RULE_NEEDS_A_SOURCE_VALUE_THAT_DOES_NOT_EXIST_YET`, the Invalidation constants and
+`REMOVING_A_KEY_RECALLS_A_HELD_COPY`, `REPLICA_NOTE`), comments and `why` text only.
+
+**Integration.** Two lanes recorded one finding in parallel: the entity guard's false green over
+the treasure-hunt mirror, in `schema_provenance.t27`, which owns the guard, and in
+`legacy_retirement.t27`. The second now names the first by ID (`REUSES_SCHEMA_PROVENANCE_ID`;
+`REUSE_EDGE_COUNT` 12 → 13, the lane's 12 kept as `REUSE_EDGE_COUNT_BEFORE_THE_ROUND_7_INTEGRATION`)
+and reads the guard by two names (`ENTITY_GUARD_OWNER_ID`, `ENTITY_GUARD_DECLARATIONS_READ`); its
+own flag stays, as the reason its state for the mirror rests on the reader count and not on the
+guard's green. No other overlap was found: every other path two contracts share is cited as
+evidence by one and classified by its owner, and the kit consumes availability's,
+cart-persistence's and legacy-retirement's mount censuses by name. The contract-to-contract edges,
+swept as the contract map describes, went from 252 at `55a6664` to 276, none dangling.
+
+*Corrected 2026-09-30, by the review of round 7:* "no other overlap" was wrong, and the integration
+read only half of the guard. The review found the same media-URL predicate written as three
+declarations in three contracts (`ui_kit`'s `media_url_is_shown`, `cart_persistence`'s
+`cart_line_image_is_drawn`, `legacy_retirement`'s `MODAL_USABLE_SRC_PREFIXES` and
+`MODAL_REFUSED_SRC_PREFIX`) with no tie between them; the wasm32 gate cited by its own lines in six
+lanes that never named its owner, `webapp_bridge`; the unwrapped-handler counts declared in
+`ui_kit` although they are `legacy_retirement`'s and `customer_surface`'s, and the server's URL gate
+declared there too, a write-side fact whose owner is `catalog_write`; the browser build target read from `index.html` in `api_surface` although `webapp_bridge`
+declares it; the happy-hour share of the seed carried in `loyalty_ledger` as an untied literal; and
+`check_not_blocked` credited to request-identity by `referral_credit` while `commerce` said no
+contract owned it. And `legacy_retirement` read two of the guard's names but restated its
+allowlist (`QUEST_PLACE_ENTITY_IS_ALLOWLISTED_UNWIRED`) and its word match in its own words. All
+are fixed in the owners' direction ("Round 7, review fixes", below): the copy goes or is marked,
+the owner stays, and the guard is read by five names now, `ENTITY_GUARD_ALLOWLIST` among them.
+The edges, swept the same way, are 289 after that review, none dangling.
+
+**Gates**, on the working tree over `55a6664`, pinned compiler `40003ed`, re-read on 2026-09-30
+after the review fixes below. On 2026-09-29, before them, gate 2 read 12404 assertions (11762
+names and bodies agreed with t27c) and gate 3 read 420 bindings over 140 source files; the other
+readings were the same.
+
+```sh
+T27C=<path>/t27c python3 scripts/verify_t27_specs.py --require-compiler -v
+# FAIL - untracked manifested specs: ['specs/turbobaby/ui_kit.t27']; local-only escape: --allow-untracked
+T27C=<path>/t27c python3 scripts/verify_t27_specs.py --require-compiler --allow-untracked -v
+# OK - 47 manifested specs, 5 generators each (every floor equals the measurement)
+python3 scripts/execute_t27_assertions.py            # WITH the compiler cross-check
+# OK - 47 spec(s), 12564 assert line(s) scanned, 12564 executed, 12564 passed, 0 failed;
+#      11856 declaration name(s) and function bodies agreed with t27c; 2 pinned front-end disagreement(s)
+python3 scripts/execute_t27_assertions.py --no-crosscheck
+# OK - 47 spec(s), 12564 assert line(s) scanned, 12564 executed, 12564 passed, 0 failed
+python3 scripts/verify_t27_against_source.py --require-git-tracked
+# FAIL - 1 problem(s) over 427 binding(s):
+#   - files read by bindings but not tracked in git: ['specs/turbobaby/ui_kit.t27']
+python3 scripts/verify_t27_against_source.py
+# OK - 427 bindings hold across 43 contracts and 143 source files
+python3 scripts/verify_fleet_seed.py -v
+# OK — 14 families (13 offered), 37 units (11 rented, 26 available); ...
+python3 coverage_2109.py .
+# named by at least one contract: 187 files (100.0%), 88816 lines (100.0%)
+# NOT NAMED ANYWHERE: 0 files, 0 lines
+```
+
+**Rust.** `cargo test --features backend -j 2 --test t27_gates_run`, with `$HOME/.cargo/bin` first on
+`PATH`, `CARGO_BUILD_JOBS=2` and a target directory under the scratch directory: it built, and
+printed `test result: FAILED. 2 passed; 1 failed`. The failure is `every_t27_source_binding_holds`,
+which runs gate 3 with `--require-git-tracked`: its output carries 420 `OK` binding lines and the
+one problem above, the untracked `ui_kit.t27`. `every_t27_assertion_is_executed_and_holds` and
+`the_gates_report_a_corpus_and_not_an_empty_scan` passed. No Rust source changed this round, so no
+fmt, clippy or full `cargo test` ran. That reading is of 2026-09-29; the cargo run was not repeated
+after the review of 2026-09-30, which changed no Rust source either.
+
+**What is left.**
+
+* Commit, push, review and merge. Two gates refuse the tree until `specs/turbobaby/ui_kit.t27` is
+  tracked, by design: gate 1 without `--allow-untracked` (`untracked manifested specs`) and gate 3
+  with `--require-git-tracked` (`files read by bindings but not tracked in git`), which is also how
+  `tests/t27_gates_run.rs` runs it. Both readings above were taken before the commit.
+* **The owner's decisions** the recorded defects ask for, none taken here: move the order replay
+  ahead of the domain gates and compare the payload or refuse a mismatch; separate or tag the order
+  and spend key namespaces; truncate `set_user_lang` to the column's 10 characters; whether the
+  check-not-blocked lookup failing should answer 403 or 500, and whether the bot should fail closed
+  like the API; whether the kept quest credits its displayed reward and in what unit; whether ruling
+  #12 reaches the grow tech tree; the fate of the nine kit primitives nothing mounts and of the dead
+  theme.
+* Two rows are censuses that move with ordinary work: `webapp_bridge.ORIGIN_READER_CALL_SITES`
+  (105, every client API call) and `commerce.BLOCK_GATE_CALL_SITES` (25). A red there asks for a
+  re-measurement, not a revert. Known blind spots, each written in its row: the
+  `REPLAY_LOOKUPS_AFTER_THE_DATE_GATE` row stays green if a second lookup is added above the gate
+  while the original stays below; `TREASURE_HUNT_MIRROR_PATH_REFERENCES` does not see a name after a
+  nested `{...}` in a use-group, nor `tests/`.
+* `docs/t27-contract-map.md`'s table still carries the 2026-09-21 `lines` and `defers to` for the
+  rows round 7 did not add; its edge count is re-measured (276, and 289 after the review of
+  2026-09-30).
+* `schema_provenance.t27`'s citations into `scripts/verify_t27_specs.py` were stale before this round
+  (round 6 left them) and are further out now by the floor comments. Since the review of 2026-09-30
+  the manifest entry is cited by its key (`SPEC_GATE_MANIFEST_ENTRY_SITE`, the line reading kept as
+  `..._BEFORE_2026_09_30`); the other citations into that script (`:313-322`, `:326-330`,
+  `:397-408`, `:418`, `:310-311`) are still line numbers and still stale.
+* Seen by the webapp lane and older than this round: `legacy_retirement.t27`'s answer-3 paragraph
+  still says CartItemComponent "reads the line through the same two rules"; its own later
+  reconciliation removed those client guards, and the component reads `item.image_url` and
+  `item.name` directly. Left for that contract's next change.
+
+### Round 7, review fixes, 2026-09-30, not yet live
+
+Same worktree and base (`D:/t27work/wt-named-2909`, `t27/named-complete` over `55a6664`); nothing
+committed. Two reviewers read round 7 and returned twenty findings. Each was re-checked against the
+tree first; all twenty held (one with a narrower consequence than written, below) and all twenty
+were fixed. Nothing under `src/`, `migrations/`, `dist/` or `tests/` changed; no defect was fixed in
+code. Every reading replaced is kept under a `_BEFORE_2026_09_30` name, and every restatement
+dropped is listed by name in a `RESTATEMENT_DROPPED_ON_2026_09_30` array in the file it left, so a
+grep for it lands there.
+
+* **Wrong facts.** `rental_terms.CLASS_ENTITY_READING_HANDLERS` 4 → 5: the fifth reader of
+  `list_class_discounts` is `check_bike_lines` (`src/api/orders.rs:794`), which `create_order` calls
+  for `POST /api/orders`. The finding called it the reader "that decides an order's money"; it is
+  the only one on the order path, and it uses the rate only to log a quoted rate that diverges from
+  the file (non-blocking), so it refuses nothing (`CLASS_ENTITY_ORDER_PATH_READ_CAN_REFUSE_AN_ORDER`
+  false). Now *bound* (`list_class_discounts(` over `src/api`). `webapp_bridge`'s no-host notice
+  renders a third text node, a fixed glyph at `open_in_telegram.rs:23` outside `t()`; the two keys
+  are *bound*.
+* **Stale citations.** `client_errors` cited the banner's `message` prop at `:15` (its doc
+  comment); `:16`, in the contract and in the gate-3 comment. `rental_terms` and `ui_kit` spelled
+  five citations with a bare file name; full repo paths now. `schema_provenance` cites the gate-1
+  manifest entry by key instead of a line that moved from `:257` to `:392` to `:422`.
+* **Restatements, moved to their owners.** The wasm32 gate is `webapp_bridge`'s: `client_errors`,
+  `http_cache`, `availability`, `cart_persistence`, `referral_program` and `legacy_retirement` each
+  name it now (`REUSES_WEBAPP_BRIDGE_ID`, `WASM_GATE_SITE`, `HOST_SUITE_COMPILES_THIS_HALF`) instead
+  of citing `src/lib.rs:17-18`. The media predicate is `ui_kit`'s: `cart_persistence` dropped
+  `cart_line_image_is_drawn` and `legacy_retirement` dropped `MODAL_USABLE_SRC_PREFIXES` and
+  `MODAL_REFUSED_SRC_PREFIX`; both read `media_url_is_shown` and `MEDIA_PREDICATE_SITES` by name and
+  keep only what their site adds, an emptiness test that changes no answer. Button's no-op default
+  handler is now declared in `ui_kit` (`BUTTON_ONCLICK_DEFAULT_DOES_NOTHING`) and read from there.
+  `ui_kit` dropped `LAZY_UNWRAPPED_HANDLERS` and `LAZY_UNWRAPPED_CATALOG_ALIASES` (the owners are
+  `customer_surface`'s `ROUTER_DECLARED_ROUTES` and `legacy_retirement`'s `REPOINTED_ROUTE_COUNT`)
+  and keeps its own three unwrapped non-catalog handlers. What the server's URL gate admits
+  (`validate_url`, `src/api/mod.rs:49-71`: five prefixes, both `data:` ones included) moved to
+  `catalog_write`, the owner of what an admin write may produce (`WRITE_IMAGE_URL_ADMITTED_PREFIXES`,
+  *bound*); `ui_kit` reads it through a new `REUSES_CATALOG_WRITE_ID`. `api_surface` reads the
+  browser build target from `webapp_bridge`'s `BROWSER_BUILD_TARGET`. `legacy_retirement` reads the
+  entity guard by five names now, `ENTITY_GUARD_ALLOWLIST` among them, and its quest-mirror flag is
+  a named reading of that list. `loyalty_ledger`'s 4 happy-hour seed keys is a marked copy of
+  `happy_hour`'s `SEEDED_CONFIG_KEYS`; the 9 defaults keys and the owner's list are *bound* (two new
+  rows), the total already was. `referral_credit` credited `check_not_blocked` to request-identity;
+  it names `commerce`'s `BLOCK_GATE` now, and `commerce` records that stale attribution.
+  `request_identity`'s echo route names the owners of its id bound (`ID_MAX_SAFE`) and its
+  documentation census by owner constants, so it stays the ownership root (`REUSE_EDGE_COUNT` 0);
+  the invariant that said it "took no decision from another contract" is renamed.
+* **Decorative and unpublished.** `ui_kit`'s data-URL test compared a flag with its own literal; the
+  refusal now goes through `media_url_is_shown` and `MEDIA_PREDICATE_DATA_SCHEME_CLAUSES` (0) is
+  *bound*, as is `SIBLING_LINE_CITATIONS_IN_THIS_FILE`, read from the contract's own text. "The
+  brief" whose figures `ui_kit` refutes is the task brief handed to the round-7 ui-kit lane, which
+  the repository does not publish: `BRIEF_IS_PUBLISHED` false, `BRIEF_SOURCE` says so.
+* **This handover.** The census sentence named CardMedia, not `mute_media_element`, as a primitive
+  that never renders; the host-test sentence was inverted (it reads 7 of the 43 and cannot see 36);
+  the admin-token sentence marked the server's missing length check *bound*, which no row reads; the
+  ui_kit list of unbound items missed the `158500b` provenance of the 43 (re-checked at `158500b^`:
+  43 of the 45 ruled, 37 in `styles/components.css` and 6 in `styles/main.css`); and "no other
+  overlap" in "Integration" was wrong (corrected there).
+
+Gate 3 gained seven rows (`rental_terms.CLASS_ENTITY_READING_HANDLERS`,
+`webapp_bridge.NO_HOST_NOTICE_KEYS`, `catalog_write.WRITE_IMAGE_URL_ADMITTED_PREFIXES`,
+`ui_kit.MEDIA_PREDICATE_DATA_SCHEME_CLAUSES`, `ui_kit.SIBLING_LINE_CITATIONS_IN_THIS_FILE`,
+`loyalty_ledger.CONFIG_SEED_KEYS_NAMED_BY_RATE_SOURCE_DEFAULTS`, `happy_hour.SEEDED_CONFIG_KEYS`):
+420 → **427**, `MIN_BINDINGS` 427, none removed. Each held on the clean tree, and each was planted
+red once through the gate's own code, two tree rows in a mirror of the working tree (337 files,
+`OK - 427 bindings` before the first plant and after the last) and five single-file rows with
+`--source-override`: **7 of 7 red** in the row that names them, and one plant (a prefix removed from
+`validate_url`) also turned `api_surface.ROUTER_SOURCE_LINES`, the length row of the same file, red.
+The harness and its readings are `negctl_fix.py` and `results_mirror3.json` under
+`D:/t27work/scratch-2909/review7-fix/`. Seventeen gate-1 floors were raised to the pinned compiler's
+counts, and all 47 equal the measurement again. The contract-to-contract edges went from 276 to
+289, none dangling; the thirteen new ones are the six lanes' and `api_surface`'s edge to
+webapp-bridge, `cart_persistence`'s and `legacy_retirement`'s to ui-kit, `ui_kit`'s to
+catalog-write, `request_identity`'s two owner constants and `commerce`'s naming of referral-credit.
+The readings are in the round-7 gates block above.
+
+**Left by the review, recorded and not done.** Two contracts older than round 7 still cite the
+wasm32 gate by its lines instead of by `WASM_GATE_SITE`: `customer_surface.t27` (its
+`WITNESS_COMPILES_THE_SURFACE_REASON` and two comments) and `person_naming.t27` (one comment). The
+server's missing length check on `X-Admin-Token` is recorded only in `webapp_bridge`'s prose; pinning
+it belongs in `request_identity`, the owner of that branch, with its own row. Button's no-op
+default and the `158500b` provenance are declared and unbound.
+
 ```sh
 # 1. structure: module, unique ID, declaration floors, typecheck, five generators.
 #    Needs the pinned compiler; see below.
@@ -1762,10 +2101,21 @@ citations** — unlike a `src/` citation, which gate 3 can check.
 > owner's answers on the base of the 10% and the referral top list on top of it, verified the same
 > way (see "Round 6"). It is not pushed.
 >
+> *Since then (2026-09-29):* round 6 was merged as #70 (`55a6664`), and `t27/named-complete`
+> carries round 7 on top of it: every file under `src/` is named by a contract (187 of 187, 0
+> unnamed by `coverage_2109.py`), one new contract (`ui_kit.t27`, 47 in all), and 420 gate-3
+> bindings over 43 contracts, each new row planted red once; 427 after the review of 2026-09-30,
+> whose twenty findings are fixed in the owners' direction (see "Round 7, review fixes"). It
+> changes no behaviour and records its defects as the owner's decisions (see "Round 7"). Commit it
+> first:
+> `specs/turbobaby/ui_kit.t27` must be tracked before gate 1 without `--allow-untracked`, gate 3
+> with `--require-git-tracked` and `tests/t27_gates_run.rs` go green. Then push it for review.
+>
 > The work, in order: fix the seven defects listed under "What is actually left", each with a test
 > that is red before the fix and with the contract that records the defect corrected in the same
-> change; then grow `scripts/verify_t27_against_source.py` beyond its 248 bindings on `main` at
-> `405f30e` (256 on the unmerged integration branch `t27/round4` on 2026-09-26; before #67, 237 on
+> change; then grow `scripts/verify_t27_against_source.py` beyond its 427 bindings on
+> `t27/named-complete` (2026-09-30; 420 there on 2026-09-29; 288 on `main` at `55a6664`; 248 on `main` at
+> `405f30e`; 256 on the unmerged integration branch `t27/round4` on 2026-09-26; before #67, 237 on
 > `main`, 248 on `t27/owner-answers-2509` at `41315b2` on 2026-09-26, 239 on
 > 2026-09-25; 237 re-measured
 > 2026-09-25 after #64, the same as after #63 on 2026-09-24; 227 after #62, 198 earlier that day,

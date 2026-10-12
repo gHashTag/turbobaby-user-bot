@@ -696,3 +696,20 @@ invariant absence_of_the_singleton_row_is_answered_as_success
 
 invariant nothing_here_publishes_a_price_or_a_currency
   assert RESPONSE_CARRIES_A_PRICE == false and RESPONSE_CARRIES_A_CURRENCY == false and NO_DISCOUNT_PERCENT_IS_CHOSEN_HERE == true
+
+; --- Bound since 2026-09-30 ---------------------------------------------------------------------------
+; Appended at the end of the file so that no line citation into it moves. SEEDED_CONFIG_KEYS above is
+; bound by gate 3 since the review of round 7, as a SET against the happy_hour_ keys of the
+; loyalty_config seed (migrations/001_initial.sql:98-101, at 55a6664): the list is in meaning order,
+; facing READER_CONFIG_KEYS, and not in file order. turbobaby/loyalty-ledger counts the seed's thirteen
+; keys and carries this list's length as a marked copy (CONFIG_SEED_KEYS_READ_BY_HAPPY_HOUR), so a key
+; added to or dropped from the seed's happy-hour share turns this row red as well as that total.
+pub const SEEDED_CONFIG_KEYS_BOUND_AT : str = "2026-09-30";
+pub const SEEDED_CONFIG_KEYS_SEED_SITE : str = "migrations/001_initial.sql:98-101 (at 55a6664)";
+
+test the_seeded_key_list_is_bound_as_a_set_and_its_length_is_the_config_key_count {
+  assert SEEDED_CONFIG_KEYS_BOUND_AT == "2026-09-30";
+  assert SEEDED_CONFIG_KEYS_SEED_SITE == "migrations/001_initial.sql:98-101 (at 55a6664)";
+  assert SEEDED_CONFIG_KEYS.len == CONFIG_KEY_COUNT;
+  assert READER_CONFIG_KEYS.len == SEEDED_CONFIG_KEYS.len;
+}

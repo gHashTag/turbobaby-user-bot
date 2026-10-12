@@ -65,13 +65,16 @@
 ;   3. "tests/retired_table_wiring.rs, survey :49-81" is :49-82 -- the const opens at 49 and
 ;      closes at 82 (at 83 since 2026-09-26, when a survivor's reason grew a line). The size, 4, is what this file pins, not the span.
 ;   4. "about 9523 LOC across 26 of the 181 src/*.rs files". 181 was right: every .rs file under
-;      src/ counted to 181 on 2026-09-21 (corrected 2026-09-22: 182 since src/trios/order_status_view.rs was added that day). 9523 across 26 does not reproduce -- no TRACKED file in the tree
+;      src/ counted to 181 on 2026-09-21 (corrected 2026-09-22: 182 since src/trios/order_status_view.rs was added that day; 187 since five files arrived on 2026-09-26, re-measured 2026-09-29 at 55a6664). 9523 across 26 does not reproduce -- no TRACKED file in the tree
 ;      carries the number 9523, and no nameable file list sums to it. This file therefore pins
 ;      its OWN reproducible measurement instead: 25 named legacy-domain source files totalling
 ;      9193 lines, the set being the eight screens behind the live legacy routes, the four UI
 ;      game modules and the set card, the three API modules that serve them, five entities, and
 ;      the four trios and db modules of the strain, quest, tea and pack domains. A number whose
 ;      file list cannot be named is not evidence, so 9523 is reported unconfirmed, not copied.
+;      (2026-09-29: the 25 were described here and never printed until that day. They are printed
+;      as LEGACY_SOURCE_FILES near the end of this file; the 9193 reproduces exactly at d1877db,
+;      the commit that wrote this paragraph, and the same 25 paths sum to 8840 at 55a6664.)
 ; --
 ; WHAT THIS FILE NEVER DOES. It implements no route, describes no screen, carries no Cyrillic
 ; copy and names no deletion date -- issue #2 is open and the order of retirement is the
@@ -88,6 +91,12 @@
 ; right subject on 2026-09-21, and all three would have rotted on the next edit next door. It carries no renter, handle, phone, key
 ; code, plate, debt, purchase price or personal note (D14): every constant here is a table
 ; name, a path, a route pattern or a count.
+; (2026-09-29: "describes no screen" is kept as the rule and narrowed by one thing. From that day
+; this file NAMES every legacy file no contract named -- 21 of them -- and records for each how it
+; is built, whether a customer reaches it in this file's own states, and the counts, routes, keys
+; and literals a gate can check. That is evidence for a classification, not a description of what
+; a screen should do: no surface is re-decided, no copy is proposed, and every defect the naming
+; found is recorded as a measured, dated fact and left unfixed -- this round changed no code.)
 ; phi^2 + 1/phi^2 = 3 | TRINITY
 
 module turbobaby-legacy-retirement;
@@ -124,8 +133,40 @@ pub const REUSES_RIDE_GAME_ID : str = "turbobaby/ride-game";
 ; 2026-09-24: REUSE_EDGE_COUNT was 7; the seven above are unchanged and the two below make it 9.
 pub const REUSES_EVENTS_BOOKING_ID : str = "turbobaby/events-booking";
 pub const REUSES_COMMERCE_ID : str = "turbobaby/commerce";
-pub const REUSE_EDGE_COUNT : u8 = 9;
+; Added 2026-09-29 with the footprint printed near the end of this file: three owners whose
+; decisions the named legacy files lean on or would break, named rather than restated -- the bound
+; the live quest scan applies to its token (turbobaby/validation-bounds, LIVE_TOKEN_MAX_CHARS and
+; LIVE_TOKEN_LENGTH_IS_MEASURED_IN_BYTES), the one kind a cart serves (turbobaby/cart-persistence,
+; SERVED_CART_KINDS; the owner OWNER_ANSWER_3_CART_RULE_OWNER_ID already names for another reason),
+; and the rule that a price is finite and strictly positive and never a confident zero
+; (turbobaby/pricing-honesty, rate_present). CORRECTED 2026-09-29: REUSE_EDGE_COUNT was 9, and 9
+; stays below as the reading of 2026-09-24 to 2026-09-28; the nine above are unchanged.
+pub const REUSES_VALIDATION_BOUNDS_ID : str = "turbobaby/validation-bounds";
+pub const REUSES_CART_PERSISTENCE_ID : str = "turbobaby/cart-persistence";
+pub const REUSES_PRICING_HONESTY_ID : str = "turbobaby/pricing-honesty";
+; Added 2026-09-29 when round 7 was integrated: the entity guard's false green over the treasure
+; hunt mirror (TREASURE_HUNT_ENTITY_PASSES_THE_WIRING_TEST_BY_A_KEY_STRING, below) is the finding
+; of turbobaby/schema-provenance, which owns the guard and records the same mirror under
+; ENTITY_MODULES_PASSING_ON_SPELLING_ALONE_NAMES, with ENTITY_GUARD_DEFECT_IS_FIXED false. The two
+; lanes measured it the same day in parallel; the guard is read from its owner by name and not
+; re-decided here. CORRECTED 2026-09-29: REUSE_EDGE_COUNT was 12 in this file's own lane, and 12
+; stays below as that reading; the twelve above are unchanged.
+pub const REUSES_SCHEMA_PROVENANCE_ID : str = "turbobaby/schema-provenance";
+; Added 2026-09-30 at the review of round 7: two owners the round-7 sections restated instead of
+; naming. turbobaby/ui-kit owns the media URL predicate (media_url_is_shown) and the census of its
+; hand copies (MEDIA_PREDICATE_SITES), and the detail modal's is_usable_src is one of those copies;
+; the modal's prefixes were declared here a second time and are dropped (listed by name in
+; RESTATEMENT_DROPPED_ON_2026_09_30, near the modal). turbobaby/webapp-bridge owns the wasm32 gate
+; the build paragraph cited by its lines (WASM_GATE_SITE, HOST_SUITE_COMPILES_THIS_HALF).
+; CORRECTED 2026-09-30: REUSE_EDGE_COUNT was 13, and 13 stays below as the reading of the round-7
+; integration; the thirteen above are unchanged.
+pub const REUSES_UI_KIT_ID : str = "turbobaby/ui-kit";
+pub const REUSES_WEBAPP_BRIDGE_ID : str = "turbobaby/webapp-bridge";
+pub const REUSE_EDGE_COUNT : u8 = 15;
+pub const REUSE_EDGE_COUNT_BEFORE_2026_09_30 : u8 = 13;
+pub const REUSE_EDGE_COUNT_BEFORE_THE_ROUND_7_INTEGRATION : u8 = 12;
 pub const REUSE_EDGE_COUNT_BEFORE_2026_09_24 : u8 = 7;
+pub const REUSE_EDGE_COUNT_BEFORE_2026_09_29 : u8 = 9;
 
 ; --- The states ---------------------------------------------------------------------------------
 ; Five values, of which three are the partial states this tree actually exhibits. STATE_LIVE is
@@ -280,7 +321,8 @@ pub fn allowlist_entry_is_valid(names_path: bool, names_table: bool, reason_char
 }
 
 ; Checked from both ends, which is what stops the list becoming a hiding place: an unlisted
-; reference fails (:450), and a listed entry matching nothing fails (:476). A list that can go
+; reference fails (:451; :450 until 2026-09-26, re-read 2026-09-29), and a listed entry matching
+; nothing fails (:477; :476 until the same day). A list that can go
 ; stale is a to-do list; one that cannot is a place things go to hide.
 pub fn allowlist_is_sound(every_reference_listed: bool, every_entry_still_matches: bool, every_entry_has_reason: bool) bool {
     return every_reference_listed and every_entry_still_matches and every_entry_has_reason;
@@ -294,7 +336,8 @@ pub fn keeping_is_permitted(named_in_allowlist: bool, reason_chars: u16) bool {
 
 ; The retired set is DERIVED from the migrations in filename order rather than listed, so a
 ; table a future migration drops inherits the guard with nobody remembering it, and a table
-; dropped then recreated is live again. The premise assert at :385 is the third leg: if the
+; dropped then recreated is live again. The premise assert at :386 (:385 until 2026-09-26, re-read
+; 2026-09-29) is the third leg: if the
 ; migrations stop retiring the anchor table, the guard says its premise changed rather than
 ; passing on an empty set.
 pub fn retired_set_is_trustworthy(derived_from_migrations: bool, honours_recreation: bool, premise_asserted: bool) bool {
@@ -378,11 +421,19 @@ pub const TECH_TREE_HTTP_ROUTE_COUNT : u8 = 4;
 pub const LEGACY_HTTP_ROUTE_COUNT : u8 = 43;
 
 ; The footprint this file can name file by file. 182 is every .rs under src/ (corrected 2026-09-22: it was 181 until src/trios/order_status_view.rs was added that day).
-pub const TOTAL_SOURCE_FILE_COUNT : u16 = 182;
+; CORRECTED 2026-09-29, both re-measured at 55a6664. TOTAL_SOURCE_FILE_COUNT was 182: git ls-files
+; under src/ gives 187 .rs files, the five new ones all of 2026-09-26 (e1511b8, f1f8517, b3f9653 and
+; 2cd985c, the last adding two), and none removed; 182 stays below as the reading it was.
+; LEGACY_SOURCE_LOC was 9193: the 25 paths LEGACY_SOURCE_FILES prints sum to 9193 at d1877db and
+; still at 0526429 (2026-09-25 14:39 +0700), and three commits of that afternoon and two of
+; 2026-09-26 took them to 8840 (see LEGACY_SOURCE_FILE_LINES); 9193 stays below as the reading it was.
+pub const TOTAL_SOURCE_FILE_COUNT : u16 = 187;
+pub const TOTAL_SOURCE_FILE_COUNT_BEFORE_2026_09_26 : u16 = 182;
 pub const LEGACY_SOURCE_FILE_COUNT : u16 = 25;
-pub const LEGACY_SOURCE_LOC : u16 = 9193;
+pub const LEGACY_SOURCE_LOC : u16 = 8840;
+pub const LEGACY_SOURCE_LOC_BEFORE_2026_09_25 : u16 = 9193;
 pub const SURVEY_LOC_CLAIM_REPRODUCED : bool = false;
-pub const SURVEY_LOC_CLAIM_NOTE : str = "The survey reported about 9523 LOC across 26 of the 181 src/*.rs files. 181 reproduced exactly on 2026-09-21, and the tree has held 182 since src/trios/order_status_view.rs was added on 2026-09-22. 9523 and 26 do not: no tracked file in the repository carries the number 9523 -- git grep -l 9523 returns nothing, and the matches an unfiltered recursive grep finds are incidental digit runs inside target/ build fingerprints, not sources -- and no nameable list of legacy-domain modules sums to it. The 25 files and 9193 lines pinned here are a list that can be printed and re-added, which is the only kind of footprint number this corpus accepts. The difference is not asserted to be an arithmetic error in the survey -- it is an unreproducible figure, and an unreproducible figure is reported as such rather than inherited.";
+pub const SURVEY_LOC_CLAIM_NOTE : str = "The survey reported about 9523 LOC across 26 of the 181 src/*.rs files. 181 reproduced exactly on 2026-09-21, and the tree held 182 from the day src/trios/order_status_view.rs was added until five files arrived on 2026-09-26 (187, re-measured at 55a6664 on 2026-09-29). 9523 and 26 do not: no tracked file in the repository carries the number 9523 -- git grep -l 9523 returns nothing, and the matches an unfiltered recursive grep finds are incidental digit runs inside target/ build fingerprints, not sources -- and no nameable list of legacy-domain modules sums to it. The 25 files pinned here -- 9193 lines when first read, 8840 at 55a6664 -- are a list that is printed and re-added (LEGACY_SOURCE_FILES, since 2026-09-29), which is the only kind of footprint number this corpus accepts. The difference is not asserted to be an arithmetic error in the survey -- it is an unreproducible figure, and an unreproducible figure is reported as such rather than inherited.";
 
 pub fn legacy_footprint_is_measured(files_named: u16, total_files: u16, loc: u16) bool {
     if (files_named == 0 or loc == 0) {
@@ -397,7 +448,8 @@ pub fn legacy_footprint_is_measured(files_named: u16, total_files: u16, loc: u16
 ; declaration over src/ returns zero. The trap is the same search run on the bare WORD: the client
 ; router still carries the word on four LINES (src/ui/routes.rs:57, :58, :61 and :97 -- five
 ; occurrences, four lines, and the constant below counts lines) because the record of
-; the removal lives in comments, exactly as the allowlist witness explains at :176-182. A word
+; the removal lives in comments, exactly as the allowlist witness explains at :177-183 (:176-182
+; until 2026-09-26, re-read 2026-09-29). A word
 ; count is not absence evidence; a declaration count is.
 pub const GARDEN_ROUTE_DECLARATIONS : u16 = 0;
 pub const GARDEN_WORD_HITS_IN_CLIENT_ROUTER : u16 = 4;
@@ -1028,6 +1080,509 @@ pub const LEFTOVERS_2026_09_26_FOLD_WORD_IN_BUNDLE : bool = false;
 pub const LEFTOVERS_2026_09_26_KEY_COUNT_OWNER_ID : str = "turbobaby/locale-policy";
 pub const LEFTOVERS_2026_09_26_WITNESS : str = "tests/no_cannabis_client_wiring.rs";
 
+; --- The legacy footprint, printed and re-added (2026-09-29) --------------------------------------
+; WHY (measured 2026-09-29 at 55a6664). A sweep that calls a file under src/ NAMED when its
+; repo-relative path occurs anywhere in a .t27 found 187 .rs files under src/, 69 of them (6279
+; lines) named by no contract. Twenty-one of the 69 are this file's subject. Eighteen are files of
+; the 25 behind LEGACY_SOURCE_FILE_COUNT -- a list this header described on 2026-09-21 as one that
+; "can be printed and re-added" and never printed, which is the defect SURVEY_LOC_CLAIM_NOTE
+; refuses in someone else's figure. So it is printed here, in the header's own order: the eight
+; screens behind LEGACY_PATHS_DECLARED, in that array's order; the four UI game modules and the set
+; card; the three API modules whose routes make LEGACY_HTTP_ROUTE_COUNT; five entities; and the
+; four trios and db modules of the strain, quest, tea and pack domains. The other seven of the 25
+; were already named by a contract. Lines are counted as gate 3's line_count counts them (Python
+; splitlines), at 55a6664 and, for the reading this file first took, at d1877db.
+; --
+; FIVE OF THE 25 MOVED, and none by a retirement: src/ui/screens/accessories_screen.rs 412 -> 396
+; (52e08e5 on 2026-09-25, ruling #12's client half, and fb5913b on 2026-09-26, the leftovers),
+; src/ui/game/quest.rs 295 -> 296 (8c25988, answer 7's purchase line became a comment),
+; src/api/tech_tree.rs 283 -> 214 (2429012, the empty roadmap of ruling #12's server half),
+; src/ui/game/shop_game.rs 1957 -> 1662 (fb5913b, the farm) and src/api/quest.rs 1097 -> 1123
+; (5279b37, R2). No file of the 25 was deleted: COMPLETED_RETIREMENT_COUNT, seen from the source.
+; --
+; NOT THE WHOLE LEGACY SOURCE. Three files no customer reaches belong to this subject and are not
+; among the 25: two components of the previous shop's goods -- the detail modal the goods screens
+; and the set card open, and the admin set picker -- which the header's set left out while counting
+; the set card beside them, and the module glue that still exports the seven repointed screens.
+; They are named here and counted apart, so the 25 stay the reading they were, and read as a floor
+; of the legacy source rather than its whole.
+pub const FOOTPRINT_PRINTED_AT : str = "2026-09-29";
+pub const FOOTPRINT_PRINTED_AT_COMMIT : str = "55a6664";
+pub const FOOTPRINT_FIRST_READ_AT_COMMIT : str = "d1877db";
+pub const LEGACY_SOURCE_FILES : [25]str = [
+    "src/ui/screens/accessories_screen.rs", "src/ui/screens/tea_screen.rs",
+    "src/ui/screens/quest_screen.rs", "src/ui/screens/game_screen.rs",
+    "src/ui/screens/treasure_hunt_screen.rs", "src/ui/screens/ar_hunt_screen.rs",
+    "src/ui/screens/location_quest_screen.rs", "src/ui/screens/tech_tree_screen.rs",
+    "src/ui/game/mod.rs", "src/ui/game/quest.rs", "src/ui/game/shop_game.rs",
+    "src/ui/game/tech_tree.rs", "src/ui/components/set_card.rs",
+    "src/api/catalog.rs", "src/api/quest.rs", "src/api/tech_tree.rs",
+    "src/db/entities/strain.rs", "src/db/entities/accessory.rs", "src/db/entities/tea_product.rs",
+    "src/db/entities/quest_place.rs", "src/db/entities/treasure_hunt.rs",
+    "src/db/strains.rs", "src/trios/quest.rs", "src/trios/drink_categories.rs", "src/trios/packs.rs",
+];
+pub const LEGACY_SOURCE_FILE_LINES : [25]u16 = [396, 370, 13, 19, 239, 218, 208, 244, 7, 296, 1662, 109, 274, 2029, 1123, 214, 62, 26, 26, 24, 29, 190, 589, 275, 198];
+pub const LEGACY_SOURCE_FILE_LINES_BEFORE_2026_09_25 : [25]u16 = [412, 370, 13, 19, 239, 218, 208, 244, 7, 295, 1957, 109, 274, 2029, 1097, 283, 62, 26, 26, 24, 29, 190, 589, 275, 198];
+pub const FOOTPRINT_SCREEN_FILES : u8 = 8;
+pub const FOOTPRINT_GAME_MODULE_AND_SET_CARD_FILES : u8 = 5;
+pub const FOOTPRINT_API_MODULE_FILES : u8 = 3;
+pub const FOOTPRINT_ENTITY_FILES : u8 = 5;
+pub const FOOTPRINT_DOMAIN_MODULE_FILES : u8 = 4;
+pub const FOOTPRINT_FILES_THAT_MOVED : u8 = 5;
+pub const FOOTPRINT_FILES_DELETED : u8 = 0;
+; The sweep's reading at 55a6664: a dated reading of the whole corpus, deliberately not bound, for
+; the reason CORPUS_FILE_COUNT gives -- it moves whenever any contract names a file.
+pub const SRC_FILES_NAMED_BY_NO_CONTRACT_AT_55A6664 : u8 = 69;
+pub const SRC_LINES_NAMED_BY_NO_CONTRACT_AT_55A6664 : u16 = 6279;
+pub const FOOTPRINT_FILES_NAMED_BY_NO_CONTRACT_AT_55A6664 : u8 = 18;
+pub const FOOTPRINT_FILES_ALREADY_NAMED_AT_55A6664 : u8 = 7;
+pub const LEGACY_FILES_OUTSIDE_THE_FOOTPRINT : [3]str = [
+    "src/ui/components/product_detail_modal.rs", "src/ui/components/id_picker.rs",
+    "src/ui/screens/mod.rs",
+];
+pub const LEGACY_FILES_OUTSIDE_THE_FOOTPRINT_LINES : [3]u16 = [330, 227, 60];
+pub const FILES_NAMED_HERE_ON_2026_09_29 : u8 = 21;
+
+pub fn legacy_source_loc_of_the_list() u16 {
+    var total : u16 = 0;
+    var i : u8 = 0;
+    while (i < LEGACY_SOURCE_FILE_LINES.len) {
+        total += LEGACY_SOURCE_FILE_LINES[i];
+        i += @as(u8, 1);
+    }
+    return total;
+}
+
+pub fn legacy_source_loc_of_the_list_before_2026_09_25() u16 {
+    var total : u16 = 0;
+    var i : u8 = 0;
+    while (i < LEGACY_SOURCE_FILE_LINES_BEFORE_2026_09_25.len) {
+        total += LEGACY_SOURCE_FILE_LINES_BEFORE_2026_09_25[i];
+        i += @as(u8, 1);
+    }
+    return total;
+}
+
+pub fn footprint_files_that_moved() u8 {
+    var moved : u8 = 0;
+    var i : u8 = 0;
+    while (i < LEGACY_SOURCE_FILE_LINES.len) {
+        if (LEGACY_SOURCE_FILE_LINES[i] != LEGACY_SOURCE_FILE_LINES_BEFORE_2026_09_25[i]) {
+            moved += @as(u8, 1);
+        }
+        i += @as(u8, 1);
+    }
+    return moved;
+}
+
+; --- How each named file is built and reached, in this file's own states ----------------------------
+; BUILD (at 55a6664). Fifteen of the 21 are UI files, and every UI file is compiled for the browser
+; only: the ui half sits behind turbobaby/webapp-bridge's WASM_GATE_SITE, and the host build that
+; `cargo test` runs compiles none of it (that owner's HOST_SUITE_COMPILES_THIS_HALF), so it compiles
+; none of the fifteen, and what guards them is the tests that read them as text (tests/rental_only_wiring.rs, tests/no_cannabis_client_wiring.rs). The five
+; entities compile with the server (src/lib.rs:107-108, src/main.rs:12-13) and src/trios/packs.rs
+; with both halves (src/lib.rs:13, src/main.rs:40); those six are the only ones a Rust test compiles.
+; CORRECTED 2026-09-30 (review of round 7): the first sentence cited the wasm32 gate itself, by its
+; lines in src/lib.rs, and did not name its owner. NAMED_UI_FILES_COMPILE_ON_THE_HOST below is this
+; file's reading of the owner's premise for its fifteen files, not a second copy of the gate.
+; --
+; REACH. A component is not a surface: it is reached exactly when a screen that mounts it is, and
+; that is the whole of the reach input the machine is given for one (component_is_reachable). Each
+; group below then runs through retirement_state on its OWN inputs, as the answers of 2026-09-24 and
+; 2026-09-25 were, and the precedence decides as it always does. None of the 21 is a completed
+; retirement, and none of the states below is new: each is one this file already declared.
+; Every src/ and tests/ line cited from here to the tests was opened on 2026-09-29 at 55a6664.
+pub const NAMED_UI_FILES : u8 = 15;
+pub const NAMED_SERVER_OR_SHARED_FILES : u8 = 6;
+pub const NAMED_UI_FILES_COMPILE_ON_THE_HOST : bool = false;
+pub const NAMED_UI_FILES_BUILD_PREMISE_OWNER_DECLS : [2]str = ["WASM_GATE_SITE", "HOST_SUITE_COMPILES_THIS_HALF"];
+
+pub fn component_is_reachable(reachable_mounters: u8) bool {
+    return reachable_mounters > 0;
+}
+
+; THE GOODS, five files, STATE_DATA_HIDDEN -- the goods state of the answer of 2026-09-25. No
+; customer reaches any of them, and every row they can show sits in a table 085 hid: the accessories
+; screen reads accessories (HIDDEN_TABLES[1]) through GET /api/accessories at
+; src/ui/screens/accessories_screen.rs:93, the tea screen reads tea_products (HIDDEN_TABLES[3])
+; through GET /api/tea-products at src/ui/screens/tea_screen.rs:67 -- both public reads of the
+; legacy catalog router, which serves them only is_available rows (src/api/catalog.rs:123 for the
+; first) -- the set card renders sets (HIDDEN_TABLES[5]), the detail modal shows only what those
+; three mount it with, and the admin set picker was built to compose sets, accessory_sets and
+; tea_sets and is mounted by nothing.
+pub const GOODS_FILES : [5]str = [
+    "src/ui/screens/accessories_screen.rs", "src/ui/screens/tea_screen.rs",
+    "src/ui/components/set_card.rs", "src/ui/components/product_detail_modal.rs",
+    "src/ui/components/id_picker.rs",
+];
+pub const GOODS_FILES_REACHABLE_MOUNTERS : u8 = 0;
+pub const GOODS_FILES_ROWS_HIDDEN : bool = true;
+pub const GOODS_FILES_STATE : u8 = 1;
+pub const GOODS_SCREEN_READS : [2]str = ["GET /api/accessories", "GET /api/tea-products"];
+; The accessories screen's filter chips (src/ui/screens/accessories_screen.rs:77). Ten until ruling
+; #12: its client half cut four paraphernalia chips on 2026-09-25 (the four chips beside the
+; subtitle in CANNABIS_RULING_I18N_KEYS_DELETED_RENDERED) and the leftovers cut two more the next
+; day (LEFTOVERS_2026_09_26_PARAPHERNALIA_KEYS), leaving four. Only the survivors are spelled.
+pub const ACCESSORIES_SCREEN_CATEGORIES : [4]str = ["All", "Clothing", "Souvenir", "Other"];
+pub const ACCESSORIES_SCREEN_CATEGORY_COUNT_BEFORE_2026_09_25 : u8 = 10;
+pub const ACCESSORIES_SCREEN_CHIPS_CUT_BY_RULING_12 : u8 = 4;
+; What the goods files would write if anything mounted them. Six cart writes -- the accessories
+; screen at :257 and :373, the tea screen at :286 and :352, the set card at :206 and :250 -- of three
+; of the four kinds the client's cart type knows (Strain, Accessory, Tea, Set, in src/ui/state.rs).
+; None of the four is served: the one kind a cart serves is turbobaby/cart-persistence's
+; SERVED_CART_KINDS, not restated here. And three share sites -- the accessories screen at :262, the
+; tea screen at :357, the set card at :255 -- each for a row 085 hid, which the share card answers
+; not found since the ruling of 2026-09-25 (OWNER_RULING_2026_09_25_SERVER_SURFACES[3]).
+pub const LEGACY_CART_WRITE_SITES : u8 = 6;
+pub const LEGACY_CART_KINDS_WRITTEN : [3]str = ["Accessory", "Tea", "Set"];
+pub const CLIENT_CART_KIND_COUNT : u8 = 4;
+pub const CLIENT_CART_KINDS_SERVED : u8 = 0;
+pub const SERVED_CART_KINDS_OWNER_DECL : str = "SERVED_CART_KINDS";
+pub const LEGACY_SHARE_SITES : u8 = 3;
+; THE DETAIL MODAL (src/ui/components/product_detail_modal.rs). Mounted three times -- by
+; src/ui/screens/accessories_screen.rs:242, src/ui/screens/tea_screen.rs:331 and
+; src/ui/components/set_card.rs:231 -- and by nothing a customer reaches. It is the only mounter of
+; ImageLightbox (:323), so the lightbox is reached by no live route either. It still carries the
+; previous shop's cafe fulfilment: it imports T_FULFILLMENT_DINE_IN and T_FULFILLMENT_TAKEAWAY
+; (:21-24) for the two options the tea screen passes it (src/ui/screens/tea_screen.rs:342, takeaway
+; the default at :54). A rental's fulfilment is turbobaby/commerce's FULFILLMENT_NAMES, another
+; vocabulary, not restated here. Its doc (:15-19) records that the reviews and lab-certificate
+; sections went with their tables -- the strain reviews and lab certificates 083 dropped. Its media
+; guard is_usable_src (:96-101) is one of the hand copies turbobaby/ui-kit counts in
+; MEDIA_PREDICATE_SITES, and what it admits is that owner's media_url_is_shown. The one thing the
+; copy adds is an emptiness test in front (:97), and it changes no answer: an empty address starts
+; with none of the admitted prefixes. CORRECTED 2026-09-30 (review of round 7): until then this
+; paragraph read "accepts three prefixes and refuses the protocol-relative one", and the prefixes
+; were declared here as MODAL_USABLE_SRC_PREFIXES and MODAL_REFUSED_SRC_PREFIX, a second copy of the
+; kit's predicate with no tie to it. The copy goes and the owner stays: both names are listed in
+; RESTATEMENT_DROPPED_ON_2026_09_30, so a grep for either lands here.
+pub const PRODUCT_DETAIL_MODAL_MOUNTERS : [3]str = [
+    "src/ui/screens/accessories_screen.rs", "src/ui/screens/tea_screen.rs",
+    "src/ui/components/set_card.rs",
+];
+pub const PRODUCT_DETAIL_MODAL_MOUNTS : u8 = 3;
+pub const PRODUCT_DETAIL_MODAL_REACHABLE_MOUNTERS : u8 = 0;
+pub const PRODUCT_DETAIL_MODAL_IS_THE_ONLY_LIGHTBOX_MOUNTER : bool = true;
+pub const LEGACY_FULFILLMENT_OPTIONS : [2]str = ["dine_in", "takeaway"];
+pub const LEGACY_FULFILLMENT_DEFAULT : str = "takeaway";
+pub const LIVE_FULFILLMENT_OWNER_DECL : str = "FULFILLMENT_NAMES";
+pub const MODAL_SECTIONS_GONE_WITH_DROPPED_TABLES : [2]str = ["lab_certificates", "strain_reviews"];
+pub const MODAL_MEDIA_GUARD_SITE : str = "src/ui/components/product_detail_modal.rs:96-101 (at 55a6664)";
+pub const MODAL_MEDIA_GUARD_OWNER_DECLS : [2]str = ["media_url_is_shown", "MEDIA_PREDICATE_SITES"];
+pub const MODAL_MEDIA_GUARD_ADDS_AN_EMPTINESS_TEST : bool = true;
+pub const MODAL_MEDIA_GUARD_EMPTINESS_TEST_CHANGES_AN_ANSWER : bool = false;
+pub const RESTATEMENT_DROPPED_ON_2026_09_30 : [2]str = ["MODAL_USABLE_SRC_PREFIXES", "MODAL_REFUSED_SRC_PREFIX"];
+; THE SET CARD (src/ui/components/set_card.rs). render_uniform_set_card (:58) has no caller -- its
+; one other occurrence is the components module's re-export -- and /sets renders the catalog with
+; its screen deleted (REPOINTED_WITH_THE_SCREEN_DELETED). SetCardData (:20-35) holds fourteen
+; fields, among them strain_count and total_weight_grams, the pack wire fields src/api/catalog.rs
+; still emits. Its price is a plain f64 (:27), so an absent price has no form, and effective_price
+; (:38-50) maps a non-finite or negative total to 0.0: a confident zero where
+; turbobaby/pricing-honesty's rate_present refuses every price that is not finite and strictly
+; positive. Nobody sees it, because nothing mounts the card; it is recorded so that remounting the
+; card is not mistaken for a clean surface. Its doc (:3) and the comment at :90-93 point at
+; sets_screen.rs, which src/ui/screens no longer holds.
+pub const SET_CARD_CALLERS : u8 = 0;
+pub const SET_CARD_DATA_FIELD_COUNT : u8 = 14;
+pub const SET_CARD_PRICE_CAN_BE_ABSENT : bool = false;
+pub const SET_CARD_NON_POSITIVE_OR_NON_FINITE_PRICE_BECOMES_ZERO : bool = true;
+pub const SET_CARD_PRICE_RULE_OWNER_DECL : str = "rate_present";
+pub const SET_CARD_DOC_NAMES_A_DELETED_SCREEN : bool = true;
+; THE ADMIN SET PICKER (src/ui/components/id_picker.rs). IdPicker has no mount: it occurs in its own
+; file and in the components module's re-export only, and src/ui/screens/admin_screen.rs holds no
+; set tab any more (neither accessory-sets nor tea-sets occurs there). Its doc (:3-7) says it
+; replaced a comma-separated ID textarea on the Sets, Accessory Sets and Tea Sets tabs -- the three
+; set tables 085 hid. A pure component: no route, no API call, a list capped at 240px (:172).
+pub const ID_PICKER_MOUNTS : u8 = 0;
+pub const ID_PICKER_BUILT_FOR_TABLES : [3]str = ["sets", "accessory_sets", "tea_sets"];
+pub const ID_PICKER_CALLS_AN_API : bool = false;
+pub const ID_PICKER_LIST_MAX_HEIGHT_PX : u16 = 240;
+pub const ADMIN_SCREEN_SET_TABS : u8 = 0;
+
+pub fn set_card_price_shown(total_thb: i32, total_is_finite: bool) i32 {
+    if (!total_is_finite) {
+        return 0;
+    }
+    if (total_thb < 0) {
+        return 0;
+    }
+    return total_thb;
+}
+
+; THE PREVIOUS SHOP'S GAME, ITS HUNTS AND BOTH TECH TREES, six files, STATE_LIVE -- which here says
+; only that no data moved (OWNER_ANSWER_OTHER_STATE, and TECH_TREE_STATE for the tech tree's rows,
+; masked on read). No customer reaches any of them: /game, /treasure-hunt, /ar-hunt,
+; /location-quest and /tech-tree render the catalog (LEGACY_PATHS_REPOINTED_ON_2026_09_25),
+; src/ui/screens/game_screen.rs mounts only WoodyShop (:15) and BottomNav (:16), and
+; src/ui/game/tech_tree.rs has no caller at all.
+pub const UNROUTED_NON_GOODS_FILES : [6]str = [
+    "src/ui/screens/game_screen.rs", "src/ui/screens/treasure_hunt_screen.rs",
+    "src/ui/screens/ar_hunt_screen.rs", "src/ui/screens/location_quest_screen.rs",
+    "src/ui/screens/tech_tree_screen.rs", "src/ui/game/tech_tree.rs",
+];
+pub const UNROUTED_NON_GOODS_REACHABLE_MOUNTERS : u8 = 0;
+pub const UNROUTED_NON_GOODS_ROWS_HIDDEN : bool = false;
+pub const UNROUTED_NON_GOODS_STATE : u8 = 0;
+; The hunts. The three hunt screens make four reads, and every one is a read R2 closed to customers
+; (OWNER_R2_CLOSED_READS): src/ui/screens/treasure_hunt_screen.rs:38 (treasure hunts) and :56 (quest
+; places) through fetch_text, src/ui/screens/ar_hunt_screen.rs:52 and
+; src/ui/screens/location_quest_screen.rs:59 (quest places) through fetch_text_full. Neither helper
+; attaches a header (src/ui/api/http.rs:26 and :73), and a caller without admin proof is answered
+; the missing-route 404 (src/api/quest.rs:67 and :261). So even remounted, these screens could show
+; only their error banners. Three of their buttons open the kept quest -- the treasure hunt at :174
+; and :228, the location quest at :197 -- the three navigations to it no customer can press.
+pub const HUNT_SCREEN_READS : [4]str = [
+    "GET /api/treasure-hunts", "GET /api/quest-places", "GET /api/quest-places", "GET /api/quest-places",
+];
+pub const HUNT_SCREEN_READS_SENDING_ADMIN_PROOF : u8 = 0;
+pub const TREASURE_HUNT_SCREEN_READ_PATHS : [2]str = ["/api/treasure-hunts", "/api/quest-places"];
+pub const HUNT_SCREENS_COULD_ONLY_SHOW_ERRORS_IF_REMOUNTED : bool = true;
+; The tech trees, two different things under one word. src/ui/screens/tech_tree_screen.rs reads
+; GET /api/tech-tree/nodes (:64), which answers an empty roadmap since ruling #12's server half
+; (src/api/tech_tree.rs:30-31), and posts a node completion with the admin token (:224-225).
+; src/ui/game/tech_tree.rs is a static TECH_TREE of five growing-themed nodes (:12-48) and a TechTree
+; component (:85), neither with a caller; the router's fn TechTree is a separate handler of the same
+; name. None of its words is in the shipped bundle: 'Master Grower', 'Basic Growing' and
+; 'basic_grow' each give 0 in dist/turbobaby-bot-c57e443e55dc3495_bg.wasm (grep -c -a -F,
+; 2026-09-29). It outlived the leftovers review of 2026-09-26 because that guard's FARM_WORDS_EN
+; (tests/no_cannabis_client_wiring.rs:969) holds four farm words and none of these. Whether a
+; growing-themed tech tree is copy ruling #12 reaches is NOT decided here, as the tea fold's word
+; was not (LEFTOVERS_2026_09_26_FOLD_WORD_IN_BUNDLE): recorded, out of the bundle, left.
+pub const TECH_TREE_SCREEN_READ : str = "GET /api/tech-tree/nodes";
+pub const GROW_TECH_TREE_NODE_IDS : [5]str = ["basic_grow", "soil_boost", "led_lights", "auto_water", "master_grower"];
+pub const GROW_TECH_TREE_NODE_COSTS : [5]u16 = [10, 25, 75, 50, 200];
+pub const GROW_TECH_TREE_TOTAL_COST : u16 = 360;
+pub const GROW_TECH_TREE_CALLERS : u8 = 0;
+pub const GROW_TECH_TREE_IN_BUNDLE : bool = false;
+pub const FARM_GUARD_WORD_COUNT : u8 = 4;
+pub const GROW_TECH_TREE_WORDS_THE_FARM_GUARD_MATCHES : u8 = 0;
+pub const GROW_TECH_TREE_RULING_12_REACH_IS_DECIDED_HERE : bool = false;
+
+pub fn read_is_closed_by_r2(route: str) bool {
+    var i : u8 = 0;
+    while (i < OWNER_R2_CLOSED_READS.len) {
+        if (OWNER_R2_CLOSED_READS[i] == route) {
+            return true;
+        }
+        i += @as(u8, 1);
+    }
+    return false;
+}
+
+pub fn hunt_reads_closed_by_r2() u8 {
+    var closed : u8 = 0;
+    var i : u8 = 0;
+    while (i < HUNT_SCREEN_READS.len) {
+        if (read_is_closed_by_r2(HUNT_SCREEN_READS[i])) {
+            closed += @as(u8, 1);
+        }
+        i += @as(u8, 1);
+    }
+    return closed;
+}
+
+pub fn grow_tech_tree_total_cost() u16 {
+    var total : u16 = 0;
+    var i : u8 = 0;
+    while (i < GROW_TECH_TREE_NODE_COSTS.len) {
+        total += GROW_TECH_TREE_NODE_COSTS[i];
+        i += @as(u8, 1);
+    }
+    return total;
+}
+
+; THE KEPT QUEST, two files, STATE_SURFACE_LIVE (OWNER_ANSWER_KEPT_QUEST_STATE). /quest/:id mounts
+; src/ui/screens/quest_screen.rs through LazyScreen (src/ui/routes.rs:62, fn Quest at :257-263), and
+; the profile links to it (src/ui/screens/profile_screen.rs:956, the id "daily") -- the one
+; navigation to it a customer can press, of the four in src/ui. QuestScreen takes the id (:6) and
+; never reads it: it renders Quest {} (:9) with no prop, so every id opens the same screen.
+; src/ui/game/quest.rs is that screen. What it holds, at 55a6664:
+;   * the scan: POST /api/quest/scan (:105) with the Telegram init data (post_json_authed, :107),
+;     after polling for the scanned text 120 times at 500 ms (:79-80), a sixty-second window;
+;   * a cap on the scanned text (:100-104) that DECIDES on token.len(), which is bytes, and
+;     TRUNCATES with chars().take(200), which is characters. The server's bound is
+;     turbobaby/validation-bounds' LIVE_TOKEN_MAX_CHARS, measured in bytes there
+;     (LIVE_TOKEN_LENGTH_IS_MEASURED_IN_BYTES), and is not restated here. So the cap its comment
+;     says mirrors the backend does not: a text of multibyte characters over the cap in bytes but
+;     not in characters keeps every character, stays over the bound, and is refused
+;     (quest_token_bytes_after_client_cap). DEFECT, measured 2026-09-29, not fixed;
+;   * five checkpoints from src/trios/quest.rs (get_checkpoints, :368-376), each shown with a reward
+;     of id times 10 (the multiplier at src/trios/quest.rs:345) in a unit spelled BAT in a literal at
+;     :258 -- 10 to 50, 150 over the quest -- and on completion the keys T_REWARD_CLAIM and T_REWARD
+;     (:179, :182). The reward line is a literal in code; T_QUEST_REWARD_BAT, the key that
+;     translates the same text (src/trios/i18n.rs:430, :1094, :1694), is rendered by no screen;
+;   * progress is a client signal (:30), advanced by one on ANY successful scan (:116) and stored
+;     nowhere. The server's scan (src/api/quest.rs:628-690) runs one SELECT that matches any active
+;     location's token (:646), notifies the admins (:670) and answers success with the location; it
+;     writes no row and credits nothing. MEASURED 2026-09-29: the reward the screen promises is
+;     backed by nothing in this repository -- no BAT balance, table or credit exists under src/ or
+;     migrations/ -- and one QR code scanned five times completes the quest. DEFECT, recorded, not
+;     fixed: whether the quest should credit anything is the owner's, and the owner kept the screen
+;     as it is (OWNER_ANSWER_KEEPS_THE_QUEST);
+;   * its loading branch (:218-222) is dead: the signal it reads (:33) is never set.
+pub const KEPT_QUEST_FILES : [2]str = ["src/ui/screens/quest_screen.rs", "src/ui/game/quest.rs"];
+pub const KEPT_QUEST_FILES_STATE : u8 = 2;
+pub const QUEST_SCREEN_READS_ITS_ID : bool = false;
+pub const QUEST_ROUTE_NAVIGATIONS : u8 = 4;
+pub const QUEST_ROUTE_NAVIGATIONS_A_CUSTOMER_CAN_PRESS : u8 = 1;
+pub const QUEST_SCAN_ROUTE : str = "POST /api/quest/scan";
+pub const QUEST_SCAN_SENDS_INIT_DATA : bool = true;
+pub const QUEST_SCAN_POLL_TRIES : u16 = 120;
+pub const QUEST_SCAN_POLL_MS : u16 = 500;
+pub const QUEST_SCAN_WINDOW_MS : u16 = 60000;
+pub const QUEST_CLIENT_TOKEN_CAP : u16 = 200;
+pub const QUEST_CLIENT_CAP_DECIDES_IN_BYTES : bool = true;
+pub const QUEST_CLIENT_CAP_TRUNCATES_IN_CHARS : bool = true;
+pub const QUEST_CLIENT_CAP_GUARANTEES_THE_SERVER_BOUND : bool = false;
+pub const QUEST_SERVER_TOKEN_BOUND_OWNER_DECL : str = "LIVE_TOKEN_MAX_CHARS";
+pub const QUEST_SERVER_TOKEN_UNIT_OWNER_DECL : str = "LIVE_TOKEN_LENGTH_IS_MEASURED_IN_BYTES";
+pub const QUEST_CHECKPOINT_COUNT : u8 = 5;
+pub const QUEST_REWARD_PER_CHECKPOINT_ID : u16 = 10;
+pub const QUEST_REWARD_UNIT : str = "BAT";
+pub const QUEST_DISPLAYED_REWARD_TOTAL : u16 = 150;
+pub const QUEST_COMPLETION_KEYS : [2]str = ["T_REWARD_CLAIM", "T_REWARD"];
+pub const QUEST_REWARD_LINE_KEY : str = "T_QUEST_REWARD_BAT";
+pub const QUEST_REWARD_LINE_USES_ITS_KEY : bool = false;
+pub const QUEST_SCAN_HANDLER_WRITES : u8 = 0;
+pub const QUEST_REWARD_IS_CREDITED : bool = false;
+pub const QUEST_REWARD_LEDGER_IS_PUBLISHED : bool = false;
+pub const QUEST_REWARD_LEDGER_NOTE : str = "No ledger backs the quest's reward. The screen shows id times 10 BAT per checkpoint and a claim line on completion; the scan handler writes no row; the unit BAT is spelled under src/ only in that screen's literal and in the two translations of one key no screen renders (the checkpoint model's field is reward_bat), and under migrations/ not at all. What is missing is the owner's answer to whether a kept quest credits anything, and in what; no amount, unit or ledger is invented here.";
+pub const QUEST_PROGRESS_IS_PERSISTED : bool = false;
+pub const QUEST_SCAN_IS_TIED_TO_A_CHECKPOINT : bool = false;
+pub const QUEST_LOADING_BRANCH_IS_REACHABLE : bool = false;
+pub const QUEST_DEFECTS_RECORDED_2026_09_29 : u8 = 3;
+
+pub fn quest_token_bytes_after_client_cap(token_bytes: u16, bytes_per_char: u16) u16 {
+    if (token_bytes <= QUEST_CLIENT_TOKEN_CAP) {
+        return token_bytes;
+    }
+    if (bytes_per_char == 0) {
+        return token_bytes;
+    }
+    const chars = token_bytes / bytes_per_char;
+    if (chars <= QUEST_CLIENT_TOKEN_CAP) {
+        return token_bytes;
+    }
+    return QUEST_CLIENT_TOKEN_CAP * bytes_per_char;
+}
+
+pub fn quest_reward_for_checkpoint(id: u8) u16 {
+    return @as(u16, id) * QUEST_REWARD_PER_CHECKPOINT_ID;
+}
+
+pub fn quest_displayed_reward_total() u16 {
+    var total : u16 = 0;
+    var id : u8 = 1;
+    while (id <= QUEST_CHECKPOINT_COUNT) {
+        total += quest_reward_for_checkpoint(id);
+        id += @as(u8, 1);
+    }
+    return total;
+}
+
+pub fn quest_completes(successful_scans: u8, distinct_locations: u8) bool {
+    return successful_scans >= QUEST_CHECKPOINT_COUNT;
+}
+
+; THE PACK MODULE (src/trios/packs.rs), STATE_SURFACE_LIVE. Not a screen: the badge rule behind
+; GET, POST and PUT /api/sets (src/api/catalog.rs:54-58, the router merged at src/api/mod.rs:89),
+; called there four times -- the read filters at :1170 and :1353, the write check at :1422 that
+; answers 400 on a badge it does not know, and the normaliser at :1434. GET /api/sets answers any
+; caller, and every row it could list sits in sets, accessory_sets or tea_sets, which 085 hid, so
+; it answers an empty list. The machine does not read content, and fed that true input --
+; reachable, rows hidden -- it answers STATE_SURFACE_LIVE: a hidden row never retires a reachable
+; surface, this file's first rule, in one file. Its client callers are
+; src/ui/components/set_card.rs:87 and :96, which nothing calls. PackBadge has four variants
+; (:18-23) and four accepted stored values (:56-61), an unknown or empty value parses to none
+; (:29-35), and six unit tests sit at :134-186. Its doc (:3) calls a pack a row of the sets table.
+pub const PACK_MODULE_FILE : str = "src/trios/packs.rs";
+pub const PACK_MODULE_ROUTE_REACHABLE : bool = true;
+pub const PACK_MODULE_ROWS_HIDDEN : bool = true;
+pub const PACK_MODULE_STATE : u8 = 2;
+pub const PACK_BADGE_VALUES : [4]str = ["none", "sale", "special", "limited"];
+pub const PACK_BADGE_UNKNOWN_PARSES_TO : str = "none";
+pub const PACK_SERVER_CALL_SITES : u8 = 4;
+pub const PACK_CLIENT_CALL_SITES : u8 = 2;
+pub const PACK_CLIENT_CALL_SITES_REACHED : u8 = 0;
+pub const PACK_UNIT_TESTS : u8 = 6;
+pub const PACK_TABLE : str = "sets";
+
+; THE FIVE ENTITIES, each a SeaORM mirror of one legacy table, compiled with the server. Each runs
+; through the machine as a reader and never as a surface: no customer reaches an entity except
+; through a route that reads it.
+;   * src/db/entities/strain.rs mirrors strains (DROPPED_TABLES[2]), 30 fields (:13-56). Three files
+;     read it: src/api/cart.rs (:166 and :170, the cart line of kind strain), src/db/mod.rs
+;     (:1043-1046) and src/db/strains.rs (:127 and :169). It is itself one of the four allowlist
+;     paths (tests/retired_table_wiring.rs:51-52), so it is the STATE_READER_ALLOWLISTED case this
+;     file already classified (RETIRED_READER_STATE_AFTER_THE_2026_09_25_RULING), not re-decided.
+;   * src/db/entities/accessory.rs and src/db/entities/tea_product.rs mirror accessories and
+;     tea_products (HIDDEN_TABLES[1] and [3]), 10 fields each; their one reader is the cart-line
+;     lookup in src/api/cart.rs (:200 and :215), which keeps is_available rows only.
+;   * src/db/entities/quest_place.rs mirrors quest_places, 9 fields, and has no reader. Whether the
+;     entity guard excuses it is turbobaby/schema-provenance's ENTITY_GUARD_ALLOWLIST, which names it
+;     today; the reason the guard's list gives is that src/api/quest.rs reads that table in raw SQL.
+;     src/db/entities/treasure_hunt.rs mirrors treasure_hunts, 14 fields, has no reader either, and
+;     is on no allowlist: it passes the guard on spelling alone, which is the same owner's
+;     ENTITY_MODULES_PASSING_ON_SPELLING_ALONE_NAMES, through the word match its
+;     ENTITY_GUARD_MATCHES_A_WORD_NOT_A_PATH records, at the one site its TREASURE_HUNT_ONLY_MATCH
+;     names. MEASURED 2026-09-29 in both lanes: a false green in that guard -- an unwired entity
+;     reads as wired -- recorded, not fixed. Neither table was hidden or dropped, and both public
+;     reads over them answer customers the missing-route 404 since R2 (OWNER_R2_CLOSED_READS[0] and
+;     [1]). CORRECTED 2026-09-30 (review of round 7): until then this bullet re-described the guard's
+;     allowlist and word match in its own words, with their lines in src/db/mod.rs and
+;     src/trios/i18n.rs; those facts are the guard owner's and are read here by the names above.
+pub const LEGACY_ENTITY_FILES : [5]str = [
+    "src/db/entities/strain.rs", "src/db/entities/accessory.rs", "src/db/entities/tea_product.rs",
+    "src/db/entities/quest_place.rs", "src/db/entities/treasure_hunt.rs",
+];
+pub const LEGACY_ENTITY_TABLES : [5]str = ["strains", "accessories", "tea_products", "quest_places", "treasure_hunts"];
+pub const LEGACY_ENTITY_FIELD_COUNTS : [5]u8 = [30, 10, 10, 9, 14];
+pub const STRAIN_ENTITY_FIELD_COUNT : u8 = 30;
+pub const LEGACY_ENTITY_READER_FILES : [5]u8 = [3, 1, 1, 0, 0];
+pub const LEGACY_ENTITY_STATES : [5]u8 = [3, 1, 1, 0, 0];
+pub const STRAIN_ENTITY_IS_AN_ALLOWLIST_PATH : bool = true;
+pub const QUEST_PLACE_ENTITY_IS_ALLOWLISTED_UNWIRED : bool = true;
+pub const TREASURE_HUNT_ENTITY_PASSES_THE_WIRING_TEST_BY_A_KEY_STRING : bool = true;
+; RECONCILED 2026-09-29 at the integration of round 7: the flag above is this file's reason for
+; resting the mirror's state on LEGACY_ENTITY_READER_FILES[4] == 0 rather than on the guard's
+; green. The guard and its defect are turbobaby/schema-provenance's, read by these two names.
+; RECONCILED AGAIN 2026-09-30 at the review of round 7: the integration read only half of the guard.
+; QUEST_PLACE_ENTITY_IS_ALLOWLISTED_UNWIRED is not a second allowlist; it is this file's reading, on
+; 2026-09-29, of the owner's ENTITY_GUARD_ALLOWLIST, which gate 3 binds to the guard's list in
+; src/db/mod.rs. The day quest_place leaves that list, the owner's row goes red and this flag is
+; corrected in the same change; the quest mirror's state never rested on it, it rests on
+; LEGACY_ENTITY_READER_FILES[3] == 0. The five names below are what this file reads of the guard,
+; and the two of 2026-09-29 stay as ENTITY_GUARD_DECLARATIONS_READ_BEFORE_2026_09_30.
+pub const ENTITY_GUARD_OWNER_ID : str = "turbobaby/schema-provenance";
+pub const QUEST_PLACE_ALLOWLIST_OWNER_DECL : str = "ENTITY_GUARD_ALLOWLIST";
+pub const ENTITY_GUARD_DECLARATIONS_READ : [5]str = ["ENTITY_MODULES_PASSING_ON_SPELLING_ALONE_NAMES", "ENTITY_GUARD_DEFECT_IS_FIXED", "ENTITY_GUARD_ALLOWLIST", "ENTITY_GUARD_MATCHES_A_WORD_NOT_A_PATH", "TREASURE_HUNT_ONLY_MATCH"];
+pub const ENTITY_GUARD_DECLARATIONS_READ_BEFORE_2026_09_30 : [2]str = ["ENTITY_MODULES_PASSING_ON_SPELLING_ALONE_NAMES", "ENTITY_GUARD_DEFECT_IS_FIXED"];
+
+pub fn entity_state(table_dropped: bool, reader_files: u8, table_hidden: bool) u8 {
+    return retirement_state(false, table_dropped, reader_files > 0, table_hidden);
+}
+
+; THE GLUE, two files with no state of their own. src/ui/screens/mod.rs declares 22 screen modules
+; (:4-37) and re-exports 22 (:39-60); seven of the re-exports are the seven repointed legacy
+; screens (:39, :41, :47, :49, :58, :59, :60) -- the export end of "the seven screens stay compiled
+; and exported" above, and of UNMOUNTED_ON_2026_09_25 in tests/rental_only_wiring.rs -- and no file
+; under src/ui mounts one of them. It also carries the notes on the bike-detail orphan (:7-13) and
+; on the deleted questionnaire screen (:29-33). src/ui/game/mod.rs declares three game modules
+; (:1-3) -- the kept quest, the previous shop's game and the growing-themed tech tree, all three in
+; the footprint -- and re-exports five names from them (:5-7), of which only Quest reaches a
+; customer, through QuestScreen.
+pub const GLUE_FILES : [2]str = ["src/ui/screens/mod.rs", "src/ui/game/mod.rs"];
+pub const SCREEN_MODULE_DECLARATIONS : u8 = 22;
+pub const SCREEN_MODULE_EXPORT_LINES : u8 = 22;
+pub const REPOINTED_LEGACY_SCREEN_EXPORTS : [7]str = [
+    "AccessoriesScreen", "ARHuntScreen", "GameScreen", "LocationQuestScreen", "TeaScreen",
+    "TechTreeScreen", "TreasureHuntScreen",
+];
+pub const REPOINTED_LEGACY_SCREEN_MOUNTS : u8 = 0;
+pub const GAME_MODULES : [3]str = ["quest", "shop_game", "tech_tree"];
+pub const GAME_MODULE_EXPORTED_NAMES : u8 = 5;
+pub const GAME_MODULE_EXPORTS_REACHING_A_CUSTOMER : u8 = 1;
+
 ; --- Tests -----------------------------------------------------------------------------------------
 
 test the_three_partial_states_are_named_and_the_value_set_is_closed {
@@ -1208,9 +1763,16 @@ test the_legacy_http_route_total_is_the_sum_of_its_three_modules {
 }
 
 test the_footprint_is_a_list_that_can_be_re_added {
-    assert TOTAL_SOURCE_FILE_COUNT == 182;
+    // 182 until 2026-09-26 and 9193 until 2026-09-25; both re-measured at 55a6664 on 2026-09-29.
+    assert TOTAL_SOURCE_FILE_COUNT == 187;
+    assert TOTAL_SOURCE_FILE_COUNT_BEFORE_2026_09_26 == 182;
+    assert TOTAL_SOURCE_FILE_COUNT > TOTAL_SOURCE_FILE_COUNT_BEFORE_2026_09_26;
     assert LEGACY_SOURCE_FILE_COUNT == 25;
-    assert LEGACY_SOURCE_LOC == 9193;
+    assert LEGACY_SOURCE_LOC == 8840;
+    assert LEGACY_SOURCE_LOC_BEFORE_2026_09_25 == 9193;
+    assert legacy_source_loc_of_the_list() == LEGACY_SOURCE_LOC;
+    assert legacy_source_loc_of_the_list_before_2026_09_25() == LEGACY_SOURCE_LOC_BEFORE_2026_09_25;
+    assert legacy_footprint_is_measured(LEGACY_SOURCE_FILE_COUNT, TOTAL_SOURCE_FILE_COUNT_BEFORE_2026_09_26, LEGACY_SOURCE_LOC_BEFORE_2026_09_25) == true;
     assert legacy_footprint_is_measured(LEGACY_SOURCE_FILE_COUNT, TOTAL_SOURCE_FILE_COUNT, LEGACY_SOURCE_LOC) == true;
     assert legacy_footprint_is_measured(0, TOTAL_SOURCE_FILE_COUNT, LEGACY_SOURCE_LOC) == false;
     assert legacy_footprint_is_measured(LEGACY_SOURCE_FILE_COUNT, TOTAL_SOURCE_FILE_COUNT, 0) == false;
@@ -1297,9 +1859,29 @@ test the_reuse_edges_are_named_and_no_sibling_decision_is_restated {
     assert REUSES_RIDE_GAME_ID == "turbobaby/ride-game";
     assert REUSES_EVENTS_BOOKING_ID == "turbobaby/events-booking";
     assert REUSES_COMMERCE_ID == "turbobaby/commerce";
-    // 7 until 2026-09-24.
-    assert REUSE_EDGE_COUNT == 9;
+    assert REUSES_VALIDATION_BOUNDS_ID == "turbobaby/validation-bounds";
+    assert REUSES_CART_PERSISTENCE_ID == "turbobaby/cart-persistence";
+    assert REUSES_PRICING_HONESTY_ID == "turbobaby/pricing-honesty";
+    assert REUSES_SCHEMA_PROVENANCE_ID == "turbobaby/schema-provenance";
+    assert REUSES_SCHEMA_PROVENANCE_ID != ID;
+    // The cart owner was already named here for answer 3's reconciliation; the edge is the same.
+    assert REUSES_CART_PERSISTENCE_ID == OWNER_ANSWER_3_CART_RULE_OWNER_ID;
+    assert REUSES_VALIDATION_BOUNDS_ID != ID;
+    assert REUSES_PRICING_HONESTY_ID != ID;
+    // 7 until 2026-09-24, 9 until 2026-09-29, 12 in the round-7 lane before its integration,
+    // 13 until the review of 2026-09-30.
+    assert REUSE_EDGE_COUNT == 15;
+    assert REUSE_EDGE_COUNT_BEFORE_2026_09_30 == 13;
+    assert REUSE_EDGE_COUNT_BEFORE_THE_ROUND_7_INTEGRATION == 12;
+    assert REUSE_EDGE_COUNT_BEFORE_2026_09_29 == 9;
     assert REUSE_EDGE_COUNT_BEFORE_2026_09_24 == 7;
+    assert REUSE_EDGE_COUNT_BEFORE_2026_09_30 == REUSE_EDGE_COUNT_BEFORE_2026_09_29 + 4;
+    assert REUSE_EDGE_COUNT_BEFORE_2026_09_30 == REUSE_EDGE_COUNT_BEFORE_THE_ROUND_7_INTEGRATION + 1;
+    assert REUSE_EDGE_COUNT == REUSE_EDGE_COUNT_BEFORE_2026_09_30 + 2;
+    assert REUSES_UI_KIT_ID == "turbobaby/ui-kit";
+    assert REUSES_WEBAPP_BRIDGE_ID == "turbobaby/webapp-bridge";
+    assert REUSES_UI_KIT_ID != ID;
+    assert REUSES_WEBAPP_BRIDGE_ID != ID;
 }
 
 test this_file_refuses_to_choose_the_next_surface {
@@ -1717,3 +2299,339 @@ invariant a_closed_read_answers_like_a_missing_route_and_touches_no_row
 
 invariant no_welcome_credit_is_written_since_r3
     assert WELCOME_CREDIT_WRITERS == 0 and WELCOME_SENTENCE_IS_SERVED == false
+
+; --- Tests and invariants of the footprint printed on 2026-09-29 ----------------------------------
+
+test the_footprint_is_printed_in_the_headers_order_and_re_adds_to_its_figure {
+    assert LEGACY_SOURCE_FILES.len == LEGACY_SOURCE_FILE_COUNT;
+    assert LEGACY_SOURCE_FILE_LINES.len == LEGACY_SOURCE_FILE_COUNT;
+    assert LEGACY_SOURCE_FILE_LINES_BEFORE_2026_09_25.len == LEGACY_SOURCE_FILE_COUNT;
+    // The header's five groups, and the screens are the eight declared paths.
+    assert FOOTPRINT_SCREEN_FILES + FOOTPRINT_GAME_MODULE_AND_SET_CARD_FILES + FOOTPRINT_API_MODULE_FILES + FOOTPRINT_ENTITY_FILES + FOOTPRINT_DOMAIN_MODULE_FILES == LEGACY_SOURCE_FILE_COUNT;
+    assert FOOTPRINT_SCREEN_FILES == LEGACY_PATH_DECLARED_COUNT;
+    assert LEGACY_SOURCE_FILES[0] == "src/ui/screens/accessories_screen.rs";
+    assert LEGACY_SOURCE_FILES[2] == "src/ui/screens/quest_screen.rs";
+    assert LEGACY_SOURCE_FILES[7] == "src/ui/screens/tech_tree_screen.rs";
+    assert LEGACY_SOURCE_FILES[12] == "src/ui/components/set_card.rs";
+    assert LEGACY_SOURCE_FILES[13] == "src/api/catalog.rs";
+    assert LEGACY_SOURCE_FILES[24] == "src/trios/packs.rs";
+    // It reproduces the header's 9193 at the commit that wrote it, and reads 8840 now.
+    assert legacy_source_loc_of_the_list_before_2026_09_25() == 9193;
+    assert legacy_source_loc_of_the_list() == 8840;
+    assert legacy_source_loc_of_the_list() < legacy_source_loc_of_the_list_before_2026_09_25();
+    assert FOOTPRINT_FIRST_READ_AT_COMMIT != FOOTPRINT_PRINTED_AT_COMMIT;
+    // Five files moved and none left: the drop is edits, not a retirement.
+    assert footprint_files_that_moved() == FOOTPRINT_FILES_THAT_MOVED;
+    assert FOOTPRINT_FILES_THAT_MOVED == 5;
+    assert LEGACY_SOURCE_FILE_LINES[10] == 1662;
+    assert LEGACY_SOURCE_FILE_LINES_BEFORE_2026_09_25[10] == 1957;
+    assert FOOTPRINT_FILES_DELETED == 0;
+    assert COMPLETED_RETIREMENT_COUNT == 1;
+}
+
+test twenty_one_files_are_named_here_and_each_falls_in_exactly_one_group {
+    assert FOOTPRINT_FILES_NAMED_BY_NO_CONTRACT_AT_55A6664 + FOOTPRINT_FILES_ALREADY_NAMED_AT_55A6664 == LEGACY_SOURCE_FILE_COUNT;
+    assert FOOTPRINT_FILES_NAMED_BY_NO_CONTRACT_AT_55A6664 + LEGACY_FILES_OUTSIDE_THE_FOOTPRINT.len == FILES_NAMED_HERE_ON_2026_09_29;
+    assert LEGACY_FILES_OUTSIDE_THE_FOOTPRINT_LINES.len == LEGACY_FILES_OUTSIDE_THE_FOOTPRINT.len;
+    assert FILES_NAMED_HERE_ON_2026_09_29 < SRC_FILES_NAMED_BY_NO_CONTRACT_AT_55A6664;
+    assert SRC_FILES_NAMED_BY_NO_CONTRACT_AT_55A6664 < TOTAL_SOURCE_FILE_COUNT;
+    // Goods, the unrouted rest, the kept quest, the entities, the glue, and the one pack module.
+    assert GOODS_FILES.len + UNROUTED_NON_GOODS_FILES.len + KEPT_QUEST_FILES.len + LEGACY_ENTITY_FILES.len + GLUE_FILES.len + 1 == FILES_NAMED_HERE_ON_2026_09_29;
+    assert GOODS_FILES.len + UNROUTED_NON_GOODS_FILES.len + KEPT_QUEST_FILES.len + GLUE_FILES.len == NAMED_UI_FILES;
+    assert LEGACY_ENTITY_FILES.len + 1 == NAMED_SERVER_OR_SHARED_FILES;
+    assert NAMED_UI_FILES + NAMED_SERVER_OR_SHARED_FILES == FILES_NAMED_HERE_ON_2026_09_29;
+    assert NAMED_UI_FILES_COMPILE_ON_THE_HOST == false;
+    // The premise is webapp-bridge's, read by its two declarations (2026-09-30).
+    assert NAMED_UI_FILES_BUILD_PREMISE_OWNER_DECLS.len == 2;
+    assert NAMED_UI_FILES_BUILD_PREMISE_OWNER_DECLS[0] == "WASM_GATE_SITE";
+    assert NAMED_UI_FILES_BUILD_PREMISE_OWNER_DECLS[1] == "HOST_SUITE_COMPILES_THIS_HALF";
+    // The groups point into the printed list, not beside it.
+    assert GOODS_FILES[0] == LEGACY_SOURCE_FILES[0];
+    assert GOODS_FILES[1] == LEGACY_SOURCE_FILES[1];
+    assert GOODS_FILES[2] == LEGACY_SOURCE_FILES[12];
+    assert GOODS_FILES[3] == LEGACY_FILES_OUTSIDE_THE_FOOTPRINT[0];
+    assert GOODS_FILES[4] == LEGACY_FILES_OUTSIDE_THE_FOOTPRINT[1];
+    assert UNROUTED_NON_GOODS_FILES[0] == LEGACY_SOURCE_FILES[3];
+    assert UNROUTED_NON_GOODS_FILES[4] == LEGACY_SOURCE_FILES[7];
+    assert UNROUTED_NON_GOODS_FILES[5] == LEGACY_SOURCE_FILES[11];
+    assert KEPT_QUEST_FILES[0] == LEGACY_SOURCE_FILES[2];
+    assert KEPT_QUEST_FILES[1] == LEGACY_SOURCE_FILES[9];
+    assert LEGACY_ENTITY_FILES[0] == LEGACY_SOURCE_FILES[16];
+    assert LEGACY_ENTITY_FILES[4] == LEGACY_SOURCE_FILES[20];
+    assert GLUE_FILES[0] == LEGACY_FILES_OUTSIDE_THE_FOOTPRINT[2];
+    assert GLUE_FILES[1] == LEGACY_SOURCE_FILES[8];
+    assert PACK_MODULE_FILE == LEGACY_SOURCE_FILES[24];
+}
+
+test each_named_group_runs_through_the_machine_on_its_own_inputs {
+    assert component_is_reachable(0) == false;
+    assert component_is_reachable(1) == true;
+    // The goods: unreached, over rows 085 hid.
+    assert retirement_state(component_is_reachable(GOODS_FILES_REACHABLE_MOUNTERS), false, false, GOODS_FILES_ROWS_HIDDEN) == GOODS_FILES_STATE;
+    assert GOODS_FILES_STATE == STATE_DATA_HIDDEN;
+    assert GOODS_FILES_STATE == OWNER_ANSWER_GOODS_STATE;
+    // The unrouted rest: unreached, and no row moved.
+    assert ruled_surface_state(component_is_reachable(UNROUTED_NON_GOODS_REACHABLE_MOUNTERS), UNROUTED_NON_GOODS_ROWS_HIDDEN) == UNROUTED_NON_GOODS_STATE;
+    assert UNROUTED_NON_GOODS_STATE == OWNER_ANSWER_OTHER_STATE;
+    assert UNROUTED_NON_GOODS_STATE == TECH_TREE_STATE;
+    // The kept quest: reached, kept on purpose.
+    assert ruled_surface_state(OWNER_ANSWER_KEEPS_THE_QUEST, false) == KEPT_QUEST_FILES_STATE;
+    assert KEPT_QUEST_FILES_STATE == OWNER_ANSWER_KEPT_QUEST_STATE;
+    // The pack module: a reachable route over hidden rows is a live surface, the header's rule.
+    assert retirement_state(PACK_MODULE_ROUTE_REACHABLE, false, false, PACK_MODULE_ROWS_HIDDEN) == PACK_MODULE_STATE;
+    assert PACK_MODULE_STATE == STATE_SURFACE_LIVE;
+    assert retirement_state(PACK_MODULE_ROUTE_REACHABLE, false, false, PACK_MODULE_ROWS_HIDDEN) == retirement_state(true, false, false, true);
+    // None of them is a completed retirement.
+    assert surface_is_retired(false, false, false, GOODS_FILES_ROWS_HIDDEN) == false;
+    assert surface_is_retired(false, false, false, UNROUTED_NON_GOODS_ROWS_HIDDEN) == false;
+    assert surface_is_retired(OWNER_ANSWER_KEEPS_THE_QUEST, false, false, false) == false;
+    assert surface_is_retired(PACK_MODULE_ROUTE_REACHABLE, false, false, PACK_MODULE_ROWS_HIDDEN) == false;
+    assert COMPLETED_RETIREMENT_COUNT == 1;
+}
+
+test the_goods_files_hold_the_previous_shops_goods_and_nothing_live_mounts_them {
+    assert GOODS_SCREEN_READS[0] == "GET /api/accessories";
+    assert GOODS_SCREEN_READS[1] == "GET /api/tea-products";
+    assert HIDDEN_TABLES[1] == "accessories";
+    assert HIDDEN_TABLES[3] == "tea_products";
+    // Ten chips, four cut by ruling #12 beside the subtitle, two by the leftovers: four left.
+    assert ACCESSORIES_SCREEN_CATEGORIES.len == 4;
+    assert ACCESSORIES_SCREEN_CATEGORIES[0] == "All";
+    assert ACCESSORIES_SCREEN_CHIPS_CUT_BY_RULING_12 + 1 == CANNABIS_RULING_I18N_KEYS_DELETED_RENDERED;
+    assert ACCESSORIES_SCREEN_CATEGORY_COUNT_BEFORE_2026_09_25 - ACCESSORIES_SCREEN_CHIPS_CUT_BY_RULING_12 - LEFTOVERS_2026_09_26_PARAPHERNALIA_KEYS == ACCESSORIES_SCREEN_CATEGORIES.len;
+    // Cart kinds: three of the client's four are written, and none of the four is served.
+    assert LEGACY_CART_KINDS_WRITTEN.len == 3;
+    assert LEGACY_CART_KINDS_WRITTEN.len < CLIENT_CART_KIND_COUNT;
+    assert CLIENT_CART_KINDS_SERVED == 0;
+    assert LEGACY_CART_WRITE_SITES == 2 * LEGACY_CART_KINDS_WRITTEN.len;
+    assert SERVED_CART_KINDS_OWNER_DECL == "SERVED_CART_KINDS";
+    assert LEGACY_SHARE_SITES == LEGACY_CART_KINDS_WRITTEN.len;
+    assert OWNER_RULING_2026_09_25_SERVER_SURFACES[3] == "share_card_for_hidden_rows";
+    // The modal: three mounters, all goods files, none reached.
+    assert PRODUCT_DETAIL_MODAL_MOUNTERS.len == PRODUCT_DETAIL_MODAL_MOUNTS;
+    assert PRODUCT_DETAIL_MODAL_MOUNTS == 3;
+    assert PRODUCT_DETAIL_MODAL_MOUNTERS[0] == GOODS_FILES[0];
+    assert PRODUCT_DETAIL_MODAL_MOUNTERS[1] == GOODS_FILES[1];
+    assert PRODUCT_DETAIL_MODAL_MOUNTERS[2] == GOODS_FILES[2];
+    assert component_is_reachable(PRODUCT_DETAIL_MODAL_REACHABLE_MOUNTERS) == false;
+    assert PRODUCT_DETAIL_MODAL_IS_THE_ONLY_LIGHTBOX_MOUNTER == true;
+    assert LEGACY_FULFILLMENT_OPTIONS.len == 2;
+    assert LEGACY_FULFILLMENT_OPTIONS[1] == LEGACY_FULFILLMENT_DEFAULT;
+    assert LIVE_FULFILLMENT_OWNER_DECL == "FULFILLMENT_NAMES";
+    assert MODAL_SECTIONS_GONE_WITH_DROPPED_TABLES[0] == DROPPED_TABLES[0];
+    assert MODAL_SECTIONS_GONE_WITH_DROPPED_TABLES[1] == DROPPED_TABLES[1];
+    // Its media guard is a copy of ui-kit's predicate, read by name; the prefixes left on 2026-09-30.
+    assert MODAL_MEDIA_GUARD_SITE == "src/ui/components/product_detail_modal.rs:96-101 (at 55a6664)";
+    assert MODAL_MEDIA_GUARD_OWNER_DECLS[0] == "media_url_is_shown";
+    assert MODAL_MEDIA_GUARD_OWNER_DECLS[1] == "MEDIA_PREDICATE_SITES";
+    assert MODAL_MEDIA_GUARD_ADDS_AN_EMPTINESS_TEST == true;
+    assert MODAL_MEDIA_GUARD_EMPTINESS_TEST_CHANGES_AN_ANSWER == false;
+    assert RESTATEMENT_DROPPED_ON_2026_09_30.len == 2;
+    assert RESTATEMENT_DROPPED_ON_2026_09_30[0] == "MODAL_USABLE_SRC_PREFIXES";
+    assert RESTATEMENT_DROPPED_ON_2026_09_30[1] == "MODAL_REFUSED_SRC_PREFIX";
+    // The picker: built for three hidden set tables, mounted by nothing.
+    assert ID_PICKER_BUILT_FOR_TABLES[0] == HIDDEN_TABLES[5];
+    assert ID_PICKER_BUILT_FOR_TABLES[1] == HIDDEN_TABLES[2];
+    assert ID_PICKER_BUILT_FOR_TABLES[2] == HIDDEN_TABLES[4];
+    assert ID_PICKER_MOUNTS == 0;
+    assert ADMIN_SCREEN_SET_TABS == 0;
+    assert ID_PICKER_CALLS_AN_API == false;
+    assert ID_PICKER_LIST_MAX_HEIGHT_PX == 240;
+}
+
+test the_set_card_would_show_a_confident_zero_if_anything_mounted_it {
+    assert SET_CARD_CALLERS == 0;
+    assert SET_CARD_DATA_FIELD_COUNT == 14;
+    assert SET_CARD_PRICE_CAN_BE_ABSENT == false;
+    assert SET_CARD_NON_POSITIVE_OR_NON_FINITE_PRICE_BECOMES_ZERO == true;
+    assert set_card_price_shown(900, true) == 900;
+    assert set_card_price_shown(900, false) == 0;
+    assert set_card_price_shown(-250, true) == 0;
+    // What rate_present refuses, the card would print; the rule is its owner's.
+    assert SET_CARD_PRICE_RULE_OWNER_DECL == "rate_present";
+    assert REUSES_PRICING_HONESTY_ID == "turbobaby/pricing-honesty";
+    assert SET_CARD_DOC_NAMES_A_DELETED_SCREEN == true;
+    assert REPOINTED_WITH_THE_SCREEN_DELETED == 2;
+}
+
+test the_hunt_screens_read_only_what_r2_closed_and_could_show_only_errors {
+    assert HUNT_SCREEN_READS.len == 4;
+    assert read_is_closed_by_r2(HUNT_SCREEN_READS[0]) == true;
+    assert read_is_closed_by_r2(HUNT_SCREEN_READS[1]) == true;
+    assert hunt_reads_closed_by_r2() == HUNT_SCREEN_READS.len;
+    assert OWNER_R2_CLOSED_READS[1] == HUNT_SCREEN_READS[0];
+    assert OWNER_R2_CLOSED_READS[0] == HUNT_SCREEN_READS[3];
+    // A read R2 did not close is told apart: the tech tree screen's.
+    assert read_is_closed_by_r2(TECH_TREE_SCREEN_READ) == false;
+    assert read_is_closed_by_r2(GOODS_SCREEN_READS[0]) == false;
+    assert HUNT_SCREEN_READS_SENDING_ADMIN_PROOF == 0;
+    assert R2_ANSWER_IS_THE_MISSING_ROUTE_ANSWER == true;
+    assert HUNT_SCREENS_COULD_ONLY_SHOW_ERRORS_IF_REMOUNTED == true;
+    assert TREASURE_HUNT_SCREEN_READ_PATHS.len == 2;
+    assert TREASURE_HUNT_SCREEN_READ_PATHS[0] == "/api/treasure-hunts";
+    // Three navigations to the kept quest sit in these unreached screens.
+    assert QUEST_ROUTE_NAVIGATIONS - QUEST_ROUTE_NAVIGATIONS_A_CUSTOMER_CAN_PRESS == 3;
+}
+
+test the_two_tech_trees_are_different_things_and_neither_reaches_a_customer {
+    assert TECH_TREE_SCREEN_READ == "GET /api/tech-tree/nodes";
+    assert TECH_TREE_HTTP_ROUTE_COUNT == 4;
+    assert GROW_TECH_TREE_NODE_IDS.len == GROW_TECH_TREE_NODE_COSTS.len;
+    assert GROW_TECH_TREE_NODE_IDS.len == 5;
+    assert GROW_TECH_TREE_NODE_IDS[0] == "basic_grow";
+    assert GROW_TECH_TREE_NODE_IDS[4] == "master_grower";
+    assert grow_tech_tree_total_cost() == GROW_TECH_TREE_TOTAL_COST;
+    assert GROW_TECH_TREE_TOTAL_COST == 360;
+    assert GROW_TECH_TREE_CALLERS == 0;
+    // Out of the bundle and past the farm guard, like the tea fold's word; left, not decided.
+    assert GROW_TECH_TREE_IN_BUNDLE == false;
+    assert GROW_TECH_TREE_IN_BUNDLE == LEFTOVERS_2026_09_26_FOLD_WORD_IN_BUNDLE;
+    assert GROW_TECH_TREE_WORDS_THE_FARM_GUARD_MATCHES == 0;
+    assert FARM_GUARD_WORD_COUNT == 4;
+    assert GROW_TECH_TREE_RULING_12_REACH_IS_DECIDED_HERE == false;
+    assert THIS_FILE_PICKS_THE_NEXT_SURFACE == false;
+}
+
+test the_kept_quest_is_reached_and_its_cap_measures_in_the_wrong_unit {
+    assert QUEST_SCAN_ROUTE == "POST /api/quest/scan";
+    assert QUEST_SCAN_SENDS_INIT_DATA == true;
+    assert QUEST_SCAN_POLL_TRIES * QUEST_SCAN_POLL_MS == QUEST_SCAN_WINDOW_MS;
+    assert QUEST_SCREEN_READS_ITS_ID == false;
+    assert QUEST_ROUTE_NAVIGATIONS_A_CUSTOMER_CAN_PRESS == 1;
+    assert LEGACY_LIVE_ROUTES[0] == "/quest/:id";
+    // One byte a character: the cap holds the text to the cap.
+    assert quest_token_bytes_after_client_cap(250, 1) == QUEST_CLIENT_TOKEN_CAP;
+    assert quest_token_bytes_after_client_cap(QUEST_CLIENT_TOKEN_CAP, 1) == QUEST_CLIENT_TOKEN_CAP;
+    // Two bytes a character: 125 characters are kept whole, 250 bytes stay over the cap.
+    assert quest_token_bytes_after_client_cap(250, 2) == 250;
+    assert quest_token_bytes_after_client_cap(250, 2) > QUEST_CLIENT_TOKEN_CAP;
+    // Three bytes a character: 300 characters are cut to 200, still 600 bytes.
+    assert quest_token_bytes_after_client_cap(900, 3) == 600;
+    assert QUEST_CLIENT_CAP_DECIDES_IN_BYTES == true;
+    assert QUEST_CLIENT_CAP_TRUNCATES_IN_CHARS == true;
+    assert QUEST_CLIENT_CAP_GUARANTEES_THE_SERVER_BOUND == false;
+    // The server's bound and its unit are the owner's, named by declaration.
+    assert QUEST_SERVER_TOKEN_BOUND_OWNER_DECL == "LIVE_TOKEN_MAX_CHARS";
+    assert QUEST_SERVER_TOKEN_UNIT_OWNER_DECL == "LIVE_TOKEN_LENGTH_IS_MEASURED_IN_BYTES";
+    assert REUSES_VALIDATION_BOUNDS_ID == "turbobaby/validation-bounds";
+}
+
+test the_kept_quest_promises_a_reward_nothing_credits {
+    assert QUEST_CHECKPOINT_COUNT == 5;
+    assert quest_reward_for_checkpoint(1) == QUEST_REWARD_PER_CHECKPOINT_ID;
+    assert quest_reward_for_checkpoint(QUEST_CHECKPOINT_COUNT) == 50;
+    assert quest_displayed_reward_total() == QUEST_DISPLAYED_REWARD_TOTAL;
+    assert QUEST_DISPLAYED_REWARD_TOTAL == 150;
+    assert QUEST_REWARD_UNIT == "BAT";
+    assert QUEST_COMPLETION_KEYS[0] == "T_REWARD_CLAIM";
+    assert QUEST_COMPLETION_KEYS[1] == "T_REWARD";
+    assert QUEST_REWARD_LINE_KEY == "T_QUEST_REWARD_BAT";
+    assert QUEST_REWARD_LINE_USES_ITS_KEY == false;
+    // Shown, and credited by nothing: the scan writes no row, and no ledger is published.
+    assert QUEST_SCAN_HANDLER_WRITES == 0;
+    assert QUEST_REWARD_IS_CREDITED == false;
+    assert QUEST_REWARD_LEDGER_IS_PUBLISHED == false;
+    // One location scanned five times completes it; four scans of five places do not.
+    assert quest_completes(QUEST_CHECKPOINT_COUNT, 1) == true;
+    assert quest_completes(QUEST_CHECKPOINT_COUNT - 1, QUEST_CHECKPOINT_COUNT) == false;
+    assert QUEST_SCAN_IS_TIED_TO_A_CHECKPOINT == false;
+    assert QUEST_PROGRESS_IS_PERSISTED == false;
+    assert QUEST_LOADING_BRANCH_IS_REACHABLE == false;
+    // Kept as the owner asked, and nothing written new for it here.
+    assert OWNER_ANSWER_KEEPS_THE_QUEST == true;
+    assert QUEST_COPY_WRITTEN_NEW == false;
+    assert QUEST_DEFECTS_RECORDED_2026_09_29 == 3;
+}
+
+test the_pack_module_is_live_on_the_server_over_rows_085_hid {
+    assert PACK_BADGE_VALUES.len == 4;
+    assert PACK_BADGE_VALUES[0] == PACK_BADGE_UNKNOWN_PARSES_TO;
+    assert PACK_BADGE_VALUES[3] == "limited";
+    assert PACK_TABLE == HIDDEN_TABLES[5];
+    assert PACK_SERVER_CALL_SITES == 4;
+    assert PACK_CLIENT_CALL_SITES == 2;
+    assert PACK_CLIENT_CALL_SITES_REACHED == 0;
+    assert PACK_CLIENT_CALL_SITES_REACHED == SET_CARD_CALLERS;
+    assert PACK_UNIT_TESTS == 6;
+    assert CATALOG_HTTP_ROUTE_COUNT == 27;
+    assert PACK_MODULE_ROUTE_REACHABLE == true;
+    assert PACK_MODULE_ROWS_HIDDEN == true;
+}
+
+test the_entities_are_readers_and_the_strain_mirror_is_the_allowlisted_case {
+    assert LEGACY_ENTITY_FILES.len == FOOTPRINT_ENTITY_FILES;
+    assert LEGACY_ENTITY_TABLES.len == FOOTPRINT_ENTITY_FILES;
+    assert LEGACY_ENTITY_FIELD_COUNTS.len == FOOTPRINT_ENTITY_FILES;
+    assert LEGACY_ENTITY_READER_FILES.len == FOOTPRINT_ENTITY_FILES;
+    assert LEGACY_ENTITY_STATES.len == FOOTPRINT_ENTITY_FILES;
+    assert LEGACY_ENTITY_TABLES[0] == DROPPED_TABLES[2];
+    assert LEGACY_ENTITY_TABLES[1] == HIDDEN_TABLES[1];
+    assert LEGACY_ENTITY_TABLES[2] == HIDDEN_TABLES[3];
+    assert LEGACY_ENTITY_FIELD_COUNTS[0] == STRAIN_ENTITY_FIELD_COUNT;
+    assert STRAIN_ENTITY_FIELD_COUNT == 30;
+    assert LEGACY_ENTITY_FIELD_COUNTS[4] == 14;
+    // Each on its own inputs.
+    assert entity_state(true, LEGACY_ENTITY_READER_FILES[0], false) == LEGACY_ENTITY_STATES[0];
+    assert entity_state(false, LEGACY_ENTITY_READER_FILES[1], true) == LEGACY_ENTITY_STATES[1];
+    assert entity_state(false, LEGACY_ENTITY_READER_FILES[2], true) == LEGACY_ENTITY_STATES[2];
+    assert entity_state(false, LEGACY_ENTITY_READER_FILES[3], false) == LEGACY_ENTITY_STATES[3];
+    assert entity_state(false, LEGACY_ENTITY_READER_FILES[4], false) == LEGACY_ENTITY_STATES[4];
+    assert LEGACY_ENTITY_STATES[0] == RETIRED_READER_STATE_AFTER_THE_2026_09_25_RULING;
+    assert LEGACY_ENTITY_STATES[1] == STATE_DATA_HIDDEN;
+    assert LEGACY_ENTITY_STATES[4] == STATE_LIVE;
+    // The strain mirror and its three readers are the four allowlist entries.
+    assert STRAIN_ENTITY_IS_AN_ALLOWLIST_PATH == true;
+    assert LEGACY_ENTITY_READER_FILES[0] + 1 == ALLOWLIST_SIZE;
+    // The day its three readers go, the mirror of a dropped table is the completed state.
+    assert entity_state(true, 0, false) == STATE_FULLY_RETIRED;
+    // Two mirrors with no reader: one allowlisted, one passing the wiring test on a key string.
+    assert QUEST_PLACE_ENTITY_IS_ALLOWLISTED_UNWIRED == true;
+    assert TREASURE_HUNT_ENTITY_PASSES_THE_WIRING_TEST_BY_A_KEY_STRING == true;
+    // The guard is schema-provenance's: its owner is the reuse edge, read by five names since
+    // 2026-09-30 (two at the integration), the allowlist the quest mirror's flag reads among them.
+    assert ENTITY_GUARD_OWNER_ID == REUSES_SCHEMA_PROVENANCE_ID;
+    assert ENTITY_GUARD_DECLARATIONS_READ.len == 5;
+    assert ENTITY_GUARD_DECLARATIONS_READ_BEFORE_2026_09_30.len == 2;
+    assert ENTITY_GUARD_DECLARATIONS_READ[0] == ENTITY_GUARD_DECLARATIONS_READ_BEFORE_2026_09_30[0];
+    assert ENTITY_GUARD_DECLARATIONS_READ[1] == ENTITY_GUARD_DECLARATIONS_READ_BEFORE_2026_09_30[1];
+    assert ENTITY_GUARD_DECLARATIONS_READ[2] == QUEST_PLACE_ALLOWLIST_OWNER_DECL;
+    assert QUEST_PLACE_ALLOWLIST_OWNER_DECL == "ENTITY_GUARD_ALLOWLIST";
+    assert LEGACY_ENTITY_READER_FILES[3] == 0;
+    assert LEGACY_ENTITY_READER_FILES[4] == 0;
+}
+
+test the_glue_still_exports_the_seven_and_nothing_mounts_them {
+    assert SCREEN_MODULE_DECLARATIONS == 22;
+    assert SCREEN_MODULE_EXPORT_LINES == SCREEN_MODULE_DECLARATIONS;
+    assert REPOINTED_LEGACY_SCREEN_EXPORTS.len == REPOINTED_LEGACY_SCREENS_KEPT_UNMOUNTED;
+    assert REPOINTED_LEGACY_SCREEN_EXPORTS.len == LEGACY_PATHS_REPOINTED_ON_2026_09_25.len;
+    assert REPOINTED_LEGACY_SCREEN_EXPORTS[0] == "AccessoriesScreen";
+    assert REPOINTED_LEGACY_SCREEN_EXPORTS[6] == "TreasureHuntScreen";
+    assert REPOINTED_LEGACY_SCREEN_MOUNTS == 0;
+    assert GAME_MODULES.len == 3;
+    assert GAME_MODULES[0] == "quest";
+    assert GAME_MODULE_EXPORTED_NAMES == 5;
+    assert GAME_MODULE_EXPORTS_REACHING_A_CUSTOMER == 1;
+    assert GAME_MODULE_EXPORTS_REACHING_A_CUSTOMER == LEGACY_LIVE_ROUTE_COUNT;
+}
+
+invariant the_printed_footprint_always_re_adds_to_its_figure
+    assert legacy_source_loc_of_the_list() == LEGACY_SOURCE_LOC and legacy_source_loc_of_the_list_before_2026_09_25() == LEGACY_SOURCE_LOC_BEFORE_2026_09_25 and LEGACY_SOURCE_FILES.len == LEGACY_SOURCE_FILE_COUNT
+
+invariant no_file_named_on_2026_09_29_is_a_completed_retirement
+    assert surface_is_retired(false, false, false, GOODS_FILES_ROWS_HIDDEN) == false and surface_is_retired(PACK_MODULE_ROUTE_REACHABLE, false, false, PACK_MODULE_ROWS_HIDDEN) == false and FOOTPRINT_FILES_DELETED == 0 and COMPLETED_RETIREMENT_COUNT == 1
+
+invariant a_component_is_reached_only_through_a_reached_mounter
+    assert component_is_reachable(0) == false and component_is_reachable(PRODUCT_DETAIL_MODAL_REACHABLE_MOUNTERS) == false and component_is_reachable(ID_PICKER_MOUNTS) == false
+
+invariant the_kept_quests_reward_stays_recorded_as_unbacked_while_its_scan_writes_nothing
+    assert QUEST_SCAN_HANDLER_WRITES == 0 and QUEST_REWARD_IS_CREDITED == false and quest_displayed_reward_total() > 0 and QUEST_REWARD_LEDGER_IS_PUBLISHED == false
+
+invariant a_cap_decided_in_bytes_and_cut_in_characters_never_claims_the_byte_bound
+    assert quest_token_bytes_after_client_cap(250, 2) > QUEST_CLIENT_TOKEN_CAP and QUEST_CLIENT_CAP_GUARANTEES_THE_SERVER_BOUND == false
+
+invariant every_hunt_read_is_one_r2_closed
+    assert hunt_reads_closed_by_r2() == HUNT_SCREEN_READS.len and HUNT_SCREEN_READS_SENDING_ADMIN_PROOF == 0
+
+invariant the_strain_mirror_and_its_readers_are_the_whole_allowlist
+    assert LEGACY_ENTITY_READER_FILES[0] + 1 == ALLOWLIST_SIZE and entity_state(true, LEGACY_ENTITY_READER_FILES[0], false) == STATE_READER_ALLOWLISTED

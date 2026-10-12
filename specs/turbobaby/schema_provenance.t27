@@ -686,7 +686,13 @@ pub const SEED_GATE_HAS_A_FLOOR : bool = true;
 ; the one section that exists to say what a gate does not reach.
 pub const SPEC_GATE_MANIFEST_ENTRIES_AT_REVIEW : u8 = 43;
 pub const SPEC_GATE_DISCOVERED_SPECS_AT_REVIEW : u8 = 43;
-pub const SPEC_GATE_MANIFEST_ENTRY_SITE : str = "scripts/verify_t27_specs.py:257";
+; CORRECTED 2026-09-30 (review of round 7): the entry was cited by line, :257, and that line had
+; moved with every manifest comment since: the entry sat at :392 at 55a6664 and at :422 after round
+; 7's floor comments. It is cited by its KEY now, which no comment above it moves; the line reading
+; stays as SPEC_GATE_MANIFEST_ENTRY_SITE_BEFORE_2026_09_30.
+pub const SPEC_GATE_MANIFEST_ENTRY_SITE : str = "scripts/verify_t27_specs.py SPEC_MANIFEST, the entry keyed specs/turbobaby/schema_provenance.t27";
+pub const SPEC_GATE_MANIFEST_ENTRY_SITE_BEFORE_2026_09_30 : str = "scripts/verify_t27_specs.py:257";
+pub const SPEC_GATE_MANIFEST_ENTRY_IS_CITED_BY_KEY : bool = true;
 pub const THIS_FILE_IS_MANIFESTED : bool = true;
 
 pub fn spec_gate_manifest_agrees(manifest_entries: u8, discovered_files: u8) bool {
@@ -970,7 +976,10 @@ test a_gate_whose_input_reaches_zero_is_refused {
   assert THIS_FILE_IS_MANIFESTED == true;
   assert SPEC_GATE_MANIFEST_ENTRIES_AT_REVIEW == 43;
   assert SPEC_GATE_DISCOVERED_SPECS_AT_REVIEW == 43;
-  assert SPEC_GATE_MANIFEST_ENTRY_SITE == "scripts/verify_t27_specs.py:257";
+  assert SPEC_GATE_MANIFEST_ENTRY_SITE == "scripts/verify_t27_specs.py SPEC_MANIFEST, the entry keyed specs/turbobaby/schema_provenance.t27";
+  assert SPEC_GATE_MANIFEST_ENTRY_SITE_BEFORE_2026_09_30 == "scripts/verify_t27_specs.py:257";
+  assert SPEC_GATE_MANIFEST_ENTRY_SITE != SPEC_GATE_MANIFEST_ENTRY_SITE_BEFORE_2026_09_30;
+  assert SPEC_GATE_MANIFEST_ENTRY_IS_CITED_BY_KEY == true;
   assert SPEC_GATE_MANIFEST_ENTRIES_AT_REVIEW > SPEC_GATE_MANIFEST_ENTRIES_AT_MEASUREMENT;
   assert spec_gate_manifest_agrees(SPEC_GATE_MANIFEST_ENTRIES_AT_REVIEW, SPEC_GATE_DISCOVERED_SPECS_AT_REVIEW) == true;
   assert seed_gate_floor_holds(0) == false;
@@ -1098,3 +1107,197 @@ invariant the_recursive_sql_count_is_the_shallow_count_plus_the_one_wip_file
 
 invariant no_schema_and_no_customer_data_enters_this_contract
   assert SCHEMA_DDL_TRANSCRIBED == false and CUSTOMER_DATA_FIELDS == 0 and MIGRATION_NUMBER_CLAIMED_FOR_UNDONE_WORK == 0
+
+; --- The entity glue: how the tree carries the database's shape (2026-09-29) ------------------------
+; Appended at the end of the file so that no line citation into it moves.
+; WHY (measured 2026-09-29 at 55a6664, every citation below opened that day). src/db/entities/mod.rs
+; (83 lines) was named by no contract, and it is the one file that decides which of the database's
+; tables the Rust tree carries a typed mirror of. It is compiled wherever the backend is:
+; src/lib.rs:107-108 (feature backend) and src/main.rs:12-13 declare `db`, and src/db/mod.rs:7
+; declares `pub mod entities`. It is COUNTED here and not transcribed -- the header of this file
+; forbids a table list kept for its own sake, and each mirror belongs to the contract that owns its
+; domain. What belongs here is the shape of the carrying: how many mirrors there are, what guards
+; them, and where that guard is blind. The few module names below are each the subject of a
+; measured fact, not a schema.
+; THE COUNTS. 30 `pub mod` declarations (:7-83), one per entity file, and 30 files under
+; src/db/entities define `pub struct Model`, which is exactly what the guard below takes as its
+; input (src/db/mod.rs:2007). 29 of the declarations carry `#[allow(unreachable_pub)]`;
+; block_history (:17) carries none.
+; THE DOC AT :2-5 IS STALE. It says each entity file "has its own #![allow(unreachable_pub)]".
+; Measured: 0 of the 30 files do. The only text of that inner attribute anywhere in the directory
+; is the comment that claims it; the 29 outer attributes on the declarations are what exists.
+; THREE REMOVED MIRRORS are recorded in place against the migration that dropped their table, each
+; citation re-opened: garden_config (:35-38, citing 083 line 90), lab_certificate (:40-44, 083 line
+; 82) and strain_review (:71-75, 083 line 83); all three lines of
+; migrations/083_drop_cannabis_catalog.sql say what the comments say they say. The three tables are
+; among the six that turbobaby/legacy-retirement lists as dropped (DROPPED_TABLES), and this file
+; does not restate that list. ONE MIRROR OF A DROPPED TABLE IS KEPT: strain (:70), because a cart
+; reader still prices a legacy line (:73-75). It is the first entry of the allowlist
+; legacy-retirement names as its witness (ALLOWLIST_WITNESS), and in that contract's own vocabulary
+; its state is reader_allowlisted (PARTIAL_STATE_NAMES, STATE_READER_ALLOWLISTED); the size of that
+; allowlist is legacy-retirement's number and is not restated.
+; --
+; THE GUARD. every_entity_module_is_referenced (src/db/mod.rs:2083) reads every entity file
+; (entity_modules, :1983), reads every .rs file under src/ except src/db/entities and src/db/mod.rs
+; with `//` comments cut (corpus_excluding_entities_and_self, :2014), and demands that each
+; entity's module name occur there as a WORD (contains_word, :2063). ALLOWED_UNWIRED_ENTITIES
+; (:1941) excuses two names, quest_place (:1957) and event_photo (:1962), each with a written
+; reason, and allowlist_entries_are_still_unused (:2113) fails an excuse that stops being needed.
+; So the guard checks 28 of the 30.
+; DEFECT, measured 2026-09-29: the guard proves a SPELLING, not a reader. A word match cannot tell
+; a mirror's module name from any other token spelled the same way. Two of the 28 pass on spelling
+; alone -- no code under src/ or tests/ outside the entities directory reaches either one through a
+; path (entities::name, a use-group naming it, or name::Entity, Model, ActiveModel or Column):
+;   treasure_hunt passes on exactly one match in the whole corpus, the string literal
+;   "home.treasure_hunt" at src/trios/i18n.rs:594, which is an i18n key and not a reader;
+;   event passes on identifiers named event that have nothing to do with the mirror.
+; The other 26 are each reached by at least one path. So the guard's green says 28 of 28 are wired
+; and the paths say 26. Recorded, not fixed: the fix is a change to src/db/mod.rs, which this round
+; does not make, and what to do with an unread mirror is its domain owner's question.
+pub const ENTITY_GLUE_SOURCE : str = "src/db/entities/mod.rs";
+pub const ENTITY_GLUE_LINES : u8 = 83;
+pub const ENTITY_GLUE_MEASURED_AT : str = "2026-09-29";
+pub const ENTITY_GLUE_MEASURED_AT_COMMIT : str = "55a6664";
+pub const ENTITY_GLUE_DECLARED_AT : str = "src/db/mod.rs:7";
+pub const ENTITY_MODULES_DECLARED : u8 = 30;
+pub const ENTITY_FILES_DEFINING_A_MODEL : u8 = 30;
+pub const ENTITY_DECLARATIONS_WITH_THE_UNREACHABLE_PUB_ALLOW : u8 = 29;
+pub const ENTITY_DECLARATIONS_WITHOUT_IT : u8 = 1;
+pub const ENTITY_DECLARATION_WITHOUT_IT : str = "block_history";
+pub const ENTITY_FILES_WITH_AN_INNER_UNREACHABLE_PUB_ALLOW : u8 = 0;
+pub const ENTITY_GLUE_DOC_CLAIMS_EVERY_FILE_HAS_IT : bool = true;
+pub const REMOVED_MIRRORS_RECORDED_IN_THE_GLUE : u8 = 3;
+pub const REMOVED_MIRROR_NAMES : [3]str = ["garden_config", "lab_certificate", "strain_review"];
+pub const REMOVED_MIRROR_DROP_LINES_IN_083 : [3]u8 = [90, 82, 83];
+pub const KEPT_MIRRORS_OF_A_DROPPED_TABLE : u8 = 1;
+pub const KEPT_MIRROR_OF_A_DROPPED_TABLE : str = "strain";
+pub const KEPT_MIRROR_RETIREMENT_STATE_NAME : str = "reader_allowlisted";
+; ADDED 2026-09-29: the retirement owner, whose list, witness and state names the paragraph above
+; consumes by name. A seventh edge; the six above are unchanged.
+pub const REUSES_LEGACY_RETIREMENT_ID : str = "turbobaby/legacy-retirement";
+pub const LEGACY_RETIREMENT_DECLARATIONS_READ : [4]str = ["DROPPED_TABLES", "ALLOWLIST_WITNESS", "PARTIAL_STATE_NAMES", "STATE_READER_ALLOWLISTED"];
+pub const REUSE_EDGES_BEFORE_2026_09_29 : u8 = 6;
+pub const REUSE_EDGES : u8 = 7;
+pub const DROPPED_TABLE_LIST_IS_RESTATED_HERE : bool = false;
+pub const ALLOWLIST_SIZE_IS_RESTATED_HERE : bool = false;
+
+pub const ENTITY_GUARD_TEST : str = "src/db/mod.rs every_entity_module_is_referenced";
+pub const ENTITY_GUARD_ALLOWLIST : [2]str = ["quest_place", "event_photo"];
+pub const ENTITY_GUARD_ALLOWLIST_SIZE : u8 = 2;
+pub const ENTITY_MODULES_THE_GUARD_CHECKS : u8 = 28;
+pub const ENTITY_GUARD_MATCHES_A_WORD_NOT_A_PATH : bool = true;
+pub const ENTITY_MODULES_REACHED_BY_A_PATH : u8 = 26;
+pub const ENTITY_MODULES_PASSING_ON_SPELLING_ALONE : u8 = 2;
+pub const ENTITY_MODULES_PASSING_ON_SPELLING_ALONE_NAMES : [2]str = ["event", "treasure_hunt"];
+pub const TREASURE_HUNT_ONLY_MATCH : str = "src/trios/i18n.rs:594";
+pub const TREASURE_HUNT_MATCHES_IN_THE_GUARD_CORPUS : u8 = 1;
+pub const TREASURE_HUNT_MIRROR_PATH_REFERENCES : u8 = 0;
+pub const ENTITY_GUARD_DEFECT_IS_FIXED : bool = false;
+
+; What the guard decides, and what would have to be true for its green to mean a reader exists.
+pub fn entity_guard_passes(allowlisted: bool, word_occurs: bool) bool {
+  return allowlisted or word_occurs;
+}
+
+pub fn mirror_is_read(path_references: u8) bool {
+  return path_references > 0;
+}
+
+pub fn guard_passes_an_unread_mirror(allowlisted: bool, word_occurs: bool, path_references: u8) bool {
+  return !allowlisted and entity_guard_passes(allowlisted, word_occurs) and !mirror_is_read(path_references);
+}
+
+test the_entity_glue_declares_one_module_per_mirror_on_disk {
+  assert ENTITY_GLUE_SOURCE == "src/db/entities/mod.rs";
+  assert ENTITY_GLUE_LINES == 83;
+  assert ENTITY_GLUE_DECLARED_AT == "src/db/mod.rs:7";
+  assert RUNNER_IMPLEMENTATION == "src/db/mod.rs";
+  assert ENTITY_MODULES_DECLARED == 30;
+  assert ENTITY_MODULES_DECLARED == ENTITY_FILES_DEFINING_A_MODEL;
+  assert ENTITY_DECLARATIONS_WITH_THE_UNREACHABLE_PUB_ALLOW + ENTITY_DECLARATIONS_WITHOUT_IT == ENTITY_MODULES_DECLARED;
+  assert ENTITY_DECLARATION_WITHOUT_IT == "block_history";
+  assert ENTITY_GLUE_MEASURED_AT == "2026-09-29";
+  assert ENTITY_GLUE_MEASURED_AT_COMMIT == "55a6664";
+}
+
+; A comment that claims thirty attributes and a directory that holds none: the claim is recorded
+; beside the count so the next reader does not take the comment for the lint's reason to be quiet.
+test the_glue_doc_claims_an_attribute_no_entity_file_carries {
+  assert ENTITY_GLUE_DOC_CLAIMS_EVERY_FILE_HAS_IT == true;
+  assert ENTITY_FILES_WITH_AN_INNER_UNREACHABLE_PUB_ALLOW == 0;
+  assert ENTITY_FILES_WITH_AN_INNER_UNREACHABLE_PUB_ALLOW < ENTITY_FILES_DEFINING_A_MODEL;
+  assert ENTITY_DECLARATIONS_WITH_THE_UNREACHABLE_PUB_ALLOW == 29;
+}
+
+test three_mirrors_left_with_their_tables_and_one_stays_for_a_reader {
+  assert REMOVED_MIRRORS_RECORDED_IN_THE_GLUE == 3;
+  assert REMOVED_MIRROR_NAMES.len == REMOVED_MIRRORS_RECORDED_IN_THE_GLUE;
+  assert REMOVED_MIRROR_DROP_LINES_IN_083.len == REMOVED_MIRRORS_RECORDED_IN_THE_GLUE;
+  assert REMOVED_MIRROR_NAMES[0] == "garden_config";
+  assert REMOVED_MIRROR_DROP_LINES_IN_083[0] == 90;
+  assert REMOVED_MIRROR_NAMES[1] == "lab_certificate";
+  assert REMOVED_MIRROR_DROP_LINES_IN_083[1] == 82;
+  assert REMOVED_MIRROR_NAMES[2] == "strain_review";
+  assert REMOVED_MIRROR_DROP_LINES_IN_083[2] == 83;
+  assert KEPT_MIRRORS_OF_A_DROPPED_TABLE == 1;
+  assert KEPT_MIRROR_OF_A_DROPPED_TABLE == "strain";
+  assert KEPT_MIRROR_RETIREMENT_STATE_NAME == "reader_allowlisted";
+  assert KEPT_MIRROR_OF_A_DROPPED_TABLE != REMOVED_MIRROR_NAMES[0];
+  assert KEPT_MIRROR_OF_A_DROPPED_TABLE != REMOVED_MIRROR_NAMES[1];
+  assert KEPT_MIRROR_OF_A_DROPPED_TABLE != REMOVED_MIRROR_NAMES[2];
+}
+
+test the_retirement_facts_are_named_by_their_owner_and_not_copied {
+  assert REUSES_LEGACY_RETIREMENT_ID == "turbobaby/legacy-retirement";
+  assert REUSES_LEGACY_RETIREMENT_ID != ID;
+  assert REUSES_LEGACY_RETIREMENT_ID != REUSES_AVAILABILITY_ID;
+  assert REUSES_LEGACY_RETIREMENT_ID != REUSES_PUBLICATION_ID;
+  assert LEGACY_RETIREMENT_DECLARATIONS_READ.len == 4;
+  assert LEGACY_RETIREMENT_DECLARATIONS_READ[0] == "DROPPED_TABLES";
+  assert LEGACY_RETIREMENT_DECLARATIONS_READ[1] == "ALLOWLIST_WITNESS";
+  assert LEGACY_RETIREMENT_DECLARATIONS_READ[2] == "PARTIAL_STATE_NAMES";
+  assert LEGACY_RETIREMENT_DECLARATIONS_READ[3] == "STATE_READER_ALLOWLISTED";
+  assert REUSE_EDGES == REUSE_EDGES_BEFORE_2026_09_29 + 1;
+  assert DROPPED_TABLE_LIST_IS_RESTATED_HERE == false;
+  assert ALLOWLIST_SIZE_IS_RESTATED_HERE == false;
+  assert SCHEMA_DDL_TRANSCRIBED == false;
+}
+
+test the_entity_guard_checks_twenty_eight_and_excuses_two {
+  assert ENTITY_GUARD_TEST == "src/db/mod.rs every_entity_module_is_referenced";
+  assert ENTITY_GUARD_ALLOWLIST_SIZE == 2;
+  assert ENTITY_GUARD_ALLOWLIST.len == ENTITY_GUARD_ALLOWLIST_SIZE;
+  assert ENTITY_GUARD_ALLOWLIST[0] == "quest_place";
+  assert ENTITY_GUARD_ALLOWLIST[1] == "event_photo";
+  assert ENTITY_MODULES_THE_GUARD_CHECKS + ENTITY_GUARD_ALLOWLIST_SIZE == ENTITY_FILES_DEFINING_A_MODEL;
+  assert entity_guard_passes(true, false) == true;
+  assert entity_guard_passes(false, true) == true;
+  assert entity_guard_passes(false, false) == false;
+}
+
+; The defect as arithmetic: 26 read by a path plus 2 read by nothing is the 28 the guard calls
+; wired. The function is what separates the two; the guard's own rule cannot.
+test the_guard_proves_a_spelling_and_two_mirrors_pass_on_it_alone {
+  assert ENTITY_GUARD_MATCHES_A_WORD_NOT_A_PATH == true;
+  assert ENTITY_MODULES_REACHED_BY_A_PATH + ENTITY_MODULES_PASSING_ON_SPELLING_ALONE == ENTITY_MODULES_THE_GUARD_CHECKS;
+  assert ENTITY_MODULES_PASSING_ON_SPELLING_ALONE_NAMES.len == ENTITY_MODULES_PASSING_ON_SPELLING_ALONE;
+  assert ENTITY_MODULES_PASSING_ON_SPELLING_ALONE_NAMES[0] == "event";
+  assert ENTITY_MODULES_PASSING_ON_SPELLING_ALONE_NAMES[1] == "treasure_hunt";
+  assert TREASURE_HUNT_ONLY_MATCH == "src/trios/i18n.rs:594";
+  assert TREASURE_HUNT_MATCHES_IN_THE_GUARD_CORPUS == 1;
+  assert TREASURE_HUNT_MIRROR_PATH_REFERENCES == 0;
+  assert guard_passes_an_unread_mirror(false, true, TREASURE_HUNT_MIRROR_PATH_REFERENCES) == true;
+  assert guard_passes_an_unread_mirror(false, true, 1) == false;
+  assert guard_passes_an_unread_mirror(true, false, 0) == false;
+  assert guard_passes_an_unread_mirror(false, false, 0) == false;
+  assert ENTITY_GUARD_DEFECT_IS_FIXED == false;
+}
+
+invariant the_glue_declares_exactly_the_mirrors_on_disk
+  assert ENTITY_MODULES_DECLARED == ENTITY_FILES_DEFINING_A_MODEL and ENTITY_DECLARATIONS_WITH_THE_UNREACHABLE_PUB_ALLOW + ENTITY_DECLARATIONS_WITHOUT_IT == ENTITY_MODULES_DECLARED
+
+invariant the_entity_guard_green_counts_two_mirrors_nothing_reads
+  assert ENTITY_MODULES_REACHED_BY_A_PATH + ENTITY_MODULES_PASSING_ON_SPELLING_ALONE == ENTITY_MODULES_THE_GUARD_CHECKS and ENTITY_MODULES_THE_GUARD_CHECKS + ENTITY_GUARD_ALLOWLIST_SIZE == ENTITY_FILES_DEFINING_A_MODEL and guard_passes_an_unread_mirror(false, true, TREASURE_HUNT_MIRROR_PATH_REFERENCES) == true
+
+invariant the_seven_edges_restate_no_siblings_decision
+  assert REUSES_LEGACY_RETIREMENT_ID != ID and DROPPED_TABLE_LIST_IS_RESTATED_HERE == false and ALLOWLIST_SIZE_IS_RESTATED_HERE == false and REUSE_EDGES == 7

@@ -9,7 +9,8 @@
 ; request_identity.t27, what an unpublished locale resolves to belongs to locale_policy.t27, the
 ; read API's wire numerals belong to catalog_api.t27, and the discipline that an absence is not a
 ; number belongs to pricing_honesty.t27, and the sliding-window limiter itself belongs to
-; rate_limit.t27. All six edges (seven since 2026-09-22) are named below by ID; none is restated.
+; rate_limit.t27. All six edges (seven since 2026-09-22, eight since 2026-09-29) are named below by
+; ID; none is restated.
 ; --
 ; WHY (measured 2026-09-21). The intake at src/api/client_errors.rs:56 takes a POST from anyone:
 ; the module says so at :8-9, and check_admin appears exactly twice in the whole 847-line file,
@@ -127,7 +128,22 @@ pub const REUSES_OBSERVABILITY_ID : str = "turbobaby/observability";
 ; that day -- and this file owns only which sentence each answer gets. Its record of the screen is
 ; consumed by declaration name and not restated.
 pub const REUSES_ORDER_PRESENTATION_ID : str = "turbobaby/order-presentation";
-pub const REUSE_EDGE_COUNT : u8 = 7;
+; The eighth edge, added 2026-09-29 with the error banner (see "The banner" near the end). The
+; legacy-retirement contract owns which client paths are legacy, which one it kept and which screens
+; no handler mounts; the banner's six mount sites are classified here in that owner's words, by
+; declaration name, and no state is assigned in this file.
+pub const REUSES_LEGACY_RETIREMENT_ID : str = "turbobaby/legacy-retirement";
+; The ninth edge, added 2026-09-30 at the review of round 7. The banner's build section cited the
+; wasm32 gate itself, by its lines in src/lib.rs, and did not name its owner. webapp-bridge owns the gate
+; (WASM_GATE_SITE) and the fact that the host suite compiles none of the ui half
+; (HOST_SUITE_COMPILES_THIS_HALF); both are read here by name, and BANNER_IS_WASM_ONLY is this
+; file's reading of that premise for one file, not a second copy of the gate. The eight edges above
+; are unchanged and their count stays as REUSE_EDGE_COUNT_BEFORE_2026_09_30.
+pub const REUSES_WEBAPP_BRIDGE_ID : str = "turbobaby/webapp-bridge";
+pub const BANNER_BUILD_PREMISE_OWNER_DECLS : [2]str = ["WASM_GATE_SITE", "HOST_SUITE_COMPILES_THIS_HALF"];
+pub const REUSE_EDGE_COUNT : u8 = 9;
+pub const REUSE_EDGE_COUNT_BEFORE_2026_09_30 : u8 = 8;
+pub const REUSE_EDGE_COUNT_BEFORE_THE_BANNER : u8 = 7;
 pub const REUSE_EDGE_COUNT_BEFORE_THE_CANCEL_SURFACE : u8 = 6;
 pub const CANCEL_SCREEN_RECORD_DECLARATION : str = "CANCEL_ANSWER_WAS_TOLD_BEFORE_REPAIR and CANCEL_DIALOG_CLOSED_ON_EVERY_ANSWER_BEFORE_REPAIR, declared by the order-presentation contract";
 pub const NO_TRANSLATION_OUTCOME_INPUT : str = "key_has_translation, supplied by the locale contract";
@@ -697,6 +713,95 @@ pub fn checkout_message_source(body_code_mapped: bool, status_is_mapped: bool) u
   return MESSAGE_FROM_BARE_CODE;
 }
 
+; --- The banner, where a told failure meets the screen (added 2026-09-29) ----------------------------
+; Measured 2026-09-29 at 55a6664. src/ui/components/error_banner.rs, 45 lines, was named by no contract
+; that day. It is not a mapper -- it chooses no sentence -- and it is the component where this file's
+; rule that a failure never reaches the customer AS NOTHING is kept or lost, because its first branch
+; (:28-30) renders nothing at all for an empty message.
+; BUILD. wasm32 only, on turbobaby/webapp-bridge's premise (WASM_GATE_SITE and
+; HOST_SUITE_COMPILES_THIS_HALF; CORRECTED 2026-09-30, this line cited the gate itself until then):
+; src/ui/mod.rs:12 declares the components, and src/ui/components/mod.rs declares this one at :31 and re-exports it
+; at :67.
+; WHAT IT HOLDS. Three props (:16, :19, :23; CORRECTED 2026-09-30, the first was cited as :15, the
+; doc comment above it): message, icon and margin. An empty message renders
+; nothing (:28-30). The icon defaults to two code points, U+26A0 U+FE0F (:31), cited by code point
+; because this corpus is ASCII. The margin defaults to "0 16px 12px" (:32). The message is then
+; interpolated as given, after the icon (:42): no lookup, no translation, no status. So the banner
+; cannot tell "no failure" from "a failure whose sentence is empty" -- both are the empty string and
+; both render nothing. The sentence is the caller's, RENDER_EMPTY_STRING_IS_POSSIBLE = false above is
+; what keeps a told failure out of that branch, and this component is where the day it turned true
+; would become invisible rather than wrong.
+; WHO MOUNTS IT, in turbobaby/legacy-retirement's words. Six mount sites. Two are on screens a
+; customer reaches: src/ui/screens/checkout_screen.rs:1586 (/checkout) and src/ui/game/quest.rs:198,
+; the quest component that /quest/:id mounts -- the one path that owner keeps in LEGACY_LIVE_ROUTES,
+; kept on purpose (OWNER_ANSWER_KEPT_QUEST_STATE). Four are on screens no handler mounts:
+; src/ui/screens/ar_hunt_screen.rs:115, src/ui/screens/location_quest_screen.rs:114,
+; src/ui/screens/tech_tree_screen.rs:134 and src/ui/screens/treasure_hunt_screen.rs:113, the screens of
+; four paths in LEGACY_PATHS_REPOINTED_ON_2026_09_25, which that owner counts in
+; REPOINTED_LEGACY_SCREENS_KEPT_UNMOUNTED. No state is assigned here; the states are that owner's.
+; THE TWO LIVE MOUNTS KEEP THE RULE THEMSELVES. At checkout the banner reads
+; order_error.unwrap_or_default() (src/ui/screens/checkout_screen.rs:1587) and overrides the icon
+; (:1588). Every one of the six writes of a value into order_error (:889, :894, :946, :1098, :1113,
+; :1120) is a t(lang, KEY) lookup or the checkout mapper's answer, and none writes a literal empty
+; string; the retry button beside the banner tests is_some() (:1591), not emptiness. The quest mounts
+; the banner only after its message has been tested non-empty and not the success word
+; (src/ui/game/quest.rs:187 and :197). The component's own doc (:3-4) names four screens it serves --
+; orders, profile, treasure_hunt, tech_tree -- and two of them, orders and profile, do not mount it;
+; the two it gets right are both among the four unmounted screens now.
+pub const BANNER_SOURCE : str = "src/ui/components/error_banner.rs";
+pub const BANNER_SOURCE_LINES : u16 = 45;
+pub const BANNER_NAMED_AT : str = "2026-09-29";
+pub const BANNER_MEASURED_AT_COMMIT : str = "55a6664";
+pub const BANNER_IS_WASM_ONLY : bool = true;
+; Bound by gate 3: the props struct's field names, in order.
+pub const BANNER_PROP_NAMES : [3]str = ["message", "icon", "margin"];
+; Bound by gate 3: the early return on an empty message.
+pub const BANNER_EMPTY_MESSAGE_GUARDS : u8 = 1;
+pub const BANNER_EMPTY_MESSAGE_RENDERS_NOTHING : bool = true;
+pub const BANNER_CHOOSES_THE_SENTENCE : bool = false;
+pub const BANNER_TELLS_NO_FAILURE_FROM_AN_EMPTY_SENTENCE : bool = false;
+pub const BANNER_DEFAULT_ICON_CODE_POINTS : [2]str = ["U+26A0", "U+FE0F"];
+; Bound by gate 3.
+pub const BANNER_DEFAULT_MARGIN : str = "0 16px 12px";
+; Bound by gate 3 over src/ui: every mount of the component.
+pub const BANNER_MOUNT_SITES : u8 = 6;
+pub const BANNER_MOUNTS_ON_REACHED_SCREENS : u8 = 2;
+pub const BANNER_MOUNTS_ON_UNMOUNTED_SCREENS : u8 = 4;
+pub const BANNER_REACHED_MOUNTS : [2]str = [
+  "src/ui/screens/checkout_screen.rs:1586",
+  "src/ui/game/quest.rs:198",
+];
+pub const BANNER_UNMOUNTED_MOUNTS : [4]str = [
+  "src/ui/screens/ar_hunt_screen.rs:115",
+  "src/ui/screens/location_quest_screen.rs:114",
+  "src/ui/screens/tech_tree_screen.rs:134",
+  "src/ui/screens/treasure_hunt_screen.rs:113",
+];
+pub const LEGACY_DECLARATIONS_CONSUMED : [4]str = [
+  "LEGACY_LIVE_ROUTES",
+  "OWNER_ANSWER_KEPT_QUEST_STATE",
+  "LEGACY_PATHS_REPOINTED_ON_2026_09_25",
+  "REPOINTED_LEGACY_SCREENS_KEPT_UNMOUNTED",
+];
+pub const CHECKOUT_BANNER_VALUE_WRITES : u8 = 6;
+pub const CHECKOUT_BANNER_VALUE_WRITES_THROUGH_A_LOOKUP : u8 = 5;
+pub const CHECKOUT_BANNER_VALUE_WRITES_THROUGH_THE_MAPPER : u8 = 1;
+pub const CHECKOUT_BANNER_EMPTY_LITERAL_WRITES : u8 = 0;
+pub const CHECKOUT_RETRY_TESTS_PRESENCE_NOT_EMPTINESS : bool = true;
+pub const QUEST_BANNER_IS_GUARDED_AGAINST_EMPTY : bool = true;
+pub const BANNER_DOC_NAMED_SCREENS : u8 = 4;
+pub const BANNER_DOC_NAMED_SCREENS_THAT_MOUNT_IT : u8 = 2;
+pub const BANNER_DOC_IS_CURRENT : bool = false;
+
+pub fn banner_renders(message_is_empty: bool) bool {
+  return !message_is_empty;
+}
+
+; A failure vanishes from the banner in exactly one way: it happened and its sentence was empty.
+pub fn banner_hides_a_failure(failure_happened: bool, sentence_is_empty: bool) bool {
+  return failure_happened and !banner_renders(sentence_is_empty);
+}
+
 ; --- Tests ------------------------------------------------------------------------------------
 
 test the_write_surface_carries_no_gate_and_the_read_surface_does {
@@ -936,8 +1041,8 @@ test a_body_code_outranks_the_status_and_an_unknown_one_costs_nothing {
 }
 
 test the_seven_ownership_edges_are_named_and_distinct {
-  assert REUSE_EDGE_COUNT == 7;
-  assert REUSE_EDGE_COUNT_BEFORE_THE_CANCEL_SURFACE + 1 == REUSE_EDGE_COUNT;
+  assert REUSE_EDGE_COUNT_BEFORE_THE_BANNER == 7;
+  assert REUSE_EDGE_COUNT_BEFORE_THE_CANCEL_SURFACE + 1 == REUSE_EDGE_COUNT_BEFORE_THE_BANNER;
   assert REUSES_ORDER_PRESENTATION_ID == "turbobaby/order-presentation";
   assert REUSES_ORDER_PRESENTATION_ID != ID;
   assert CANCEL_SCREEN_RECORD_DECLARATION == "CANCEL_ANSWER_WAS_TOLD_BEFORE_REPAIR and CANCEL_DIALOG_CLOSED_ON_EVERY_ANSWER_BEFORE_REPAIR, declared by the order-presentation contract";
@@ -1035,6 +1140,97 @@ test the_refused_cancellation_is_worded_by_delegation_and_its_limits_are_named {
   assert CONFLICTED_CANCELLATION_NOTE != UNKNOWN_CANCELLATION_NOTE;
 }
 
+; --- The banner, checked -------------------------------------------------------------------------
+
+test the_eighth_edge_names_the_owner_of_the_legacy_states {
+  assert REUSE_EDGE_COUNT_BEFORE_2026_09_30 == 8;
+  assert REUSE_EDGE_COUNT_BEFORE_THE_BANNER + 1 == REUSE_EDGE_COUNT_BEFORE_2026_09_30;
+  assert REUSES_LEGACY_RETIREMENT_ID == "turbobaby/legacy-retirement";
+  assert REUSES_LEGACY_RETIREMENT_ID != ID;
+  assert REUSES_LEGACY_RETIREMENT_ID != REUSES_ORDER_PRESENTATION_ID;
+  assert LEGACY_DECLARATIONS_CONSUMED.len == 4;
+  assert LEGACY_DECLARATIONS_CONSUMED[0] == "LEGACY_LIVE_ROUTES";
+  assert LEGACY_DECLARATIONS_CONSUMED[3] == "REPOINTED_LEGACY_SCREENS_KEPT_UNMOUNTED";
+}
+
+test the_banner_is_named_with_the_day_and_commit_and_builds_for_the_browser_only {
+  assert BANNER_SOURCE == "src/ui/components/error_banner.rs";
+  assert BANNER_SOURCE_LINES == 45;
+  assert BANNER_NAMED_AT == "2026-09-29";
+  assert BANNER_MEASURED_AT_COMMIT == "55a6664";
+  assert BANNER_IS_WASM_ONLY == true;
+  assert OVERLAY_SOURCE != BANNER_SOURCE;
+}
+
+; The build premise is webapp-bridge's, named by ID and by its two declarations; this file keeps
+; only which of its files sits behind it.
+test the_ninth_edge_names_the_owner_of_the_wasm_gate {
+  assert REUSES_WEBAPP_BRIDGE_ID == "turbobaby/webapp-bridge";
+  assert REUSES_WEBAPP_BRIDGE_ID != ID;
+  assert REUSES_WEBAPP_BRIDGE_ID != REUSES_LEGACY_RETIREMENT_ID;
+  assert BANNER_BUILD_PREMISE_OWNER_DECLS.len == 2;
+  assert BANNER_BUILD_PREMISE_OWNER_DECLS[0] == "WASM_GATE_SITE";
+  assert BANNER_BUILD_PREMISE_OWNER_DECLS[1] == "HOST_SUITE_COMPILES_THIS_HALF";
+  assert REUSE_EDGE_COUNT == 9;
+  assert REUSE_EDGE_COUNT == REUSE_EDGE_COUNT_BEFORE_2026_09_30 + 1;
+  assert BANNER_IS_WASM_ONLY == true;
+}
+
+; An empty message renders nothing, and the banner has no way to know whether that emptiness was a
+; failure. The only failure it hides is one that arrived with an empty sentence.
+test the_banner_renders_nothing_for_an_empty_message_and_cannot_tell_why {
+  assert banner_renders(true) == false;
+  assert banner_renders(false) == true;
+  assert banner_hides_a_failure(true, true) == true;
+  assert banner_hides_a_failure(true, false) == false;
+  assert banner_hides_a_failure(false, true) == false;
+  assert BANNER_EMPTY_MESSAGE_GUARDS == 1;
+  assert BANNER_EMPTY_MESSAGE_RENDERS_NOTHING == true;
+  assert BANNER_TELLS_NO_FAILURE_FROM_AN_EMPTY_SENTENCE == false;
+  assert BANNER_CHOOSES_THE_SENTENCE == false;
+}
+
+test the_banner_holds_three_props_and_two_defaults {
+  assert BANNER_PROP_NAMES.len == 3;
+  assert BANNER_PROP_NAMES[0] == "message";
+  assert BANNER_PROP_NAMES[1] == "icon";
+  assert BANNER_PROP_NAMES[2] == "margin";
+  assert BANNER_DEFAULT_ICON_CODE_POINTS.len == 2;
+  assert BANNER_DEFAULT_ICON_CODE_POINTS[0] == "U+26A0";
+  assert BANNER_DEFAULT_ICON_CODE_POINTS[1] == "U+FE0F";
+  assert BANNER_DEFAULT_MARGIN == "0 16px 12px";
+}
+
+; Six mounts, split two and four, each half listed by site and the lists agreeing with the counts.
+test six_mounts_two_on_reached_screens_and_four_on_screens_no_handler_mounts {
+  assert BANNER_MOUNT_SITES == 6;
+  assert BANNER_MOUNTS_ON_REACHED_SCREENS + BANNER_MOUNTS_ON_UNMOUNTED_SCREENS == BANNER_MOUNT_SITES;
+  assert BANNER_REACHED_MOUNTS.len == BANNER_MOUNTS_ON_REACHED_SCREENS;
+  assert BANNER_UNMOUNTED_MOUNTS.len == BANNER_MOUNTS_ON_UNMOUNTED_SCREENS;
+  assert BANNER_REACHED_MOUNTS[0] == "src/ui/screens/checkout_screen.rs:1586";
+  assert BANNER_REACHED_MOUNTS[1] == "src/ui/game/quest.rs:198";
+  assert BANNER_MOUNTS_ON_UNMOUNTED_SCREENS > BANNER_MOUNTS_ON_REACHED_SCREENS;
+}
+
+; The two live mounts never hand the banner an empty failure: checkout writes only looked-up or mapped
+; sentences, and the quest tests emptiness before it mounts. With the mappers' own guarantee this is
+; the whole reason no told failure vanishes on a live screen.
+test the_live_mounts_never_hand_the_banner_an_empty_failure {
+  assert CHECKOUT_BANNER_VALUE_WRITES == CHECKOUT_BANNER_VALUE_WRITES_THROUGH_A_LOOKUP + CHECKOUT_BANNER_VALUE_WRITES_THROUGH_THE_MAPPER;
+  assert CHECKOUT_BANNER_VALUE_WRITES == 6;
+  assert CHECKOUT_BANNER_EMPTY_LITERAL_WRITES == 0;
+  assert CHECKOUT_RETRY_TESTS_PRESENCE_NOT_EMPTINESS == true;
+  assert QUEST_BANNER_IS_GUARDED_AGAINST_EMPTY == true;
+  assert RENDER_EMPTY_STRING_IS_POSSIBLE == false;
+  assert banner_hides_a_failure(true, RENDER_EMPTY_STRING_IS_POSSIBLE) == false;
+}
+
+test the_banner_doc_names_two_screens_that_do_not_mount_it {
+  assert BANNER_DOC_NAMED_SCREENS == 4;
+  assert BANNER_DOC_NAMED_SCREENS - BANNER_DOC_NAMED_SCREENS_THAT_MOUNT_IT == 2;
+  assert BANNER_DOC_IS_CURRENT == false;
+}
+
 ; --- Invariants ---------------------------------------------------------------------------------
 
 invariant the_cancel_surface_never_renders_a_bare_code
@@ -1117,3 +1313,11 @@ invariant an_unmapped_body_code_falls_to_the_status_and_is_never_shown
 
 invariant a_failure_is_not_a_price
   assert FAILURE_CARRIES_A_PRICE == false and REUSES_PRICING_HONESTY_ID == "turbobaby/pricing-honesty"
+
+; Added 2026-09-29 with the banner. The empty-message branch is the one place a told failure can
+; become nothing on screen; no failure renders an empty string upstream, and no live mount writes one.
+invariant no_told_failure_vanishes_in_the_banner_on_a_live_screen
+  assert banner_hides_a_failure(true, true) == true and banner_hides_a_failure(true, RENDER_EMPTY_STRING_IS_POSSIBLE) == false and CHECKOUT_BANNER_EMPTY_LITERAL_WRITES == 0 and QUEST_BANNER_IS_GUARDED_AGAINST_EMPTY == true
+
+invariant every_banner_mount_is_classified_once
+  assert BANNER_MOUNTS_ON_REACHED_SCREENS + BANNER_MOUNTS_ON_UNMOUNTED_SCREENS == BANNER_MOUNT_SITES and BANNER_REACHED_MOUNTS.len + BANNER_UNMOUNTED_MOUNTS.len == BANNER_MOUNT_SITES

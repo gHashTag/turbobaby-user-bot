@@ -1236,3 +1236,413 @@ invariant every_edge_is_named_by_a_declaration_and_none_of_them_is_missing
 ; literal or the alias list into this file, this is what fails.
 invariant pinning_a_name_never_becomes_copying_a_value
   assert CAP_VALUE_IS_RESTATED_HERE == false and HEADER_LITERAL_IS_RESTATED_HERE == false and ROUTE_ALIASES_ARE_RESTATED_HERE == false and IDEMPOTENCY_ARMS_ARE_RESTATED_HERE == false
+
+; --- The tab's module root, the origin and the files around the transport (2026-09-29) -----------
+; Appended at the end of the file so that no line citation into it moves.
+; WHY (measured 2026-09-29 at 55a6664, every citation below opened that day). Five files of the
+; client half were named by no contract: the root of the browser tree, the transport's module
+; file, the one file that decides which host every API URL is built on, an admin-status hook and
+; the notice a tab outside Telegram shows. Each is named here by its full path with what it holds,
+; how it is built and whether anything reaches it. No number this file carried before moves.
+; --
+; THE ROOT. src/ui/mod.rs (18 lines) declares 15 modules: nine files at :1-9 (admin, app, assets,
+; lang, prefetch, routes, share, state, telegram) and six directories at :11-15 and :18 (api,
+; components, game, pages, theme, screens). It is compiled for the browser and nowhere else.
+; src/lib.rs:17-18 gates `pub mod ui` on target_arch = "wasm32" (WASM_GATE_SITE above); the second
+; declaration, src/main.rs:43-44, carries the same gate inside the server binary, which
+; Cargo.toml:62-65 builds only with the backend feature for the host, so it never compiles the
+; tree either. Trunk builds the library (index.html:117, data-target-name="turbobaby_bot") and
+; names no cargo feature. The tree is entered from run() (src/lib.rs:20-89, the attribute at :20),
+; which launches App at :87. 75 .rs files live under src/ui, and cargo test on the host compiles
+; none of them -- HOST_SUITE_COMPILES_THIS_HALF above is the same fact seen from the test side.
+; --
+; THE TRANSPORT'S MODULE FILE. src/ui/api/mod.rs (9 lines) declares five modules at :1-5 --
+; client, context, http, local_client, types -- and this file named four of them before this date
+; (TYPED_CLIENT_SOURCE, TRANSPORT_SOURCE, SHIM_SOURCE, DTO_SOURCE). It re-exports ApiClient (:7),
+; use_api_client and ApiClientProvider (:8) and every DTO (:9). It does not re-export
+; api_base_url, so every caller spells the path into context.
+; --
+; THE ORIGIN. src/ui/api/context.rs (39 lines) holds the one read of the page origin under src/ui:
+; api_base_url (:11-18) returns window.location.origin (:15-16) and an EMPTY string when there is
+; no window (:17, unwrap_or_default). 105 calls under src/ui reach it -- 104 in 25 other files, 45
+; of those in src/ui/screens/admin_screen.rs, and one inside context.rs through the private
+; get_base_url (:20-22). So every API URL the client builds is on the host that served the page,
+; and the client has no configurable API host. The comment at :12-14 gives the reason as a
+; requirement of reqwest 0.11 in WASM, and that premise names a library the browser build does not
+; compile: reqwest is optional (Cargo.toml:88-91) and switched on only by the backend feature
+; (:175, :179), Trunk switches on none, and every transport under src/ui/api is gloo-net
+; (src/ui/api/client.rs:1, src/ui/api/http.rs:3), whose typed client accepts an empty base as a
+; page-relative path (src/ui/api/client.rs:85-89). The behaviour is harmless and the stated reason
+; is stale; it is recorded and not repaired, because this round changes no code.
+; ApiClientProvider (:31-39) is mounted once, at src/ui/app.rs:262, and installs
+; ApiClient::anonymous (:33), a client that carries no initData, as the doc at :24-30 says out
+; loud. use_api_client (:7-9) has no caller, and no other code asks the context for the client:
+; the typed client is constructed at exactly one site under src/ui and read at none. A dated
+; consequence for this file's own census: the second of UNLABELLED_SITES sits in that client's
+; with_auth, which no request reaches today -- the one instance is anonymous and unread. The census
+; stays 9/7/2 because it counts sites that attach the header, not requests that carry it.
+; --
+; THE ADMIN-STATUS HOOK. src/ui/admin.rs (68 lines) declares use_admin_status (:13), and nothing
+; calls it: under src/ and tests/ the name occurs at its declaration and nowhere else. The browser
+; gate above already covers the module, so its inner cfg arms at :18 and :60 change nothing, and
+; the host arm (:60-63) is never compiled at all. What it would do: read two localStorage keys,
+; wwb_admin_token (:28) -- kept only when non-empty and at most 2048 bytes (:29; String::len
+; counts bytes) -- and wwb_admin_telegram_id (:33), parsed as an i64 with 0 on failure (:36-37).
+; With a 0 it returns before building any request (:38-40), so the rule
+; NO_REQUEST_IS_BUILT_FROM_A_FABRICATED_ID above holds here too. Otherwise it sends GET
+; {origin}/api/admin/check?telegram_id=N (:42-43) through the LocalClient shim (:44) with exactly
+; one header, X-Admin-Token (:46), and reads is_admin out of a 2xx body (:50-54). Every failure --
+; transport, status, body, a missing field -- answers false (:55-56). It sends no initData and no
+; label. Whether that token proves an admin is turbobaby/request-identity's: the server handler
+; (src/api/admin.rs:135, calling check_admin at :477) runs the first gate of GATE_NAMES, which is
+; pinned below as a name. This file owns what the client attaches and what it makes of a failure.
+; The header says the path strings that appear here are "the two that carry a measured defect".
+; Since 2026-09-29 they are three, and this is the third, here for the same reason: it carries a
+; measured divergence. The header is left as written and is dated by this sentence.
+; ITS DOC IS HALF TRUE. :3 says the hook mirrors the check AdminScreen uses. The token half does:
+; the screen keeps the same key and the same inclusive 2048-byte cap
+; (src/ui/screens/admin_screen.rs:81, :84) and sends the same single header (:763). The id half
+; does not: the screen asks with telegram_id=0 and needs no stored id (:759), because the server
+; reads that parameter for display only (src/api/admin.rs:463-465), while the hook will not ask
+; without a non-zero stored id -- and the screen's own login stores a 0 when the id field is left
+; empty (:819, :836). An admin who logs in without typing an id is an admin to the screen and not
+; to the hook. Nothing reads the hook, so the divergence reaches nobody today; it is the fact the
+; next caller would inherit.
+; THE CAP IS WRITTEN SIX TIMES. The same byte bound on the stored admin token is a bare literal at
+; six sites in three files, with no shared constant: src/ui/admin.rs:29,
+; src/ui/screens/admin_screen.rs:75, :84, :590 and :739, and src/ui/screens/tech_tree_screen.rs:16.
+; All six read it inclusively today. Measured in the server source request-identity reads: the
+; X-Admin-Token branch hands the header straight to verify_admin_token with no length check of its
+; own (src/api/auth.rs:477-479, the comparison at :414-417), so the six client copies are the only
+; length bound there is, and nothing but the count below notices when one of them moves.
+; --
+; THE TAB WITH NO TELEGRAM HOST. src/ui/components/open_in_telegram.rs (30 lines) is the state this
+; file's header promises to own: what the client does in a tab with no Telegram host at all.
+; OpenInTelegramNotice (:14) renders three text nodes: two translated keys, T_OPEN_IN_TELEGRAM_TITLE
+; (:24) and T_OPEN_IN_TELEGRAM_BODY (:26), imported at :9, in the language current_lang picks (:15),
+; and one fixed glyph above them, a motorcycle emoji in a 72px div (:23), cited by line because this
+; corpus is ASCII. The glyph passes through no t() and is the same under every locale. CORRECTED
+; 2026-09-30 (review of round 7): this sentence said "two keys and nothing else". Its doc
+; (:3-7) records why it exists: on 2026-09-13, minutes after the shop went live, a raw resource
+; error in a plain browser tab was reported as a broken tab. It is compiled for the browser only
+; (src/ui/mod.rs:12 -> src/ui/components/mod.rs:19, re-exported at :56) and mounted at ONE site,
+; src/ui/screens/orders_screen.rs:387, in the error arm of the orders read and only when the id is
+; 0 (:386). With no host the bridge yields no id (src/ui/telegram.rs:256 tests for the host, :273
+; returns empty) and the screen reads that as 0 (src/ui/screens/orders_screen.rs:163), and then
+; the orders read returns its error before building a request (:170-171). So in a tab with no host
+; the notice is what that screen shows, and no request is made from the zero. The doc names three
+; screens whose identity comes from initData (orders, profile, checkout, :3); the notice is mounted
+; on the first alone, and what the other two show in such a tab is not measured here.
+pub const NAMING_MEASURED_AT : str = "2026-09-29";
+pub const NAMING_MEASURED_AT_COMMIT : str = "55a6664";
+
+pub const UI_ROOT_SOURCE : str = "src/ui/mod.rs";
+pub const UI_ROOT_SOURCE_LINES : u8 = 18;
+pub const UI_ROOT_MODULE_COUNT : u8 = 15;
+pub const UI_ROOT_FILE_MODULES : u8 = 9;
+pub const UI_ROOT_DIRECTORY_MODULES : u8 = 6;
+pub const UI_ROOT_DECLARATION_SITES : [2]str = ["src/lib.rs:17-18", "src/main.rs:43-44"];
+pub const UI_ROOT_DECLARATIONS_GATED_ON_THE_BROWSER : u8 = 2;
+pub const UI_TREE_RS_FILES : u8 = 75;
+pub const UI_TREE_IS_COMPILED_FOR_THE_HOST : bool = false;
+pub const BROWSER_BUILD_TARGET : str = "turbobaby_bot";
+pub const BROWSER_BUILD_ENABLES_THE_BACKEND_FEATURE : bool = false;
+pub const UI_ENTRY : str = "src/lib.rs:20-89 run, launching App at :87";
+
+pub const TRANSPORT_MODULE_FILE : str = "src/ui/api/mod.rs";
+pub const TRANSPORT_MODULE_FILE_LINES : u8 = 9;
+pub const TRANSPORT_MODULE_NAMES : [5]str = ["client", "context", "http", "local_client", "types"];
+pub const TRANSPORT_MODULE_COUNT : u8 = 5;
+pub const TRANSPORT_MODULES_NAMED_BEFORE_2026_09_29 : u8 = 4;
+pub const TRANSPORT_MODULE_RE_EXPORT_LINES : u8 = 3;
+pub const ORIGIN_READER_IS_RE_EXPORTED : bool = false;
+
+pub const ORIGIN_SOURCE : str = "src/ui/api/context.rs";
+pub const ORIGIN_SOURCE_LINES : u8 = 39;
+pub const PAGE_ORIGIN_READ_SITES : u8 = 1;
+pub const ORIGIN_READER_CALL_SITES : u8 = 105;
+pub const ORIGIN_READER_CALL_SITES_OUTSIDE_ITS_FILE : u8 = 104;
+pub const ORIGIN_READER_CALL_SITES_INSIDE_ITS_FILE : u8 = 1;
+pub const ORIGIN_READER_CALLER_FILES_OUTSIDE_ITS_FILE : u8 = 25;
+pub const ORIGIN_READER_CALLS_IN_THE_ADMIN_SCREEN : u8 = 45;
+pub const ABSENT_WINDOW_YIELDS_AN_EMPTY_BASE : bool = true;
+pub const API_HOST_IS_CONFIGURABLE_IN_THE_CLIENT : bool = false;
+pub const ORIGIN_COMMENT_NAMES_A_LIBRARY_THE_BROWSER_BUILD_COMPILES : bool = false;
+pub const TYPED_CLIENT_TAKES_AN_EMPTY_BASE_AS_PAGE_RELATIVE : bool = true;
+pub const PROVIDER_MOUNT_SITES : u8 = 1;
+pub const PROVIDER_MOUNT_SITE : str = "src/ui/app.rs:262";
+pub const PROVIDED_CLIENT_CARRIES_A_PROOF : bool = false;
+pub const TYPED_CLIENT_CONSTRUCTION_SITES : u8 = 1;
+pub const PROVIDED_CLIENT_READ_SITES : u8 = 0;
+
+pub const ADMIN_STATUS_SOURCE : str = "src/ui/admin.rs";
+pub const ADMIN_STATUS_SOURCE_LINES : u8 = 68;
+pub const ADMIN_STATUS_HOOK : str = "use_admin_status";
+pub const ADMIN_STATUS_HOOK_CALL_SITES : u8 = 0;
+pub const ADMIN_STATUS_HOST_ARM_IS_EVER_COMPILED : bool = false;
+pub const ADMIN_STATUS_STORAGE_KEYS : [2]str = ["wwb_admin_token", "wwb_admin_telegram_id"];
+pub const ADMIN_TOKEN_CLIENT_CAP_BYTES : u16 = 2048;
+pub const ADMIN_TOKEN_CLIENT_CAP_IS_INCLUSIVE : bool = true;
+pub const ADMIN_TOKEN_CLIENT_CAP_SITES_IN_UI : u8 = 6;
+pub const ADMIN_TOKEN_CLIENT_CAP_FILES_IN_UI : u8 = 3;
+pub const ADMIN_TOKEN_CLIENT_CAP_IS_A_SHARED_CONSTANT : bool = false;
+pub const ADMIN_STATUS_PATH : str = "/api/admin/check";
+pub const ADMIN_STATUS_HEADER : str = "X-Admin-Token";
+pub const ADMIN_STATUS_HEADERS_SENT : u8 = 1;
+pub const ADMIN_STATUS_RESPONSE_FIELD : str = "is_admin";
+pub const ADMIN_STATUS_SENDS_INIT_DATA : bool = false;
+pub const ADMIN_STATUS_ASKS_WITHOUT_A_STORED_ID : bool = false;
+pub const ADMIN_SCREEN_ASKS_WITHOUT_A_STORED_ID : bool = true;
+pub const ADMIN_SCREEN_QUERY_ID : u8 = 0;
+pub const ADMIN_STATUS_MIRRORS_THE_SCREEN_ON_THE_TOKEN : bool = true;
+pub const ADMIN_STATUS_MIRRORS_THE_SCREEN_ON_THE_ID : bool = false;
+; The one declaration of request-identity this section consumes that the edge list of 2026-09-21
+; did not pin. EDGE_DECLARATIONS_PINNED above stays the eleven read that day, as a dated reading;
+; this name was read in the owner's file on 2026-09-29.
+pub const REQUEST_IDENTITY_DECLARATIONS_READ_2026_09_29 : [1]str = ["GATE_NAMES"];
+pub const ADMIN_GATE_NAME : str = "check_admin";
+pub const EDGE_DECLARATIONS_PINNED_WITH_THE_2026_09_29_READ : u8 = 12;
+
+pub const NO_HOST_NOTICE_SOURCE : str = "src/ui/components/open_in_telegram.rs";
+pub const NO_HOST_NOTICE_SOURCE_LINES : u8 = 30;
+pub const NO_HOST_NOTICE_COMPONENT : str = "OpenInTelegramNotice";
+; Bound by gate 3 since 2026-09-30: the keys the component passes to t(), in file order.
+pub const NO_HOST_NOTICE_KEYS : [2]str = ["T_OPEN_IN_TELEGRAM_TITLE", "T_OPEN_IN_TELEGRAM_BODY"];
+; Added 2026-09-30 (review of round 7): the component renders one text node that is no key, the
+; glyph at src/ui/components/open_in_telegram.rs:23 (at 55a6664), so three text nodes in all.
+pub const NO_HOST_NOTICE_UNTRANSLATED_TEXT_NODES : u8 = 1;
+pub const NO_HOST_NOTICE_UNTRANSLATED_TEXT_SITE : str = "src/ui/components/open_in_telegram.rs:23 (at 55a6664)";
+pub const NO_HOST_NOTICE_TEXT_NODES : u8 = 3;
+pub const NO_HOST_NOTICE_RENDERS_ONLY_KEYS : bool = false;
+pub const NO_HOST_NOTICE_MOUNT_SITES : u8 = 1;
+pub const NO_HOST_NOTICE_MOUNT_SITE : str = "src/ui/screens/orders_screen.rs:387";
+pub const NO_HOST_NOTICE_REPORT_DATE : str = "2026-09-13";
+pub const NO_HOST_NOTICE_DOC_NAMES_SCREENS : u8 = 3;
+pub const NO_HOST_YIELDS_A_KNOWN_ID : bool = false;
+pub const NO_HOST_ORDERS_READ_MAKES_A_REQUEST : bool = false;
+
+pub const FILES_NAMED_2026_09_29 : [5]str = [
+  "src/ui/mod.rs",
+  "src/ui/api/mod.rs",
+  "src/ui/api/context.rs",
+  "src/ui/admin.rs",
+  "src/ui/components/open_in_telegram.rs"
+];
+
+; A request from the typed client leaves with the identity header only when some code reads an
+; instance AND that instance carries a proof. Today neither holds.
+pub fn typed_client_can_send_a_proof(instance_read_sites: u8, instance_carries_a_proof: bool) bool {
+  return instance_read_sites > 0 and instance_carries_a_proof;
+}
+
+pub fn admin_token_is_kept(byte_len: u16) bool {
+  return byte_len > 0 and byte_len <= ADMIN_TOKEN_CLIENT_CAP_BYTES;
+}
+
+pub fn admin_hook_asks_the_server(token_kept: bool, stored_id_is_nonzero: bool) bool {
+  return token_kept and stored_id_is_nonzero;
+}
+
+pub fn admin_screen_asks_the_server(token_kept: bool) bool {
+  return token_kept;
+}
+
+pub fn admin_hook_answer(asked: bool, status_is_2xx: bool, field_reads_true: bool) bool {
+  return asked and status_is_2xx and field_reads_true;
+}
+
+pub fn orders_read_makes_a_request(id_is_known: bool) bool {
+  return id_is_known;
+}
+
+pub fn orders_screen_shows_the_notice(read_failed: bool, id_is_known: bool) bool {
+  return read_failed and !id_is_known;
+}
+
+test the_browser_tree_has_one_root_and_the_host_compiles_none_of_it {
+  assert UI_ROOT_SOURCE == "src/ui/mod.rs";
+  assert UI_ROOT_SOURCE_LINES == 18;
+  assert UI_ROOT_MODULE_COUNT == 15;
+  assert UI_ROOT_FILE_MODULES + UI_ROOT_DIRECTORY_MODULES == UI_ROOT_MODULE_COUNT;
+  assert UI_ROOT_DECLARATION_SITES.len == UI_ROOT_DECLARATIONS_GATED_ON_THE_BROWSER;
+  assert UI_ROOT_DECLARATION_SITES[0] == "src/lib.rs:17-18";
+  assert UI_ROOT_DECLARATION_SITES[1] == "src/main.rs:43-44";
+  assert WASM_GATE_SITE == "src/lib.rs:17";
+  assert UI_TREE_RS_FILES == 75;
+  assert UI_TREE_RS_FILES > UI_ROOT_MODULE_COUNT;
+  assert UI_TREE_RS_FILES > CFG_TEST_MODULES_IN_UI;
+  assert UI_TREE_IS_COMPILED_FOR_THE_HOST == HOST_SUITE_COMPILES_THIS_HALF;
+  assert BROWSER_BUILD_TARGET == "turbobaby_bot";
+  assert BROWSER_BUILD_ENABLES_THE_BACKEND_FEATURE == false;
+  assert a_claim_here_rests_on_a_test(UI_TREE_IS_COMPILED_FOR_THE_HOST) == false;
+  assert UI_ENTRY == "src/lib.rs:20-89 run, launching App at :87";
+}
+
+test the_transport_module_file_declares_five_and_this_file_now_names_all_five {
+  assert TRANSPORT_MODULE_FILE_LINES == 9;
+  assert TRANSPORT_MODULE_NAMES.len == TRANSPORT_MODULE_COUNT;
+  assert TRANSPORT_MODULE_NAMES[0] == "client";
+  assert TRANSPORT_MODULE_NAMES[1] == "context";
+  assert TRANSPORT_MODULE_NAMES[2] == "http";
+  assert TRANSPORT_MODULE_NAMES[3] == "local_client";
+  assert TRANSPORT_MODULE_NAMES[4] == "types";
+  assert TRANSPORT_MODULES_NAMED_BEFORE_2026_09_29 + 1 == TRANSPORT_MODULE_COUNT;
+  assert TYPED_CLIENT_SOURCE == "src/ui/api/client.rs";
+  assert TRANSPORT_SOURCE == "src/ui/api/http.rs";
+  assert SHIM_SOURCE == "src/ui/api/local_client.rs";
+  assert DTO_SOURCE == "src/ui/api/types.rs";
+  assert ORIGIN_SOURCE == "src/ui/api/context.rs";
+  assert TRANSPORT_MODULE_RE_EXPORT_LINES == 3;
+  assert ORIGIN_READER_IS_RE_EXPORTED == false;
+}
+
+test every_api_url_rests_on_one_read_of_the_page_origin {
+  assert ORIGIN_SOURCE_LINES == 39;
+  assert PAGE_ORIGIN_READ_SITES == 1;
+  assert ORIGIN_READER_CALL_SITES == 105;
+  assert ORIGIN_READER_CALL_SITES_OUTSIDE_ITS_FILE + ORIGIN_READER_CALL_SITES_INSIDE_ITS_FILE == ORIGIN_READER_CALL_SITES;
+  assert ORIGIN_READER_CALLER_FILES_OUTSIDE_ITS_FILE == 25;
+  assert ORIGIN_READER_CALLS_IN_THE_ADMIN_SCREEN == 45;
+  assert ORIGIN_READER_CALLS_IN_THE_ADMIN_SCREEN < ORIGIN_READER_CALL_SITES_OUTSIDE_ITS_FILE;
+  assert ABSENT_WINDOW_YIELDS_AN_EMPTY_BASE == true;
+  assert API_HOST_IS_CONFIGURABLE_IN_THE_CLIENT == false;
+  assert ORIGIN_COMMENT_NAMES_A_LIBRARY_THE_BROWSER_BUILD_COMPILES == false;
+  assert TYPED_CLIENT_TAKES_AN_EMPTY_BASE_AS_PAGE_RELATIVE == true;
+}
+
+; The provider hands out a client nothing reads, and the one instance carries no proof, so the
+; typed client's header site is a site and not a sender. The census above is unchanged by this.
+test the_provided_client_is_anonymous_and_read_by_nothing {
+  assert PROVIDER_MOUNT_SITES == 1;
+  assert PROVIDER_MOUNT_SITE == "src/ui/app.rs:262";
+  assert PROVIDED_CLIENT_CARRIES_A_PROOF == false;
+  assert TYPED_CLIENT_CONSTRUCTION_SITES == 1;
+  assert PROVIDED_CLIENT_READ_SITES == 0;
+  assert typed_client_can_send_a_proof(PROVIDED_CLIENT_READ_SITES, PROVIDED_CLIENT_CARRIES_A_PROOF) == false;
+  assert typed_client_can_send_a_proof(1, PROVIDED_CLIENT_CARRIES_A_PROOF) == false;
+  assert typed_client_can_send_a_proof(PROVIDED_CLIENT_READ_SITES, true) == false;
+  assert typed_client_can_send_a_proof(1, true) == true;
+  assert UNLABELLED_SITES[1] == "src/ui/api/client.rs:100";
+  assert AUTH_HEADER_SITES == 9;
+  assert SITES_OMITTING_THE_LABEL == 2;
+}
+
+test the_admin_hook_is_compiled_and_called_by_nothing {
+  assert ADMIN_STATUS_SOURCE == "src/ui/admin.rs";
+  assert ADMIN_STATUS_SOURCE_LINES == 68;
+  assert ADMIN_STATUS_HOOK == "use_admin_status";
+  assert ADMIN_STATUS_HOOK_CALL_SITES == 0;
+  assert ADMIN_STATUS_HOST_ARM_IS_EVER_COMPILED == UI_TREE_IS_COMPILED_FOR_THE_HOST;
+  assert ADMIN_STATUS_STORAGE_KEYS.len == 2;
+  assert ADMIN_STATUS_STORAGE_KEYS[0] == "wwb_admin_token";
+  assert ADMIN_STATUS_STORAGE_KEYS[1] == "wwb_admin_telegram_id";
+  assert ADMIN_STATUS_PATH == "/api/admin/check";
+  assert ADMIN_STATUS_HEADER == "X-Admin-Token";
+  assert ADMIN_STATUS_HEADERS_SENT == 1;
+  assert ADMIN_STATUS_RESPONSE_FIELD == "is_admin";
+  assert ADMIN_STATUS_SENDS_INIT_DATA == false;
+  assert IDENTITY_HEADER_CALLS_OUTSIDE_THE_TRANSPORT == 44;
+}
+
+test the_admin_token_cap_is_inclusive_at_2048_bytes {
+  assert ADMIN_TOKEN_CLIENT_CAP_BYTES == 2048;
+  assert ADMIN_TOKEN_CLIENT_CAP_IS_INCLUSIVE == true;
+  assert admin_token_is_kept(2048) == true;
+  assert admin_token_is_kept(2049) == false;
+  assert admin_token_is_kept(0) == false;
+  assert admin_token_is_kept(1) == true;
+  assert ADMIN_TOKEN_CLIENT_CAP_SITES_IN_UI == 6;
+  assert ADMIN_TOKEN_CLIENT_CAP_FILES_IN_UI == 3;
+  assert ADMIN_TOKEN_CLIENT_CAP_FILES_IN_UI < ADMIN_TOKEN_CLIENT_CAP_SITES_IN_UI;
+  assert ADMIN_TOKEN_CLIENT_CAP_IS_A_SHARED_CONSTANT == false;
+}
+
+; Every failure is a false, and a zero id is not a question the hook asks.
+test the_admin_hook_answers_false_on_every_failure_and_never_asks_with_a_zero {
+  assert admin_hook_asks_the_server(true, false) == false;
+  assert admin_hook_asks_the_server(false, true) == false;
+  assert admin_hook_asks_the_server(true, true) == true;
+  assert admin_hook_answer(false, true, true) == false;
+  assert admin_hook_answer(true, false, true) == false;
+  assert admin_hook_answer(true, true, false) == false;
+  assert admin_hook_answer(true, true, true) == true;
+  assert NO_REQUEST_IS_BUILT_FROM_A_FABRICATED_ID == true;
+}
+
+; The doc's "mirrors" is true of the token and false of the id, and the pair of functions is where
+; the divergence can be read: an admin with a token and a stored zero.
+test the_hook_mirrors_the_screen_on_the_token_and_not_on_the_id {
+  assert ADMIN_STATUS_MIRRORS_THE_SCREEN_ON_THE_TOKEN == true;
+  assert ADMIN_STATUS_MIRRORS_THE_SCREEN_ON_THE_ID == false;
+  assert ADMIN_STATUS_ASKS_WITHOUT_A_STORED_ID == false;
+  assert ADMIN_SCREEN_ASKS_WITHOUT_A_STORED_ID == true;
+  assert ADMIN_SCREEN_QUERY_ID == 0;
+  assert admin_screen_asks_the_server(true) == true;
+  assert admin_hook_asks_the_server(true, false) != admin_screen_asks_the_server(true);
+  assert admin_hook_asks_the_server(false, false) == admin_screen_asks_the_server(false);
+}
+
+test the_admin_gate_is_request_identitys_and_is_named_not_copied {
+  assert REQUEST_IDENTITY_DECLARATIONS_READ_2026_09_29.len == 1;
+  assert REQUEST_IDENTITY_DECLARATIONS_READ_2026_09_29[0] == "GATE_NAMES";
+  assert ADMIN_GATE_NAME == "check_admin";
+  assert REUSES_REQUEST_IDENTITY_ID == "turbobaby/request-identity";
+  assert REUSE_EDGE_COUNT == 5;
+  assert EDGE_DECLARATIONS_PINNED == 11;
+  assert EDGE_DECLARATIONS_PINNED + REQUEST_IDENTITY_DECLARATIONS_READ_2026_09_29.len == EDGE_DECLARATIONS_PINNED_WITH_THE_2026_09_29_READ;
+  assert edge_rests_on_a_live_declaration(true) == true;
+}
+
+test a_tab_with_no_host_shows_the_notice_on_orders_and_asks_nothing {
+  assert NO_HOST_NOTICE_SOURCE == "src/ui/components/open_in_telegram.rs";
+  assert NO_HOST_NOTICE_SOURCE_LINES == 30;
+  assert NO_HOST_NOTICE_COMPONENT == "OpenInTelegramNotice";
+  assert NO_HOST_NOTICE_KEYS.len == 2;
+  assert NO_HOST_NOTICE_KEYS[0] == "T_OPEN_IN_TELEGRAM_TITLE";
+  assert NO_HOST_NOTICE_KEYS[1] == "T_OPEN_IN_TELEGRAM_BODY";
+  assert NO_HOST_NOTICE_KEYS.len + NO_HOST_NOTICE_UNTRANSLATED_TEXT_NODES == NO_HOST_NOTICE_TEXT_NODES;
+  assert NO_HOST_NOTICE_UNTRANSLATED_TEXT_NODES == 1;
+  assert NO_HOST_NOTICE_UNTRANSLATED_TEXT_SITE == "src/ui/components/open_in_telegram.rs:23 (at 55a6664)";
+  assert NO_HOST_NOTICE_RENDERS_ONLY_KEYS == false and NO_HOST_NOTICE_UNTRANSLATED_TEXT_NODES > 0;
+  assert NO_HOST_NOTICE_MOUNT_SITES == 1;
+  assert NO_HOST_NOTICE_MOUNT_SITE == "src/ui/screens/orders_screen.rs:387";
+  assert NO_HOST_NOTICE_REPORT_DATE == "2026-09-13";
+  assert NO_HOST_NOTICE_DOC_NAMES_SCREENS == 3;
+  assert NO_HOST_NOTICE_MOUNT_SITES < NO_HOST_NOTICE_DOC_NAMES_SCREENS;
+  assert NO_HOST_YIELDS_A_KNOWN_ID == false;
+  assert init_data_payload_is_empty(init_data_origin(false, false, false)) == true;
+  assert orders_read_makes_a_request(NO_HOST_YIELDS_A_KNOWN_ID) == NO_HOST_ORDERS_READ_MAKES_A_REQUEST;
+  assert orders_screen_shows_the_notice(true, NO_HOST_YIELDS_A_KNOWN_ID) == true;
+  assert orders_screen_shows_the_notice(true, true) == false;
+  assert orders_screen_shows_the_notice(false, false) == false;
+  assert orders_read_makes_a_request(true) == true;
+}
+
+test the_five_files_named_on_2026_09_29_are_listed_by_full_path {
+  assert FILES_NAMED_2026_09_29.len == 5;
+  assert FILES_NAMED_2026_09_29[0] == UI_ROOT_SOURCE;
+  assert FILES_NAMED_2026_09_29[1] == TRANSPORT_MODULE_FILE;
+  assert FILES_NAMED_2026_09_29[2] == ORIGIN_SOURCE;
+  assert FILES_NAMED_2026_09_29[3] == ADMIN_STATUS_SOURCE;
+  assert FILES_NAMED_2026_09_29[4] == NO_HOST_NOTICE_SOURCE;
+  assert NAMING_MEASURED_AT == "2026-09-29";
+  assert NAMING_MEASURED_AT_COMMIT == "55a6664";
+}
+
+invariant the_tab_root_is_built_for_the_browser_alone
+  assert UI_TREE_IS_COMPILED_FOR_THE_HOST == false and UI_ROOT_FILE_MODULES + UI_ROOT_DIRECTORY_MODULES == UI_ROOT_MODULE_COUNT and UI_ROOT_DECLARATION_SITES.len == UI_ROOT_DECLARATIONS_GATED_ON_THE_BROWSER
+
+invariant every_transport_module_is_named_by_this_file
+  assert TRANSPORT_MODULE_NAMES.len == TRANSPORT_MODULE_COUNT and TRANSPORT_MODULES_NAMED_BEFORE_2026_09_29 + 1 == TRANSPORT_MODULE_COUNT
+
+invariant the_client_has_one_origin_and_no_configurable_host
+  assert PAGE_ORIGIN_READ_SITES == 1 and API_HOST_IS_CONFIGURABLE_IN_THE_CLIENT == false and ORIGIN_READER_CALL_SITES_OUTSIDE_ITS_FILE + ORIGIN_READER_CALL_SITES_INSIDE_ITS_FILE == ORIGIN_READER_CALL_SITES
+
+invariant the_typed_client_sends_no_proof_while_its_one_instance_is_anonymous_and_unread
+  assert typed_client_can_send_a_proof(PROVIDED_CLIENT_READ_SITES, PROVIDED_CLIENT_CARRIES_A_PROOF) == false and TYPED_CLIENT_CONSTRUCTION_SITES == 1
+
+invariant the_admin_hook_builds_no_request_from_a_zero_id
+  assert admin_hook_asks_the_server(true, false) == false and admin_hook_answer(false, true, true) == false and ADMIN_STATUS_HOOK_CALL_SITES == 0
+
+invariant a_tab_with_no_host_asks_the_orders_route_nothing
+  assert orders_read_makes_a_request(NO_HOST_YIELDS_A_KNOWN_ID) == false and orders_screen_shows_the_notice(true, NO_HOST_YIELDS_A_KNOWN_ID) == true

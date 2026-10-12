@@ -1,0 +1,1180 @@
+// SPDX-License-Identifier: Apache-2.0
+; specs/turbobaby/ui_kit.t27 -- the shared presentational kit: which of its primitives a live route
+; can actually render, and which of the class names they emit any stylesheet answers
+; BOUNDARY. This file owns nineteen files and nothing else: the seventeen presentational
+; primitives under src/ui/components that no domain contract names -- button, card, card_media,
+; modal, image_lightbox, input, loading, video_modal, video_mute, badge, chip, empty_state,
+; lazy_screen, progress_bar, rarity_glow, skeleton and toast -- their module list
+; src/ui/components/mod.rs, and the theme module src/ui/theme/mod.rs. About them it owns five
+; facts: (1) the mount census -- which primitive a live route can render, which only has a mount
+; site whose branch is never taken, and which has no live site at all; (2) the class vocabulary
+; the primitives emit, which of it any rule in styles/*.css answers, and what the one host test
+; over that vocabulary cannot see; (3) the render deferral LazyScreen applies; (4) the drift of the
+; dead theme module against the stylesheets; (5) the media URL predicate and its hand copies. It
+; owns no wording, no route, no price, no tab, no error message and no retirement: eleven sibling
+; contracts own those and are named by ID below, not one of them restated.
+; --
+; WHY (measured 2026-09-29 at 55a6664). None of the 46 contracts named any of these files: a scan
+; of every .t27 for each file's repo-relative path found none of the nineteen, 1753 lines between
+; them. They compile only for wasm32 (src/lib.rs:17-18 gates `pub mod ui`, and
+; src/ui/mod.rs:12 and :15 declare components and theme), none of them carries a #[cfg(test)]
+; module, and the one host instrument that reads them at all -- css_class_consistency_tests,
+; src/main.rs:1609 -- reads a line only when its trimmed text starts with `class: "` and the
+; quoted value holds no brace (src/main.rs:1659 and :1669). That rule sees 7 of the kit's 43 class
+; attributes and none of the 67 class tokens its css_class and selected_class methods return,
+; because a method returns a string and is never a `class: "` line.
+; 45 of those 67 tokens have no selector in any of styles/*.css. They were not always unstyled:
+; at the parent of 158500b (2026-05-15) 43 of the 45 had a rule, 37 of them in
+; styles/components.css, and 158500b deleted that 852-line sheet together with its index.html
+; link. docs/DESIGN_SYSTEM.md:421 and :458 still name the deleted sheet. All 45 sit in six
+; primitives with no live mount site, so no customer is shown an unstyled one today; the one
+; unstyled class that DOES render on a live route is not a method token at all: /cart mounts
+; EmptyState with glass set (src/ui/screens/cart_screen.rs:197), and the glass variant adds
+; card-glass (src/ui/components/empty_state.rs:22), which no rule answers.
+; The census is the second finding. Counted by mount SITE, eight primitives are mounted, which is
+; what the brief said. Counted by what can RENDER, six are: CardMedia's two live mounts both pass
+; video_url None (src/ui/screens/catalog_screen.rs:859, src/ui/screens/bike_detail.rs:264; the
+; bike DTO at src/ui/screens/catalog_screen.rs:81 carries no video field at all), so its autoplay
+; branch and the mute_media_element call inside it never run on a live route; and VideoModal's
+; one mount on a live screen (src/ui/screens/admin_screen.rs:2378) sits inside fn ItemRow, whose
+; only mount passes no video_url (src/ui/screens/admin_screen.rs:1305, default None at :2315), and
+; whose opener clears the Modal that contains the player in the same click (:2375, with the Modal
+; opened by menu_open at :2363) while Modal renders nothing when closed
+; (src/ui/components/modal.rs:43-45). Both readings are kept below, by name.
+; --
+; WHERE THE BRIEF IS REFUTED (every claim reopened and re-measured on 2026-09-29).
+; "The brief" is the task brief the round-7 ui-kit lane was handed on 2026-09-29. It is not in the
+; repository, and no file in the tree carries its figures, so none of them is a source: each is kept
+; below only as a refuted claim beside the measurement that refutes it, and BRIEF_IS_PUBLISHED says
+; so (added 2026-09-30 at the review of round 7, which found the brief named nowhere).
+;   1. "video_mute is live through CardMedia" and "video_modal is live on /admin only": each has a
+;      mount site on a live screen, and neither can render -- the two paragraphs above.
+;   2. "54 tokens in 7 files" is 67 in 8: the 54 leaves out skeleton's 13, which the same brief
+;      then says all have rules. The 45 without a selector reproduce exactly.
+;   3. "skeleton is used by lazy_screen.rs": it is not. LazyScreen draws its own inline shimmer
+;      (src/ui/components/lazy_screen.rs:65-104) and mounts no Skeleton; the word matches its
+;      comments at :4, :12 and :65.
+;   4. "empty_state is mounted by admin_screen.rs (10 uses)": 9 mount sites plus the import at
+;      src/ui/screens/admin_screen.rs:55.
+;   5. "2 theme tokens differ": 2 differ as TEXT, 1 as a colour. --bg-secondary is var(--bg2) in
+;      styles/variables.css:33, and --bg2 is #1a1a2e (styles/variables.css:18), the theme's value.
+;   6. "the bike_card money helpers re-exported at components/mod.rs:44-46, used by 6+ screens":
+;      the helpers are used, but zero uses go through that re-export; every one spells the full
+;      path crate::ui::components::bike_card::.
+;   7. "ChipGroup is a horizontal scroll row (:81-98)": that is its doc comment. Its class,
+;      filter-tag-group (src/ui/components/chip.rs:94), has no rule, so nothing lays it out.
+;   8. "The toast container sits in the top-right corner (:91)": :91 is a doc comment; the corner
+;      is the rule at styles/main.css:943-945, and that rule exists.
+; --
+; WHAT THIS FILE NEVER DOES. It changes no behaviour and fixes nothing: every defect below is a
+; measured, dated fact left for the owner. It decides no wording -- the kit's hard-coded copy is
+; COUNTED, never quoted, and this file carries no Cyrillic -- no route (the router and the tab set
+; are turbobaby/customer-surface's), no price and no dash (turbobaby/pricing-honesty's), no error
+; message (turbobaby/client-errors'), no locale (turbobaby/locale-policy's) and no retirement: a
+; legacy file's reach and state are turbobaby/legacy-retirement's, read through its own
+; component_is_reachable and never restated as a second state machine. It picks no fate for the
+; nine primitives nothing mounts and no fate for the dead theme;
+; RETIREMENT_OF_UNMOUNTED_PRIMITIVES_IS_PUBLISHED says why. It names siblings by ID and
+; declaration, never by line. Several sibling declarations it names (in legacy-retirement,
+; availability and cart-persistence) were written the same day as this file, in the same round.
+; phi^2 + 1/phi^2 = 3 | TRINITY
+
+module turbobaby-ui-kit;
+
+pub const KIND : str = "contract";
+pub const ID : str = "turbobaby/ui-kit";
+pub const NAME : str = "TurboBaby UI kit: what a live route renders of it, and what its class names reach";
+pub const MEASURED_AT : str = "2026-09-29";
+pub const MEASURED_AT_COMMIT : str = "55a6664";
+pub const MODULE_LIST : str = "src/ui/components/mod.rs";
+pub const THEME_MODULE : str = "src/ui/theme/mod.rs";
+pub const STYLE_SHEETS_READ : [4]str = ["styles/admin.css", "styles/main.css", "styles/simple.css", "styles/variables.css"];
+pub const STYLE_SHEETS_LINKED_BY_INDEX_HTML : u8 = 3;
+pub const STYLE_SHEETS_LINK_SITE : str = "index.html:52-54 (at 55a6664), data-trunk rel=css: variables.css, main.css, admin.css";
+
+; --- Reuse edges -------------------------------------------------------------------------------
+; No import exists in this language. A neighbour is named by its ID and by the NAME of the
+; declaration that owns the decision, never by a line number.
+pub const REUSES_CUSTOMER_SURFACE_ID : str = "turbobaby/customer-surface";
+pub const REUSES_CLIENT_ERRORS_ID : str = "turbobaby/client-errors";
+pub const REUSES_WEBAPP_BRIDGE_ID : str = "turbobaby/webapp-bridge";
+pub const REUSES_LEGACY_RETIREMENT_ID : str = "turbobaby/legacy-retirement";
+pub const REUSES_AVAILABILITY_ID : str = "turbobaby/availability";
+pub const REUSES_PRICING_HONESTY_ID : str = "turbobaby/pricing-honesty";
+pub const REUSES_LOCALE_POLICY_ID : str = "turbobaby/locale-policy";
+pub const REUSES_VALIDATION_BOUNDS_ID : str = "turbobaby/validation-bounds";
+pub const REUSES_EVENTS_BOOKING_ID : str = "turbobaby/events-booking";
+pub const REUSES_ORDER_PRESENTATION_ID : str = "turbobaby/order-presentation";
+pub const REUSES_CART_PERSISTENCE_ID : str = "turbobaby/cart-persistence";
+; Added 2026-09-30 at the review of round 7. What the server's write gate admits into a stored media
+; address was declared here (the server gate's site and the two data: prefixes it admits); that is a
+; write-side fact, and what an admin write may produce is turbobaby/catalog-write's. It is read from
+; there by name (WRITE_IMAGE_URL_ADMITTED_PREFIXES) and the two declarations are dropped
+; (RESTATEMENT_DROPPED_ON_2026_09_30). CORRECTED 2026-09-30: REUSE_EDGE_COUNT was 11, and 11 stays as
+; REUSE_EDGE_COUNT_BEFORE_2026_09_30; the eleven above are unchanged.
+pub const REUSES_CATALOG_WRITE_ID : str = "turbobaby/catalog-write";
+pub const REUSE_EDGE_COUNT : u8 = 12;
+pub const REUSE_EDGE_COUNT_BEFORE_2026_09_30 : u8 = 11;
+
+pub const CUSTOMER_SURFACE_OWNS : str = "turbobaby/customer-surface owns the tab bar (TAB_SOURCE, the bottom_nav module listed in this kit's module file) and the size of the client router (ROUTER_DECLARED_ROUTES). This file counts which route handlers wrap their screen in LazyScreen; it never counts the routes themselves.";
+pub const CLIENT_ERRORS_OWNS : str = "turbobaby/client-errors owns what a customer is told when something fails and the overlay that tells him (OVERLAY_SOURCE). The error_overlay and error_banner modules sit in this kit's module file and are counted here as module entries only.";
+pub const WEBAPP_BRIDGE_OWNS : str = "turbobaby/webapp-bridge owns the wasm32 gate (WASM_GATE_SITE) and the fact that the host suite compiles none of this half (HOST_SUITE_COMPILES_THIS_HALF). Every file of this kit sits behind that gate; that is the premise of every count below, not a finding of this file.";
+pub const LEGACY_RETIREMENT_OWNS : str = "turbobaby/legacy-retirement owns what state a legacy surface is in (retirement_state and its first argument legacy_surface_reachable), the seven legacy screens that stay compiled with no handler (REPOINTED_LEGACY_SCREENS_KEPT_UNMOUNTED), and -- since 2026-09-29 -- the reach of each legacy file that mounts a kit primitive: component_is_reachable, read on GOODS_FILES_REACHABLE_MOUNTERS (the accessories and tea screens, the set card, the detail modal), UNROUTED_NON_GOODS_REACHABLE_MOUNTERS (the hunt and tech-tree screens), PRODUCT_DETAIL_MODAL_REACHABLE_MOUNTERS with PRODUCT_DETAIL_MODAL_IS_THE_ONLY_LIGHTBOX_MOUNTER, and SET_CARD_CALLERS. Every one of those is zero, so a primitive mounted only there has no live site here; no second retirement state is declared.";
+pub const AVAILABILITY_OWNS : str = "turbobaby/availability owns what a bike card may say about booking and whether the card reaches a screen at all (card_reaches_a_screen, false on CARD_GRID_MOUNT_SITES and CARD_RENDER_SITES_OUTSIDE_THE_GRID). This file uses that card only as one of the two renderers of Button; it restates nothing the card shows.";
+pub const CART_PERSISTENCE_OWNS : str = "turbobaby/cart-persistence owns the cart line renderer CartItemComponent and records that nothing mounts it (CART_LINE_COMPONENT_MOUNT_SITES). It is the other renderer of Button. Since 2026-09-30 it reads the line's picture rule from this file by name (media_url_is_shown, MEDIA_PREDICATE_SITES) and Button's default handler too (BUTTON_ONCLICK_DEFAULT_DOES_NOTHING); this file counts the line's copy of the predicate and decides nothing about the line.";
+pub const CART_PERSISTENCE_OWNS_BEFORE_2026_09_30 : str = "turbobaby/cart-persistence owns the cart line renderer CartItemComponent and records that nothing mounts it (CART_LINE_COMPONENT_MOUNT_SITES). It is the other renderer of Button, and its own copy of the media predicate is modelled there (cart_line_image_is_drawn); this file counts that copy and decides nothing about the line.";
+pub const CATALOG_WRITE_OWNS : str = "turbobaby/catalog-write owns what an admin write may produce, and since 2026-09-30 that includes the prefixes the server's URL gate admits into a stored image address (WRITE_IMAGE_URL_ADMITTED_PREFIXES, with WRITE_IMAGE_URL_ADMITS_A_DATA_URL). This file owns only the read side: which stored address a primitive shows.";
+pub const PRICING_HONESTY_OWNS : str = "turbobaby/pricing-honesty owns how an absent rate renders (SHAPE_DASH, DASH). The kit's module file re-exports the three bike-card helpers that implement it; this file counts who reaches them through that re-export and decides nothing about the dash.";
+pub const LOCALE_POLICY_OWNS : str = "turbobaby/locale-policy owns the published locale set (PUBLISHED_LOCALES) and the fallthrough of a bare key. The kit's hard-coded strings never pass through t(), so they render the same text under every published locale; this file counts them and quotes none.";
+pub const VALIDATION_BOUNDS_OWNS : str = "turbobaby/validation-bounds owns the shared write-side URL rewrite, whose lack of any refusing branch it records as REWRITER_HAS_A_REFUSING_BRANCH. The kit's media predicate is the READ side and is this file's; the two are not the same function and neither restates the other.";
+pub const EVENTS_BOOKING_OWNS : str = "turbobaby/events-booking owns the mount state of the events screens (EVENT_SCREENS_MOUNTED_BY_THE_CLIENT_ROUTER). One Skeleton caller is an events screen; its liveness is read from there.";
+pub const ORDER_PRESENTATION_OWNS : str = "turbobaby/order-presentation owns the status stepper (SHARED_COMPONENT), a module listed in this kit's module file and not a kit primitive.";
+
+; --- The nineteen files ------------------------------------------------------------------------
+; In the order src/ui/components/mod.rs declares the primitives, then the module file, then the
+; theme. Line counts by `wc -l` on 2026-09-29 at 55a6664.
+pub const KIT_FILE_COUNT : u8 = 19;
+pub const KIT_FILES : [19]str = [
+  "src/ui/components/button.rs",
+  "src/ui/components/card.rs",
+  "src/ui/components/card_media.rs",
+  "src/ui/components/modal.rs",
+  "src/ui/components/image_lightbox.rs",
+  "src/ui/components/input.rs",
+  "src/ui/components/loading.rs",
+  "src/ui/components/video_modal.rs",
+  "src/ui/components/video_mute.rs",
+  "src/ui/components/badge.rs",
+  "src/ui/components/chip.rs",
+  "src/ui/components/empty_state.rs",
+  "src/ui/components/lazy_screen.rs",
+  "src/ui/components/progress_bar.rs",
+  "src/ui/components/rarity_glow.rs",
+  "src/ui/components/skeleton.rs",
+  "src/ui/components/toast.rs",
+  "src/ui/components/mod.rs",
+  "src/ui/theme/mod.rs"
+];
+pub const KIT_FILE_LINES : [19]u16 = [128, 100, 113, 102, 102, 81, 66, 71, 53, 106, 98, 42, 119, 108, 72, 111, 105, 79, 97];
+pub const KIT_SOURCE_LINES : u16 = 1753;
+pub const KIT_PRIMITIVE_COUNT : u8 = 17;
+pub const KIT_GLUE_FILE_COUNT : u8 = 1;
+pub const KIT_THEME_FILE_COUNT : u8 = 1;
+
+; --- Build state -------------------------------------------------------------------------------
+; src/lib.rs:17-18 and src/main.rs:43-44 both gate `pub mod ui` on target_arch = "wasm32";
+; src/ui/mod.rs:12 declares components and :15 declares theme. The gate itself is
+; turbobaby/webapp-bridge's WASM_GATE_SITE and is not re-pinned here.
+pub const KIT_COMPILE_PATH : str = "src/lib.rs:17-18 -> src/ui/mod.rs:12 (components) and :15 (theme) (at 55a6664)";
+pub const KIT_CFG_TEST_MODULES : u8 = 0;
+pub const KIT_IS_COMPILED_BY_THE_HOST_SUITE : bool = false;
+; src/ui/components/video_mute.rs:49-52 is a #[cfg(not(target_arch = "wasm32"))] branch inside a
+; module that exists only on wasm32, so no build of this repository compiles it.
+pub const VIDEO_MUTE_HOST_BRANCH_SITE : str = "src/ui/components/video_mute.rs:49-52 (at 55a6664)";
+pub const VIDEO_MUTE_HOST_BRANCH_IS_EVER_COMPILED : bool = false;
+
+; --- The module file, src/ui/components/mod.rs --------------------------------------------------
+; 28 `pub mod` lines (:7-39) and 28 `pub use` lines (:44-79). Of the 28 modules, 17 are this
+; kit's primitives and 11 are domain components whose owners are elsewhere; bottom_nav is the one
+; module with no `pub use`, and the 28th `pub use` is the alias CartItemType = ui::state::CartItem
+; (:78). The file's own header calls it auto-generated (:2); nothing in the tree generates it.
+pub const GLUE_PUB_MOD_COUNT : u8 = 28;
+pub const GLUE_PUB_USE_COUNT : u8 = 28;
+pub const GLUE_KIT_MODULE_COUNT : u8 = 17;
+pub const GLUE_DOMAIN_MODULE_COUNT : u8 = 11;
+pub const GLUE_DOMAIN_MODULE_NAMES : [11]str = ["bike_card", "bike_grid", "bottom_nav", "cart_item", "open_in_telegram", "product_detail_modal", "set_card", "error_banner", "error_overlay", "id_picker", "status_stepper"];
+pub const GLUE_MODULES_WITHOUT_A_REEXPORT : u8 = 1;
+pub const GLUE_TYPE_ALIASES : u8 = 1;
+pub const GLUE_HEADER_CLAIMS_AUTO_GENERATION : bool = true;
+pub const GLUE_GENERATOR_IS_IN_THE_TREE : bool = false;
+; src/ui/components/mod.rs:44-46 re-exports published, thb_or_dash and DASH from bike_card. Every
+; use of the three, in src/ui/screens and in src/ui/components, spells the full path
+; crate::ui::components::bike_card::<name>; zero go through the re-export (grep, 2026-09-29).
+pub const MONEY_HELPER_REEXPORT_SITE : str = "src/ui/components/mod.rs:44-46 (at 55a6664)";
+pub const MONEY_HELPER_REEXPORTS : [3]str = ["published", "thb_or_dash", "DASH"];
+pub const MONEY_HELPER_REEXPORT_PATH_USES : u8 = 0;
+pub const MONEY_HELPER_RULE_OWNER_ID : str = "turbobaby/pricing-honesty";
+pub const MONEY_HELPER_RULE_OWNER_DECL : str = "SHAPE_DASH";
+
+; --- The mount census ---------------------------------------------------------------------------
+; Four classes, and a primitive is in exactly one. A LIVE site is a mount inside a route handler
+; of src/ui/routes.rs or inside a screen such a handler mounts. A mount inside a legacy file is a
+; live site exactly when turbobaby/legacy-retirement's component_is_reachable says that file is
+; reached, and for every legacy file that mounts a kit primitive it says no (the four
+; *_REACHABLE_MOUNTERS / *_CALLERS declarations LEGACY_MOUNTER_REACH_OWNER_DECLS names, all zero on
+; 2026-09-29). The events screen's reach is turbobaby/events-booking's
+; EVENT_SCREENS_MOUNTED_BY_THE_CLIENT_ROUTER; Button's two renderers' are
+; turbobaby/availability's card_reaches_a_screen and turbobaby/cart-persistence's
+; CART_LINE_COMPONENT_MOUNT_SITES. This file takes each as a boolean input and declares no
+; retirement state of its own.
+pub const REACH_CUSTOMER_ROUTE : u8 = 1;
+pub const REACH_ADMIN_ROUTE_ONLY : u8 = 2;
+pub const REACH_SITE_NEVER_RENDERS : u8 = 3;
+pub const REACH_NO_LIVE_SITE : u8 = 4;
+pub const REACH_CLASS_COUNT : u8 = 4;
+pub const LEGACY_MOUNTER_IS_REACHED : bool = false;
+pub const LEGACY_MOUNTER_REACH_OWNER_ID : str = "turbobaby/legacy-retirement";
+pub const LEGACY_MOUNTER_REACH_OWNER_DECLS : [4]str = ["GOODS_FILES_REACHABLE_MOUNTERS", "UNROUTED_NON_GOODS_REACHABLE_MOUNTERS", "PRODUCT_DETAIL_MODAL_REACHABLE_MOUNTERS", "SET_CARD_CALLERS"];
+pub const LEGACY_MOUNTER_REACH_RULE_DECL : str = "component_is_reachable";
+pub const BUTTON_RENDERER_REACH_OWNER_DECLS : [2]str = ["card_reaches_a_screen", "CART_LINE_COMPONENT_MOUNT_SITES"];
+pub const BUTTON_RENDERER_IS_REACHED : bool = false;
+
+pub fn reach_class(site_on_a_customer_route: bool, site_on_the_admin_route: bool, branch_is_taken: bool) u8 {
+    if (!site_on_a_customer_route and !site_on_the_admin_route) {
+        return REACH_NO_LIVE_SITE;
+    }
+    if (!branch_is_taken) {
+        return REACH_SITE_NEVER_RENDERS;
+    }
+    if (site_on_a_customer_route) {
+        return REACH_CUSTOMER_ROUTE;
+    }
+    return REACH_ADMIN_ROUTE_ONLY;
+}
+
+pub fn reach_class_is_known(class: u8) bool {
+    return class >= REACH_CUSTOMER_ROUTE and class <= REACH_CLASS_COUNT;
+}
+
+; The seventeen primitives in module-file order, the three measured inputs of each (1 = yes), and
+; the class those inputs give. The evidence for every row is the matching entry of
+; KIT_REACH_EVIDENCE.
+pub const KIT_PRIMITIVE_NAMES : [17]str = ["Button", "Card", "CardMedia", "Modal", "ImageLightbox", "Input", "Loading", "VideoModal", "mute_media_element", "Badge", "Chip", "EmptyState", "LazyScreen", "ProgressBar", "RarityGlow", "Skeleton", "Toast"];
+pub const KIT_SITE_ON_A_CUSTOMER_ROUTE : [17]u8 = [0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0];
+pub const KIT_SITE_ON_THE_ADMIN_ROUTE : [17]u8 = [0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 1, 1];
+pub const KIT_BRANCH_IS_TAKEN : [17]u8 = [0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1];
+pub const KIT_PRIMITIVE_REACH : [17]u8 = [4, 4, 1, 2, 4, 4, 4, 3, 3, 4, 4, 1, 1, 4, 4, 1, 2];
+pub const KIT_REACH_EVIDENCE : [17]str = [
+  "Button: rendered only by BikeCard (src/ui/components/bike_card.rs:295; its reach is turbobaby/availability's card_reaches_a_screen) and by CartItemComponent (src/ui/components/cart_item.rs:50, :56, :63; turbobaby/cart-persistence's CART_LINE_COMPONENT_MOUNT_SITES), and neither is reached",
+  "Card: `Card {` occurs at no line start under src/ui; every other hit of the word is SkeletonShape::Card or a longer name",
+  "CardMedia: src/ui/screens/catalog_screen.rs:857 and src/ui/screens/bike_detail.rs:262, both reached from /, /menu and the catalog aliases; the image and emoji branches render, the video branch does not",
+  "Modal: six mounts in src/ui/screens/admin_screen.rs (:2269, :2362, :5181, :5233, :5287, :6600), /admin only",
+  "ImageLightbox: only src/ui/components/product_detail_modal.rs:323; that modal's reach is turbobaby/legacy-retirement's PRODUCT_DETAIL_MODAL_REACHABLE_MOUNTERS, and the same contract records it as the lightbox's only mounter (PRODUCT_DETAIL_MODAL_IS_THE_ONLY_LIGHTBOX_MOUNTER)",
+  "Input: `Input {` has no mount site under src/ui",
+  "Loading: no mount site; LoadingOverlay's one mount is inside Loading itself (src/ui/components/loading.rs:60)",
+  "VideoModal: src/ui/screens/admin_screen.rs:2378 inside fn ItemRow, whose only mount (:1305) passes no video_url and whose opener closes the containing Modal (:2375); the other three mounts are src/ui/screens/accessories_screen.rs:269, src/ui/screens/tea_screen.rs:364 and src/ui/components/set_card.rs:263, legacy files whose reach is GOODS_FILES_REACHABLE_MOUNTERS",
+  "mute_media_element: called at src/ui/components/card_media.rs:87 inside the video branch, which both live CardMedia mounts skip, and at src/ui/components/set_card.rs:140, whose card has SET_CARD_CALLERS",
+  "Badge: `Badge {` has no mount site under src/ui",
+  "Chip: neither `Chip {` nor `ChipGroup {` has a mount site under src/ui",
+  "EmptyState: src/ui/screens/cart_screen.rs:193 (/cart) and nine mounts in src/ui/screens/admin_screen.rs",
+  "LazyScreen: eleven wraps in src/ui/routes.rs, ten of them customer routes and one /admin",
+  "ProgressBar: no mount site; the three `ProgressBar {` lines in src/ui/game/shop_game.rs (:923, :1196, :1277) mount that file's own private fn ProgressBar (:1390)",
+  "RarityGlow: `RarityGlow {` has no mount site under src/ui",
+  "Skeleton: thirteen screen files outside the kit, six of them live (catalog_screen, bike_detail, orders_screen, order_detail_screen, profile_screen, admin_screen); the other seven are legacy-retirement's goods and unrouted screens and the events screen",
+  "Toast: src/ui/screens/admin_screen.rs:158-160 (ToastContainer and Toast in render_toasts), /admin only"
+];
+
+pub fn count_reach(reach: [17]u8, class: u8) u8 {
+    var found : u8 = 0;
+    var i : u8 = 0;
+    while (i < KIT_PRIMITIVE_COUNT) {
+        if (reach[i] == class) {
+            found += @as(u8, 1);
+        }
+        i += @as(u8, 1);
+    }
+    return found;
+}
+
+pub fn reach_rows_follow_from_their_inputs() bool {
+    var i : u8 = 0;
+    while (i < KIT_PRIMITIVE_COUNT) {
+        if (reach_class(KIT_SITE_ON_A_CUSTOMER_ROUTE[i] == 1, KIT_SITE_ON_THE_ADMIN_ROUTE[i] == 1, KIT_BRANCH_IS_TAKEN[i] == 1) != KIT_PRIMITIVE_REACH[i]) {
+            return false;
+        }
+        i += @as(u8, 1);
+    }
+    return true;
+}
+
+pub const PRIMITIVES_RENDERING_ON_A_CUSTOMER_ROUTE : u8 = 4;
+pub const PRIMITIVES_RENDERING_ON_ADMIN_ONLY : u8 = 2;
+pub const PRIMITIVES_WITH_A_SITE_THAT_NEVER_RENDERS : u8 = 2;
+pub const PRIMITIVES_WITH_NO_LIVE_SITE : u8 = 9;
+pub const PRIMITIVES_THAT_CAN_RENDER : u8 = 6;
+pub const PRIMITIVES_WITH_A_LIVE_MOUNT_SITE : u8 = 8;
+pub const BRIEF_MOUNTED_PRIMITIVE_COUNT : u8 = 8;
+pub const BRIEF_UNMOUNTED_PRIMITIVE_COUNT : u8 = 9;
+pub const BRIEF_COUNTED_SITES_NOT_RENDERS : bool = true;
+; Eight components the census puts in REACH_NO_LIVE_SITE because no line under src/ui mounts them
+; at all: `Name {` at a line start occurs for none of them. Button (four sites), ImageLightbox (one)
+; and ProgressBar (a different, private component of the same name) are counted apart above.
+pub const UNCALLED_PRIMITIVE_COMPONENTS : [8]str = ["Card", "Input", "Loading", "Badge", "Chip", "ChipGroup", "RarityGlow", "SkeletonRow"];
+pub const MOUNT_SITES_OF_THE_UNCALLED_PRIMITIVES : u8 = 0;
+; The theme module is not a primitive and has no mount at all: CSS_VARS and inject_theme are named
+; by no file but their own (src/ui/theme/mod.rs:6 and :95).
+pub const THEME_EXPORT_FILES : u8 = 1;
+pub const THEME_EXPORT_CALLERS : u8 = 0;
+
+; --- LazyScreen, src/ui/components/lazy_screen.rs ------------------------------------------------
+; delay_ms defaults to 16 (:18); heavy replaces it with 80 (:24) -- the caller's delay_ms is then
+; ignored -- and adds one more 16 ms wait (:33). The placeholder is inline (:42-116, keyframes
+; lazy-spin :108 and lazy-shimmer :111) and mounts no Skeleton. src/ui/routes.rs imports it at :7
+; and wraps eleven handlers; one passes heavy (Admin, :341). No caller passes delay_ms.
+pub const LAZY_DEFAULT_DELAY_MS : u32 = 16;
+pub const LAZY_HEAVY_DELAY_MS : u32 = 80;
+pub const LAZY_HEAVY_EXTRA_TICK_MS : u32 = 16;
+pub const LAZY_DELAY_SITES : str = "src/ui/components/lazy_screen.rs:18 (default 16), :24 (heavy 80), :33 (extra 16) (at 55a6664)";
+pub const LAZY_WRAPPED_HANDLERS : u8 = 11;
+pub const LAZY_WRAPPED_HANDLER_NAMES : [11]str = ["Home", "Menu", "Cart", "Checkout", "Success", "Orders", "OrderDetail", "Profile", "Quest", "Referrals", "Admin"];
+pub const LAZY_HEAVY_HANDLERS : u8 = 1;
+pub const LAZY_HEAVY_HANDLER_NAMES : [1]str = ["Admin"];
+pub const LAZY_CALLERS_PASSING_DELAY_MS : u8 = 0;
+; Every other handler of the same router mounts no LazyScreen: the handlers that render only the
+; catalog, which turbobaby/legacy-retirement counts (REPOINTED_ROUTE_COUNT), and three more that are
+; this file's to name -- Ride (deliberately, src/ui/routes.rs:267-269), Skate (:276) and NotFound
+; (:348). How many handlers the router has is turbobaby/customer-surface's (ROUTER_DECLARED_ROUTES).
+; The same CatalogScreen therefore paints a 16 ms placeholder at / (:109) and none at /sets (:136-140).
+; CORRECTED 2026-09-30 (review of round 7): the unwrapped handlers and the catalog-only ones among
+; them were declared here as two literals, the router's size less the wraps and a copy of the
+; repointed count, with no tie to either owner. The copies go and the owners stay: both names are
+; listed in RESTATEMENT_DROPPED_ON_2026_09_30, and this file keeps what it measured itself -- the
+; wraps (LAZY_WRAPPED_HANDLERS, bound) and the three unwrapped handlers that are not catalog aliases.
+pub const LAZY_UNWRAPPED_NON_CATALOG_HANDLER_NAMES : [3]str = ["Ride", "Skate", "NotFound"];
+pub const ROUTER_SIZE_OWNER_DECL : str = "ROUTER_DECLARED_ROUTES";
+pub const CATALOG_ONLY_HANDLERS_OWNER_DECL : str = "REPOINTED_ROUTE_COUNT";
+pub const ROUTES_HEADER_SAYS_ALL_SCREENS_ARE_WRAPPED : bool = true;
+pub const ROUTES_HEADER_SITE : str = "src/ui/routes.rs:4 (at 55a6664)";
+; The doc at src/ui/components/lazy_screen.rs:5-6 gives heavy to "Admin, Ride/Game, TechTree". Ride
+; is not wrapped and Game and TechTree render the catalog unwrapped; Admin is the one heavy wrap.
+pub const LAZY_DOC_NAMES_HEAVY_SCREENS : u8 = 3;
+pub const LAZY_SCREEN_MOUNTS_THE_SKELETON_COMPONENT : bool = false;
+
+pub fn lazy_total_delay_ms(heavy: bool, delay_ms: u32) u32 {
+    if (heavy) {
+        return LAZY_HEAVY_DELAY_MS + LAZY_HEAVY_EXTRA_TICK_MS;
+    }
+    return delay_ms;
+}
+
+; --- Loading placeholders: Skeleton and Loading --------------------------------------------------
+; src/ui/components/skeleton.rs: SkeletonShape has 13 variants (:6-29), css_class (:32-47) returns
+; 13 distinct skeleton-* tokens and every one has a rule in styles/main.css. Thirteen screen files
+; mount Skeleton, all passing a shape; eleven of the thirteen shapes are named at a call site, and
+; Rectangle (the default) and Pack at none. SkeletonRow (:100-111) has no caller.
+; Six of the thirteen caller files are live screens; six are legacy screens whose reach is
+; turbobaby/legacy-retirement's (the accessories and tea screens among GOODS_FILES, the ar_hunt,
+; location_quest, tech_tree and treasure_hunt screens among UNROUTED_NON_GOODS_FILES); one is the
+; events screen (EVENT_SCREENS_MOUNTED_BY_THE_CLIENT_ROUTER).
+pub const SKELETON_SHAPE_COUNT : u8 = 13;
+pub const SKELETON_SHAPES_NAMED_AT_A_CALL_SITE : u8 = 11;
+pub const SKELETON_SHAPES_NEVER_REQUESTED : [2]str = ["Rectangle", "Pack"];
+pub const SKELETON_CALLER_FILES : u8 = 13;
+pub const SKELETON_CALLER_FILES_LIVE : u8 = 6;
+pub const SKELETON_CALLER_FILES_KEPT_UNMOUNTED_LEGACY : u8 = 6;
+pub const SKELETON_CALLER_FILES_UNROUTED_EVENTS : u8 = 1;
+pub const SKELETON_ROW_CALLERS : u8 = 0;
+; src/ui/components/loading.rs: LoadingSize has 3 variants (:4-9); every class it writes is built
+; with format! (:33, :37, :38), so the host test cannot see one of them, and none of the six --
+; loading-overlay, visible, loading-spinner, loading-small, loading-medium, loading-large -- has a
+; rule. Loading and LoadingOverlay have no mount site outside the file.
+pub const LOADING_SIZE_COUNT : u8 = 3;
+pub const LOADING_CLASS_NAMES_WITHOUT_A_RULE : u8 = 6;
+
+; --- Media: CardMedia, mute_media_element, VideoModal, ImageLightbox ----------------------------
+; src/ui/components/card_media.rs: is_media_url (:20-24) admits http://, https:// or a root-relative
+; path and never //. A video renders autoplay (:75), muted (:76), loop (:77) and playsinline (:80),
+; with mute_media_element on mount (:87). A set aspect_ratio gives a fixed box (:51); without one the
+; box is min-height 180px (:55). Both live mounts pass aspect_ratio 4/3
+; (src/ui/screens/catalog_screen.rs:862, src/ui/screens/bike_detail.rs:267), so the variable-height
+; branch renders only for the unmounted accessories screen (src/ui/screens/accessories_screen.rs:324).
+pub const CARD_MEDIA_PREDICATE_SITE : str = "src/ui/components/card_media.rs:20-24 (at 55a6664)";
+pub const CARD_MEDIA_AUTOPLAY_ATTRIBUTES : [4]str = ["autoplay", "muted", "loop", "playsinline"];
+pub const CARD_MEDIA_FREE_HEIGHT_MIN_PX : u16 = 180;
+pub const CARD_MEDIA_LIVE_MOUNTS : u8 = 2;
+pub const CARD_MEDIA_LIVE_MOUNTS_PASSING_NO_VIDEO : u8 = 2;
+pub const CARD_MEDIA_LIVE_MOUNTS_WITH_A_FIXED_RATIO : u8 = 2;
+pub const CARD_MEDIA_LEGACY_MOUNTS : u8 = 2;
+pub const BIKE_DTO_VIDEO_FIELDS : u8 = 0;
+pub const BIKE_DTO_SITE : str = "src/ui/screens/catalog_screen.rs:81-191, image_url at :188 and no video field (at 55a6664)";
+
+pub fn video_branch_is_live(live_mounts: u8, live_mounts_passing_no_video: u8) bool {
+    return live_mounts > live_mounts_passing_no_video;
+}
+
+; src/ui/components/video_mute.rs:28 sets the live .muted (:40), .defaultMuted (:41) and .volume 0
+; (:42), then re-issues play() (:46); the doc (:3-10) says why: the muted attribute Dioxus sets only
+; seeds defaultMuted. It has two callers and neither runs on a live route (KIT_REACH_EVIDENCE).
+pub const VIDEO_MUTE_PROPERTIES_SET : u8 = 3;
+pub const VIDEO_MUTE_REISSUES_PLAY : bool = true;
+pub const VIDEO_MUTE_CALL_SITES : u8 = 2;
+
+; src/ui/components/video_modal.rs: a fixed backdrop at rgba 0.85 and z-index 1000 (:35); its
+; accessible name is a hard-coded Russian word (:41) while its close button reads T_MODAL_CLOSE
+; (:66). The doc (:3-10) says it consolidated four hand copies in menu_screen, accessories_screen,
+; sets_screen and admin_screen; sets_screen is deleted and menu_screen mounts none, so two of the
+; four named sites still mount it, beside two the doc does not name (tea_screen, set_card).
+pub const VIDEO_MODAL_Z_INDEX : u16 = 1000;
+pub const VIDEO_MODAL_MOUNT_SITES : u8 = 4;
+pub const VIDEO_MODAL_LIVE_MOUNT_SITES : u8 = 1;
+pub const VIDEO_MODAL_DOC_NAMED_COPY_SITES : u8 = 4;
+pub const VIDEO_MODAL_DOC_NAMED_SITES_STILL_MOUNTING : u8 = 2;
+; The live site, fn ItemRow in src/ui/screens/admin_screen.rs: video_url defaults to None (:2315)
+; and the only mount (:1305) passes none; the button that opens the player (:2375) also sets
+; menu_open false, and the player lives inside the Modal that menu_open opens (:2363).
+pub const ITEM_ROW_MOUNTS : u8 = 1;
+pub const ITEM_ROW_MOUNTS_PASSING_A_VIDEO : u8 = 0;
+pub const VIDEO_MODAL_OPENERS_THAT_CLOSE_ITS_MODAL : u8 = 1;
+pub const MODAL_RENDERS_WHEN_CLOSED : bool = false;
+
+pub fn video_modal_can_render(mount_passes_a_video: bool, opener_keeps_the_modal_open: bool, modal_renders_when_closed: bool) bool {
+    return mount_passes_a_video and (opener_keeps_the_modal_open or modal_renders_when_closed);
+}
+
+; src/ui/components/image_lightbox.rs: MIN_ZOOM 1.0 (:12), MAX_ZOOM 3.0 (:13), ZOOM_STEP 0.5 (:14),
+; double-tap toggles to 2.0 from the minimum and back to it from anything above (:41); z-index 1100
+; (:47); four hard-coded Russian aria-labels (:51, :79, :89, :95). The corpus has no float, so zoom
+; is carried in tenths; the whole-number bounds are what the drift gate reads.
+pub const LIGHTBOX_MIN_ZOOM_WHOLE : u8 = 1;
+pub const LIGHTBOX_MAX_ZOOM_WHOLE : u8 = 3;
+pub const LIGHTBOX_MIN_ZOOM_TENTHS : u8 = 10;
+pub const LIGHTBOX_MAX_ZOOM_TENTHS : u8 = 30;
+pub const LIGHTBOX_ZOOM_STEP_TENTHS : u8 = 5;
+pub const LIGHTBOX_TOGGLE_ZOOM_TENTHS : u8 = 20;
+pub const LIGHTBOX_Z_INDEX : u16 = 1100;
+
+pub fn lightbox_zoom_in(zoom_tenths: u8) u8 {
+    if (zoom_tenths + LIGHTBOX_ZOOM_STEP_TENTHS > LIGHTBOX_MAX_ZOOM_TENTHS) {
+        return LIGHTBOX_MAX_ZOOM_TENTHS;
+    }
+    return zoom_tenths + LIGHTBOX_ZOOM_STEP_TENTHS;
+}
+
+pub fn lightbox_zoom_out(zoom_tenths: u8) u8 {
+    if (zoom_tenths < LIGHTBOX_MIN_ZOOM_TENTHS + LIGHTBOX_ZOOM_STEP_TENTHS) {
+        return LIGHTBOX_MIN_ZOOM_TENTHS;
+    }
+    return zoom_tenths - LIGHTBOX_ZOOM_STEP_TENTHS;
+}
+
+pub fn lightbox_toggle(zoom_tenths: u8) u8 {
+    if (zoom_tenths > LIGHTBOX_MIN_ZOOM_TENTHS) {
+        return LIGHTBOX_MIN_ZOOM_TENTHS;
+    }
+    return LIGHTBOX_TOGGLE_ZOOM_TENTHS;
+}
+
+; --- The media URL predicate and its copies -------------------------------------------------------
+; Three clauses: http://, https://, or '/' but not '//'. The same clauses are hand-written at 15
+; sites in 9 files under src/ui (the grep for starts_with("//") on 2026-09-29; the tree_regex count
+; in the drift gate is the instrument). Two of the 15 are in the kit. What is this file's is the
+; predicate itself (media_url_is_shown, the canonical is_media_url) and the census of its copies.
+; No copy carries a data: clause (MEDIA_PREDICATE_DATA_SCHEME_CLAUSES, bound), so a data: address
+; is refused everywhere the predicate is written: it starts with none of the three admitted prefixes.
+; What the server's write gate admits into a stored address is turbobaby/catalog-write's
+; (WRITE_IMAGE_URL_ADMITTED_PREFIXES, WRITE_IMAGE_URL_ADMITS_A_DATA_URL): it admits data:image/ and
+; data:video/, which no copy of this predicate admits, so a stored data: URL the server accepted
+; renders the emoji fallback on every card. The rewrite on the admin screen is a third function,
+; turbobaby/validation-bounds' (REWRITER_HAS_A_REFUSING_BRANCH), and is neither of the other two.
+; CORRECTED 2026-09-30 (review of round 7). Until then this paragraph said two owners "model their
+; own copy": turbobaby/legacy-retirement the detail modal's and turbobaby/cart-persistence the cart
+; line's, and neither of them named this file. Since that date both read this predicate by name
+; (media_url_is_shown, MEDIA_PREDICATE_SITES) and keep only what their site adds -- an emptiness test
+; that changes no answer -- and their copies of the clauses are dropped in their own files. And it
+; declared the server gate's site and the two data: prefixes itself, a write-side fact with its owner
+; named wrongly; both declarations are dropped here (RESTATEMENT_DROPPED_ON_2026_09_30) and read from
+; turbobaby/catalog-write.
+pub const MEDIA_PREDICATE_CLAUSES : u8 = 3;
+pub const MEDIA_PREDICATE_SITE_COUNT : u8 = 15;
+pub const MEDIA_PREDICATE_FILE_COUNT : u8 = 9;
+pub const MEDIA_PREDICATE_SITES_IN_THE_KIT : u8 = 2;
+pub const MEDIA_PREDICATE_SITES : [15]str = [
+  "src/ui/components/bike_card.rs:238",
+  "src/ui/components/card.rs:86",
+  "src/ui/components/card_media.rs:23",
+  "src/ui/components/cart_item.rs:20",
+  "src/ui/components/product_detail_modal.rs:100",
+  "src/ui/components/set_card.rs:273",
+  "src/ui/screens/admin_screen.rs:2171",
+  "src/ui/screens/admin_screen.rs:2174",
+  "src/ui/screens/admin_screen.rs:2338",
+  "src/ui/screens/admin_screen.rs:5355",
+  "src/ui/screens/catalog_screen.rs:455",
+  "src/ui/screens/events_screen.rs:283",
+  "src/ui/screens/events_screen.rs:362",
+  "src/ui/screens/events_screen.rs:370",
+  "src/ui/screens/events_screen.rs:381"
+];
+pub const MEDIA_PREDICATE_ADMITS_A_DATA_URL : bool = false;
+; Bound by gate 3 since 2026-09-30, with a witness on the '//' clause: data: clauses in any copy.
+pub const MEDIA_PREDICATE_DATA_SCHEME_CLAUSES : u8 = 0;
+; The two copies whose owners read this predicate by name since 2026-09-30, as MEDIA_PREDICATE_SITES
+; lists them (indices 3 and 4).
+pub const MEDIA_PREDICATE_SITES_READ_BY_THEIR_OWNERS : [2]str = ["src/ui/components/cart_item.rs:20", "src/ui/components/product_detail_modal.rs:100"];
+pub const SERVER_URL_GATE_OWNER_DECL : str = "WRITE_IMAGE_URL_ADMITTED_PREFIXES";
+pub const SERVER_URL_GATE_DATA_OWNER_DECL : str = "WRITE_IMAGE_URL_ADMITS_A_DATA_URL";
+pub const RESTATEMENT_DROPPED_ON_2026_09_30 : [4]str = ["SERVER_URL_GATE_SITE", "SERVER_GATE_PREFIXES_THE_PREDICATE_REFUSES", "LAZY_UNWRAPPED_HANDLERS", "LAZY_UNWRAPPED_CATALOG_ALIASES"];
+pub const WRITE_SIDE_REWRITE_OWNER_ID : str = "turbobaby/validation-bounds";
+pub const WRITE_SIDE_REWRITE_OWNER_DECL : str = "REWRITER_HAS_A_REFUSING_BRANCH";
+
+pub fn media_url_is_shown(starts_http: bool, starts_https: bool, starts_slash: bool, starts_double_slash: bool) bool {
+    return starts_http or starts_https or (starts_slash and !starts_double_slash);
+}
+
+; --- Dialog and notice: Modal, Toast, EmptyState -------------------------------------------------
+; src/ui/components/modal.rs: ModalSize has 4 variants (:22-28) written as modal-sm, modal-md,
+; modal-lg and modal-full (:48), and those four and modal-overlay have rules (styles/main.css:902,
+; :918-921). role dialog and aria-modal (:65-66), focus on mount (:70-74), Escape closes (:76-80);
+; the close label is T_MODAL_CLOSE (:54), and with no title the dialog's accessible name falls back
+; to the same key (:50-53). All six mounts pass a title, so the fallback is reached by none.
+pub const MODAL_SIZE_COUNT : u8 = 4;
+pub const MODAL_SIZE_CLASSES : [4]str = ["modal-sm", "modal-md", "modal-lg", "modal-full"];
+pub const MODAL_SIZE_CLASSES_WITH_A_RULE : u8 = 4;
+pub const MODAL_MOUNT_SITES : u8 = 6;
+pub const MODAL_MOUNTS_PASSING_A_TITLE : u8 = 6;
+pub const MODAL_CLOSED_SITE : str = "src/ui/components/modal.rs:43-45 (at 55a6664)";
+; src/ui/components/toast.rs: ToastKind has 4 variants (:6-12), and css_class (:15-22) returns 5
+; tokens, every one ruled in styles/main.css. title() (:33-40) returns a hard-coded Russian word
+; per kind (:35-38) and the close button's label is hard-coded too (:83). The one mount,
+; render_toasts in src/ui/screens/admin_screen.rs:152-169, passes no title, so on /admin every
+; toast shows the kind's hard-coded word. The container's corner and z-index 3000 are the rule at
+; styles/main.css:943-945.
+pub const TOAST_KIND_COUNT : u8 = 4;
+pub const TOAST_CLASS_TOKENS : u8 = 5;
+pub const TOAST_HARDCODED_CYRILLIC_LITERALS : u8 = 5;
+pub const TOAST_MOUNT_PASSES_A_TITLE : bool = false;
+pub const TOAST_CONTAINER_Z_INDEX : u16 = 3000;
+; src/ui/components/empty_state.rs: the class line (:27) is interpolated, so the host test skips
+; it; its fixed parts and the four inner classes (:29, :31, :33, :36) all have rules. The glass
+; flag adds card-glass (:22), which has none -- and /cart sets it (src/ui/screens/cart_screen.rs:197).
+pub const EMPTY_STATE_MOUNT_SITES : u8 = 10;
+pub const EMPTY_STATE_ADMIN_MOUNT_SITES : u8 = 9;
+pub const EMPTY_STATE_ADMIN_OCCURRENCES_WITH_THE_IMPORT : u8 = 10;
+pub const EMPTY_STATE_MOUNTS_ASKING_FOR_GLASS : u8 = 1;
+pub const EMPTY_STATE_GLASS_CLASS : str = "card-glass";
+pub const CARD_GLASS_RULES_IN_STYLES : u8 = 0;
+pub const CARD_GLASS_RULED_AT_THE_PARENT_OF_158500B : bool = true;
+
+; --- The primitives nothing mounts: Button, Card, Badge, Chip, Input, ProgressBar, RarityGlow -----
+; src/ui/components/button.rs: ButtonVariant 10 (:5-18), ButtonSize 4 (:55-61) written as btn-sm,
+; btn-md, btn-lg, btn-full (:98). Renderers: 4 `Button {` sites in 2 files, neither mounted.
+pub const BUTTON_VARIANT_COUNT : u8 = 10;
+pub const BUTTON_SIZE_COUNT : u8 = 4;
+pub const BUTTON_RENDER_SITES : u8 = 4;
+pub const BUTTON_RENDER_FILES : u8 = 2;
+pub const BUTTON_RENDER_FILES_WITH_A_LIVE_SITE : u8 = 0;
+; Added 2026-09-30 at the review of round 7, where turbobaby/cart-persistence had stated it for its
+; line renderer by these lines and now reads it from here: the onclick prop is #[props(default)] on
+; an EventHandler (src/ui/components/button.rs:84-85), so a Button mounted without a handler renders
+; and does nothing when pressed.
+pub const BUTTON_ONCLICK_DEFAULT_SITE : str = "src/ui/components/button.rs:84-85 (at 55a6664)";
+pub const BUTTON_ONCLICK_DEFAULT_DOES_NOTHING : bool = true;
+; src/ui/components/card.rs: CardVariant 9 (:5-17); another copy of the media predicate (:86); the
+; image's alt text is a hard-coded English phrase (:91).
+pub const CARD_VARIANT_COUNT : u8 = 9;
+; src/ui/components/badge.rs: BadgeVariant 9 (:6-17), four of them rarity tiers; BadgeSize 3
+; (:50-55); default_icon (:34-46) gives 8 of the 9 an icon and Neutral none.
+pub const BADGE_VARIANT_COUNT : u8 = 9;
+pub const BADGE_SIZE_COUNT : u8 = 3;
+pub const BADGE_VARIANTS_WITH_A_DEFAULT_ICON : u8 = 8;
+; src/ui/components/chip.rs: ChipColor 3 (:6-11); selected_class (:14-19). Not one class the file
+; writes has a rule: the three selected tokens, chip, chip-icon, chip-label, chip-close and
+; filter-tag-group. chip-close is on the host test's ALLOWLIST (src/main.rs:1622).
+pub const CHIP_COLOR_COUNT : u8 = 3;
+pub const CHIP_CLASS_NAMES : u8 = 8;
+pub const CHIP_CLASS_NAMES_WITH_A_RULE : u8 = 0;
+; src/ui/components/input.rs: InputType 4 (:31-37) written as password, email, number, text
+; (:64-67); its one class pixel-input (:74) has no rule and is on the ALLOWLIST (src/main.rs:1621),
+; whose comment calls it "1 ref"; that ref is this file, which nothing mounts.
+pub const INPUT_TYPE_COUNT : u8 = 4;
+; src/ui/components/progress_bar.rs: ProgressColor 4 (:6-12), ProgressSize 4 (:27-33); max
+; defaults to 100 (:51) and a non-positive max is reset to 100 (:69). No mount site: shop_game's
+; three `ProgressBar {` lines mount that file's own private component.
+pub const PROGRESS_COLOR_COUNT : u8 = 4;
+pub const PROGRESS_SIZE_COUNT : u8 = 4;
+pub const PROGRESS_DEFAULT_MAX : u8 = 100;
+; src/ui/components/rarity_glow.rs: Rarity 4 tiers (:6-12) with English labels (:26-33) and
+; from_str_lossy (:39-46) falling back to Common; the tag prop (:57) is read by nothing, the wrapper
+; is always a div (:65-67).
+pub const RARITY_TIER_COUNT : u8 = 4;
+pub const RARITY_TAG_PROP_IS_READ : bool = false;
+
+pub fn progress_max(max: u16) u16 {
+    if (max == 0) {
+        return 100;
+    }
+    return max;
+}
+
+; --- The class vocabulary and what answers it ------------------------------------------------------
+; The eight files with a css_class or selected_class method, the distinct tokens each returns, how
+; many of those no selector in styles/*.css names (the same `.name` scan the host test uses,
+; src/main.rs:1692-1733), and each file's reach class from the census above.
+pub const METHOD_TOKEN_FILES : [8]str = [
+  "src/ui/components/button.rs",
+  "src/ui/components/card.rs",
+  "src/ui/components/badge.rs",
+  "src/ui/components/chip.rs",
+  "src/ui/components/progress_bar.rs",
+  "src/ui/components/rarity_glow.rs",
+  "src/ui/components/skeleton.rs",
+  "src/ui/components/toast.rs"
+];
+pub const METHOD_TOKEN_COUNTS : [8]u8 = [12, 10, 12, 3, 7, 5, 13, 5];
+pub const METHOD_TOKENS_WITHOUT_A_RULE : [8]u8 = [9, 9, 12, 3, 7, 5, 0, 0];
+pub const METHOD_TOKENS_WITH_A_RULE : [8]u8 = [3, 1, 0, 0, 0, 0, 13, 5];
+pub const METHOD_TOKEN_FILE_REACH : [8]u8 = [4, 4, 4, 4, 4, 4, 1, 2];
+pub const METHOD_TOKEN_TOTAL : u8 = 67;
+pub const METHOD_TOKEN_FILE_COUNT : u8 = 8;
+pub const METHOD_TOKENS_WITHOUT_A_RULE_TOTAL : u8 = 45;
+pub const METHOD_TOKENS_WITH_A_RULE_TOTAL : u8 = 22;
+pub const METHOD_TOKENS_VISIBLE_TO_THE_HOST_TEST : u8 = 0;
+; The 45, in file order. Button's btn, btn-primary and btn-secondary and Card's card are the four
+; ruled tokens of those two files.
+pub const UNSTYLED_METHOD_TOKENS : [45]str = [
+  "btn-outline", "btn-ghost", "btn-danger", "btn-pixel", "btn-neon", "btn-neon-green", "btn-neon-purple", "btn-neon-gold", "btn-neon-red",
+  "card-default", "card-product", "card-bike", "card-quest", "card-member", "card-glass", "card-glass-green", "card-glass-purple", "card-glass-gold",
+  "badge", "badge-neutral", "badge-rarity-common", "badge-rarity-rare", "badge-rarity-epic", "badge-rarity-legendary", "badge-success", "badge-warning", "badge-info", "badge-error", "badge-sm", "badge-lg",
+  "selected", "chip-purple", "chip-gold",
+  "progress-green", "progress-purple", "progress-gold", "progress-neon", "progress-sm", "progress-lg", "progress-xl",
+  "rarity-glow", "rarity-glow-common", "rarity-glow-rare", "rarity-glow-epic", "rarity-glow-legendary"
+];
+pub const UNSTYLED_METHOD_TOKEN_RULES_IN_STYLES : u8 = 0;
+; Provenance, by `git show` of the two sheets at the parent of 158500b (2026-05-15) and the same
+; `.name` scan: 37 of the 45 had a rule in styles/components.css and 6 more in styles/main.css;
+; card-default and card-bike had none. 158500b deleted styles/components.css (852 lines) and the
+; index.html line that linked it.
+pub const RULES_REMOVED_BY_COMMIT : str = "158500b (2026-05-15), which deleted styles/components.css";
+pub const UNSTYLED_TOKENS_RULED_AT_THE_PARENT_OF_158500B : u8 = 43;
+pub const UNSTYLED_TOKENS_RULED_IN_THE_DELETED_SHEET : u8 = 37;
+pub const DELETED_SHEET_LINES : u16 = 852;
+pub const DESIGN_DOC_NAMES_THE_DELETED_SHEET : bool = true;
+pub const DESIGN_DOC_SITES : str = "docs/DESIGN_SYSTEM.md:421 and :458 (at 55a6664)";
+
+pub fn sum8(v: [8]u8) u8 {
+    var total : u8 = 0;
+    var i : u8 = 0;
+    while (i < METHOD_TOKEN_FILE_COUNT) {
+        total = total + v[i];
+        i += @as(u8, 1);
+    }
+    return total;
+}
+
+pub fn unstyled_tokens_on_a_live_site(without: [8]u8, reach: [8]u8) u8 {
+    var total : u8 = 0;
+    var i : u8 = 0;
+    while (i < METHOD_TOKEN_FILE_COUNT) {
+        if (reach[i] != REACH_NO_LIVE_SITE) {
+            total = total + without[i];
+        }
+        i += @as(u8, 1);
+    }
+    return total;
+}
+
+pub fn sum19(v: [19]u16) u16 {
+    var total : u16 = 0;
+    var i : u8 = 0;
+    while (i < KIT_FILE_COUNT) {
+        total = total + v[i];
+        i += @as(u8, 1);
+    }
+    return total;
+}
+
+; --- The host test and what it cannot see ----------------------------------------------------------
+; css_class_consistency_tests (src/main.rs:1609) takes a line only when its trimmed text starts with
+; `class: "` (:1659) and the quoted value holds no `{` (:1669). Of the kit's 43 class attributes it
+; therefore reads 7 (src/ui/components/modal.rs:58, :84, :90; src/ui/components/input.rs:74;
+; src/ui/components/chip.rs:68; src/ui/components/toast.rs:82, :101). Two of the seven name a class
+; with no rule, and both sit on its ALLOWLIST (src/main.rs:1621-1622). The other
+; 36 are an element and its class on one line, an interpolated value, or a format! call, and the
+; test reads none of them: twelve literal class names with no rule hide that way (listed below), and
+; so do eleven computed ones, card-glass among them.
+pub const HOST_TEST_SITE : str = "src/main.rs:1609 css_class_consistency_tests (at 55a6664)";
+pub const HOST_TEST_LINE_RULE_SITES : str = "src/main.rs:1659 (line must start with class: and a quote) and :1669 (value must hold no brace) (at 55a6664)";
+pub const KIT_CLASS_ATTRIBUTES : u8 = 43;
+pub const KIT_CLASS_ATTRIBUTES_THE_HOST_TEST_READS : u8 = 7;
+pub const KIT_CLASS_ATTRIBUTES_THE_HOST_TEST_SKIPS : u8 = 36;
+pub const KIT_RULELESS_CLASSES_THE_HOST_TEST_READS : u8 = 2;
+pub const KIT_RULELESS_CLASSES_ON_THE_ALLOWLIST : u8 = 2;
+pub const HOST_TEST_ALLOWLIST_SIZE : u8 = 3;
+pub const UNSEEN_RULELESS_LITERAL_CLASSES : [12]str = ["btn-spinner", "btn-icon", "btn-label", "card-image", "badge-icon", "badge-label", "chip", "chip-icon", "chip-label", "filter-tag-group", "progress-bar-wrapper", "progress-bar-label-row"];
+pub const UNSEEN_RULELESS_COMPUTED_CLASSES : [11]str = ["btn-md", "btn-full", "btn-disabled", "glow", "loading-overlay", "visible", "loading-spinner", "loading-small", "loading-medium", "loading-large", "card-glass"];
+pub const RULELESS_KIT_CLASSES_RENDERED_ON_A_LIVE_ROUTE : [1]str = ["card-glass"];
+
+pub fn host_test_reads(line_starts_with_a_class_literal: bool, value_holds_a_brace: bool) bool {
+    return line_starts_with_a_class_literal and !value_holds_a_brace;
+}
+
+; --- The theme module, src/ui/theme/mod.rs ----------------------------------------------------------
+; CSS_VARS (:6-93) declares 13 custom properties (:8-20); inject_theme (:95-97) wraps them in a
+; style tag. Nothing calls either. Against styles/*.css: 7 are declared with the same value; 2 with
+; different text -- --bg-secondary is var(--bg2) (styles/variables.css:33), which resolves to the
+; theme's #1a1a2e (:18), and --bg-tertiary is #20203a (:34) against the theme's #1a1a2e -- and 4 are
+; declared by no sheet at all. The @font-face (:24-28) names family Inter and loads
+; /assets/fonts/PressStart2P.woff2; there is no assets/fonts directory in the tree, and the Inter the
+; page uses comes from Google Fonts (index.html:51).
+pub const THEME_TOKEN_EQUAL : u8 = 1;
+pub const THEME_TOKEN_TEXT_DIFFERS : u8 = 2;
+pub const THEME_TOKEN_ABSENT_FROM_STYLES : u8 = 3;
+pub const THEME_TOKEN_COUNT : u8 = 13;
+pub const THEME_TOKEN_NAMES : [13]str = ["--bg-primary", "--bg-secondary", "--bg-tertiary", "--border", "--text-primary", "--text-secondary", "--green", "--cyan", "--yellow", "--purple", "--red", "--pixel-shadow", "--pixel-border"];
+pub const THEME_TOKEN_STATE : [13]u8 = [3, 2, 2, 1, 3, 3, 1, 1, 1, 1, 1, 1, 3];
+pub const THEME_TOKENS_EQUAL : u8 = 7;
+pub const THEME_TOKENS_TEXT_DIFFERS : u8 = 2;
+pub const THEME_TOKENS_ABSENT_FROM_STYLES : u8 = 4;
+pub const THEME_TOKENS_COLOUR_DIFFERS : u8 = 1;
+pub const STYLES_DEFINITIONS_OF_THE_ABSENT_THEME_TOKENS : u8 = 0;
+pub const THEME_FONT_FAMILY : str = "Inter";
+pub const THEME_FONT_FILE : str = "/assets/fonts/PressStart2P.woff2";
+pub const THEME_FONT_DIRECTORY_IN_THE_TREE : bool = false;
+pub const THEME_FONT_FAMILY_MATCHES_THE_FILE : bool = false;
+pub const BRIEF_THEME_TOKENS_DIFFERING : u8 = 2;
+
+pub fn count_theme_state(state: [13]u8, wanted: u8) u8 {
+    var found : u8 = 0;
+    var i : u8 = 0;
+    while (i < THEME_TOKEN_COUNT) {
+        if (state[i] == wanted) {
+            found += @as(u8, 1);
+        }
+        i += @as(u8, 1);
+    }
+    return found;
+}
+
+; --- Copy that bypasses t() --------------------------------------------------------------------------
+; Eleven string literals in the kit carry Cyrillic outside a comment: toast.rs 5 (:35-38, :83),
+; image_lightbox.rs 4 (:51, :79, :89, :95), video_modal.rs 1 (:41), chip.rs 1 (:69). Two kit files
+; route text through t(): modal.rs (:53-54) and video_modal.rs (:66), both with T_MODAL_CLOSE. Of
+; the eleven, the five in toast.rs render on a live route (/admin); the other six do not.
+pub const KIT_HARDCODED_CYRILLIC_LITERALS : u8 = 11;
+pub const KIT_HARDCODED_CYRILLIC_FILES : u8 = 4;
+pub const KIT_HARDCODED_CYRILLIC_BY_FILE : [4]u8 = [5, 4, 1, 1];
+pub const KIT_HARDCODED_CYRILLIC_RENDERED_LIVE : u8 = 5;
+pub const KIT_FILES_CALLING_T : u8 = 2;
+
+pub fn sum4(v: [4]u8) u8 {
+    return v[0] + v[1] + v[2] + v[3];
+}
+
+; --- What the repository does not publish -----------------------------------------------------------
+; Whether the nine primitives with no live site, the two that never render and the dead theme should
+; be restyled, wired or removed: no source in the tree decides it. docs/DESIGN_SYSTEM.md describes
+; the kit as it was designed and still names the deleted sheet; for legacy SURFACES the same refusal
+; is turbobaby/legacy-retirement's RETIREMENT_ORDER_IS_PUBLISHED, and nothing extends it to
+; primitives. What is missing is the owner's choice, and a contract that picked one would be
+; followed as if it had been made.
+pub const RETIREMENT_OF_UNMOUNTED_PRIMITIVES_IS_PUBLISHED : bool = false;
+pub const THIS_FILE_PICKS_A_FATE : bool = false;
+pub const THIS_FILE_CHANGES_BEHAVIOUR : bool = false;
+; Bound by gate 3 since 2026-09-30 over this file's own text (a `name.t27:N` citation anywhere in it),
+; with a witness on its REUSES_ edges; until then it was a claim no gate or script read.
+pub const SIBLING_LINE_CITATIONS_IN_THIS_FILE : u8 = 0;
+
+; --- Brief readings kept beside the measurement -------------------------------------------------------
+; Every BRIEF_ constant in this file is a claim of the round-7 lane brief, which the repository does
+; not publish (see WHERE THE BRIEF IS REFUTED in the header). None is a measurement and none is used
+; as a value: each is asserted only against the measured declaration that refutes or confirms it.
+pub const BRIEF_SOURCE : str = "the task brief handed to the round-7 ui-kit lane on 2026-09-29; not in the repository";
+pub const BRIEF_IS_PUBLISHED : bool = false;
+pub const BRIEF_FIGURES_ARE_MEASUREMENTS : bool = false;
+pub const BRIEF_METHOD_TOKEN_TOTAL : u8 = 54;
+pub const BRIEF_METHOD_TOKEN_FILE_COUNT : u8 = 7;
+pub const BRIEF_SAID_LAZY_SCREEN_USES_SKELETON : bool = true;
+pub const BRIEF_EMPTY_STATE_ADMIN_USES : u8 = 10;
+pub const BRIEF_SAID_THE_MONEY_REEXPORT_IS_USED : bool = true;
+
+; ============================================================================================
+; Tests
+; ============================================================================================
+
+test the_reuse_edges_name_owners_and_not_this_file {
+  assert REUSES_CUSTOMER_SURFACE_ID == "turbobaby/customer-surface";
+  assert REUSES_CLIENT_ERRORS_ID == "turbobaby/client-errors";
+  assert REUSES_WEBAPP_BRIDGE_ID == "turbobaby/webapp-bridge";
+  assert REUSES_LEGACY_RETIREMENT_ID == "turbobaby/legacy-retirement";
+  assert REUSES_AVAILABILITY_ID == "turbobaby/availability";
+  assert REUSES_PRICING_HONESTY_ID == "turbobaby/pricing-honesty";
+  assert REUSES_LOCALE_POLICY_ID == "turbobaby/locale-policy";
+  assert REUSES_VALIDATION_BOUNDS_ID == "turbobaby/validation-bounds";
+  assert REUSES_EVENTS_BOOKING_ID == "turbobaby/events-booking";
+  assert REUSES_ORDER_PRESENTATION_ID == "turbobaby/order-presentation";
+  assert REUSES_CART_PERSISTENCE_ID == "turbobaby/cart-persistence";
+  assert REUSES_CUSTOMER_SURFACE_ID != ID;
+  assert REUSES_LEGACY_RETIREMENT_ID != ID;
+  assert MONEY_HELPER_RULE_OWNER_ID == REUSES_PRICING_HONESTY_ID;
+  assert WRITE_SIDE_REWRITE_OWNER_ID == REUSES_VALIDATION_BOUNDS_ID;
+  assert REUSE_EDGE_COUNT_BEFORE_2026_09_30 == 11;
+  assert REUSE_EDGE_COUNT == REUSE_EDGE_COUNT_BEFORE_2026_09_30 + 1;
+  assert REUSES_CATALOG_WRITE_ID == "turbobaby/catalog-write";
+  assert CART_PERSISTENCE_OWNS != CART_PERSISTENCE_OWNS_BEFORE_2026_09_30;
+}
+
+test the_nineteen_files_add_up_to_the_measured_lines {
+  assert KIT_FILES.len == KIT_FILE_COUNT;
+  assert KIT_FILE_LINES.len == KIT_FILE_COUNT;
+  assert sum19(KIT_FILE_LINES) == KIT_SOURCE_LINES;
+  assert KIT_PRIMITIVE_COUNT + KIT_GLUE_FILE_COUNT + KIT_THEME_FILE_COUNT == KIT_FILE_COUNT;
+  assert KIT_FILES[17] == MODULE_LIST;
+  assert KIT_FILES[18] == THEME_MODULE;
+  assert KIT_FILES[12] == "src/ui/components/lazy_screen.rs";
+}
+
+test nothing_in_the_kit_is_compiled_by_the_host_suite {
+  assert KIT_CFG_TEST_MODULES == 0;
+  assert KIT_IS_COMPILED_BY_THE_HOST_SUITE == false;
+  assert VIDEO_MUTE_HOST_BRANCH_IS_EVER_COMPILED == false;
+  assert METHOD_TOKENS_VISIBLE_TO_THE_HOST_TEST == 0;
+}
+
+test the_module_file_splits_into_kit_and_domain_entries {
+  assert GLUE_KIT_MODULE_COUNT + GLUE_DOMAIN_MODULE_COUNT == GLUE_PUB_MOD_COUNT;
+  assert GLUE_KIT_MODULE_COUNT == KIT_PRIMITIVE_COUNT;
+  assert GLUE_DOMAIN_MODULE_NAMES.len == GLUE_DOMAIN_MODULE_COUNT;
+  assert GLUE_PUB_MOD_COUNT - GLUE_MODULES_WITHOUT_A_REEXPORT + GLUE_TYPE_ALIASES == GLUE_PUB_USE_COUNT;
+  assert GLUE_DOMAIN_MODULE_NAMES[2] == "bottom_nav";
+  assert GLUE_HEADER_CLAIMS_AUTO_GENERATION == true and GLUE_GENERATOR_IS_IN_THE_TREE == false;
+}
+
+test the_money_reexport_is_published_and_reached_by_no_one {
+  assert MONEY_HELPER_REEXPORTS.len == 3;
+  assert MONEY_HELPER_REEXPORT_PATH_USES == 0;
+  assert BRIEF_SAID_THE_MONEY_REEXPORT_IS_USED == true;
+  assert MONEY_HELPER_RULE_OWNER_DECL == "SHAPE_DASH";
+}
+
+test the_reach_rule_puts_each_input_combination_in_one_class {
+  assert reach_class(false, false, true) == REACH_NO_LIVE_SITE;
+  assert reach_class(false, false, false) == REACH_NO_LIVE_SITE;
+  assert reach_class(true, false, false) == REACH_SITE_NEVER_RENDERS;
+  assert reach_class(false, true, false) == REACH_SITE_NEVER_RENDERS;
+  assert reach_class(true, true, true) == REACH_CUSTOMER_ROUTE;
+  assert reach_class(true, false, true) == REACH_CUSTOMER_ROUTE;
+  assert reach_class(false, true, true) == REACH_ADMIN_ROUTE_ONLY;
+  assert reach_class_is_known(REACH_NO_LIVE_SITE) == true;
+  assert reach_class_is_known(0) == false;
+  assert reach_class_is_known(REACH_CLASS_COUNT + 1) == false;
+}
+
+test a_legacy_mounter_is_no_live_site_by_legacy_retirements_own_input {
+  assert LEGACY_MOUNTER_IS_REACHED == false;
+  assert reach_class(LEGACY_MOUNTER_IS_REACHED, false, true) == REACH_NO_LIVE_SITE;
+  assert reach_class(BUTTON_RENDERER_IS_REACHED, false, true) == REACH_NO_LIVE_SITE;
+  assert LEGACY_MOUNTER_REACH_OWNER_ID == REUSES_LEGACY_RETIREMENT_ID;
+  assert LEGACY_MOUNTER_REACH_OWNER_DECLS.len == 4;
+  assert LEGACY_MOUNTER_REACH_RULE_DECL == "component_is_reachable";
+  assert BUTTON_RENDERER_REACH_OWNER_DECLS.len == 2;
+  assert KIT_PRIMITIVE_NAMES[4] == "ImageLightbox";
+  assert KIT_PRIMITIVE_REACH[4] == REACH_NO_LIVE_SITE;
+}
+
+test the_census_rows_are_derived_from_their_measured_inputs {
+  assert KIT_PRIMITIVE_NAMES.len == KIT_PRIMITIVE_COUNT;
+  assert KIT_PRIMITIVE_REACH.len == KIT_PRIMITIVE_COUNT;
+  assert KIT_REACH_EVIDENCE.len == KIT_PRIMITIVE_COUNT;
+  assert reach_rows_follow_from_their_inputs() == true;
+}
+
+test the_census_counts_renders_and_the_brief_counted_sites {
+  assert count_reach(KIT_PRIMITIVE_REACH, REACH_CUSTOMER_ROUTE) == PRIMITIVES_RENDERING_ON_A_CUSTOMER_ROUTE;
+  assert count_reach(KIT_PRIMITIVE_REACH, REACH_ADMIN_ROUTE_ONLY) == PRIMITIVES_RENDERING_ON_ADMIN_ONLY;
+  assert count_reach(KIT_PRIMITIVE_REACH, REACH_SITE_NEVER_RENDERS) == PRIMITIVES_WITH_A_SITE_THAT_NEVER_RENDERS;
+  assert count_reach(KIT_PRIMITIVE_REACH, REACH_NO_LIVE_SITE) == PRIMITIVES_WITH_NO_LIVE_SITE;
+  assert PRIMITIVES_RENDERING_ON_A_CUSTOMER_ROUTE + PRIMITIVES_RENDERING_ON_ADMIN_ONLY == PRIMITIVES_THAT_CAN_RENDER;
+  assert PRIMITIVES_THAT_CAN_RENDER + PRIMITIVES_WITH_A_SITE_THAT_NEVER_RENDERS == PRIMITIVES_WITH_A_LIVE_MOUNT_SITE;
+  assert PRIMITIVES_WITH_A_LIVE_MOUNT_SITE + PRIMITIVES_WITH_NO_LIVE_SITE == KIT_PRIMITIVE_COUNT;
+  assert BRIEF_MOUNTED_PRIMITIVE_COUNT == PRIMITIVES_WITH_A_LIVE_MOUNT_SITE;
+  assert BRIEF_UNMOUNTED_PRIMITIVE_COUNT == PRIMITIVES_WITH_NO_LIVE_SITE;
+  assert BRIEF_MOUNTED_PRIMITIVE_COUNT != PRIMITIVES_THAT_CAN_RENDER;
+}
+
+test the_theme_has_no_caller {
+  assert THEME_EXPORT_FILES == 1;
+  assert THEME_EXPORT_CALLERS == 0;
+}
+
+test heavy_replaces_the_callers_delay_and_adds_one_tick {
+  assert lazy_total_delay_ms(false, LAZY_DEFAULT_DELAY_MS) == 16;
+  assert lazy_total_delay_ms(true, LAZY_DEFAULT_DELAY_MS) == 96;
+  assert lazy_total_delay_ms(true, 500) == lazy_total_delay_ms(true, 0);
+  assert lazy_total_delay_ms(false, 500) == 500;
+  assert LAZY_HEAVY_EXTRA_TICK_MS == LAZY_DEFAULT_DELAY_MS;
+}
+
+test the_router_wraps_eleven_handlers_and_one_of_them_heavy {
+  assert LAZY_WRAPPED_HANDLER_NAMES.len == LAZY_WRAPPED_HANDLERS;
+  assert LAZY_HEAVY_HANDLER_NAMES.len == LAZY_HEAVY_HANDLERS;
+  assert LAZY_WRAPPED_HANDLER_NAMES[10] == LAZY_HEAVY_HANDLER_NAMES[0];
+  assert LAZY_CALLERS_PASSING_DELAY_MS == 0;
+  // The header's "all screens" is refuted by this file's own three names, without the owners' counts.
+  assert ROUTES_HEADER_SAYS_ALL_SCREENS_ARE_WRAPPED == true and LAZY_UNWRAPPED_NON_CATALOG_HANDLER_NAMES.len > 0;
+  assert LAZY_UNWRAPPED_NON_CATALOG_HANDLER_NAMES[0] == "Ride";
+  assert LAZY_UNWRAPPED_NON_CATALOG_HANDLER_NAMES[2] == "NotFound";
+  assert ROUTER_SIZE_OWNER_DECL == "ROUTER_DECLARED_ROUTES";
+  assert CATALOG_ONLY_HANDLERS_OWNER_DECL == "REPOINTED_ROUTE_COUNT";
+  assert LAZY_DOC_NAMES_HEAVY_SCREENS > LAZY_HEAVY_HANDLERS;
+  assert LAZY_SCREEN_MOUNTS_THE_SKELETON_COMPONENT == false;
+  assert BRIEF_SAID_LAZY_SCREEN_USES_SKELETON != LAZY_SCREEN_MOUNTS_THE_SKELETON_COMPONENT;
+}
+
+test skeleton_callers_split_into_live_legacy_and_events {
+  assert SKELETON_CALLER_FILES_LIVE + SKELETON_CALLER_FILES_KEPT_UNMOUNTED_LEGACY + SKELETON_CALLER_FILES_UNROUTED_EVENTS == SKELETON_CALLER_FILES;
+  assert SKELETON_SHAPES_NAMED_AT_A_CALL_SITE + SKELETON_SHAPES_NEVER_REQUESTED.len == SKELETON_SHAPE_COUNT;
+  assert SKELETON_ROW_CALLERS == 0;
+  assert METHOD_TOKEN_COUNTS[6] == SKELETON_SHAPE_COUNT;
+  assert METHOD_TOKENS_WITHOUT_A_RULE[6] == 0;
+}
+
+test card_medias_video_branch_is_not_live {
+  assert video_branch_is_live(CARD_MEDIA_LIVE_MOUNTS, CARD_MEDIA_LIVE_MOUNTS_PASSING_NO_VIDEO) == false;
+  assert video_branch_is_live(CARD_MEDIA_LIVE_MOUNTS, CARD_MEDIA_LIVE_MOUNTS_PASSING_NO_VIDEO - 1) == true;
+  assert BIKE_DTO_VIDEO_FIELDS == 0;
+  assert CARD_MEDIA_LIVE_MOUNTS_WITH_A_FIXED_RATIO == CARD_MEDIA_LIVE_MOUNTS;
+  assert CARD_MEDIA_AUTOPLAY_ATTRIBUTES.len == 4;
+  assert KIT_PRIMITIVE_REACH[8] == REACH_SITE_NEVER_RENDERS;
+  assert VIDEO_MUTE_CALL_SITES == 2 and VIDEO_MUTE_PROPERTIES_SET == 3 and VIDEO_MUTE_REISSUES_PLAY == true;
+}
+
+test the_admin_video_player_needs_a_video_and_an_open_modal {
+  assert video_modal_can_render(ITEM_ROW_MOUNTS_PASSING_A_VIDEO > 0, VIDEO_MODAL_OPENERS_THAT_CLOSE_ITS_MODAL == 0, MODAL_RENDERS_WHEN_CLOSED) == false;
+  assert video_modal_can_render(true, false, false) == false;
+  assert video_modal_can_render(false, true, true) == false;
+  assert video_modal_can_render(true, true, false) == true;
+  assert video_modal_can_render(true, false, true) == true;
+  assert ITEM_ROW_MOUNTS == 1 and ITEM_ROW_MOUNTS_PASSING_A_VIDEO == 0;
+  assert VIDEO_MODAL_LIVE_MOUNT_SITES == 1 and VIDEO_MODAL_MOUNT_SITES == 4;
+  assert KIT_PRIMITIVE_REACH[7] == REACH_SITE_NEVER_RENDERS;
+}
+
+test the_smaller_counts_close_against_their_neighbours {
+  assert LOADING_CLASS_NAMES_WITHOUT_A_RULE == LOADING_SIZE_COUNT + 3;
+  assert CARD_MEDIA_LIVE_MOUNTS + CARD_MEDIA_LEGACY_MOUNTS == 4;
+  assert CARD_MEDIA_FREE_HEIGHT_MIN_PX == 180;
+  assert UNCALLED_PRIMITIVE_COMPONENTS.len == PRIMITIVES_WITH_NO_LIVE_SITE - 3 + 2;
+  assert MOUNT_SITES_OF_THE_UNCALLED_PRIMITIVES == 0;
+  assert STYLE_SHEETS_LINKED_BY_INDEX_HTML == STYLE_SHEETS_READ.len - 1;
+  assert STYLE_SHEETS_READ[2] == "styles/simple.css";
+}
+
+test the_video_modal_doc_names_sites_that_no_longer_mount_it {
+  assert VIDEO_MODAL_DOC_NAMED_COPY_SITES == 4;
+  assert VIDEO_MODAL_DOC_NAMED_SITES_STILL_MOUNTING == 2;
+  assert VIDEO_MODAL_MOUNT_SITES - VIDEO_MODAL_DOC_NAMED_SITES_STILL_MOUNTING == 2;
+}
+
+test the_lightbox_zoom_is_bounded_and_toggles_between_fit_and_double {
+  assert LIGHTBOX_MIN_ZOOM_TENTHS == LIGHTBOX_MIN_ZOOM_WHOLE * 10;
+  assert LIGHTBOX_MAX_ZOOM_TENTHS == LIGHTBOX_MAX_ZOOM_WHOLE * 10;
+  assert lightbox_zoom_in(LIGHTBOX_MAX_ZOOM_TENTHS) == LIGHTBOX_MAX_ZOOM_TENTHS;
+  assert lightbox_zoom_in(LIGHTBOX_MIN_ZOOM_TENTHS) == 15;
+  assert lightbox_zoom_out(LIGHTBOX_MIN_ZOOM_TENTHS) == LIGHTBOX_MIN_ZOOM_TENTHS;
+  assert lightbox_zoom_out(25) == 20;
+  assert lightbox_toggle(LIGHTBOX_MIN_ZOOM_TENTHS) == LIGHTBOX_TOGGLE_ZOOM_TENTHS;
+  assert lightbox_toggle(15) == LIGHTBOX_MIN_ZOOM_TENTHS;
+  assert (LIGHTBOX_MAX_ZOOM_TENTHS - LIGHTBOX_MIN_ZOOM_TENTHS) / LIGHTBOX_ZOOM_STEP_TENTHS == 4;
+  assert LIGHTBOX_Z_INDEX > VIDEO_MODAL_Z_INDEX;
+}
+
+; Renamed 2026-09-30 (was the_media_predicate_refuses_protocol_relative_and_data_urls, whose data half
+; was a flag compared with its own literal). The data half now goes through the function: a data:
+; address starts with none of http://, https:// and '/', so it reaches the predicate as four false
+; answers, and the gate-bound count of data: clauses in the copies is zero.
+test the_media_predicate_refuses_protocol_relative_urls_and_has_no_data_clause {
+  assert media_url_is_shown(false, false, true, false) == true;
+  assert media_url_is_shown(false, false, true, true) == false;
+  assert media_url_is_shown(true, false, false, false) == true;
+  assert media_url_is_shown(false, true, false, false) == true;
+  assert media_url_is_shown(false, false, false, false) == false;
+  assert MEDIA_PREDICATE_DATA_SCHEME_CLAUSES == 0;
+  assert MEDIA_PREDICATE_ADMITS_A_DATA_URL == false and MEDIA_PREDICATE_DATA_SCHEME_CLAUSES == 0;
+  assert MEDIA_PREDICATE_CLAUSES == 3;
+}
+
+test the_predicate_copies_are_listed_one_per_site {
+  assert MEDIA_PREDICATE_SITES.len == MEDIA_PREDICATE_SITE_COUNT;
+  assert MEDIA_PREDICATE_SITES[1] == "src/ui/components/card.rs:86";
+  assert MEDIA_PREDICATE_SITES[2] == "src/ui/components/card_media.rs:23";
+  assert MEDIA_PREDICATE_SITES_IN_THE_KIT == 2;
+  assert MEDIA_PREDICATE_FILE_COUNT < MEDIA_PREDICATE_SITE_COUNT;
+}
+
+; Two copies are read back by their owners (2026-09-30): each is an element of the census, and the
+; write side of a stored address is read from catalog-write, not declared here.
+test two_owners_read_the_predicate_by_name_and_the_write_side_is_catalog_writes {
+  assert MEDIA_PREDICATE_SITES_READ_BY_THEIR_OWNERS[0] == MEDIA_PREDICATE_SITES[3];
+  assert MEDIA_PREDICATE_SITES_READ_BY_THEIR_OWNERS[1] == MEDIA_PREDICATE_SITES[4];
+  assert MEDIA_PREDICATE_SITES_READ_BY_THEIR_OWNERS.len < MEDIA_PREDICATE_SITE_COUNT;
+  assert REUSES_CATALOG_WRITE_ID == "turbobaby/catalog-write";
+  assert REUSES_CATALOG_WRITE_ID != ID;
+  assert SERVER_URL_GATE_OWNER_DECL == "WRITE_IMAGE_URL_ADMITTED_PREFIXES";
+  assert SERVER_URL_GATE_DATA_OWNER_DECL == "WRITE_IMAGE_URL_ADMITS_A_DATA_URL";
+  assert RESTATEMENT_DROPPED_ON_2026_09_30.len == 4;
+  assert RESTATEMENT_DROPPED_ON_2026_09_30[0] == "SERVER_URL_GATE_SITE";
+  assert RESTATEMENT_DROPPED_ON_2026_09_30[1] == "SERVER_GATE_PREFIXES_THE_PREDICATE_REFUSES";
+  assert RESTATEMENT_DROPPED_ON_2026_09_30[2] == "LAZY_UNWRAPPED_HANDLERS";
+  assert RESTATEMENT_DROPPED_ON_2026_09_30[3] == "LAZY_UNWRAPPED_CATALOG_ALIASES";
+  assert WRITE_SIDE_REWRITE_OWNER_ID != REUSES_CATALOG_WRITE_ID;
+}
+
+test every_modal_mount_names_its_dialog {
+  assert MODAL_SIZE_CLASSES.len == MODAL_SIZE_COUNT;
+  assert MODAL_SIZE_CLASSES_WITH_A_RULE == MODAL_SIZE_COUNT;
+  assert MODAL_MOUNTS_PASSING_A_TITLE == MODAL_MOUNT_SITES;
+  assert MODAL_RENDERS_WHEN_CLOSED == false;
+}
+
+test the_admin_toast_shows_the_hardcoded_title {
+  assert TOAST_KIND_COUNT == 4;
+  assert TOAST_CLASS_TOKENS == METHOD_TOKEN_COUNTS[7];
+  assert METHOD_TOKENS_WITHOUT_A_RULE[7] == 0;
+  assert TOAST_MOUNT_PASSES_A_TITLE == false;
+  assert TOAST_HARDCODED_CYRILLIC_LITERALS == TOAST_KIND_COUNT + 1;
+  assert TOAST_CONTAINER_Z_INDEX > LIGHTBOX_Z_INDEX;
+}
+
+test the_cart_asks_for_a_glass_class_nothing_styles {
+  assert EMPTY_STATE_MOUNT_SITES == EMPTY_STATE_ADMIN_MOUNT_SITES + 1;
+  assert EMPTY_STATE_ADMIN_OCCURRENCES_WITH_THE_IMPORT == EMPTY_STATE_ADMIN_MOUNT_SITES + 1;
+  assert BRIEF_EMPTY_STATE_ADMIN_USES == EMPTY_STATE_ADMIN_OCCURRENCES_WITH_THE_IMPORT;
+  assert EMPTY_STATE_MOUNTS_ASKING_FOR_GLASS == 1;
+  assert CARD_GLASS_RULES_IN_STYLES == 0;
+  assert CARD_GLASS_RULED_AT_THE_PARENT_OF_158500B == true;
+  assert RULELESS_KIT_CLASSES_RENDERED_ON_A_LIVE_ROUTE[0] == EMPTY_STATE_GLASS_CLASS;
+  assert UNSTYLED_METHOD_TOKENS[14] == EMPTY_STATE_GLASS_CLASS;
+}
+
+test the_unmounted_primitives_render_through_no_live_file {
+  assert BUTTON_RENDER_FILES_WITH_A_LIVE_SITE == 0;
+  assert BUTTON_RENDER_SITES == 4 and BUTTON_RENDER_FILES == 2;
+  assert BUTTON_ONCLICK_DEFAULT_DOES_NOTHING == true;
+  assert BUTTON_ONCLICK_DEFAULT_SITE == "src/ui/components/button.rs:84-85 (at 55a6664)";
+  assert KIT_PRIMITIVE_REACH[0] == REACH_NO_LIVE_SITE;
+  assert CHIP_CLASS_NAMES_WITH_A_RULE == 0 and CHIP_CLASS_NAMES == 8;
+  assert RARITY_TAG_PROP_IS_READ == false;
+  assert progress_max(0) == PROGRESS_DEFAULT_MAX;
+  assert progress_max(40) == 40;
+}
+
+test the_variant_counts_match_the_token_counts {
+  assert METHOD_TOKEN_COUNTS[0] == BUTTON_VARIANT_COUNT + 2;
+  assert METHOD_TOKEN_COUNTS[1] == CARD_VARIANT_COUNT + 1;
+  assert METHOD_TOKEN_COUNTS[2] == BADGE_VARIANT_COUNT + 1 + (BADGE_SIZE_COUNT - 1);
+  assert METHOD_TOKEN_COUNTS[3] == CHIP_COLOR_COUNT;
+  assert METHOD_TOKEN_COUNTS[4] == PROGRESS_COLOR_COUNT + (PROGRESS_SIZE_COUNT - 1);
+  assert METHOD_TOKEN_COUNTS[5] == RARITY_TIER_COUNT + 1;
+  assert BADGE_VARIANTS_WITH_A_DEFAULT_ICON == BADGE_VARIANT_COUNT - 1;
+  assert INPUT_TYPE_COUNT == 4 and LOADING_SIZE_COUNT == 3 and BUTTON_SIZE_COUNT == 4;
+}
+
+test the_class_vocabulary_totals_close {
+  assert METHOD_TOKEN_FILES.len == METHOD_TOKEN_FILE_COUNT;
+  assert sum8(METHOD_TOKEN_COUNTS) == METHOD_TOKEN_TOTAL;
+  assert sum8(METHOD_TOKENS_WITHOUT_A_RULE) == METHOD_TOKENS_WITHOUT_A_RULE_TOTAL;
+  assert METHOD_TOKENS_WITHOUT_A_RULE_TOTAL + METHOD_TOKENS_WITH_A_RULE_TOTAL == METHOD_TOKEN_TOTAL;
+  assert UNSTYLED_METHOD_TOKENS.len == METHOD_TOKENS_WITHOUT_A_RULE_TOTAL;
+  assert UNSTYLED_METHOD_TOKEN_RULES_IN_STYLES == 0;
+}
+
+test every_unstyled_method_token_sits_where_nothing_renders_it {
+  assert unstyled_tokens_on_a_live_site(METHOD_TOKENS_WITHOUT_A_RULE, METHOD_TOKEN_FILE_REACH) == 0;
+  assert unstyled_tokens_on_a_live_site(METHOD_TOKENS_WITH_A_RULE, METHOD_TOKEN_FILE_REACH) == METHOD_TOKEN_COUNTS[6] + METHOD_TOKEN_COUNTS[7];
+  assert sum8(METHOD_TOKENS_WITH_A_RULE) == METHOD_TOKENS_WITH_A_RULE_TOTAL;
+  assert METHOD_TOKEN_FILE_REACH[0] == KIT_PRIMITIVE_REACH[0];
+  assert METHOD_TOKEN_FILE_REACH[6] == KIT_PRIMITIVE_REACH[15];
+  assert METHOD_TOKEN_FILE_REACH[7] == KIT_PRIMITIVE_REACH[16];
+}
+
+test the_brief_left_skeleton_out_of_its_token_count {
+  assert BRIEF_METHOD_TOKEN_TOTAL == METHOD_TOKEN_TOTAL - METHOD_TOKEN_COUNTS[6];
+  assert BRIEF_METHOD_TOKEN_FILE_COUNT == METHOD_TOKEN_FILE_COUNT - 1;
+}
+
+; The brief is not a source: it is unpublished, and each of its figures that this file keeps
+; disagrees with, or is a different count from, the measured declaration beside it.
+test the_brief_is_unpublished_and_every_figure_kept_from_it_is_answered_by_a_measurement {
+  assert BRIEF_IS_PUBLISHED == false;
+  assert BRIEF_FIGURES_ARE_MEASUREMENTS == false;
+  assert BRIEF_SOURCE == "the task brief handed to the round-7 ui-kit lane on 2026-09-29; not in the repository";
+  assert BRIEF_METHOD_TOKEN_TOTAL != METHOD_TOKEN_TOTAL;
+  assert BRIEF_METHOD_TOKEN_FILE_COUNT != METHOD_TOKEN_FILE_COUNT;
+  assert BRIEF_EMPTY_STATE_ADMIN_USES != EMPTY_STATE_ADMIN_MOUNT_SITES;
+  assert BRIEF_MOUNTED_PRIMITIVE_COUNT != PRIMITIVES_THAT_CAN_RENDER;
+  assert BRIEF_THEME_TOKENS_DIFFERING != THEME_TOKENS_COLOUR_DIFFERS;
+  assert BRIEF_SAID_LAZY_SCREEN_USES_SKELETON != LAZY_SCREEN_MOUNTS_THE_SKELETON_COMPONENT;
+  assert BRIEF_SAID_THE_MONEY_REEXPORT_IS_USED == true and MONEY_HELPER_REEXPORT_PATH_USES == 0;
+}
+
+test the_unstyled_tokens_were_styled_before_one_commit {
+  assert UNSTYLED_TOKENS_RULED_AT_THE_PARENT_OF_158500B <= METHOD_TOKENS_WITHOUT_A_RULE_TOTAL;
+  assert UNSTYLED_TOKENS_RULED_IN_THE_DELETED_SHEET < UNSTYLED_TOKENS_RULED_AT_THE_PARENT_OF_158500B;
+  assert METHOD_TOKENS_WITHOUT_A_RULE_TOTAL - UNSTYLED_TOKENS_RULED_AT_THE_PARENT_OF_158500B == 2;
+  assert DELETED_SHEET_LINES == 852;
+  assert DESIGN_DOC_NAMES_THE_DELETED_SHEET == true;
+}
+
+test the_host_test_reads_only_bare_class_lines {
+  assert host_test_reads(true, false) == true;
+  assert host_test_reads(true, true) == false;
+  assert host_test_reads(false, false) == false;
+  assert KIT_CLASS_ATTRIBUTES_THE_HOST_TEST_READS + KIT_CLASS_ATTRIBUTES_THE_HOST_TEST_SKIPS == KIT_CLASS_ATTRIBUTES;
+  assert KIT_RULELESS_CLASSES_THE_HOST_TEST_READS == KIT_RULELESS_CLASSES_ON_THE_ALLOWLIST;
+  assert KIT_RULELESS_CLASSES_ON_THE_ALLOWLIST < HOST_TEST_ALLOWLIST_SIZE;
+  assert UNSEEN_RULELESS_LITERAL_CLASSES.len == 12;
+  assert UNSEEN_RULELESS_COMPUTED_CLASSES.len == 11;
+  assert UNSEEN_RULELESS_COMPUTED_CLASSES[10] == EMPTY_STATE_GLASS_CLASS;
+}
+
+test the_theme_drift_splits_seven_two_four {
+  assert THEME_TOKEN_NAMES.len == THEME_TOKEN_COUNT;
+  assert THEME_TOKEN_STATE.len == THEME_TOKEN_COUNT;
+  assert count_theme_state(THEME_TOKEN_STATE, THEME_TOKEN_EQUAL) == THEME_TOKENS_EQUAL;
+  assert count_theme_state(THEME_TOKEN_STATE, THEME_TOKEN_TEXT_DIFFERS) == THEME_TOKENS_TEXT_DIFFERS;
+  assert count_theme_state(THEME_TOKEN_STATE, THEME_TOKEN_ABSENT_FROM_STYLES) == THEME_TOKENS_ABSENT_FROM_STYLES;
+  assert THEME_TOKENS_EQUAL + THEME_TOKENS_TEXT_DIFFERS + THEME_TOKENS_ABSENT_FROM_STYLES == THEME_TOKEN_COUNT;
+  assert THEME_TOKENS_COLOUR_DIFFERS < THEME_TOKENS_TEXT_DIFFERS;
+  assert BRIEF_THEME_TOKENS_DIFFERING == THEME_TOKENS_TEXT_DIFFERS;
+  assert STYLES_DEFINITIONS_OF_THE_ABSENT_THEME_TOKENS == 0;
+}
+
+test the_theme_font_face_names_one_font_and_loads_another_from_nowhere {
+  assert THEME_FONT_FAMILY == "Inter";
+  assert THEME_FONT_FILE == "/assets/fonts/PressStart2P.woff2";
+  assert THEME_FONT_FAMILY_MATCHES_THE_FILE == false;
+  assert THEME_FONT_DIRECTORY_IN_THE_TREE == false;
+}
+
+test the_hardcoded_copy_is_counted_per_file {
+  assert sum4(KIT_HARDCODED_CYRILLIC_BY_FILE) == KIT_HARDCODED_CYRILLIC_LITERALS;
+  assert KIT_HARDCODED_CYRILLIC_BY_FILE.len == KIT_HARDCODED_CYRILLIC_FILES;
+  assert KIT_HARDCODED_CYRILLIC_BY_FILE[0] == TOAST_HARDCODED_CYRILLIC_LITERALS;
+  assert KIT_HARDCODED_CYRILLIC_RENDERED_LIVE == TOAST_HARDCODED_CYRILLIC_LITERALS;
+  assert KIT_FILES_CALLING_T == 2;
+}
+
+test nothing_here_picks_a_fate_or_changes_behaviour {
+  assert RETIREMENT_OF_UNMOUNTED_PRIMITIVES_IS_PUBLISHED == false;
+  assert THIS_FILE_PICKS_A_FATE == false;
+  assert THIS_FILE_CHANGES_BEHAVIOUR == false;
+  assert SIBLING_LINE_CITATIONS_IN_THIS_FILE == 0;
+}
+
+; ============================================================================================
+; Invariants
+; ============================================================================================
+
+invariant no_unstyled_method_token_is_rendered_on_a_live_route
+  assert unstyled_tokens_on_a_live_site(METHOD_TOKENS_WITHOUT_A_RULE, METHOD_TOKEN_FILE_REACH) == 0 and METHOD_TOKENS_WITHOUT_A_RULE_TOTAL == 45
+
+invariant the_census_is_a_partition_of_the_seventeen
+  assert count_reach(KIT_PRIMITIVE_REACH, REACH_CUSTOMER_ROUTE) + count_reach(KIT_PRIMITIVE_REACH, REACH_ADMIN_ROUTE_ONLY) + count_reach(KIT_PRIMITIVE_REACH, REACH_SITE_NEVER_RENDERS) + count_reach(KIT_PRIMITIVE_REACH, REACH_NO_LIVE_SITE) == KIT_PRIMITIVE_COUNT
+
+invariant a_mount_site_is_never_counted_as_a_render
+  assert PRIMITIVES_WITH_A_LIVE_MOUNT_SITE - PRIMITIVES_THAT_CAN_RENDER == PRIMITIVES_WITH_A_SITE_THAT_NEVER_RENDERS and reach_class(true, false, false) != REACH_CUSTOMER_ROUTE
+
+invariant the_host_test_never_reads_a_method_token
+  assert host_test_reads(false, false) == false and METHOD_TOKENS_VISIBLE_TO_THE_HOST_TEST == 0
+
+invariant a_protocol_relative_url_is_never_shown
+  assert media_url_is_shown(false, false, true, true) == false
+
+invariant the_one_live_ruleless_class_is_the_carts_glass
+  assert RULELESS_KIT_CLASSES_RENDERED_ON_A_LIVE_ROUTE.len == 1 and CARD_GLASS_RULES_IN_STYLES == 0 and EMPTY_STATE_MOUNTS_ASKING_FOR_GLASS == 1
+
+invariant heavy_ignores_the_callers_delay
+  assert lazy_total_delay_ms(true, 1) == lazy_total_delay_ms(true, 1000)
+
+invariant this_file_picks_no_fate
+  assert RETIREMENT_OF_UNMOUNTED_PRIMITIVES_IS_PUBLISHED == false and THIS_FILE_PICKS_A_FATE == false

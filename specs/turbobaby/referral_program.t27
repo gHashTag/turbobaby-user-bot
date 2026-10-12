@@ -205,9 +205,24 @@ pub const REUSES_BOT_SURFACE_ID : str = "turbobaby/bot-surface";
 pub const REUSES_NOTIFICATION_QUEUE_ID : str = "turbobaby/notification-queue";
 ; Since 2026-09-26 (R3): the referral credit, which owns what a referral earns now.
 pub const REUSES_REFERRAL_CREDIT_ID : str = "turbobaby/referral-credit";
-pub const REUSE_EDGE_COUNT : u8 = 7;
+; Since 2026-09-29: the legacy-retirement contract, which owns which client paths are legacy and which
+; surfaces the owner kept. The section on the two client files near the end consumes
+; LEGACY_PATHS_DECLARED and OWNER_KEPT_SURFACES by name. CORRECTED 2026-09-29: REUSE_EDGE_COUNT was 7;
+; the seven edges above are unchanged and this one makes 8.
+pub const REUSES_LEGACY_RETIREMENT_ID : str = "turbobaby/legacy-retirement";
+; Since 2026-09-30 (review of round 7): the webapp-bridge contract, which owns the wasm32 gate
+; (WASM_GATE_SITE) and the fact that the host suite compiles none of the ui half
+; (HOST_SUITE_COMPILES_THIS_HALF). The section on the two client files cited the gate itself, by its
+; lines in src/lib.rs, and did not name its owner; it now reads both by name. CORRECTED 2026-09-30:
+; REUSE_EDGE_COUNT was 8; the eight edges above are unchanged, and this one is appended at index 8
+; of REUSE_EDGES so that no earlier index moves.
+pub const REUSES_WEBAPP_BRIDGE_ID : str = "turbobaby/webapp-bridge";
+pub const CLIENT_FILES_BUILD_PREMISE_OWNER_DECLS : [2]str = ["WASM_GATE_SITE", "HOST_SUITE_COMPILES_THIS_HALF"];
+pub const REUSE_EDGE_COUNT : u8 = 9;
+pub const REUSE_EDGE_COUNT_BEFORE_2026_09_30 : u8 = 8;
+pub const REUSE_EDGE_COUNT_BEFORE_2026_09_29 : u8 = 7;
 pub const REUSE_EDGE_COUNT_BEFORE_2026_09_26 : u8 = 6;
-pub const REUSE_EDGES : [7]str = [
+pub const REUSE_EDGES : [9]str = [
   "turbobaby/loyalty-ledger",
   "turbobaby/star-award",
   "turbobaby/request-identity",
@@ -215,6 +230,8 @@ pub const REUSE_EDGES : [7]str = [
   "turbobaby/bot-surface",
   "turbobaby/notification-queue",
   "turbobaby/referral-credit",
+  "turbobaby/legacy-retirement",
+  "turbobaby/webapp-bridge",
 ];
 
 pub const LOYALTY_LEDGER_SUPPLIES : str = "the bonus ledger a referral credit was a row in until 2026-09-26, and the finding that the balance movements that pair with a ledger insert are a subset of all of them (six of ten when this was written; three of seven since R3 removed this domain's three). All three of this domain's credits were inside that six, and that owner named all three by path and line into src/. This file adds no ledger column and no replay key. Re-checked 2026-09-21: that owner's LEDGER_BYPASS_SITES names four bypasses and not one of them is a referral site; re-checked 2026-09-26: this domain writes no balance at all, so it is in neither list.";
@@ -856,6 +873,62 @@ pub const REFSTATS_BUTTON_LABEL_FIELD_BEFORE_THE_ANSWER : str = "referral_leader
 pub const REFSTATS_BUTTON_LABEL_WORDED_FOR_IT : bool = false;
 pub const REFSTATS_BUTTON_WITNESS : str = "tests/referral_credit_wiring.rs the_refstats_button_no_longer_promises_a_leaderboard";
 
+; --- The two client files that carry the referral page (added 2026-09-29) --------------------------
+; Measured 2026-09-29 at 55a6664. The referral page this file already names (src/ui/pages/referrals.rs,
+; in the top-list section above) reaches a customer through two files that were named by no contract
+; that day. Both are wasm32 only -- they sit in the ui half behind turbobaby/webapp-bridge's
+; WASM_GATE_SITE, which the host suite never compiles (its HOST_SUITE_COMPILES_THIS_HALF; CORRECTED
+; 2026-09-30, this line cited the gate itself until then) -- and neither holds any logic of its own.
+; src/ui/pages/mod.rs, 15 lines, declared at src/ui/mod.rs:14. It holds ONE module, referrals (:13),
+; and one re-export of the page (:15). Its comment records that cycle #23 removed 13 unused modules
+; (:8) and closes the directory to additions (:10-11); the directory holds two files, mod.rs and
+; referrals.rs. The re-export at :15 is consumed by nothing: the page's one importer,
+; src/ui/screens/referrals_screen.rs:2, names the path through the child module, and a grep of src/
+; and tests/ for the re-exported path returns 0. So the comment's reason for keeping the directory --
+; that referrals_screen.rs imports the page "from here" (:8-9) -- is true of the module and not of
+; the re-export.
+; src/ui/screens/referrals_screen.rs, 8 lines, declared at src/ui/screens/mod.rs:27 and re-exported at
+; :55. ReferralsScreen (:5-8) renders the page and nothing else (:7). It is mounted exactly once, by the
+; handler fn Referrals at src/ui/routes.rs:293-300 behind the /referrals route (:72-73), and the app
+; navigates to it from two places: the profile's link (src/ui/screens/profile_screen.rs:970) and the
+; order-success screen's push (src/ui/screens/success_screen.rs:359). The /referrals deep link is
+; turbobaby/deeplink's (REUSES_DEEPLINK_ID) and is not restated.
+; LEGACY STATE, in turbobaby/legacy-retirement's words. /referrals is not one of that owner's
+; LEGACY_PATHS_DECLARED, and referrals is the first of its OWNER_KEPT_SURFACES: the owner kept the
+; programme on 2026-09-24. So none of that owner's retirement states applies and none is assigned
+; here -- the screen is reachable, and the keeping is that owner's record.
+pub const CLIENT_FILES_NAMED_AT : str = "2026-09-29";
+pub const CLIENT_FILES_MEASURED_AT_COMMIT : str = "55a6664";
+pub const PAGES_MODULE_SOURCE : str = "src/ui/pages/mod.rs";
+pub const PAGES_MODULE_LINES : u8 = 15;
+; Bound by gate 3: the modules the directory declares.
+pub const PAGES_MODULES : [1]str = ["referrals"];
+; Bound by gate 3: the files under src/ui/pages/.
+pub const PAGES_DIRECTORY_FILES : u8 = 2;
+pub const PAGES_MODULES_REMOVED_IN_CYCLE_23 : u8 = 13;
+pub const PAGES_DIRECTORY_IS_CLOSED_TO_ADDITIONS : bool = true;
+; Bound by gate 3 with a witness: uses of the re-exported path.
+pub const PAGES_REEXPORT_CONSUMERS : u8 = 0;
+pub const REFERRALS_SCREEN_SOURCE : str = "src/ui/screens/referrals_screen.rs";
+pub const REFERRALS_SCREEN_LINES : u8 = 8;
+pub const REFERRALS_SCREEN_HOLDS_LOGIC : bool = false;
+; Bound by gate 3: mounts of the screen in the router.
+pub const REFERRALS_SCREEN_MOUNT_SITES : u8 = 1;
+pub const REFERRALS_ROUTE : str = "/referrals";
+; Bound by gate 3 over src/ui: in-app navigations to the route.
+pub const REFERRALS_IN_APP_ENTRY_POINTS : u8 = 2;
+pub const REFERRALS_ROUTE_IS_A_LEGACY_PATH : bool = false;
+pub const REFERRALS_IS_AN_OWNER_KEPT_SURFACE : bool = true;
+pub const LEGACY_DECLARATIONS_CONSUMED : [2]str = ["LEGACY_PATHS_DECLARED", "OWNER_KEPT_SURFACES"];
+
+pub fn a_reexport_is_live(consumers: u8) bool {
+  return consumers > 0;
+}
+
+pub fn a_retirement_state_applies(is_a_legacy_path: bool) bool {
+  return is_a_legacy_path;
+}
+
 ; --- Tests -----------------------------------------------------------------------------------------
 
 test r3_a_referral_writes_no_points_and_offers_no_rung {
@@ -884,7 +957,7 @@ test r3_a_referral_writes_no_points_and_offers_no_rung {
 
 
 test the_seven_reuse_edges_are_named_by_id_and_none_is_this_file {
-  assert REUSE_EDGE_COUNT == 7;
+  assert REUSE_EDGE_COUNT_BEFORE_2026_09_29 == 7;
   assert REUSE_EDGE_COUNT_BEFORE_2026_09_26 == 6;
   assert REUSE_EDGES[6] == REUSES_REFERRAL_CREDIT_ID;
   assert REUSES_REFERRAL_CREDIT_ID == "turbobaby/referral-credit";
@@ -1276,6 +1349,73 @@ test the_identity_snapshot_names_this_file_and_moved_the_day_it_was_checked {
   assert REUSES_REQUEST_IDENTITY_ID == "turbobaby/request-identity";
 }
 
+; --- The two client files, checked ------------------------------------------------------------------
+
+test the_eighth_edge_names_the_owner_of_the_legacy_paths {
+  assert REUSE_EDGE_COUNT_BEFORE_2026_09_30 == 8;
+  assert REUSE_EDGE_COUNT_BEFORE_2026_09_29 + 1 == REUSE_EDGE_COUNT_BEFORE_2026_09_30;
+  assert REUSE_EDGES.len == REUSE_EDGE_COUNT;
+  assert REUSE_EDGES[7] == REUSES_LEGACY_RETIREMENT_ID;
+  assert REUSES_LEGACY_RETIREMENT_ID == "turbobaby/legacy-retirement";
+  assert REUSES_LEGACY_RETIREMENT_ID != ID;
+  assert LEGACY_DECLARATIONS_CONSUMED.len == 2;
+  assert LEGACY_DECLARATIONS_CONSUMED[0] == "LEGACY_PATHS_DECLARED";
+  assert LEGACY_DECLARATIONS_CONSUMED[1] == "OWNER_KEPT_SURFACES";
+}
+
+; The two client files' build premise is webapp-bridge's, named by ID and by its two declarations,
+; appended at the end of the edge list so that no earlier index moved.
+test the_ninth_edge_names_the_owner_of_the_wasm_gate {
+  assert REUSE_EDGE_COUNT == 9;
+  assert REUSE_EDGE_COUNT == REUSE_EDGE_COUNT_BEFORE_2026_09_30 + 1;
+  assert REUSE_EDGES[8] == REUSES_WEBAPP_BRIDGE_ID;
+  assert REUSES_WEBAPP_BRIDGE_ID == "turbobaby/webapp-bridge";
+  assert REUSES_WEBAPP_BRIDGE_ID != ID;
+  assert CLIENT_FILES_BUILD_PREMISE_OWNER_DECLS.len == 2;
+  assert CLIENT_FILES_BUILD_PREMISE_OWNER_DECLS[0] == "WASM_GATE_SITE";
+  assert CLIENT_FILES_BUILD_PREMISE_OWNER_DECLS[1] == "HOST_SUITE_COMPILES_THIS_HALF";
+}
+
+test the_two_client_files_are_named_with_the_day_and_commit {
+  assert PAGES_MODULE_SOURCE == "src/ui/pages/mod.rs";
+  assert REFERRALS_SCREEN_SOURCE == "src/ui/screens/referrals_screen.rs";
+  assert PAGES_MODULE_LINES == 15;
+  assert REFERRALS_SCREEN_LINES == 8;
+  assert CLIENT_FILES_NAMED_AT == "2026-09-29";
+  assert CLIENT_FILES_MEASURED_AT_COMMIT == "55a6664";
+}
+
+; One module and its file, the module file itself, and a re-export nothing uses. The directory's own
+; comment closes it to additions, and the file count is what gate 3 holds it to.
+test the_pages_directory_holds_one_module_and_an_unused_reexport {
+  assert PAGES_MODULES.len == 1;
+  assert PAGES_MODULES[0] == "referrals";
+  assert PAGES_DIRECTORY_FILES == PAGES_MODULES.len + 1;
+  assert PAGES_MODULES_REMOVED_IN_CYCLE_23 == 13;
+  assert PAGES_DIRECTORY_IS_CLOSED_TO_ADDITIONS == true;
+  assert PAGES_REEXPORT_CONSUMERS == 0;
+  assert a_reexport_is_live(PAGES_REEXPORT_CONSUMERS) == false;
+  assert a_reexport_is_live(1) == true;
+}
+
+; A wrapper with no logic, mounted once and reached from two places in the app.
+test the_referrals_screen_is_mounted_once_and_reached_from_two_places {
+  assert REFERRALS_SCREEN_HOLDS_LOGIC == false;
+  assert REFERRALS_SCREEN_MOUNT_SITES == 1;
+  assert REFERRALS_IN_APP_ENTRY_POINTS == 2;
+  assert REFERRALS_IN_APP_ENTRY_POINTS > REFERRALS_SCREEN_MOUNT_SITES;
+  assert REFERRALS_ROUTE == "/referrals";
+  assert REUSES_DEEPLINK_ID == "turbobaby/deeplink";
+}
+
+; Kept by the owner and not a legacy path, so no retirement state is this screen's.
+test the_referrals_screen_is_kept_and_carries_no_retirement_state {
+  assert REFERRALS_ROUTE_IS_A_LEGACY_PATH == false;
+  assert REFERRALS_IS_AN_OWNER_KEPT_SURFACE == true;
+  assert a_retirement_state_applies(REFERRALS_ROUTE_IS_A_LEGACY_PATH) == false;
+  assert a_retirement_state_applies(true) == true;
+}
+
 ; --- Invariants -------------------------------------------------------------------------------------
 
 invariant a_code_that_encodes_an_identity_is_not_opaque
@@ -1366,3 +1506,10 @@ invariant r3_the_edge_is_still_confirmed_and_what_was_paid_stays
 
 invariant since_the_owners_answer_no_route_of_the_graph_is_ungated
   assert UNGATED_ROUTE_COUNT == 0 and LEADERBOARD_ROUTE_GATE == GATE_ADMIN and an_anonymous_caller_can_read_an_account_id(LEADERBOARD_ROUTE_GATE, LEADERBOARD_ROW_CARRIES_A_TELEGRAM_ID) == false and TOP_LIST_READERS_IN_THE_MINI_APP == 0
+
+; Added 2026-09-29 with the two client files.
+invariant the_referral_page_has_one_mount_and_no_retirement_state
+  assert REFERRALS_SCREEN_MOUNT_SITES == 1 and a_retirement_state_applies(REFERRALS_ROUTE_IS_A_LEGACY_PATH) == false and REFERRALS_IS_AN_OWNER_KEPT_SURFACE == true
+
+invariant the_pages_directory_holds_the_referral_page_and_nothing_else
+  assert PAGES_MODULES.len == 1 and PAGES_DIRECTORY_FILES == PAGES_MODULES.len + 1 and a_reexport_is_live(PAGES_REEXPORT_CONSUMERS) == false

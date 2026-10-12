@@ -970,3 +970,391 @@ invariant commerce_no_reservation_mechanism_is_invented_here
 
 invariant commerce_no_new_sale_line_is_fulfillable_while_sales_are_retired
     assert commerce_deal_fulfillable(DEAL_SALE, true, SALE_LINE_ADMITTED_AT_CHECKOUT) == false and DEAL_NAMES.len == DEAL_KIND_COUNT and PLACED_SALE_LINES_STILL_READ == true
+
+; ============================================================================================
+; (4) THE COMMITTED ORDER'S STORAGE: FOUR ENTITY MIRRORS, AND THE BLOCK THEY FEED (2026-09-29)
+; --
+; WHY (measured 2026-09-29 at 55a6664). Four SeaORM mirrors hold what this contract's checkout
+; decides, and until this date no contract named one of them: src/db/entities/order.rs (the
+; committed order), src/db/entities/order_idempotency_key.rs (the key the IDEM_* decision is
+; taken over), src/db/entities/order_fraud_event.rs (one row per recorded refusal of a checkout)
+; and src/db/entities/block_history.rs (the audit of the block that three such refusals raise).
+; All four are declared in src/db/entities/mod.rs, at :54, :58, :56 and :17, under the entities
+; module of src/db/mod.rs:7, which src/lib.rs:108 and src/main.rs:13 compile with the backend.
+; All four are live on the server: POST /api/orders is served by the orders router merged at
+; src/api/mod.rs:85, and the three audit tables are swept by the three TTL loops that
+; turbobaby/runtime-config names in LOOP_NAMES.
+; --
+; WHAT THE MEASUREMENT FOUND THAT THE ALGEBRA ABOVE DOES NOT SAY. Three divergences between this
+; file's idempotency model and the shipped create_order (src/api/orders.rs), each recorded as a
+; dated fact and none repaired, because this round changes no code:
+;   1. The shipped replay compares nothing but the key. src/api/orders.rs:1362-1375 answers the
+;      stored order_id for any row found under the key; the body is never compared, and the
+;      telegram_id written beside the key at :1577 is never read back. So IDEM_CONFLICT has no
+;      shipped arm, and the shipped checkout makes it reachable: it mints one key per checkout
+;      screen and keeps it for the life of that screen (src/ui/screens/checkout_screen.rs:596-600
+;      and :970-973), so a customer whose first submit committed but whose answer was lost, and
+;      who then edits the form and submits again, is told success and handed the FIRST order.
+;   2. The shipped replay runs AFTER the domain gates, not before them. The key is looked up at
+;      src/api/orders.rs:1355, inside the transaction begun at :1335, and every gate before that
+;      line can refuse a committed retry: validate_bike_lines at :950 refuses a rental that
+;      starts before the shop's today with 422 (:335-339), so the same key presented again after
+;      midnight is refused rather than replayed; check_bike_lines at :1214 refuses a family the
+;      door has closed since. commerce_committed_replay_precedes_current_cart_and_inventory_state
+;      is this file's rule and the shipped order is the other way round.
+;   3. The key table is not the order path's alone. /api/stars/spend (src/api/stars.rs) claims
+;      its keys in the same table and writes order_id as "stars:" plus a ledger id (:509), and
+;      the table holds no route and no payload digest to tell the two apart. A key used on one
+;      endpoint and presented to the other replays across them: POST /api/orders answers an
+;      order_id that is no order, and a spend answers success without debiting. The shipped UI
+;      never calls /api/stars/spend (0 occurrences of stars/spend under src/ui), so this one is a
+;      latent shape and not a customer fact today.
+; --
+; WHAT THIS SECTION NEVER DOES. It carries no customer value -- no order id, no key and no
+; telegram_id VALUE, only column and code names -- and pins counts, vocabularies and absences,
+; so the header's promise still holds.
+; It restates no neighbour's decision; it consumes each by owner ID and declaration name:
+; turbobaby/loyalty-ledger's KEY_MAX_LEN (the key grammar both endpoints borrow),
+; ORDER_KEY_RETENTION_HOURS and SWEPT_TABLES; turbobaby/runtime-config's LOOP_NAMES;
+; turbobaby/request-identity's GATE_NAMES; turbobaby/legacy-retirement's
+; AGE_GATE_ANSWER_ADDS_A_MIGRATION; and turbobaby/order-money for what the four money columns
+; must satisfy. It sets no threshold and no retention of its own: each number below is read off
+; the tree.
+
+pub const REUSES_LOYALTY_LEDGER_ID : str = "turbobaby/loyalty-ledger";
+pub const REUSES_RUNTIME_CONFIG_ID : str = "turbobaby/runtime-config";
+pub const REUSES_REQUEST_IDENTITY_ID : str = "turbobaby/request-identity";
+pub const REUSES_LEGACY_RETIREMENT_ID : str = "turbobaby/legacy-retirement";
+pub const REUSES_ORDER_MONEY_ID : str = "turbobaby/order-money";
+pub const MIRRORS_MEASURED_AT : str = "2026-09-29";
+
+; --- The committed order: src/db/entities/order.rs ------------------------------------------
+; The table orders, 17 fields, which is exactly the 17 migrated columns: 12 created by
+; migrations/001_initial.sql:56-69, stars_used by migrations/042_stars_currency.sql:45,
+; delivery_address and delivery_notes by migrations/044_order_delivery_fields.sql:5-6, and
+; age_confirmed and delivery_zone_id by migrations/057_order_checkout_compliance.sql:5-7. No
+; other migration adds or drops an orders column (020 retypes three, 025 relaxes one).
+; telegram_id is an Option because migrations/025_orders_telegram_nullable.sql:2 dropped its
+; NOT NULL. Read and written by src/api/orders.rs and src/db/orders.rs, and by the integration
+; test tests/integration_create_order.rs.
+pub const ORDER_ENTITY : str = "src/db/entities/order.rs";
+pub const ORDER_TABLE : str = "orders";
+pub const ORDER_ENTITY_DECLARED_AT : str = "src/db/entities/mod.rs:54";
+pub const ORDER_ENTITY_FIELD_COUNT : u8 = 17;
+pub const ORDER_COLUMN_MIGRATIONS : [4]str = [
+    "migrations/001_initial.sql",
+    "migrations/042_stars_currency.sql",
+    "migrations/044_order_delivery_fields.sql",
+    "migrations/057_order_checkout_compliance.sql"
+];
+pub const ORDER_COLUMNS_ADDED_BY_EACH : [4]u8 = [12, 1, 2, 2];
+pub const ORDER_TELEGRAM_ID_IS_OPTIONAL : bool = true;
+; What the committed row freezes. The lines are ONE json column, items (the mirror's :15-16), and
+; each bike line inside it carries its quoted rate and agreed deposit (BikeDeal in
+; src/db/orders.rs). No column holds a quote identity, a revision or an expiry. So the snapshot
+; QUOTE_SNAPSHOT_RULE describes is the model, and the stored order keeps the quoted figures
+; without the identity that would bind them to one authorization.
+pub const ORDER_LINES_ARE_ONE_JSON_COLUMN : bool = true;
+pub const ORDER_QUOTE_IDENTITY_COLUMNS : u8 = 0;
+pub const ORDER_QUOTE_IDENTITY_IS_STORED : bool = false;
+; age_confirmed stays mapped and is still written from the body, false when absent
+; (src/api/orders.rs:1558), although the 20+ gate left the code on 2026-09-25: that answer added
+; no migration (turbobaby/legacy-retirement, AGE_GATE_ANSWER_ADDS_A_MIGRATION), so the column
+; and every stored value stay. It decides nothing at checkout.
+pub const ORDER_AGE_COLUMN_IS_STILL_MAPPED : bool = true;
+pub const ORDER_AGE_COLUMN_DECIDES_CHECKOUT : bool = false;
+
+; --- The replay key: src/db/entities/order_idempotency_key.rs --------------------------------
+; The table order_idempotency_keys, 4 fields, from migrations/029_order_idempotency_keys.sql:22-27;
+; the mirror's doc calls it Stripe/AWS-style replay protection (:1-2). The key alone is the
+; primary key. Like the loyalty key table turbobaby/loyalty-ledger measured, it stores no payload
+; digest and no route discriminator; that is a separate measurement over a separate table.
+; Written in the same transaction as the order (src/api/orders.rs:1573-1584, IDEMPOTENCY_COMMIT_RULE
+; holds as shipped) and by the spend endpoint. The key's grammar is loyalty-ledger's KEY_MAX_LEN,
+; its 24 hours are loyalty-ledger's ORDER_KEY_RETENTION_HOURS, and the loop that enforces them is
+; runtime-config's idempotency_ttl_sweep.
+pub const ORDER_KEY_ENTITY : str = "src/db/entities/order_idempotency_key.rs";
+pub const ORDER_KEY_TABLE : str = "order_idempotency_keys";
+pub const ORDER_KEY_ENTITY_DECLARED_AT : str = "src/db/entities/mod.rs:58";
+pub const ORDER_KEY_ENTITY_FIELD_COUNT : u8 = 4;
+pub const ORDER_KEY_TABLE_STORES_A_PAYLOAD_DIGEST : bool = false;
+pub const ORDER_KEY_TABLE_STORES_A_ROUTE_DISCRIMINATOR : bool = false;
+pub const ORDER_KEY_GRAMMAR_OWNER_DECL : str = "turbobaby/loyalty-ledger KEY_MAX_LEN";
+pub const ORDER_KEY_RETENTION_OWNER_DECL : str = "turbobaby/loyalty-ledger ORDER_KEY_RETENTION_HOURS";
+pub const ORDER_KEY_WRITING_ENDPOINTS : u8 = 2;
+pub const ORDER_KEY_SPEND_ORDER_ID_PREFIX : str = "stars:";
+pub const SHIPPED_UI_CALLS_STARS_SPEND : bool = false;
+; Divergences 1 and 2 of the header above, as facts.
+pub const SHIPPED_REPLAY_COMPARES_THE_PAYLOAD : bool = false;
+pub const SHIPPED_REPLAY_COMPARES_THE_CALLER : bool = false;
+pub const SHIPPED_CHECKOUT_KEEPS_ONE_KEY_PER_SCREEN : bool = true;
+pub const SHIPPED_REPLAY_PRECEDES_THE_DOMAIN_GATES : bool = false;
+; The key lookup that follows the date gate, counted: 1 while the replay sits after
+; validate_bike_lines, 0 the day it moves ahead of it.
+pub const REPLAY_LOOKUPS_AFTER_THE_DATE_GATE : u8 = 1;
+; A concurrent request with the same key waits on the per-key advisory lock
+; (src/api/orders.rs:1345-1348) and then finds the committed row, or none if the holder rolled
+; back. So IDEM_IN_PROGRESS is answered by waiting, never by a verdict.
+pub const SHIPPED_IN_PROGRESS_IS_A_WAIT : bool = true;
+
+; The decision create_order actually takes. A key that is present has been seen only after the
+; lock, so prior_committed is always true and the payload is never an input.
+pub fn commerce_shipped_order_replay_decision(key_valid: bool, key_seen: bool) u8 {
+    if (!key_valid) {
+        return IDEM_REJECT_KEY;
+    }
+    if (!key_seen) {
+        return IDEM_CREATE_NEW;
+    }
+    return IDEM_RETURN_PRIOR;
+}
+
+; --- The refusal log: src/db/entities/order_fraud_event.rs -----------------------------------
+; The table order_fraud_events, 8 fields, from migrations/030_order_fraud_events.sql:18-27.
+; record_fraud_event (src/db/orders.rs:824, the mirror opened at :833) writes one row per call,
+; and create_order calls it at six places over four codes (src/db/orders.rs:792-795). The mirror's
+; doc (:1-3) says a row is written on EVERY rejection of POST /api/orders, and that is too wide:
+; a rental with no published rate and a refused deposit (CLIENT_DEPOSIT_REFUSALS) record none, and
+; neither does a 400, a 403 or a 429. Swept after 30 days (src/main.rs:589-591), by the loop
+; runtime-config names fraud_events_ttl_sweep.
+pub const FRAUD_EVENT_ENTITY : str = "src/db/entities/order_fraud_event.rs";
+pub const FRAUD_EVENT_TABLE : str = "order_fraud_events";
+pub const FRAUD_EVENT_ENTITY_DECLARED_AT : str = "src/db/entities/mod.rs:56";
+pub const FRAUD_EVENT_ENTITY_FIELD_COUNT : u8 = 8;
+pub const FRAUD_CODES : [4]str = ["subtotal_mismatch", "unknown_item", "unavailable", "malformed"];
+pub const FRAUD_EVENT_CALL_SITES : u8 = 6;
+pub const FRAUD_EVENT_IS_WRITTEN_ON_EVERY_REFUSAL : bool = false;
+pub const FRAUD_EVENT_RETENTION_DAYS : u8 = 30;
+; The rule that turns refusals into a block, which no contract declared before this date.
+; src/db/orders.rs:802 and :805: three subtotal_mismatch rows for one telegram_id inside 24
+; hours, decided by should_auto_block_for_fraud (:811). Only that code counts and only a known
+; telegram_id can be blocked (:853-854); an anonymous mismatch is left to the per-IP limit.
+pub const FRAUD_AUTO_BLOCK_THRESHOLD : i32 = 3;
+pub const FRAUD_AUTO_BLOCK_LOOKBACK_HOURS : u8 = 24;
+pub const FRAUD_AUTO_BLOCK_NEEDS_A_TELEGRAM_ID : bool = true;
+; Concurrency, measured and narrower than the doc. src/db/orders.rs:819-823 says two racing
+; mismatches are serialised by pg_advisory_xact_lock inside the helper; that name occurs in the
+; file only in that comment, and the helper runs on the pool, not in a transaction. What stops a
+; double block is the conditional upsert at :1108-1111 (ON CONFLICT ... WHERE is_blocked = FALSE),
+; whose affected-row count is the "newly blocked" signal that writes one block_history row.
+pub const AUTO_BLOCK_ADVISORY_LOCK_CALLS : u8 = 0;
+pub const AUTO_BLOCK_DOC_CLAIMS_AN_ADVISORY_LOCK : bool = true;
+pub const AUTO_BLOCK_IS_GUARDED_BY_A_CONDITIONAL_UPSERT : bool = true;
+
+pub fn commerce_fraud_code_counts_toward_a_block(code: str, telegram_id_known: bool) bool {
+    return code == FRAUD_CODES[0] and telegram_id_known;
+}
+
+pub fn commerce_fraud_auto_block(counted_events_in_window: i32) bool {
+    return counted_events_in_window >= FRAUD_AUTO_BLOCK_THRESHOLD;
+}
+
+; --- The block's audit: src/db/entities/block_history.rs -------------------------------------
+; The table block_history, 6 fields, from migrations/031_block_history.sql:21-28: the audit of
+; every transition of loyalty_profiles.is_blocked, spelled auto_block and unblock
+; (src/db/orders.rs:1002-1003). record_block_history (:1008, the mirror opened at :1015) has two
+; callers: the fraud auto-block (:1125) and the bot's /unblock (src/bot/commands.rs:730). The only
+; writer that SETS a block is the auto-block's upsert, so the checkout's fraud path is the one
+; automatic source of what this table audits. Swept after 90 days (src/main.rs:598-600), by the
+; loop runtime-config names block_history_ttl_sweep. The flag it audits lives in the
+; loyalty_profiles mirror, which is turbobaby/loyalty-ledger's. It is declared at
+; src/db/entities/mod.rs:17; how that glue file carries the thirty mirrors is counted by
+; turbobaby/schema-provenance and is not restated here.
+pub const BLOCK_HISTORY_ENTITY : str = "src/db/entities/block_history.rs";
+pub const BLOCK_HISTORY_TABLE : str = "block_history";
+pub const BLOCK_HISTORY_ENTITY_DECLARED_AT : str = "src/db/entities/mod.rs:17";
+pub const BLOCK_HISTORY_ENTITY_FIELD_COUNT : u8 = 6;
+pub const BLOCK_ACTIONS : [2]str = ["auto_block", "unblock"];
+pub const BLOCK_HISTORY_WRITER_CALL_SITES : u8 = 2;
+pub const BLOCK_SETTING_WRITERS : u8 = 1;
+pub const BLOCK_HISTORY_RETENTION_DAYS : u8 = 90;
+; Where the block bites. check_not_blocked (src/api/auth.rs:671) is called at 25 sites in 8
+; modules under src/api, and turbobaby/request-identity's GATE_NAMES (three names) does not
+; include it: no contract owned the gate before this date, and this section records its census
+; without claiming to own an endpoint-to-gate map. Its doc (:669-670) says a failed lookup answers 403;
+; the code answers 500 (src/api/auth.rs:686-692). Both refuse. The bot reads the same flag through
+; is_user_blocked at four sites under src/bot, each with unwrap_or(false): a failed lookup there
+; lets the message through. So the API fails closed and the bot fails open, on one flag.
+; CORRECTED 2026-09-30 (review of round 7): "no contract owned the gate" was true of ownership and
+; not of attribution. One contract had named an owner: turbobaby/referral-credit's
+; REQUEST_IDENTITY_SUPPLIES gave check_not_blocked to request-identity, whose GATE_NAMES do not hold
+; it. That string is corrected in its own file on the same day and its old text kept there
+; (REQUEST_IDENTITY_SUPPLIES_BEFORE_2026_09_30); it now names this file's BLOCK_GATE instead.
+pub const BLOCK_GATE_STALE_ATTRIBUTIONS_FOUND : u8 = 1;
+pub const BLOCK_GATE_STALE_ATTRIBUTION_CORRECTED_IN : str = "turbobaby/referral-credit";
+pub const BLOCK_GATE : str = "src/api/auth.rs:671 check_not_blocked";
+pub const BLOCK_GATE_CALL_SITES : u8 = 25;
+pub const BLOCK_GATE_CALL_SITE_MODULES : u8 = 8;
+pub const BLOCK_GATE_IS_AMONG_REQUEST_IDENTITY_GATE_NAMES : bool = false;
+pub const BLOCK_GATE_DB_ERROR_ANSWER_MATCHES_ITS_DOC : bool = false;
+pub const BLOCK_GATE_FAILS_CLOSED : bool = true;
+pub const BOT_BLOCK_CHECK_SITES : u8 = 4;
+pub const BOT_BLOCK_CHECK_FAILS_CLOSED : bool = false;
+
+; --- Executable gates for the four mirrors ----------------------------------------------------
+
+test commerce_the_four_mirrors_are_named_and_their_owners_by_id {
+    assert ORDER_ENTITY == "src/db/entities/order.rs";
+    assert ORDER_KEY_ENTITY == "src/db/entities/order_idempotency_key.rs";
+    assert FRAUD_EVENT_ENTITY == "src/db/entities/order_fraud_event.rs";
+    assert BLOCK_HISTORY_ENTITY == "src/db/entities/block_history.rs";
+    assert REUSES_LOYALTY_LEDGER_ID == "turbobaby/loyalty-ledger";
+    assert REUSES_RUNTIME_CONFIG_ID == "turbobaby/runtime-config";
+    assert REUSES_REQUEST_IDENTITY_ID == "turbobaby/request-identity";
+    assert REUSES_LEGACY_RETIREMENT_ID == "turbobaby/legacy-retirement";
+    assert REUSES_LEGACY_RETIREMENT_ID == SALE_OWNER_ID;
+    assert REUSES_ORDER_MONEY_ID == "turbobaby/order-money";
+    assert REUSES_LOYALTY_LEDGER_ID != ID;
+    assert REUSES_ORDER_MONEY_ID != REUSES_LOYALTY_LEDGER_ID;
+    assert MIRRORS_MEASURED_AT == "2026-09-29";
+}
+
+test commerce_the_order_row_closes_over_the_four_migrations_that_built_it {
+    assert ORDER_COLUMN_MIGRATIONS.len == ORDER_COLUMNS_ADDED_BY_EACH.len;
+    assert ORDER_COLUMNS_ADDED_BY_EACH[0] + ORDER_COLUMNS_ADDED_BY_EACH[1] + ORDER_COLUMNS_ADDED_BY_EACH[2] + ORDER_COLUMNS_ADDED_BY_EACH[3] == ORDER_ENTITY_FIELD_COUNT;
+    assert ORDER_ENTITY_FIELD_COUNT == 17;
+    assert ORDER_COLUMN_MIGRATIONS[0] == "migrations/001_initial.sql";
+    assert ORDER_COLUMN_MIGRATIONS[3] == "migrations/057_order_checkout_compliance.sql";
+    assert ORDER_TELEGRAM_ID_IS_OPTIONAL == true;
+    assert ORDER_ENTITY_DECLARED_AT == "src/db/entities/mod.rs:54";
+}
+
+; The snapshot rule is this file's; the row keeps the figures and not the identity.
+test commerce_the_order_row_keeps_the_quoted_figures_without_a_quote_identity {
+    assert ORDER_LINES_ARE_ONE_JSON_COLUMN == true;
+    assert ORDER_QUOTE_IDENTITY_COLUMNS == 0;
+    assert ORDER_QUOTE_IDENTITY_IS_STORED == false;
+    assert commerce_quote_snapshot_valid(ORDER_QUOTE_IDENTITY_IS_STORED, true, true, true, true) == false;
+    assert ORDER_AGE_COLUMN_IS_STILL_MAPPED == true;
+    assert ORDER_AGE_COLUMN_DECIDES_CHECKOUT == false;
+}
+
+; Divergence 1: the same key with a different body. The model says conflict; the shipped path
+; says here is your first order.
+test commerce_the_shipped_replay_never_answers_conflict {
+    assert commerce_idempotency_decision(true, true, false, true) == IDEM_CONFLICT;
+    assert commerce_shipped_order_replay_decision(true, true) == IDEM_RETURN_PRIOR;
+    assert commerce_shipped_order_replay_decision(true, true) != commerce_idempotency_decision(true, true, false, true);
+    assert commerce_shipped_order_replay_decision(true, false) == IDEM_CREATE_NEW;
+    assert commerce_shipped_order_replay_decision(false, true) == IDEM_REJECT_KEY;
+    assert SHIPPED_REPLAY_COMPARES_THE_PAYLOAD == false;
+    assert SHIPPED_REPLAY_COMPARES_THE_CALLER == false;
+    assert SHIPPED_CHECKOUT_KEEPS_ONE_KEY_PER_SCREEN == true;
+    assert SHIPPED_IN_PROGRESS_IS_A_WAIT == true;
+}
+
+; Where the two agree: a matching body, a new key, a malformed key.
+test commerce_the_shipped_replay_agrees_with_the_model_on_a_matching_body {
+    assert commerce_shipped_order_replay_decision(true, true) == commerce_idempotency_decision(true, true, true, true);
+    assert commerce_shipped_order_replay_decision(true, false) == commerce_idempotency_decision(true, false, true, false);
+    assert commerce_shipped_order_replay_decision(false, false) == commerce_idempotency_decision(false, false, false, false);
+    assert commerce_idempotency_record_is_durable(true) == true;
+}
+
+; Divergence 2: the model returns a committed replay before the cart and domain gates; the shipped
+; path runs them first, so a retry the model would replay is refused.
+test commerce_the_shipped_replay_follows_the_domain_gates {
+    assert commerce_checkout_decision(DEAL_RENTAL, CART_STATE_CONVERTED, true, true, false, true, true, IDEM_RETURN_PRIOR) == CHECKOUT_RETURN_PRIOR;
+    assert SHIPPED_REPLAY_PRECEDES_THE_DOMAIN_GATES == false;
+    assert REPLAY_LOOKUPS_AFTER_THE_DATE_GATE == 1;
+}
+
+; Divergence 3: two endpoints, one key table, and nothing in a row to say which wrote it.
+test commerce_the_key_table_is_shared_with_the_spend_endpoint {
+    assert ORDER_KEY_ENTITY_FIELD_COUNT == 4;
+    assert ORDER_KEY_WRITING_ENDPOINTS == 2;
+    assert ORDER_KEY_TABLE_STORES_A_ROUTE_DISCRIMINATOR == false;
+    assert ORDER_KEY_TABLE_STORES_A_PAYLOAD_DIGEST == false;
+    assert ORDER_KEY_SPEND_ORDER_ID_PREFIX == "stars:";
+    assert SHIPPED_UI_CALLS_STARS_SPEND == false;
+    assert ORDER_KEY_GRAMMAR_OWNER_DECL == "turbobaby/loyalty-ledger KEY_MAX_LEN";
+    assert ORDER_KEY_RETENTION_OWNER_DECL == "turbobaby/loyalty-ledger ORDER_KEY_RETENTION_HOURS";
+}
+
+test commerce_three_counted_mismatches_in_a_day_block_a_known_customer {
+    assert FRAUD_CODES.len == 4;
+    assert FRAUD_CODES[0] == "subtotal_mismatch";
+    assert FRAUD_CODES[3] == "malformed";
+    assert commerce_fraud_auto_block(2) == false;
+    assert commerce_fraud_auto_block(FRAUD_AUTO_BLOCK_THRESHOLD) == true;
+    assert commerce_fraud_auto_block(FRAUD_AUTO_BLOCK_THRESHOLD - 1) == false;
+    assert commerce_fraud_code_counts_toward_a_block(FRAUD_CODES[0], true) == true;
+    assert commerce_fraud_code_counts_toward_a_block(FRAUD_CODES[0], false) == false;
+    assert commerce_fraud_code_counts_toward_a_block(FRAUD_CODES[1], true) == false;
+    assert commerce_fraud_code_counts_toward_a_block(FRAUD_CODES[2], true) == false;
+    assert FRAUD_AUTO_BLOCK_LOOKBACK_HOURS == 24;
+    assert FRAUD_AUTO_BLOCK_NEEDS_A_TELEGRAM_ID == true;
+}
+
+; The mirror's doc says every refusal; six call sites and the deposit refusal's silence say not.
+test commerce_not_every_refusal_writes_a_fraud_row {
+    assert FRAUD_EVENT_CALL_SITES == 6;
+    assert FRAUD_EVENT_CALL_SITES > FRAUD_CODES.len;
+    assert FRAUD_EVENT_IS_WRITTEN_ON_EVERY_REFUSAL == false;
+    assert CLIENT_DEPOSIT_REFUSAL_COUNT == 3;
+    assert FRAUD_EVENT_ENTITY_FIELD_COUNT == 8;
+}
+
+test commerce_the_auto_block_is_guarded_by_its_upsert_and_not_by_a_lock {
+    assert AUTO_BLOCK_ADVISORY_LOCK_CALLS == 0;
+    assert AUTO_BLOCK_DOC_CLAIMS_AN_ADVISORY_LOCK == true;
+    assert AUTO_BLOCK_IS_GUARDED_BY_A_CONDITIONAL_UPSERT == true;
+    assert BLOCK_SETTING_WRITERS == 1;
+}
+
+test commerce_the_block_audit_has_two_actions_two_writers_and_one_automatic_source {
+    assert BLOCK_ACTIONS.len == 2;
+    assert BLOCK_ACTIONS[0] == "auto_block";
+    assert BLOCK_ACTIONS[1] == "unblock";
+    assert BLOCK_HISTORY_WRITER_CALL_SITES == BLOCK_ACTIONS.len;
+    assert BLOCK_SETTING_WRITERS < BLOCK_HISTORY_WRITER_CALL_SITES;
+    assert BLOCK_HISTORY_ENTITY_FIELD_COUNT == 6;
+    assert BLOCK_HISTORY_ENTITY_DECLARED_AT == "src/db/entities/mod.rs:17";
+}
+
+; The three audit tables keep their rows for three different spans, and the order key's span is
+; another contract's number: only the two that no contract held are declared here.
+test commerce_the_audit_retentions_are_read_off_the_tree_and_ordered {
+    assert FRAUD_EVENT_RETENTION_DAYS == 30;
+    assert BLOCK_HISTORY_RETENTION_DAYS == 90;
+    assert FRAUD_EVENT_RETENTION_DAYS < BLOCK_HISTORY_RETENTION_DAYS;
+    // The rows the auto-block counts outlive the window it counts them in.
+    assert FRAUD_AUTO_BLOCK_LOOKBACK_HOURS / 24 < FRAUD_EVENT_RETENTION_DAYS;
+}
+
+test commerce_the_block_gate_fails_closed_on_the_api_and_open_in_the_bot {
+    assert BLOCK_GATE == "src/api/auth.rs:671 check_not_blocked";
+    assert BLOCK_GATE_CALL_SITES == 25;
+    assert BLOCK_GATE_CALL_SITE_MODULES == 8;
+    assert BLOCK_GATE_CALL_SITES > BLOCK_GATE_CALL_SITE_MODULES;
+    assert BLOCK_GATE_IS_AMONG_REQUEST_IDENTITY_GATE_NAMES == false;
+    assert BLOCK_GATE_DB_ERROR_ANSWER_MATCHES_ITS_DOC == false;
+    assert BLOCK_GATE_FAILS_CLOSED == true;
+    assert BOT_BLOCK_CHECK_SITES == 4;
+    assert BOT_BLOCK_CHECK_FAILS_CLOSED == false;
+    assert BLOCK_GATE_FAILS_CLOSED != BOT_BLOCK_CHECK_FAILS_CLOSED;
+}
+
+; CORRECTED 2026-09-30: one sibling had credited the gate to request-identity; that sibling is named
+; here and corrected in its own file, so two contracts no longer name two owners for one gate.
+test commerce_the_one_stale_attribution_of_the_block_gate_is_named {
+    assert BLOCK_GATE_STALE_ATTRIBUTIONS_FOUND == 1;
+    assert BLOCK_GATE_STALE_ATTRIBUTION_CORRECTED_IN == "turbobaby/referral-credit";
+    assert BLOCK_GATE_STALE_ATTRIBUTION_CORRECTED_IN != REUSES_REQUEST_IDENTITY_ID;
+    assert BLOCK_GATE_IS_AMONG_REQUEST_IDENTITY_GATE_NAMES == false;
+}
+
+invariant commerce_the_order_row_is_its_migrations_and_nothing_else
+    assert ORDER_COLUMNS_ADDED_BY_EACH[0] + ORDER_COLUMNS_ADDED_BY_EACH[1] + ORDER_COLUMNS_ADDED_BY_EACH[2] + ORDER_COLUMNS_ADDED_BY_EACH[3] == ORDER_ENTITY_FIELD_COUNT
+
+invariant commerce_the_shipped_replay_is_recorded_as_not_comparing_the_body
+    assert commerce_shipped_order_replay_decision(true, true) == IDEM_RETURN_PRIOR and SHIPPED_REPLAY_COMPARES_THE_PAYLOAD == false and commerce_idempotency_decision(true, true, false, true) == IDEM_CONFLICT
+
+invariant commerce_the_shipped_replay_never_answers_in_progress_or_conflict
+    assert commerce_shipped_order_replay_decision(true, true) != IDEM_IN_PROGRESS and commerce_shipped_order_replay_decision(true, true) != IDEM_CONFLICT and commerce_shipped_order_replay_decision(true, false) != IDEM_CONFLICT
+
+invariant commerce_only_a_known_customer_mismatch_counts_toward_a_block
+    assert commerce_fraud_code_counts_toward_a_block(FRAUD_CODES[0], false) == false and commerce_fraud_auto_block(FRAUD_AUTO_BLOCK_THRESHOLD) == true and commerce_fraud_auto_block(FRAUD_AUTO_BLOCK_THRESHOLD - 1) == false
+
+invariant commerce_the_block_has_one_automatic_writer_and_its_audit_two
+    assert BLOCK_SETTING_WRITERS == 1 and BLOCK_HISTORY_WRITER_CALL_SITES == 2 and BLOCK_ACTIONS.len == 2

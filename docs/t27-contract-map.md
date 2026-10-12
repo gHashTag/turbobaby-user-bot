@@ -29,6 +29,13 @@ own `ID`: **203 distinct contract-to-contract edges**, and every one of them res
 `ID`. There is exactly one literal in the corpus that resolves to no contract, and it is deliberate:
 `rental_terms.t27` keeps `TWIN_SPEC_ID = "turbobaby/rental_terms"` (underscore) as the legacy id of a
 draft that was never tracked, guarded by `assert ID != TWIN_SPEC_ID`.
+*Re-measured 2026-09-29* with the same sweep (a top-level `pub const NAME : str =
+"turbobaby/...";` that is not the file's own `ID`, counted as distinct owner-to-target pairs):
+**252** at `55a6664` over 46 contracts, and **276** on `t27/named-complete` after round 7 over 47,
+every one resolving to a declared `ID`. `TWIN_SPEC_ID` is still the only literal that resolves to
+none. The 203 above is the 2026-09-21 reading. *Re-measured 2026-09-30* after the review of round
+7, the same sweep: **289**, none dangling (thirteen new, listed in the handover's "Round 7, review
+fixes").
 
 A second rule, learned the hard way: **a contract never cites a sibling by line number.** Four waves
 of parallel authoring produced 72 such citations and most went stale within the hour — one moved
@@ -99,6 +106,7 @@ the market's currency, `ride_runtime` names the roster owner whose decisions it 
 | `runtime_config.t27` | 920 | cart-persistence, delivery-terms, events-booking, legacy-retirement, notification-queue, observability, promo-broadcast, publication, schema-provenance |
 | `schema_provenance.t27` | 980 | availability, bike-catalog, market, observability, pricing-honesty, publication |
 | `star_award.t27` | 594 | commerce, game-score, market, order-money, request-identity, ride-runtime |
+| `ui_kit.t27` | 1180 | availability, cart-persistence, catalog-write, client-errors, customer-surface, events-booking, legacy-retirement, locale-policy, order-presentation, pricing-honesty, validation-bounds, webapp-bridge |
 | `upload_media.t27` | 846 | catalog-write, client-errors, rate-limit, request-identity |
 | `validation_bounds.t27` | 937 | catalog-write, pricing-honesty, request-identity, ride-runtime |
 | `webapp_bridge.t27` | 896 | catalog-api, client-errors, commerce, deeplink, loyalty-ledger, request-identity |
@@ -106,10 +114,51 @@ the market's currency, `ride_runtime` names the roster owner whose decisions it 
 The table keeps the 2026-09-21 measurement, except one row: `referral_credit.t27` was added on
 **2026-09-26** with the owner's R3 answer and is measured on that day (515 lines on the server lane,
 565 after the integration's block the same day, 616 after the review fix's recorder guard, 651 after
-round 6 recorded the owner's answer on the base of the 10%). Two
+round 6 recorded the owner's answer on the base of the 10%). `ui_kit.t27` was added on
+**2026-09-29** (round 7, every source file named) and was re-measured on **2026-09-30** after the
+review of round 7 (1082 lines and eleven edges the first day; 1180 and twelve, with catalog-write,
+after the review). Two
 contracts tracked since
 the measurement, `order_presentation.t27` and `person_naming.t27`, are manifested in the gate but
-not yet indexed here.
+not yet indexed here. The other rows' `lines` and `defers to` are the 2026-09-21 reading and have
+moved since; round 7 alone added outbound edges from commerce, locale-policy, loyalty-ledger,
+http-cache, client-errors, referral-program, schema-provenance and legacy-retirement, and the review
+of round 7 (2026-09-30) added more from availability, api-surface, cart-persistence, client-errors,
+commerce, http-cache, legacy-retirement, referral-program, request-identity and ui-kit. The sweep
+behind the edge count above prints each file's list (see "Files named in round 7" below).
+
+## Files named in round 7 (2026-09-29)
+
+At `55a6664`, 69 of the 187 files under `src/` (6 279 of 88 816 lines) were named by no contract:
+`python coverage_2109.py <root>` counts a file as named when its exact repo-relative path occurs in
+some `.t27`. Round 7 gave each of them to the contract that owns its subject; afterwards the same
+command prints `NOT NAMED ANYWHERE: 0 files, 0 lines`. The owner of each file, as assigned and as
+the file itself records (other contracts may cite the same path as evidence; the owner is the one
+that classifies it):
+
+| owner | files it named on 2026-09-29 |
+| --- | --- |
+| `api_surface` | `src/web.rs` |
+| `availability` | `src/ui/components/bike_grid.rs` |
+| `bike_catalog` | `src/db/entities/bike.rs`, `src/db/entities/bike_service_record.rs` |
+| `cart_persistence` | `src/ui/components/cart_item.rs` |
+| `client_errors` | `src/ui/components/error_banner.rs` |
+| `commerce` | `src/db/entities/order.rs`, `src/db/entities/order_idempotency_key.rs`, `src/db/entities/order_fraud_event.rs`, `src/db/entities/block_history.rs` |
+| `http_cache` | `src/ui/prefetch.rs` |
+| `legacy_retirement` | `src/db/entities/accessory.rs`, `src/db/entities/quest_place.rs`, `src/db/entities/strain.rs`, `src/db/entities/tea_product.rs`, `src/db/entities/treasure_hunt.rs`, `src/trios/packs.rs`, `src/ui/components/id_picker.rs`, `src/ui/components/product_detail_modal.rs`, `src/ui/components/set_card.rs`, `src/ui/game/mod.rs`, `src/ui/game/quest.rs`, `src/ui/game/tech_tree.rs`, `src/ui/screens/accessories_screen.rs`, `src/ui/screens/ar_hunt_screen.rs`, `src/ui/screens/game_screen.rs`, `src/ui/screens/location_quest_screen.rs`, `src/ui/screens/mod.rs`, `src/ui/screens/quest_screen.rs`, `src/ui/screens/tea_screen.rs`, `src/ui/screens/tech_tree_screen.rs`, `src/ui/screens/treasure_hunt_screen.rs` |
+| `locale_policy` | `src/db/entities/user.rs` |
+| `loyalty_ledger` | `src/db/loyalty.rs`, `src/db/entities/loyalty_config.rs`, `src/db/entities/loyalty_profile.rs` |
+| `referral_program` | `src/ui/pages/mod.rs`, `src/ui/screens/referrals_screen.rs` |
+| `rental_terms` | `src/db/entities/rental_term.rs`, `src/db/entities/class_discount.rs` |
+| `request_identity` | `src/api/users.rs` |
+| `schema_provenance` | `src/db/entities/mod.rs` |
+| `star_award` | `src/db/entities/stars_transaction.rs`, `src/db/entities/stars_idempotency_key.rs`, `src/db/entities/user_stars.rs` |
+| `ui_kit` (new) | `src/ui/components/badge.rs`, `button.rs`, `card.rs`, `card_media.rs`, `chip.rs`, `empty_state.rs`, `image_lightbox.rs`, `input.rs`, `lazy_screen.rs`, `loading.rs`, `modal.rs`, `progress_bar.rs`, `rarity_glow.rs`, `skeleton.rs`, `toast.rs`, `video_modal.rs`, `video_mute.rs`, the module list `src/ui/components/mod.rs`, and `src/ui/theme/mod.rs` |
+| `webapp_bridge` | `src/ui/mod.rs`, `src/ui/api/mod.rs`, `src/ui/api/context.rs`, `src/ui/admin.rs`, `src/ui/components/open_in_telegram.rs` |
+
+69 files: 1 + 1 + 2 + 1 + 1 + 4 + 1 + 21 + 1 + 3 + 2 + 2 + 1 + 1 + 3 + 19 + 5. What each
+contract found in them, and the 132 gate-3 rows that now bind it, are in
+[`t27-handover.md`](t27-handover.md), section "Round 7".
 
 ## What each one owns, in one line
 
@@ -121,7 +170,8 @@ rounding rule. `deposit_tiers` — the per-family tiers, money XOR passport, and
 decision. `market_profile` — the deployment market as a declared profile.
 
 **Transport and transaction.** `catalog_api` — the read boundary and its HTTP outcomes.
-`catalog_write` — what an admin write may produce. `commerce` — cart to checkout to committed order,
+`catalog_write` — what an admin write may produce (since 2026-09-30 including the prefixes the
+server's URL gate admits into a stored image address). `commerce` — cart to checkout to committed order,
 the quote snapshot, idempotency, the dated line identity, and family capacity. `order_money` — the
 arithmetic identity a submitted order must satisfy. `order_status` — the status vocabulary and which
 values are terminal. `cart_persistence` — the gap between the cart the corpus declares and the cart
@@ -155,6 +205,14 @@ queue and its dedupe. `promo_broadcast` — what may be promoted and what may be
 `events_booking` — capacity, the waitlist and the same-day rule. `happy_hour` — a discount window
 and the clock it reads. `customer_surface` — which classes of claim the first screen may carry.
 `locale_policy` — the published locales and the bare-key fallthrough.
+
+**The client kit** (since 2026-09-29). `ui_kit` — which of the shared presentational primitives
+under `src/ui/components` a live route can actually render, the class names they emit against the
+rules in `styles/*.css` and what the one host test over that vocabulary cannot see, LazyScreen's
+render deferral, the dead theme module's drift, and the hand-copied media URL predicate. It owns no
+wording, route, price, error message, locale or retirement. Since the review of 2026-09-30 two
+owners of a copy of the predicate (cart-persistence, legacy-retirement) read it from here by name,
+and what the server's URL gate admits into a stored address is catalog-write's, read from there.
 
 **The tree itself.** `schema_provenance` — the migration sequence law, the established-database
 probe, and the fail-open read. `runtime_config` — the rule about defaults, written because one

@@ -171,7 +171,23 @@ pub const REUSES_LEGACY_RETIREMENT_ID : str = "turbobaby/legacy-retirement";
 pub const THE_RETIREMENT_CENSUS_IS_OWNED_THERE : bool = true;
 pub const NEIGHBOUR_RATE_LIMIT_ID : str = "turbobaby/rate-limit";
 pub const THE_ONLY_BOUND_ON_KEY_GROWTH_IS_OWNED_THERE : bool = true;
-pub const REUSE_EDGE_COUNT : u8 = 5;
+; CORRECTED 2026-09-29: five owners until that day, six since. turbobaby/customer-surface owns the tab
+; bar that calls the prefetch (its TAB_SOURCE) and the tab set (TAB_ROUTE_NAMES); the section on the
+; prefetch near the end of this file consumes both by name and restates neither. The five edges above
+; are unchanged, and the old count stays as REUSE_EDGE_COUNT_BEFORE_THE_PREFETCH.
+pub const REUSES_CUSTOMER_SURFACE_ID : str = "turbobaby/customer-surface";
+pub const THE_TAB_BAR_THAT_CALLS_THE_PREFETCH_IS_OWNED_THERE : bool = true;
+; CORRECTED 2026-09-30 (review of round 7): six owners until that day, seven since. The prefetch's
+; build section cited the wasm32 gate itself, by its lines in src/lib.rs, and did not name its owner.
+; turbobaby/webapp-bridge owns the gate (WASM_GATE_SITE) and the fact that the host suite compiles
+; none of the ui half (HOST_SUITE_COMPILES_THIS_HALF); both are read here by name, and
+; PREFETCH_IS_WASM_ONLY is this file's reading of that premise for one file. The six edges above are
+; unchanged, and their count stays as REUSE_EDGE_COUNT_BEFORE_2026_09_30.
+pub const REUSES_WEBAPP_BRIDGE_ID : str = "turbobaby/webapp-bridge";
+pub const PREFETCH_BUILD_PREMISE_OWNER_DECLS : [2]str = ["WASM_GATE_SITE", "HOST_SUITE_COMPILES_THIS_HALF"];
+pub const REUSE_EDGE_COUNT : u8 = 7;
+pub const REUSE_EDGE_COUNT_BEFORE_2026_09_30 : u8 = 6;
+pub const REUSE_EDGE_COUNT_BEFORE_THE_PREFETCH : u8 = 5;
 
 ; --- The boundary census, re-measured 2026-09-21 ------------------------------------------------
 ; The header claims three boundaries no other contract occupies. An absence is the one claim a
@@ -304,7 +320,13 @@ pub const INVALIDATOR_CALL_SITES : u8 = 1;
 pub const INVALIDATORS_NAMING_A_LIVE_KEY : u8 = 0;
 pub const LIVE_KEY_BASES : [2]str = ["bikes", "bikes_available"];
 pub const LIVE_KEY_BASE_COUNT : u8 = 2;
-pub const INVALIDATION_NOTE : str = "The four invalidators are at src/api/cache.rs:160-164, :168-170, :174-176 and :180-182; the last three carry a dead-code annotation. The single call site is src/api/admin.rs:686 and it clears keys for a route src/ui/api/client.rs:119-121 records as retired by migration 083; legacy_retirement.t27 owns that census. The live writer at src/api/bikes.rs:489-499 creates keys under the two bases above. Coverage of a live key is therefore zero, and harmless, because the origin re-hashes.";
+; CORRECTED 2026-09-29: the note cited src/ui/api/client.rs:119-121 for the retirement record, and at
+; 55a6664 those lines close an error branch of a response handler; the record is the comment at
+; :155-158, where the header above already points. Nothing else in the note moved: the four
+; invalidators, the one call site and the live writer were re-opened the same day and still land.
+; The old text is kept below.
+pub const INVALIDATION_NOTE : str = "The four invalidators are at src/api/cache.rs:160-164, :168-170, :174-176 and :180-182; the last three carry a dead-code annotation. The single call site is src/api/admin.rs:686 and it clears keys for a route src/ui/api/client.rs:155-158 records as retired by migration 083; legacy_retirement.t27 owns that census. The live writer at src/api/bikes.rs:489-499 creates keys under the two bases above. Coverage of a live key is therefore zero, and harmless, because the origin re-hashes.";
+pub const INVALIDATION_NOTE_BEFORE_2026_09_29 : str = "The four invalidators are at src/api/cache.rs:160-164, :168-170, :174-176 and :180-182; the last three carry a dead-code annotation. The single call site is src/api/admin.rs:686 and it clears keys for a route src/ui/api/client.rs:119-121 records as retired by migration 083; legacy_retirement.t27 owns that census. The live writer at src/api/bikes.rs:489-499 creates keys under the two bases above. Coverage of a live key is therefore zero, and harmless, because the origin re-hashes.";
 
 pub fn a_write_can_clear_this_key(key_is_named_by_an_invalidator: bool, a_call_site_exists: bool) bool {
   return key_is_named_by_an_invalidator and a_call_site_exists;
@@ -830,6 +852,83 @@ pub fn surface_may_be_cached(is_an_edit_surface: bool) bool {
   return !is_an_edit_surface;
 }
 
+; --- The prefetch: the client module that puts this body into a browser early (added 2026-09-29) ----
+; Measured 2026-09-29 at 55a6664. src/ui/prefetch.rs, 49 lines, was named by no contract that day. It
+; belongs to BOUNDARY TWO. Its one job is to put the catalog body -- the one that carries prices and
+; unit counts under the 60-second budget above -- into the browser's cache before the customer asks
+; for it, and a copy put there early is a HELD copy at the moment it is first read.
+; BUILD. wasm32 only, on turbobaby/webapp-bridge's premise (WASM_GATE_SITE and
+; HOST_SUITE_COMPILES_THIS_HALF; CORRECTED 2026-09-30, this line cited the gate itself until then):
+; src/ui/mod.rs:5 declares this one, and prefetch_route's body sits behind a second cfg(target_arch = "wasm32") (:40).
+; The server build does not contain it.
+; WHAT IT WARMS. endpoint_for (:10-35) maps five routes to one path: Home and Menu at :15; Sets,
+; Accessories and Tea at :23. That path is /api/bikes, the list src/api/bikes.rs:516-519 sends under
+; CATALOG_MAX_AGE_SECONDS. Orders (:27), Profile (:31) and every other route (:32) warm nothing. The
+; URL it builds (:34) is the same string the catalog screen fetches at
+; src/ui/screens/catalog_screen.rs:556, so the warmed copy is the copy that screen is entitled to be
+; served. The request is a bare GET (:46): no header, no cache mode, no credentials option; and its
+; answer is discarded, so a failed warm-up is seen by nobody.
+; WHO CALLS IT. Five call sites, all on onmouseenter, all in src/ui/components/bottom_nav.rs -- at
+; :27, :34, :41, :48 and :60, one per tab. That file is turbobaby/customer-surface's TAB_SOURCE and the
+; tabs are its TAB_ROUTE_NAMES; both are consumed by name here and neither is restated. Of the five
+; hovered routes ONE, Home, is a warmed route. The Ride, Orders, Cart and Profile hovers call a
+; function that returns at :42-44 having done nothing. The file's own header says mobile skips the
+; prefetch (:3-5); the code holds no platform test -- outside that comment the file names no touch
+; input, no mobile platform and no user agent -- so whether a hover fires on a phone is the browser's
+; behaviour, and this repository does not measure it.
+; WHAT IT DOES TO THE AGE OF A PRICE. Nothing to the ceiling: a warmed copy is held under the same
+; directive, so the oldest copy a reader can be served is still last_reusable_age_seconds of the
+; budget, plus the origin's own age, exactly as worst_case_served_age_seconds says. What it changes is
+; WHICH copy the first read gets. A catalog opened within the budget after a Home hover may be
+; answered from the warmed copy, held since the hover, where without the prefetch that first read
+; would have reached the origin. So on the one tab it serves, the prefetch turns the held-copy case
+; this file prices into the ordinary first read. While DOOR_IS_WIRED is false no door price is in the
+; body; the day it is wired, the warmed copy is where a stale door price is first read.
+pub const PREFETCH_SOURCE : str = "src/ui/prefetch.rs";
+pub const PREFETCH_SOURCE_LINES : u16 = 49;
+pub const PREFETCH_NAMED_AT : str = "2026-09-29";
+pub const PREFETCH_MEASURED_AT_COMMIT : str = "55a6664";
+pub const PREFETCH_IS_WASM_ONLY : bool = true;
+; Bound by gate 3: the routes endpoint_for maps to a path.
+pub const PREFETCH_WARMED_ROUTES : [5]str = ["Home", "Menu", "Sets", "Accessories", "Tea"];
+; Bound by gate 3: the distinct paths endpoint_for answers with.
+pub const PREFETCH_ENDPOINTS : [1]str = ["/api/bikes"];
+pub const PREFETCH_URL_EQUALS_THE_CATALOG_READ : bool = true;
+pub const PREFETCH_CATALOG_READ_SITE : str = "src/ui/screens/catalog_screen.rs:556";
+; Bound by gate 3 with a witness: header, cache-mode or credentials options on the request.
+pub const PREFETCH_REQUEST_OPTIONS_SET : u8 = 0;
+pub const PREFETCH_ANSWER_IS_READ : bool = false;
+; Bound by gate 3 over src/ui: every call of prefetch_route.
+pub const PREFETCH_CALL_SITES : u8 = 5;
+pub const PREFETCH_CALL_SITE_SOURCE : str = "src/ui/components/bottom_nav.rs";
+pub const PREFETCH_TRIGGER : str = "onmouseenter";
+; Bound by gate 3 on the tab bar: the hovers whose route endpoint_for warms.
+pub const PREFETCH_HOVERS_THAT_FIRE : u8 = 1;
+pub const PREFETCH_FIRING_HOVER : str = "Home";
+pub const TAB_OWNER_DECLARATIONS : [2]str = ["TAB_SOURCE", "TAB_ROUTE_NAMES"];
+pub const PREFETCH_HEADER_SAYS_MOBILE_SKIPS : bool = true;
+pub const PREFETCH_HAS_A_PLATFORM_TEST : bool = false;
+pub const PREFETCH_RAISES_THE_AGE_CEILING : bool = false;
+pub const PREFETCH_MAKES_THE_FIRST_READ_A_HELD_COPY : bool = true;
+
+; A warmed copy answers the first read exactly when a held copy may answer any read: the hover warmed
+; it, and the time since the hover is inside the budget with nothing forcing a question.
+pub fn first_read_is_the_warmed_copy(hover_warmed: bool, hover_to_read_seconds: u32, max_age_seconds: u32, must_revalidate: bool) bool {
+  if (!hover_warmed) {
+    return false;
+  }
+  return client_may_reuse_without_asking(hover_to_read_seconds, max_age_seconds, must_revalidate);
+}
+
+; How long the first read's copy has been held. Zero when the read reaches the origin; the origin's own
+; age is added by served_copy_age_seconds either way and is not measured (ORIGIN_ANSWER_AGE_IS_MEASURED).
+pub fn held_seconds_at_the_first_read(hover_warmed: bool, hover_to_read_seconds: u32, max_age_seconds: u32, must_revalidate: bool) u32 {
+  if (first_read_is_the_warmed_copy(hover_warmed, hover_to_read_seconds, max_age_seconds, must_revalidate)) {
+    return hover_to_read_seconds;
+  }
+  return 0;
+}
+
 ; --- Tests -------------------------------------------------------------------------------------
 
 ; The census behind the header's absence. Each count is over the whole corpus and not over the
@@ -862,7 +961,11 @@ test the_owner_contracts_are_named_and_none_of_them_is_restated {
   assert NEIGHBOUR_RATE_LIMIT_ID != ID;
   assert REUSES_CATALOG_API_ID != REUSES_PRICING_HONESTY_ID;
   assert REUSES_AVAILABILITY_ID != REUSES_LEGACY_RETIREMENT_ID;
-  assert REUSE_EDGE_COUNT == 5;
+  assert REUSE_EDGE_COUNT_BEFORE_THE_PREFETCH == 5;
+  assert REUSE_EDGE_COUNT_BEFORE_2026_09_30 == REUSE_EDGE_COUNT_BEFORE_THE_PREFETCH + 1;
+  assert REUSE_EDGE_COUNT == REUSE_EDGE_COUNT_BEFORE_2026_09_30 + 1;
+  assert REUSES_CUSTOMER_SURFACE_ID == "turbobaby/customer-surface";
+  assert REUSES_CUSTOMER_SURFACE_ID != ID;
   assert THIS_FILE_DECLARES_NO_HTTP_STATUS == true;
 }
 
@@ -1270,6 +1373,96 @@ test an_edit_surface_is_never_cached {
   assert surface_may_be_cached(false) == true;
 }
 
+; --- The prefetch, checked ---------------------------------------------------------------------
+
+test the_prefetch_is_named_with_the_day_and_commit_and_builds_for_the_browser_only {
+  assert PREFETCH_SOURCE == "src/ui/prefetch.rs";
+  assert PREFETCH_SOURCE_LINES == 49;
+  assert PREFETCH_NAMED_AT == "2026-09-29";
+  assert PREFETCH_MEASURED_AT_COMMIT == "55a6664";
+  assert PREFETCH_IS_WASM_ONLY == true;
+  assert PREFETCH_SOURCE != CALL_SITE;
+}
+
+; The build premise is webapp-bridge's, named by ID and by its two declarations; this file keeps
+; only which of its files sits behind it.
+test the_seventh_edge_names_the_owner_of_the_wasm_gate {
+  assert REUSES_WEBAPP_BRIDGE_ID == "turbobaby/webapp-bridge";
+  assert REUSES_WEBAPP_BRIDGE_ID != ID;
+  assert REUSES_WEBAPP_BRIDGE_ID != REUSES_CUSTOMER_SURFACE_ID;
+  assert PREFETCH_BUILD_PREMISE_OWNER_DECLS.len == 2;
+  assert PREFETCH_BUILD_PREMISE_OWNER_DECLS[0] == "WASM_GATE_SITE";
+  assert PREFETCH_BUILD_PREMISE_OWNER_DECLS[1] == "HOST_SUITE_COMPILES_THIS_HALF";
+  assert REUSE_EDGE_COUNT == 7;
+  assert PREFETCH_IS_WASM_ONLY == true;
+}
+
+; Five routes, one path, and the path is the catalog list the budget above ages. The URL is the one
+; the catalog screen reads, so what is warmed is what that screen may be served.
+test the_prefetch_warms_one_path_for_five_routes_and_it_is_the_catalog_list {
+  assert PREFETCH_WARMED_ROUTES.len == 5;
+  assert PREFETCH_WARMED_ROUTES[0] == "Home";
+  assert PREFETCH_ENDPOINTS.len == 1;
+  assert PREFETCH_ENDPOINTS[0] == "/api/bikes";
+  assert PREFETCH_URL_EQUALS_THE_CATALOG_READ == true;
+  assert PREFETCH_CATALOG_READ_SITE == "src/ui/screens/catalog_screen.rs:556";
+  assert PREFETCH_REQUEST_OPTIONS_SET == 0;
+  assert PREFETCH_ANSWER_IS_READ == false;
+  assert CATALOG_MAX_AGE_SECONDS == 60;
+  assert RESPONSE_IS_PUBLICLY_CACHEABLE == true;
+}
+
+; Five hovers call it and one of them warms anything. The tab set is the customer-surface contract's
+; and is named by declaration; the count of calls and the one that fires are this file's.
+test one_hover_in_five_fires_and_it_is_the_home_tab {
+  assert PREFETCH_CALL_SITES == 5;
+  assert PREFETCH_HOVERS_THAT_FIRE == 1;
+  assert PREFETCH_HOVERS_THAT_FIRE < PREFETCH_CALL_SITES;
+  assert PREFETCH_FIRING_HOVER == PREFETCH_WARMED_ROUTES[0];
+  assert PREFETCH_CALL_SITE_SOURCE == "src/ui/components/bottom_nav.rs";
+  assert PREFETCH_TRIGGER == "onmouseenter";
+  assert TAB_OWNER_DECLARATIONS.len == 2;
+  assert TAB_OWNER_DECLARATIONS[0] == "TAB_SOURCE";
+  assert TAB_OWNER_DECLARATIONS[1] == "TAB_ROUTE_NAMES";
+  assert THE_TAB_BAR_THAT_CALLS_THE_PREFETCH_IS_OWNED_THERE == true;
+}
+
+; The warmed copy lives under the same budget: held for up to 59 seconds after the hover, never for 60,
+; never at all once a question is forced, and never when the hover warmed nothing.
+test a_warmed_copy_is_held_from_the_hover_and_never_past_the_budget {
+  assert first_read_is_the_warmed_copy(true, 0, CATALOG_MAX_AGE_SECONDS, MUST_REVALIDATE_IS_SET) == true;
+  assert first_read_is_the_warmed_copy(true, 59, CATALOG_MAX_AGE_SECONDS, MUST_REVALIDATE_IS_SET) == true;
+  assert first_read_is_the_warmed_copy(true, 60, CATALOG_MAX_AGE_SECONDS, MUST_REVALIDATE_IS_SET) == false;
+  assert first_read_is_the_warmed_copy(true, 10, CATALOG_MAX_AGE_SECONDS, true) == false;
+  assert first_read_is_the_warmed_copy(false, 10, CATALOG_MAX_AGE_SECONDS, MUST_REVALIDATE_IS_SET) == false;
+  assert held_seconds_at_the_first_read(true, 59, CATALOG_MAX_AGE_SECONDS, MUST_REVALIDATE_IS_SET) == last_reusable_age_seconds(CATALOG_MAX_AGE_SECONDS);
+  assert held_seconds_at_the_first_read(true, 60, CATALOG_MAX_AGE_SECONDS, MUST_REVALIDATE_IS_SET) == 0;
+  assert held_seconds_at_the_first_read(false, 30, CATALOG_MAX_AGE_SECONDS, MUST_REVALIDATE_IS_SET) == 0;
+  assert served_copy_age_seconds(0, held_seconds_at_the_first_read(true, 59, CATALOG_MAX_AGE_SECONDS, MUST_REVALIDATE_IS_SET)) == worst_case_served_age_seconds(0, CATALOG_MAX_AGE_SECONDS);
+  assert PREFETCH_RAISES_THE_AGE_CEILING == false;
+  assert PREFETCH_MAKES_THE_FIRST_READ_A_HELD_COPY == true;
+}
+
+; The day the door is wired, the warmed copy carries its price; today it carries none.
+test the_warmed_copy_carries_a_door_price_only_once_the_door_is_wired {
+  assert body_can_carry_a_door_price(DOOR_IS_WIRED) == false;
+  assert stale_door_price_is_reachable(DOOR_IS_WIRED, CATALOG_MAX_AGE_SECONDS) == false;
+  assert stale_door_price_is_reachable(true, CATALOG_MAX_AGE_SECONDS) == true;
+  assert price_in_a_served_body_is_authoritative(true, held_seconds_at_the_first_read(true, 1, CATALOG_MAX_AGE_SECONDS, MUST_REVALIDATE_IS_SET)) == false;
+}
+
+test the_invalidation_note_points_at_the_retirement_record_again {
+  assert INVALIDATION_NOTE != INVALIDATION_NOTE_BEFORE_2026_09_29;
+  assert INVALIDATORS_NAMING_A_LIVE_KEY == 0;
+  assert INVALIDATOR_CALL_SITES == 1;
+}
+
+test the_header_says_mobile_skips_and_the_code_tests_no_platform {
+  assert PREFETCH_HEADER_SAYS_MOBILE_SKIPS == true;
+  assert PREFETCH_HAS_A_PLATFORM_TEST == false;
+  assert PREFETCH_HEADER_SAYS_MOBILE_SKIPS != PREFETCH_HAS_A_PLATFORM_TEST;
+}
+
 ; --- Invariants --------------------------------------------------------------------------------
 
 invariant the_origin_never_holds_a_body
@@ -1374,3 +1567,11 @@ invariant neither_source_publishes_a_ceiling_or_an_eviction_rule
 
 invariant the_figure_vocabulary_and_the_response_vocabulary_share_no_value
   assert FIGURE_RECOMPUTED != OUTCOME_NOT_MODIFIED and FIGURE_RECOMPUTED != OUTCOME_FULL_BODY and FIGURE_UNRECONCILED != OUTCOME_NOT_MODIFIED and FIGURE_UNRECONCILED != OUTCOME_FULL_BODY and FIGURE_WITHHELD != OUTCOME_NOT_MODIFIED and FIGURE_WITHHELD != OUTCOME_FULL_BODY
+
+; Added 2026-09-29 with the prefetch. The budget binds a warmed copy exactly as it binds any held copy,
+; so the prefetch moves when a copy is first read and never how old one may be.
+invariant a_warmed_copy_never_outlives_the_budget
+  assert first_read_is_the_warmed_copy(true, CATALOG_MAX_AGE_SECONDS, CATALOG_MAX_AGE_SECONDS, MUST_REVALIDATE_IS_SET) == false and held_seconds_at_the_first_read(true, last_reusable_age_seconds(CATALOG_MAX_AGE_SECONDS), CATALOG_MAX_AGE_SECONDS, MUST_REVALIDATE_IS_SET) == 59 and PREFETCH_RAISES_THE_AGE_CEILING == false
+
+invariant the_prefetch_warms_only_the_catalog_list_and_only_from_one_hover
+  assert PREFETCH_ENDPOINTS.len == 1 and PREFETCH_ENDPOINTS[0] == "/api/bikes" and PREFETCH_URL_EQUALS_THE_CATALOG_READ == true and PREFETCH_HOVERS_THAT_FIRE == 1 and PREFETCH_REQUEST_OPTIONS_SET == 0

@@ -372,6 +372,108 @@ pub fn km_field_name_is_honest(name: str) bool {
 }
 
 // ============================================================================
+// The two storage mirrors this file owns (added 2026-09-29)
+//
+// Measured 2026-09-29 at 55a6664, in the round that names every file under src/ by the
+// contract whose subject it holds. Two SeaORM entity mirrors land here, because this file
+// owns the family-versus-unit boundary and the rule that service state never reaches a public
+// row (public_unit_fields_exclude_private_and_service_records). The unit-side mirror,
+// src/db/entities/bike_unit.rs, is turbobaby/availability's and is not restated here.
+//
+// Both are compiled only with the backend: src/lib.rs:108 and src/main.rs:13 declare db,
+// src/db/mod.rs:7 declares entities, and src/db/entities/mod.rs declares each mirror (the
+// line is recorded beside each one below).
+// ============================================================================
+
+; CORRECTED 2026-09-29. The header says this file "never restates a storage schema -- no table,
+; no column, no migration number, no key type". From this date it names two TABLES and the
+; migrations their columns arrived in, because naming a mirror without naming its table is not
+; naming it. It still lists no column set and no key type: what it pins is the COUNT of each
+; mirror's fields, the one vocabulary the service table's free-text status column is held to,
+; and the absences the family-versus-unit boundary turns on. The promise as first written is
+; kept under the _BEFORE_ name.
+pub const THIS_FILE_NAMES_A_TABLE : bool = true;
+pub const THIS_FILE_NAMES_A_TABLE_BEFORE_2026_09_29 : bool = false;
+pub const THIS_FILE_LISTS_A_COLUMN_SET : bool = false;
+pub const MIRRORS_MEASURED_AT : str = "2026-09-29";
+
+; src/db/entities/bike.rs: the table bikes, one row per product FAMILY -- "a family with ten
+; units is still one row here" (the mirror's :1-3). Declared at src/db/entities/mod.rs:12. Live:
+; From<bike::Model> at src/db/bikes.rs:176-199 builds the Bike the catalog serves, and the
+; bikes router that answers GET /api/bikes and GET /api/bikes/:key (src/api/bikes.rs:104-105)
+; is merged at src/api/mod.rs:86.
+pub const FAMILY_ENTITY : str = "src/db/entities/bike.rs";
+pub const FAMILY_TABLE : str = "bikes";
+pub const FAMILY_ENTITY_DECLARED_AT : str = "src/db/entities/mod.rs:12";
+pub const FAMILY_ENTITY_IS_COMPILED_WITH_THE_BACKEND : bool = true;
+pub const FAMILY_ENTITY_IS_SERVED_TO_CUSTOMERS : bool = true;
+; Twenty fields. Nineteen arrive in migrations/077_bikes.sql:20-68 and one, for_sale, in
+; migrations/086_bikes_for_sale.sql:38-39. The mirror's own header (:5-8) says every column below
+; lands in 077, and its own :61 says for_sale is 086's, so the header is contradicted by the file
+; it heads. Recorded, not repaired: this round changes no code.
+pub const FAMILY_ENTITY_FIELD_COUNT : u8 = 20;
+pub const FAMILY_COLUMNS_FROM_077 : u8 = 19;
+pub const FAMILY_COLUMNS_FROM_086 : u8 = 1;
+pub const FAMILY_ENTITY_HEADER_NAMES_ONE_MIGRATION_FOR_EVERY_COLUMN : bool = true;
+pub const FAMILY_ENTITY_HEADER_IS_TRUE : bool = false;
+; The wire keeps eighteen of the twenty. The Bike of src/db/bikes.rs:61-97 carries every field
+; but the two timestamps, created_at and updated_at, and From<bike::Model> is its only builder
+; outside a test (the other, src/api/bikes.rs:1869, sits in the cfg(test) module opened at :1843).
+pub const FAMILY_WIRE_FIELD_COUNT : u8 = 18;
+pub const FAMILY_FIELDS_KEPT_OFF_THE_WIRE : u8 = 2;
+; The boundary, as an absence: the family row carries no unit identity (no unit_code, no
+; bike_unit_id) and none of the names in FORBIDDEN_UNIT_FIELDS that could be a column. The one
+; key it does carry is the family key, the value a cart rental line stores (D8; the mirror's
+; :27-29), which is FAMILY_KEY_EXAMPLE's kind and never UNIT_CODE_EXAMPLE's.
+pub const FAMILY_ROW_UNIT_OR_FORBIDDEN_FIELDS : u8 = 0;
+pub const FAMILY_ROW_KEY_FIELD : str = "key";
+
+; src/db/entities/bike_service_record.rs: the table bike_service_records, one row per service
+; line of one PHYSICAL unit (the mirror's :1-4), the table D6 put in place of lab_certificates.
+; Declared at src/db/entities/mod.rs:14. Nine fields, all from
+; migrations/080_bike_service_records.sql:23-36, and the table ships EMPTY: no migration inserts
+; a row into it (the mirror's :7-8; a search of migrations/ for an INSERT into it returns 0).
+pub const SERVICE_ENTITY : str = "src/db/entities/bike_service_record.rs";
+pub const SERVICE_TABLE : str = "bike_service_records";
+pub const SERVICE_ENTITY_DECLARED_AT : str = "src/db/entities/mod.rs:14";
+pub const SERVICE_ENTITY_FIELD_COUNT : u8 = 9;
+pub const SERVICE_TABLE_SEEDED_ROWS : u8 = 0;
+; Reach, measured: admin only, and by a different path than the mirror's own doc says. Its :13-14
+; names db::bikes::list_service_records_for_unit as the only reader, and that function has NO
+; caller: src/db/bikes.rs:524-526 carries #[expect(dead_code)] and the words "no caller yet". The
+; live readers are the four handlers of src/api/bikes.rs that open the entity -- the unit
+; delete's record count, and the list, create and delete of service lines -- each of which calls
+; check_admin before anything else. Their two routes, /admin/bike-service-records and
+; /admin/bike-service-records/:id (src/api/bikes.rs:156-163), sit in the bikes router merged at
+; src/api/mod.rs:86, and no route outside /admin names a service record.
+pub const SERVICE_ENTITY_USE_SITES_IN_THE_API : u8 = 4;
+pub const SERVICE_RECORD_ROUTES : u8 = 2;
+pub const SERVICE_RECORD_ROUTES_OUTSIDE_ADMIN : u8 = 0;
+pub const SERVICE_DOC_NAMED_READER_HAS_A_CALLER : bool = false;
+; The status column is free TEXT in 080, with no CHECK, so the only thing holding it is the
+; admin write's own list, SERVICE_STATUSES at src/api/bikes.rs:1692. The mirror's doc (:41)
+; gives two of the three as examples. No contract named this vocabulary before this date:
+; turbobaby/catalog-write, which owns what an admin write may produce, mentions no service
+; record at all (0 occurrences of the word service in it on 2026-09-29).
+pub const SERVICE_RECORD_STATUSES : [3]str = ["ok", "due", "overdue"];
+pub const SERVICE_STATUS_COLUMN_HAS_A_CHECK : bool = false;
+; Four kilometre columns. current_km is kilometres since purchase at the reading and NOT an
+; odometer value (the mirror's :35-36) -- the meaning KM_FIELD names on the public row -- yet it
+; is not spelled KM_FIELD. That is safe only while no service row reaches a public row, which is
+; the rule this section binds to the tree.
+pub const SERVICE_KM_COLUMN_COUNT : u8 = 4;
+pub const SERVICE_KM_COLUMN_EXAMPLE : str = "current_km";
+
+; A service row reaches a public row if any route outside /admin serves one, or if the rule
+; that service records are private is ever given up. Either alone is enough.
+pub fn service_row_may_reach_a_public_row(routes_outside_admin: u8, records_are_public: bool) bool {
+    if (records_are_public) {
+        return true;
+    }
+    return routes_outside_admin > 0;
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
@@ -573,6 +675,81 @@ test availability_is_referenced_without_reimplementing_its_formula {
     assert BOOKABILITY_INPUT == "bookable boolean supplied by the availability contract";
 }
 
+; The no-schema promise, narrowed on 2026-09-29 and kept as it was under its _BEFORE_ name.
+test the_mirrors_name_their_tables_and_still_list_no_column_set {
+    assert THIS_FILE_NAMES_A_TABLE == true;
+    assert THIS_FILE_NAMES_A_TABLE_BEFORE_2026_09_29 == false;
+    assert THIS_FILE_NAMES_A_TABLE != THIS_FILE_NAMES_A_TABLE_BEFORE_2026_09_29;
+    assert THIS_FILE_LISTS_A_COLUMN_SET == false;
+    assert MIRRORS_MEASURED_AT == "2026-09-29";
+    assert FAMILY_TABLE != SERVICE_TABLE;
+}
+
+; The family mirror: its fields close over the two migrations they arrived in, the wire keeps all
+; but the two timestamps, and the row carries no unit identity. The key it carries is a family
+; key, which is never a unit code.
+test the_family_mirror_is_one_row_per_family_and_carries_no_unit {
+    assert FAMILY_ENTITY == "src/db/entities/bike.rs";
+    assert FAMILY_ENTITY_DECLARED_AT == "src/db/entities/mod.rs:12";
+    assert FAMILY_ENTITY_FIELD_COUNT == 20;
+    assert FAMILY_COLUMNS_FROM_077 + FAMILY_COLUMNS_FROM_086 == FAMILY_ENTITY_FIELD_COUNT;
+    assert FAMILY_WIRE_FIELD_COUNT + FAMILY_FIELDS_KEPT_OFF_THE_WIRE == FAMILY_ENTITY_FIELD_COUNT;
+    assert FAMILY_ROW_UNIT_OR_FORBIDDEN_FIELDS == 0;
+    assert FAMILY_ROW_KEY_FIELD != PUBLISHABLE_UNIT_FIELDS[0];
+    assert FAMILY_KEY_EXAMPLE != UNIT_CODE_EXAMPLE;
+    assert FAMILY_ENTITY_IS_COMPILED_WITH_THE_BACKEND == true;
+    assert FAMILY_ENTITY_IS_SERVED_TO_CUSTOMERS == true;
+}
+
+; The mirror's header names one migration for every column, and one of its columns came from a
+; later one. The pair below is the contradiction, as two facts and not as a sentence.
+test the_family_mirror_header_is_contradicted_by_its_own_sale_column {
+    assert FAMILY_ENTITY_HEADER_NAMES_ONE_MIGRATION_FOR_EVERY_COLUMN == true;
+    assert FAMILY_COLUMNS_FROM_086 > 0;
+    assert FAMILY_ENTITY_HEADER_IS_TRUE == false;
+    assert FAMILY_COLUMNS_FROM_077 < FAMILY_ENTITY_FIELD_COUNT;
+}
+
+test the_service_mirror_is_admin_only_and_its_named_reader_is_dead {
+    assert SERVICE_ENTITY == "src/db/entities/bike_service_record.rs";
+    assert SERVICE_ENTITY_DECLARED_AT == "src/db/entities/mod.rs:14";
+    assert SERVICE_ENTITY_FIELD_COUNT == 9;
+    assert SERVICE_TABLE_SEEDED_ROWS == 0;
+    assert SERVICE_RECORD_ROUTES == 2;
+    assert SERVICE_RECORD_ROUTES_OUTSIDE_ADMIN == 0;
+    assert SERVICE_ENTITY_USE_SITES_IN_THE_API == 4;
+    assert SERVICE_ENTITY_USE_SITES_IN_THE_API > SERVICE_RECORD_ROUTES;
+    assert SERVICE_DOC_NAMED_READER_HAS_A_CALLER == false;
+    assert SERVICE_RECORDS_ARE_PUBLIC == false;
+}
+
+test a_service_row_reaches_no_public_row_and_either_breach_would_open_it {
+    assert service_row_may_reach_a_public_row(SERVICE_RECORD_ROUTES_OUTSIDE_ADMIN, SERVICE_RECORDS_ARE_PUBLIC) == false;
+    assert service_row_may_reach_a_public_row(1, false) == true;
+    assert service_row_may_reach_a_public_row(0, true) == true;
+    assert service_row_may_reach_a_public_row(0, false) == false;
+}
+
+; The column has no CHECK, so this list is the whole constraint, and it is the admin write's.
+test the_service_status_is_held_by_a_list_and_not_by_the_column {
+    assert SERVICE_RECORD_STATUSES.len == 3;
+    assert SERVICE_RECORD_STATUSES[0] == "ok";
+    assert SERVICE_RECORD_STATUSES[1] == "due";
+    assert SERVICE_RECORD_STATUSES[2] == "overdue";
+    assert SERVICE_STATUS_COLUMN_HAS_A_CHECK == false;
+}
+
+; current_km means what KM_FIELD means and is not spelled like it. The name rule governs the
+; public row, and no service row reaches one, so the two facts hold together only because of
+; the privacy rule.
+test a_service_kilometre_column_is_not_the_public_km_field {
+    assert SERVICE_KM_COLUMN_COUNT == 4;
+    assert km_field_name_is_honest(SERVICE_KM_COLUMN_EXAMPLE) == false;
+    assert SERVICE_KM_COLUMN_EXAMPLE != FORBIDDEN_KM_ALIASES[0];
+    assert SERVICE_KM_COLUMN_EXAMPLE != FORBIDDEN_KM_ALIASES[1];
+    assert SERVICE_RECORDS_ARE_PUBLIC == false;
+}
+
 // ============================================================================
 // Invariants
 //
@@ -671,3 +848,10 @@ invariant public_unit_fields_exclude_private_and_service_records
 
 invariant the_mileage_column_is_never_called_an_odometer
   assert km_field_name_is_honest(FORBIDDEN_KM_ALIASES[0]) == false
+
+; Added 2026-09-29 with the two mirrors.
+invariant the_family_mirror_closes_over_its_two_migrations_and_holds_no_unit
+  assert FAMILY_COLUMNS_FROM_077 + FAMILY_COLUMNS_FROM_086 == FAMILY_ENTITY_FIELD_COUNT and FAMILY_ROW_UNIT_OR_FORBIDDEN_FIELDS == 0
+
+invariant no_service_row_reaches_a_public_row
+  assert service_row_may_reach_a_public_row(SERVICE_RECORD_ROUTES_OUTSIDE_ADMIN, SERVICE_RECORDS_ARE_PUBLIC) == false
