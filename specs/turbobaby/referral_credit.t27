@@ -624,7 +624,7 @@ test the_owner_chose_the_net_base {
 ; --- Invariants -----------------------------------------------------------------------------------------
 
 invariant the_credit_never_exceeds_the_owners_rate
-  assert credit(1239, 0) * 100 <= 1239 * CREDIT_PERCENT and 1239 * CREDIT_PERCENT - credit(1239, 0) * 100 < 100 and credit(1000, 300) * 100 <= (1000 - 300) * CREDIT_PERCENT and (1000 - 300) * CREDIT_PERCENT - credit(1000, 300) * 100 < 100
+  assert credit(1239, 0) * 100 <= @as(u32, 1239) * CREDIT_PERCENT and @as(u32, 1239) * CREDIT_PERCENT - credit(1239, 0) * 100 < 100 and credit(1000, 300) * 100 <= (@as(u32, 1000) - 300) * CREDIT_PERCENT and (@as(u32, 1000) - 300) * CREDIT_PERCENT - credit(1000, 300) * 100 < 100
 
 invariant the_friend_is_credited_nothing
   assert FRIEND_IS_CREDITED == false and LEVELS_CREDITED == 1

@@ -705,14 +705,12 @@ pub const ALLOWLIST_SIZE_MOVED_BY_THE_2026_09_25_RULING : bool = false;
 ; DECIDED 2026-09-25 by the operator, applying the owner's ruling of that day; added by review the
 ; same day. The label printed in place of a withheld name is admin-facing copy chosen then, and is
 ; cited here by name (REPORT_WITHHELD_NAME in src/trios/promo.rs), not quoted.
-
 ; WHY. promo_posts keeps every row the promoter ever wrote, and from 2026-08-19 until migration 083
 ; it also wrote about the product table 083 dropped: rows of the kind whose subject variant left
 ; with 083, and bestseller rows drawn from that table. The report printed each row's stored
 ; subject_name -- the old shop's product name -- to the owners in /promo (30 days) and on the admin
 ; route (up to 365 days). Whether production holds such a published row today was not read; the
 ; rule does not depend on the answer.
-
 ; THE RULE, fail closed (report_may_print_name). A stored name is printed only when a subject the
 ; promoter can build today writes the row's kind AND the link stored with the row opens the
 ; deep-link kind a live post of that kind opens. A row with no stored link (drafted before
@@ -722,7 +720,6 @@ pub const ALLOWLIST_SIZE_MOVED_BY_THE_2026_09_25_RULING : bool = false;
 ; one or one nobody here classified (the database forked from another shop's bot, DECISIONS.md D19).
 ; No row is hidden, so the report's post count and totals do not move, and nothing in the table is
 ; written.
-
 ; WHAT IT DOES NOT DECIDE. Whether a stored draft may still be SENT: that is the Publish button's
 ; question, and the same day's item-13 decision in turbobaby/promo-broadcast answers it there
 ; (publish_refusal in src/promo.rs, refusing every stored kind). This file claims no line of
@@ -761,7 +758,6 @@ pub fn report_prints_stored_name(kind_written_by_a_live_subject: bool, link_stor
 ; migration is added. The database was forked from the previous shop's bot (DECISIONS.md D19), so
 ; what it stores was not all written by this repository, and each rule fails closed: a customer
 ; is served what this code can vouch for. The admin views are the archive and read every row whole.
-
 ; THE ANALYSIS: every customer-facing read of stored legacy content in src/api and src/ui, and
 ; the bot sends that read it. Masked on the server, five (OWNER_ANSWER_3_SERVER_READS):
 ;   1. order lines of a retired kind on the customer's own list and detail
