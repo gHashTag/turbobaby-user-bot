@@ -282,44 +282,56 @@ BINDINGS: tuple[dict[str, object], ...] = (
     },
     # --- order status vocabulary ---------------------------------------------------
     {
-        "name": "order_status.STATUS_NAMES ~ orders.rs VALID_STATUSES",
+        "name": "order_status.STATUS_NAMES ~ spec/order_status.rs STATUS_NAMES",
         "spec": "specs/turbobaby/order_status.t27",
         "const": "STATUS_NAMES",
-        "source": "src/api/orders.rs",
-        "extract": ("regex_list", r"const VALID_STATUSES:\s*&\[&str\]\s*=\s*&\[(.*?)\]\s*;"),
+        "source": "src/spec/order_status.rs",
+        # Until 2026-10-11 this bound a hand-written copy in src/api/orders.rs (const VALID_STATUSES). The host
+        # now executes the spec from src/spec/order_status.rs (`t27c gen-rust`, drift-gated by
+        # scripts/check_spec_gen.sh), so the value the server enforces lives there.
+        "extract": ("regex_list", r"pub const STATUS_NAMES:\s*\[&'static str;\s*9\]\s*=\s*\[(.*?)\]\s*;"),
         "relation": "list_equal",
         "why": "the nine names are the whole admission test for PATCH order status; a "
                "name in one list and not the other is either a 400 on a legal status "
                "or a contract promising a status the endpoint refuses",
     },
     {
-        "name": "order_status.TERMINAL_NAMES ~ orders.rs is_terminal arm",
+        "name": "order_status.TERMINAL_NAMES ~ spec/order_status.rs TERMINAL_NAMES",
         "spec": "specs/turbobaby/order_status.t27",
         "const": "TERMINAL_NAMES",
-        "source": "src/api/orders.rs",
-        "extract": ("regex_list", r"let is_terminal = matches!\(\s*cur_status,\s*(.*?)\s*\)\s*;"),
+        "source": "src/spec/order_status.rs",
+        # Until 2026-10-11 this bound a hand-written copy in src/api/orders.rs (the is_terminal matches! arm). The host
+        # now executes the spec from src/spec/order_status.rs (`t27c gen-rust`, drift-gated by
+        # scripts/check_spec_gen.sh), so the value the server enforces lives there.
+        "extract": ("regex_list", r"pub const TERMINAL_NAMES:\s*\[&'static str;\s*4\]\s*=\s*\[(.*?)\]\s*;"),
         "relation": "list_equal",
         "why": "terminality decides whether a status change is refused; the contract "
                "states these four ARE the source's own order (order_status.t27:224)",
     },
     {
-        "name": "order_status.STATUS_CHARS_MAX ~ orders.rs status length guard",
+        "name": "order_status.STATUS_CHARS_MAX ~ spec/order_status.rs STATUS_CHARS_MAX",
         "spec": "specs/turbobaby/order_status.t27",
         "const": "STATUS_CHARS_MAX",
-        "source": "src/api/orders.rs",
-        "extract": ("regex", r"if status\.len\(\) > (\d+)\s*\{"),
+        "source": "src/spec/order_status.rs",
+        # Until 2026-10-11 this bound a hand-written copy in src/api/orders.rs (`if status.len() > 50`). The host
+        # now executes the spec from src/spec/order_status.rs (`t27c gen-rust`, drift-gated by
+        # scripts/check_spec_gen.sh), so the value the server enforces lives there.
+        "extract": ("regex", r"pub const STATUS_CHARS_MAX:\s*u16\s*=\s*(\d+);"),
         "relation": "equal",
         "why": "the cap is checked before the whitelist, so it is the first thing a "
                "malformed status meets and the contract pins its precedence",
     },
     {
-        "name": "order_status.ORDER_ID_CHARS_MAX ~ orders.rs id length guard",
+        "name": "order_status.ORDER_ID_CHARS_MAX ~ spec/order_status.rs ORDER_ID_CHARS_MAX",
         "spec": "specs/turbobaby/order_status.t27",
         "const": "ORDER_ID_CHARS_MAX",
-        "source": "src/api/orders.rs",
+        "source": "src/spec/order_status.rs",
+        # Until 2026-10-11 this bound a hand-written copy in src/api/orders.rs (`if id.len() > 200` in validate_update_order_status). The host
+        # now executes the spec from src/spec/order_status.rs (`t27c gen-rust`, drift-gated by
+        # scripts/check_spec_gen.sh), so the value the server enforces lives there.
         # `id.len() > 200` alone matches 8 times in this file. The function signature
         # is the anchor that makes it one.
-        "extract": ("regex", r"fn validate_update_order_status\([^)]*\)[^{]*\{\s*if id\.len\(\) > (\d+)"),
+        "extract": ("regex", r"pub const ORDER_ID_CHARS_MAX:\s*u16\s*=\s*(\d+);"),
         "relation": "equal",
         "why": "same refusal ladder as STATUS_CHARS_MAX; the contract pins both bounds "
                "and their order (order_status.t27:298-302)",
@@ -359,25 +371,31 @@ BINDINGS: tuple[dict[str, object], ...] = (
     },
     # --- order money ----------------------------------------------------------------
     {
-        "name": "order_money.MAX_STARS_PER_TRANSACTION ~ orders.rs MAX_STARS_PER_TX",
+        "name": "order_money.MAX_STARS_PER_TRANSACTION ~ spec/order_money.rs MAX_STARS_PER_TRANSACTION",
         "spec": "specs/turbobaby/order_money.t27",
         "const": "MAX_STARS_PER_TRANSACTION",
-        "source": "src/api/orders.rs",
+        "source": "src/spec/order_money.rs",
+        # Until 2026-10-11 this bound a hand-written copy in src/api/orders.rs (const MAX_STARS_PER_TX). The host
+        # now executes the spec from src/spec/order_money.rs (`t27c gen-rust`, drift-gated by
+        # scripts/check_spec_gen.sh), so the value the server enforces lives there.
         # A SECOND constant of the same name lives at src/api/stars.rs:52. They are
         # different constants on different paths -- spend vs award -- and the contract
         # pins the spend one by file and line (order_money.t27:124).
-        "extract": ("regex", r"const MAX_STARS_PER_TX:\s*i64\s*=\s*([0-9_]+)\s*;"),
+        "extract": ("regex", r"pub const MAX_STARS_PER_TRANSACTION:\s*i64\s*=\s*([0-9_]+);"),
         "relation": "equal",
         "why": "how many Stars one checkout may spend; at 1 Star = 1 baht this is a "
                "discount ceiling, and the contract is the only place the two "
                "same-named ceilings are told apart",
     },
     {
-        "name": "order_money.MAX_ORDER_AMOUNT_MAJOR_UNITS ~ orders.rs MAX_ORDER_TOTAL",
+        "name": "order_money.MAX_ORDER_AMOUNT_MAJOR_UNITS ~ spec/order_money.rs MAX_ORDER_AMOUNT_MAJOR_UNITS",
         "spec": "specs/turbobaby/order_money.t27",
         "const": "MAX_ORDER_AMOUNT_MAJOR_UNITS",
-        "source": "src/api/orders.rs",
-        "extract": ("regex", r"const MAX_ORDER_TOTAL:\s*f64\s*=\s*([0-9_.]+)\s*;"),
+        "source": "src/spec/order_money.rs",
+        # Until 2026-10-11 this bound a hand-written copy in src/api/orders.rs (const MAX_ORDER_TOTAL). The host
+        # now executes the spec from src/spec/order_money.rs (`t27c gen-rust`, drift-gated by
+        # scripts/check_spec_gen.sh), so the value the server enforces lives there.
+        "extract": ("regex", r"pub const MAX_ORDER_AMOUNT_MAJOR_UNITS:\s*i64\s*=\s*([0-9_]+);"),
         "relation": "equal",
         "why": "the envelope both subtotal and total must sit inside; the contract's "
                "verdict algebra is written against exactly this figure",
@@ -3928,11 +3946,14 @@ BINDINGS: tuple[dict[str, object], ...] = (
                "that the INSERT then refuses as a 500",
     },
     {
-        "name": "referral_credit.MAX_RENTAL_AMOUNT_THB ~ orders.rs MAX_ORDER_TOTAL",
+        "name": "referral_credit.MAX_RENTAL_AMOUNT_THB ~ spec/order_money.rs MAX_ORDER_AMOUNT_MAJOR_UNITS",
         "spec": "specs/turbobaby/referral_credit.t27",
         "const": "MAX_RENTAL_AMOUNT_THB",
-        "source": "src/api/orders.rs",
-        "extract": ("regex", r"const MAX_ORDER_TOTAL:\s*f64\s*=\s*([0-9_.]+)\s*;"),
+        "source": "src/spec/order_money.rs",
+        # Until 2026-10-11 this bound a hand-written copy in src/api/orders.rs (const MAX_ORDER_TOTAL). The host
+        # now executes the spec from src/spec/order_money.rs (`t27c gen-rust`, drift-gated by
+        # scripts/check_spec_gen.sh), so the value the server enforces lives there.
+        "extract": ("regex", r"pub const MAX_ORDER_AMOUNT_MAJOR_UNITS:\s*i64\s*=\s*([0-9_]+);"),
         "relation": "equal",
         "why": "a recorded rental may not exceed what an order may total (turbobaby/order-money); "
                "the three copies move together or a rental outgrows the shop's own ceiling",

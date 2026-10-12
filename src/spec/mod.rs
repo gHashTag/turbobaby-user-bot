@@ -9,6 +9,8 @@
 //!
 //! ```text
 //! t27c gen-rust specs/turbobaby/request_identity.t27 > src/spec/request_identity.rs
+//! t27c gen-rust specs/turbobaby/order_money.t27 > src/spec/order_money.rs
+//! t27c gen-rust specs/turbobaby/order_status.t27 > src/spec/order_status.rs
 //! ```
 //!
 //! Generated code keeps the spec's own shape (explicit `return`, parentheses,
@@ -24,3 +26,23 @@
 )]
 #[rustfmt::skip]
 pub(crate) mod request_identity;
+
+#[allow(
+    dead_code,
+    unreachable_pub,
+    unused_parens,
+    clippy::all,
+    clippy::needless_return
+)]
+#[rustfmt::skip]
+pub(crate) mod order_money;
+
+#[allow(
+    dead_code,
+    unreachable_pub,
+    unused_parens,
+    clippy::all,
+    clippy::needless_return
+)]
+#[rustfmt::skip]
+pub(crate) mod order_status;

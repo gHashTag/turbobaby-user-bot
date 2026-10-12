@@ -156,7 +156,10 @@ pub const OWNED_LINE_COUNT_AFTER_THE_CANCEL_REPAIR : u16 = 999;
 pub const DETAIL_LINE_COUNT_AFTER_THE_STATUS_REPAIR : u16 = 525;
 pub const OWNED_LINE_COUNT_AFTER_THE_STATUS_REPAIR : u16 = 935;
 pub const SHARED_COMPONENT_LINE_COUNT : u16 = 72;
-pub const READING_LINE_COUNT : u16 = 657;
+; Re-measured 2026-10-11: the reading's tests now read the vocabulary from src/spec/order_status.rs
+; (the server's VALID_STATUSES is gone); only the test module grew, every cited site above it stays put.
+pub const READING_LINE_COUNT : u16 = 671;
+pub const READING_LINE_COUNT_BEFORE_2026_10_11 : u16 = 657;
 pub const LIST_LINE_COUNT_BEFORE_REPAIR : u16 = 440;
 pub const DETAIL_LINE_COUNT_BEFORE_REPAIR : u16 = 556;
 pub const OWNED_LINE_COUNT_BEFORE_REPAIR : u16 = 996;
@@ -940,13 +943,15 @@ pub const MONEY_WITHHELD_REASON_SITE : str = "src/db/orders.rs:46";
 ; Since the owner's answer 3 of 2026-09-25 the two customer sites call Order::for_customer, which
 ; runs this same conversion first and then masks only the lines and the shop (the section "The
 ; name of a line of the old catalogue"); no figure passes anything else, and the sites did not move.
+; Re-measured 2026-10-11 after order_money / order_status moved into src/spec/: the customer
+; sites were :1973 and :2509, the admin sites :1824 and :1848; the code at each is unchanged.
 pub const ORDER_ENDPOINTS_SERIALISE_THROUGH_ONE_CONVERSION : [2]str = [
-  "src/api/orders.rs:1973",
-  "src/api/orders.rs:2509",
+  "src/api/orders.rs:1975",
+  "src/api/orders.rs:2505",
 ];
 pub const ADMIN_ENDPOINTS_SERIALISE_THROUGH_THE_SAME_CONVERSION : [2]str = [
-  "src/api/orders.rs:1824",
-  "src/api/orders.rs:1848",
+  "src/api/orders.rs:1826",
+  "src/api/orders.rs:1850",
 ];
 ; Every other reader of the same payloads, each declaring the figure as an Option: the home widget,
 ; the profile history, the webapp-bridge mirror, and the admin order (all four figures). The mirror
@@ -1748,7 +1753,8 @@ pub const ORDER_FIGURE_DASH_NOTE : str = "Owner question E. Which sentence, if a
 ; (CHECKOUT_SUBMISSION_SITE builds four shapes of line and none carries a bike), so this is
 ; reachability and not traffic, and gate 3 binds that zero to the submission map.
 pub const BIKE_LINE_ORDER_TOTAL_HAS_A_DISPLAY_RULE : bool = false;
-pub const BIKE_LINE_SUM_SITE : str = "src/api/orders.rs:495-503";
+; Re-measured 2026-10-11 (was src/api/orders.rs:495-503; the comment is unchanged, it moved).
+pub const BIKE_LINE_SUM_SITE : str = "src/api/orders.rs:497-505";
 pub const NO_SHIPPED_CLIENT_SUBMITS_A_BIKE_LINE : bool = true;
 pub const CHECKOUT_SUBMISSION_SITE : str = "src/ui/screens/checkout_screen.rs:975-1006";
 pub const CHECKOUT_BIKE_LINE_KEY_COUNT : u8 = 0;
@@ -1842,7 +1848,8 @@ test the_owned_surface_is_two_screens_one_component_and_one_reading {
   assert DETAIL_LINE_COUNT > DETAIL_LINE_COUNT_AFTER_THE_STATUS_REPAIR;
   assert MONEY_REPAIRED_AT == "2026-09-22";
   assert SHARED_COMPONENT_LINE_COUNT == 72;
-  assert READING_LINE_COUNT == 657;
+  assert READING_LINE_COUNT == 671;
+  assert READING_LINE_COUNT_BEFORE_2026_10_11 == 657;
   assert LIST_LINE_COUNT_BEFORE_REPAIR == 440;
   assert DETAIL_LINE_COUNT_BEFORE_REPAIR == 556;
   assert LIST_LINE_COUNT_BEFORE_REPAIR + DETAIL_LINE_COUNT_BEFORE_REPAIR == OWNED_LINE_COUNT_BEFORE_REPAIR;

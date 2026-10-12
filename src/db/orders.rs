@@ -209,7 +209,13 @@ pub async fn complete_order_and_update_loyalty(
         tx.commit().await?;
         return Ok(None);
     };
-    if order.status == "completed" {
+    // The name every completion writes: the spec persists `delivered` as
+    // `completed` (`order_status_persisted_code`), so both land here.
+    let completed = order_status_name(os::order_status_persisted_code(os::STATUS_COMPLETED))
+        .ok_or_else(|| {
+            sea_orm::DbErr::Custom("order_status spec names no completed status".into())
+        })?;
+    if order.status == completed {
         // Idempotent: already completed.
         tx.commit().await?;
         return Ok(None);
@@ -217,10 +223,7 @@ pub async fn complete_order_and_update_loyalty(
     let Some(cid) = order.telegram_id else {
         // No customer attribution — flip status but no loyalty side-effect.
         OrderEntity::update_many()
-            .col_expr(
-                OrderCol::Status,
-                sea_orm::sea_query::Expr::value("completed"),
-            )
+            .col_expr(OrderCol::Status, sea_orm::sea_query::Expr::value(completed))
             .filter(OrderCol::Id.eq(order_id))
             .exec(&tx)
             .await?;
@@ -261,10 +264,7 @@ pub async fn complete_order_and_update_loyalty(
 
     // 3. Flip the order to completed.
     OrderEntity::update_many()
-        .col_expr(
-            OrderCol::Status,
-            sea_orm::sea_query::Expr::value("completed"),
-        )
+        .col_expr(OrderCol::Status, sea_orm::sea_query::Expr::value(completed))
         .filter(OrderCol::Id.eq(order_id))
         .exec(&tx)
         .await?;
@@ -1373,6 +1373,29 @@ pub(crate) async fn fraud_stats_24h(
         s.top_offender_count = top.try_get("", "n").unwrap_or(0);
     }
     Ok(s)
+}
+
+use crate::spec::order_status as os;
+
+/// Plumbing: the `order_status.t27` code of a status name read from the wire
+/// or a row. `t27c gen-rust` types the spec's `str` parameter as
+/// `&'static str`, so the name is first matched against the spec's own
+/// `STATUS_NAMES` and the code then comes from `order_status_code_of`; a name
+/// outside the vocabulary is the spec's `STATUS_UNSET`.
+pub(crate) fn order_status_code(name: &str) -> u8 {
+    os::STATUS_NAMES
+        .iter()
+        .find(|n| **n == name)
+        .map_or(os::STATUS_UNSET, |n| os::order_status_code_of(n))
+}
+
+/// Plumbing: the spec's name for a status code, found through
+/// `order_status_code_of` so no table order is assumed here.
+pub(crate) fn order_status_name(code: u8) -> Option<&'static str> {
+    os::STATUS_NAMES
+        .iter()
+        .copied()
+        .find(|n| os::order_status_code_of(n) == code)
 }
 
 #[cfg(test)]
