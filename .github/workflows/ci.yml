@@ -152,8 +152,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: gHashTag/t27
-          # Measured 2026-10-11 (epic #77 / #78): 42 of 45 TurboBaby specs pass here.
-          ref: 3733ff164ae78145c31547d7b914da0f7b023eee
+          # Re-pinned 2026-10-13: 3733ff1's parser rejects the indented `;`
+          # prose request_identity/api_surface carried since 2026-10-11 (a `;`
+          # is a comment only at column 1); the specs are fixed to column-1
+          # comments instead. d8604f7 is on master, descends from 3733ff1, and
+          # its gen-rust output for src/spec/request_identity.rs was proven
+          # byte-identical on the Railway lab the same day.
+          ref: d8604f71b0b9f0e03f3780fa1985d7e3d4d30156
           path: .t27b-toolchain
       - name: Build pinned t27b and its t27c
         # gen-rust is taken from this commit, not from the t27-contracts pin:

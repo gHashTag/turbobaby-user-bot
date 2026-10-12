@@ -550,7 +550,8 @@ test this_contract_is_a_root_and_names_its_consumers_instead {
     assert IS_OWNERSHIP_ROOT == true;
     assert REUSE_EDGE_COUNT == 0;
     assert CONSUMERS.len == CONSUMER_COUNT;
-    ; Re-measured 2026-09-21: 18 of the 22, not the 4 of the first writing; 19 of 23 since 2026-09-26.    assert CONSUMERS_DECLARING_THE_EDGE == 19;
+; Re-measured 2026-09-21: 18 of the 22, not the 4 of the first writing, 19 of 23 since 2026-09-26.
+    assert CONSUMERS_DECLARING_THE_EDGE == 19;
     assert CONSUMERS_DECLARING_THE_EDGE < CONSUMER_COUNT;
     assert CONSUMERS_DECLARING_THE_EDGE + CONSUMERS_MEASURED_ONLY == CONSUMER_COUNT;
     assert CONSUMER_COUNT > CONSUMER_COUNT_BEFORE_THE_RE_MEASUREMENT;
@@ -627,7 +628,8 @@ test the_consumer_census_and_the_array_describe_the_same_list {
     assert LAST_LATE_DECLARER_INDEX - FIRST_LATE_DECLARER_INDEX + 1 == LATE_DECLARER_COUNT;
     assert LATE_DECLARER_COUNT + CONSUMER_COUNT_BEFORE_THE_RE_MEASUREMENT + CONSUMERS_ADDED_2026_09_26 == CONSUMER_COUNT;
     assert FIRST_MEASURED_ONLY_INDEX + LATE_DECLARER_COUNT + CONSUMERS_ADDED_2026_09_26 == CONSUMERS_DECLARING_THE_EDGE;
-    ; The four measured-only entries are exactly the four positions the census says they are.    assert CONSUMERS[4] == "turbobaby/commerce";
+; The four measured-only entries are exactly the four positions the census says they are.
+    assert CONSUMERS[4] == "turbobaby/commerce";
     assert CONSUMERS[5] == "turbobaby/bike-catalog";
     assert CONSUMERS[6] == "turbobaby/availability";
     assert CONSUMERS[7] == "turbobaby/ride-game";
