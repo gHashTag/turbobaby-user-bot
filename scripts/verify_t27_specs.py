@@ -402,6 +402,14 @@ SPEC_MANIFEST: dict[str, dict[str, str | int]] = {
         "min_declarations": 113,
         "min_checks": 43,
     },
+    "specs/turbobaby/stars_wallet.t27": {
+        "module": "turbobaby-stars-wallet",
+        "id": "turbobaby/stars-wallet",
+        # Added 2026-10-11 (inventory #79): the add and spend doors of src/api/stars.rs; measured
+        # with the pinned t27c that day, 90 declarations and 22 checks.
+        "min_declarations": 90,
+        "min_checks": 22,
+    },
     "specs/turbobaby/upload_media.t27": {
         "module": "turbobaby-upload-media",
         "id": "turbobaby/upload-media",
