@@ -16,6 +16,17 @@
 //! sends. So the test that matters is the one below — initData that is
 //! **present and invalid**, which is what production actually carries.
 //!
+//! **2026-10-11, the law turned.** `request_identity.t27`
+//! (LENIENT_PATH_IS_SHIPPED = false, DECIDED 2026-10-11, epic #77 issue #82)
+//! retired the lenient fallback on every owner call site, this endpoint
+//! included: a request whose HMAC does not verify is refused whatever its user
+//! id and stamp, and the two cohorts are counted as refusals. The client had
+//! already been made to send Telegram's own signed `initData`
+//! (`get_init_data`, src/ui/telegram.rs) — the rebuilt-from-`initDataUnsafe`
+//! payload that can never validate is the documented exception the retirement
+//! accepted. The first test below inverted with the law: the signed-but-invalid
+//! client is now turned away, like every other owner route.
+//!
 //! Run with:
 //! ```sh
 //! DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/woody_test \
@@ -64,7 +75,7 @@ async fn prepare(app: &axum::Router, init_data: &str, body: &str) -> (StatusCode
 
 #[tokio::test]
 #[ignore]
-async fn a_real_client_whose_hmac_fails_is_not_turned_away() {
+async fn a_real_client_whose_hmac_fails_is_refused_like_every_owner_route() {
     let Some((app, _db)) = make_app_with_db().await else {
         eprintln!("DATABASE_URL unset — skipping");
         return;
@@ -73,20 +84,18 @@ async fn a_real_client_whose_hmac_fails_is_not_turned_away() {
     let body = format!(r#"{{"kind":"set","id":"no-such-set","telegram_id":{OWNER}}}"#);
     let (status, text) = prepare(&app, &signed_but_invalid(OWNER), &body).await;
 
-    // The assertion is about the *gate*, not about the product. A missing set
-    // must answer 404 — which proves the request got past authentication and
-    // reached the lookup. Before this change the same request answered 401 and
-    // the lookup was never reached.
-    assert_ne!(
-        status,
-        StatusCode::UNAUTHORIZED,
-        "a signed-but-invalid client is exactly what production sends, and this \
-         endpoint refused it while twenty-one others accept it: {text}"
-    );
+    // The law of 2026-10-11 (request_identity.t27, LENIENT_PATH_IS_SHIPPED =
+    // false): a request whose HMAC does not verify is refused, here as on all
+    // owner routes. Until that date this test asserted the opposite — the
+    // endpoint accepted the signed-but-invalid client the way twenty-one others
+    // did — because the production client of that day sent no valid signature.
+    // The client now sends Telegram's own signed initData, so the refusal is
+    // the decision, not a defect: the lookup below must NOT be reached.
     assert_eq!(
         status,
-        StatusCode::NOT_FOUND,
-        "expected the lookup to be reached and to miss; got {status}: {text}"
+        StatusCode::UNAUTHORIZED,
+        "a signed-but-invalid client is refused by the owner gate, per \
+         request_identity.t27 of 2026-10-11: {text}"
     );
 }
 
@@ -120,7 +129,10 @@ async fn a_correctly_signed_client_still_reaches_the_lookup() {
     assert_eq!(status, StatusCode::NOT_FOUND, "{text}");
 }
 
-/// An unparseable `kind` is refused before any Telegram call is attempted.
+/// An unparseable `kind` is refused before any Telegram call is attempted. The
+/// initData is signed correctly so the owner gate admits the request and the
+/// 400 is the kind refusal, not the gate's 401 (since 2026-10-11 the gate
+/// refuses the signed-but-invalid payload this test used to send).
 #[tokio::test]
 #[ignore]
 async fn an_unknown_kind_is_refused_without_calling_telegram() {
@@ -130,6 +142,6 @@ async fn an_unknown_kind_is_refused_without_calling_telegram() {
     };
 
     let body = format!(r#"{{"kind":"spaceship","id":"x","telegram_id":{OWNER}}}"#);
-    let (status, _) = prepare(&app, &signed_but_invalid(OWNER), &body).await;
+    let (status, _) = prepare(&app, &make_init_data(OWNER, "dummy_test_token"), &body).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
