@@ -495,13 +495,13 @@ BINDINGS: tuple[dict[str, object], ...] = (
         "const": "AUTH_DATE_MAX_AGE_SECONDS",
         "source": "src/api/auth.rs",
         "extract": ("regex", r"now\.saturating_sub\(\w+\) > (\d+)"),
-        # FRESHNESS_IS_CHECKED_IN_BOTH_PATHS (request_identity.t27:265; :259 until 2026-09-26) says two, so
-        # two is what this binding demands -- and both must carry the same number.
-        "occurrences": 2,
-        "relation": "equal",
-        "why": "how long a replayed initData stays usable, in the strict validator and "
-               "the lenient owner path; the contract asserts BOTH paths check it, so a "
-               "third path or a missing one is the interesting failure",
+        # Two copies until 2026-10-11 (strict validator and lenient owner path). The lenient
+        # path is retired (FRESHNESS_IS_CHECKED_IN_BOTH_PATHS = false, FRESHNESS_HOST_COPIES = 1):
+        # exactly one hand-written copy remains, and a second one coming back is the failure.
+        "occurrences": 1,        "relation": "equal",
+        "why": "how long a replayed initData stays usable in the strict validator; the "
+               "lenient owner path that carried a second copy is retired, so a copy coming "
+               "back is the interesting failure",
     },
     {
         "name": "request_identity.ADMIN_RL_MAX_ATTEMPTS ~ auth.rs attempt cap",
